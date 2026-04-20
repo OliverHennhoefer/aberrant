@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 
 from aberrant.base.model import BaseModel
@@ -220,7 +222,7 @@ class LODA(BaseModel):
     def _project(self, vector: np.ndarray) -> np.ndarray:
         if self._projection_matrix is None:
             raise RuntimeError("Projection matrix is not initialized")
-        return self._projection_matrix @ vector
+        return cast(np.ndarray, self._projection_matrix @ vector)
 
     def _bin_indices_from_edges(
         self,
