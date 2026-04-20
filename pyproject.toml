@@ -46,9 +46,7 @@ docs = [
     "mkdocs",
     "mkdocs-material[imaging]",
     "mkdocstrings[python]",
-    # Pymdown's highlighter passes `filename=None` for untitled fences, which
-    # Pygments 2.20 rejects during MkDocs builds.
-    "pygments<2.20",
+    "pygments>=2.20.0",
 ]
 eval = ["scikit-learn>=1.6.1,<2.0.0"]
 dl = ["torch>=2.6.0,<3.0.0"]
@@ -68,7 +66,7 @@ all = [
     "mkdocs-material[imaging]",
     "mkdocstrings[python]",
     # Keep docs stack aligned with the `docs` extra above.
-    "pygments<2.20",
+    "pygments>=2.20.0",
     "scikit-learn>=1.6.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",
     "river>=0.22.0,<1.0.0",
