@@ -202,6 +202,7 @@ class NETS(BaseModel):
                 f"({n_features})"
             )
 
+        indices: np.ndarray
         if selected_dim == n_features:
             indices = np.arange(n_features, dtype=np.intp)
         else:
