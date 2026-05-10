@@ -38,7 +38,7 @@ dev = [
     "pytest>=8.0.0,<10.0.0",
     "pytest-cov>=6.0.0,<8.0.0",
     "hypothesis>=6.0.0,<7.0.0",
-    "mypy>=1.13.0,<2.0.0",
+    "mypy>=1.13.0,<3.0.0",
     "scikit-learn>=1.6.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",
 ]
@@ -61,7 +61,7 @@ all = [
     "pytest>=8.0.0,<10.0.0",
     "pytest-cov>=6.0.0,<8.0.0",
     "hypothesis>=6.0.0,<7.0.0",
-    "mypy>=1.13.0,<2.0.0",
+    "mypy>=1.13.0,<3.0.0",
     "mkdocs",
     "mkdocs-material[imaging]",
     "mkdocstrings[python]",
