@@ -36,6 +36,7 @@ Each `x` is `dict[str, float]`.
 | Distance | `CellNeighborhoodDetector`, `KNN`, `LocalOutlierFactor`, `SDOStream`, `StationaryRegionNeighborDetector` |
 | Sketch | `MStream`, `StreamingLODA`, `StreamingRSHash` |
 | Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `SignedGraphSketchDetector` |
+| Time Series | `XLagDAMP` |
 | SVM | `GraphGatedOneClassSVM`, `IncrementalOneClassSVMAdaptiveKernel` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance` |
 | Deep (`aberrant[dl]`) | `Autoencoder`, `OnlineAutoencoderEnsemble` |
@@ -90,6 +91,7 @@ Optional extras:
 - `aberrant.model.distance`
 - `aberrant.model.sketch`
 - `aberrant.model.graph`
+- `aberrant.model.timeseries`
 - `aberrant.model.svm`
 - `aberrant.model.stat`
 - `aberrant.model.deep` (optional extra)

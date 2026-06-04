@@ -7,6 +7,7 @@ Model APIs are split by family:
 - Distance-based detectors
 - Sketch detectors
 - Graph detectors
+- Time-series discord detectors
 - SVM detectors
 - Statistical detectors
 - Deep detectors

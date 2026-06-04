@@ -23,6 +23,7 @@ Example scripts are in `examples/models/` and `examples/pipeline.py`.
 - `examples/models/isconna.py`
 - `examples/models/midas.py`
 - `examples/models/signed_graph_sketch.py`
+- `examples/models/xlag_damp.py`
 - `examples/models/adaptive_svm.py`
 - `examples/models/graph_gated_svm.py`
 - `examples/models/online_autoencoder_ensemble.py`

@@ -43,6 +43,7 @@ nav:
       - Distance: api/models/distance.md
       - Sketch: api/models/sketch.md
       - Graph: api/models/graph.md
+      - Time Series: api/models/timeseries.md
       - SVM: api/models/svm.md
       - Statistical: api/models/stat.md
       - Deep: api/models/deep.md

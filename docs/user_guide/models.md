@@ -193,6 +193,33 @@ model = SignedGraphSketchDetector(
 )
 ```
 
+## Time-series family
+
+Imports:
+
+```python
+from aberrant.model.timeseries import XLagDAMP
+```
+
+`XLagDAMP` detects time-series discords using the original authors' pure-online
+X-Lag Amnesic DAMP backward processing:
+
+```python
+model = XLagDAMP(
+    subsequence_length=64,
+    x_lag=1024,
+    start_index=256,
+)
+```
+
+- Each event must contain exactly one scalar feature.
+- `score_one` scores the subsequence ending at the current event before it is
+  learned.
+- X-Lag amnesia bounds retained history and worst-case search work.
+- DAMP's highest score peaks are meaningful discord candidates; early-abandoned
+  non-peak scores are approximate.
+- The reference algorithm does not support constant subsequences.
+
 ## SVM family
 
 Imports:

@@ -28,6 +28,9 @@ Semantic Versioning.
   unit/integration tests, docs, and example script.
 - `AnoEdgeL` graph-stream detector in `aberrant.model.graph` with public export,
   unit/integration tests, docs, and example script.
+- `XLagDAMP` pure-online time-series discord detector based on the original
+  authors' X-Lag Amnesic DAMP implementation, with bounded history, reference
+  formula tests, synthetic integration coverage, docs, and example script.
 - Production hardening CI jobs for base-install smoke and optional-extras smoke.
 - Trusted SHA256 checksums for built-in dataset artifacts.
 - `py.typed` marker for downstream type-checker support.
