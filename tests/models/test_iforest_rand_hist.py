@@ -3,10 +3,16 @@
 Real dataset tests are in tests/integration/test_iforest_models.py
 """
 
+import copy
 import random
 import unittest
 
-from aberrant.model.iforest.rand_hist import StreamRandomHistogramForest
+import numpy as np
+
+from aberrant.model.iforest.rand_hist import (
+    StreamRandomHistogramForest,
+    _RandomHistogramTree,
+)
 
 
 class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
@@ -15,7 +21,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     def create_model(self):
         return StreamRandomHistogramForest(
             n_estimators=5,  # Small for fast testing
-            max_bins=5,
+            max_depth=5,
             window_size=50,
             seed=42,
         )
@@ -26,11 +32,12 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     def test_initialization_valid_parameters(self):
         """Test initialization with valid parameters."""
         model = StreamRandomHistogramForest(
-            n_estimators=10, max_bins=8, window_size=100, seed=123
+            n_estimators=10, max_depth=8, window_size=100, seed=123
         )
 
         self.assertEqual(model.n_estimators, 10)
-        self.assertEqual(model.max_bins, 8)
+        self.assertEqual(model.max_depth, 8)
+        self.assertFalse(hasattr(model, "max_bins"))
         self.assertEqual(model.window_size, 100)
         self.assertEqual(model.seed, 123)
 
@@ -40,19 +47,23 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         with self.assertRaises((ValueError, AssertionError)):
             StreamRandomHistogramForest(n_estimators=0)
 
-        # Invalid max_bins
+        # Invalid max_depth
         with self.assertRaises((ValueError, AssertionError)):
-            StreamRandomHistogramForest(max_bins=0)
+            StreamRandomHistogramForest(max_depth=0)
 
         # Invalid window_size
         with self.assertRaises((ValueError, AssertionError)):
             StreamRandomHistogramForest(window_size=0)
 
+    def test_max_bins_is_no_longer_accepted(self):
+        with self.assertRaises(TypeError):
+            StreamRandomHistogramForest(max_bins=5)  # type: ignore[call-arg]
+
     def test_window_size_behavior(self):
         """Test window size constraint behavior."""
         model = StreamRandomHistogramForest(
             n_estimators=3,
-            max_bins=4,
+            max_depth=4,
             window_size=10,  # Small window
             seed=42,
         )
@@ -69,16 +80,19 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         self.assertIsInstance(score, (int, float))
         self.assertGreaterEqual(score, 0.0)
 
-    def test_different_bin_sizes(self):
-        """Test different max_bins configurations."""
-        for max_bins in [3, 5, 10]:
-            with self.subTest(max_bins=max_bins):
+    def test_different_depths(self):
+        """Test different max_depth configurations."""
+        for max_depth in [3, 5, 10]:
+            with self.subTest(max_depth=max_depth):
                 model = StreamRandomHistogramForest(
-                    n_estimators=3, max_bins=max_bins, window_size=50, seed=42
+                    n_estimators=3,
+                    max_depth=max_depth,
+                    window_size=50,
+                    seed=42,
                 )
 
                 # Should initialize without error
-                self.assertEqual(model.max_bins, max_bins)
+                self.assertEqual(model.max_depth, max_depth)
 
                 # Basic functionality test
                 point = {"feature1": 1.0, "feature2": 2.0}
@@ -119,10 +133,10 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     def test_deterministic_behavior(self):
         """Test deterministic behavior with same seed."""
         model1 = StreamRandomHistogramForest(
-            n_estimators=3, max_bins=5, window_size=20, seed=42
+            n_estimators=3, max_depth=5, window_size=20, seed=42
         )
         model2 = StreamRandomHistogramForest(
-            n_estimators=3, max_bins=5, window_size=20, seed=42
+            n_estimators=3, max_depth=5, window_size=20, seed=42
         )
 
         # Train both models identically
@@ -142,6 +156,92 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         score2 = model2.score_one(test_point)
 
         self.assertEqual(score1, score2, "Same seed should produce identical results")
+
+    def test_different_seeds_produce_different_node_random_values(self):
+        model1 = StreamRandomHistogramForest(
+            n_estimators=2, max_depth=5, window_size=4, seed=42
+        )
+        model2 = StreamRandomHistogramForest(
+            n_estimators=2, max_depth=5, window_size=4, seed=43
+        )
+        points = [
+            {"x": 0.0, "y": 4.0},
+            {"x": 1.0, "y": 1.0},
+            {"x": 2.0, "y": 3.0},
+            {"x": 3.0, "y": 0.0},
+        ]
+        for point in points:
+            model1.learn_one(point)
+            model2.learn_one(point)
+
+        caches1 = [tree._node_random for tree in model1._trees]
+        caches2 = [tree._node_random for tree in model2._trees]
+        self.assertNotEqual(caches1, caches2)
+
+    def test_large_depth_allocates_random_values_only_for_visited_nodes(self):
+        model = StreamRandomHistogramForest(
+            n_estimators=2,
+            max_depth=64,
+            window_size=4,
+            seed=42,
+        )
+        for point in [
+            {"x": 0.0, "y": 4.0},
+            {"x": 1.0, "y": 1.0},
+            {"x": 2.0, "y": 3.0},
+            {"x": 3.0, "y": 0.0},
+        ]:
+            model.learn_one(point)
+
+        cached_nodes = sum(len(tree._node_random) for tree in model._trees)
+        self.assertGreater(cached_nodes, 0)
+        self.assertLessEqual(cached_nodes, model.n_estimators * (2 * model.window_size - 1))
+        self.assertIsInstance(model.score_one({"x": 1.5, "y": 2.0}), float)
+
+    def test_node_random_values_are_independent_of_visit_order(self):
+        nodes = [0, 7, 2**32, 2**40 + 7]
+        tree1 = _RandomHistogramTree(64, 2, np.random.SeedSequence(42))
+        tree2 = _RandomHistogramTree(64, 2, np.random.SeedSequence(42))
+
+        values1 = {node: tree1._random_values(node) for node in nodes}
+        values2 = {node: tree2._random_values(node) for node in reversed(nodes)}
+
+        self.assertEqual(values1, values2)
+
+    def test_score_preview_preserves_cache_and_matches_later_learning(self):
+        model = StreamRandomHistogramForest(
+            n_estimators=3,
+            max_depth=8,
+            window_size=4,
+            seed=42,
+        )
+        for point in [
+            {"x": 0.0, "y": 4.0},
+            {"x": 1.0, "y": 1.0},
+            {"x": 2.0, "y": 3.0},
+            {"x": 3.0, "y": 0.0},
+        ]:
+            model.learn_one(point)
+
+        query = {"x": 1.5, "y": 2.0}
+        point = model._vectorize(query)
+        preview_trees = copy.deepcopy(model._trees)
+        for tree in preview_trees:
+            tree.insert(point)
+        preview_caches = [tree._node_random for tree in preview_trees]
+        learned_caches = [copy.deepcopy(tree._node_random) for tree in model._trees]
+
+        model.score_one(query)
+        self.assertEqual(
+            [tree._node_random for tree in model._trees],
+            learned_caches,
+        )
+
+        model.learn_one(query)
+        self.assertEqual(
+            [tree._node_random for tree in model._trees],
+            preview_caches,
+        )
 
     def test_model_randomness_does_not_mutate_global_random_state(self):
         random.seed(123)

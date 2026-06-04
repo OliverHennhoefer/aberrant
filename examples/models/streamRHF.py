@@ -4,7 +4,7 @@ from aberrant.model.iforest import StreamRandomHistogramForest
 from aberrant.stream.dataset import Dataset, load
 
 model = StreamRandomHistogramForest(
-    n_estimators=25, max_bins=10, window_size=256, seed=1
+    n_estimators=25, max_depth=10, window_size=256, seed=1
 )
 
 labels, scores = [], []

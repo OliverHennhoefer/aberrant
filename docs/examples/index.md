@@ -22,9 +22,8 @@ Example scripts are in `examples/models/` and `examples/pipeline.py`.
 - `examples/models/midas.py`
 - `examples/models/streamspot.py`
 - `examples/models/adaptive_svm.py`
-- `examples/models/gadget_svm.py`
+- `examples/models/graph_gated_svm.py`
 - `examples/models/kitnet.py`
-- `examples/models/threshold.py`
 - `examples/pipeline.py`
 
 ## Notes

@@ -22,7 +22,7 @@ class TestStreamRandomHistogramForest(unittest.TestCase):
 
         # Create model
         model = StreamRandomHistogramForest(
-            n_estimators=25, max_bins=10, window_size=256, seed=SEED
+            n_estimators=25, max_depth=10, window_size=256, seed=SEED
         )
 
         # Load dataset

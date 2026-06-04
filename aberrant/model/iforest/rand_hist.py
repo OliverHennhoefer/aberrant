@@ -10,6 +10,8 @@ import numpy as np
 
 from aberrant.base.model import BaseModel
 
+_OPEN_UNIT_LOW = float(np.nextafter(0.0, 1.0))
+
 
 def _empty_moments(n_features: int) -> np.ndarray:
     """Create per-feature ``mean, M2, M3, M4, n`` moment state."""
@@ -102,25 +104,50 @@ class _RandomHistogramTree:
         self,
         max_depth: int,
         n_features: int,
-        feature_random: np.ndarray,
-        split_random: np.ndarray,
+        seed_sequence: np.random.SeedSequence,
     ) -> None:
         self.max_depth = max_depth
         self.n_features = n_features
-        self.feature_random = feature_random
-        self.split_random = split_random
+        self.seed_sequence = seed_sequence
+        self._node_random: dict[int, tuple[float, float]] = {}
         self.root: _RHFNode | None = None
 
     def build(self, points: list[np.ndarray]) -> None:
         """Build a complete tree from one reference window."""
         self.root = self._build_node(points, depth=0, node_id=0)
 
+    def _random_values(self, node_id: int) -> tuple[float, float]:
+        """Return fixed feature/split quantiles for one visited node."""
+        cached = self._node_random.get(node_id)
+        if cached is None:
+            words: list[int] = []
+            remaining = node_id
+            while remaining:
+                words.append(remaining & 0xFFFFFFFF)
+                remaining >>= 32
+            if not words:
+                words.append(0)
+            node_seed = np.random.SeedSequence(
+                entropy=self.seed_sequence.entropy,
+                spawn_key=(*self.seed_sequence.spawn_key, len(words), *words),
+                pool_size=self.seed_sequence.pool_size,
+            )
+            values = np.random.default_rng(node_seed).uniform(
+                _OPEN_UNIT_LOW,
+                1.0,
+                size=2,
+            )
+            cached = (float(values[0]), float(values[1]))
+            self._node_random[node_id] = cached
+        return cached
+
     def _selected_feature(self, moments: np.ndarray, node_id: int) -> int | None:
         weights = _kurtosis_weights(moments)
         total = float(np.sum(weights))
         if total <= 0.0:
             return None
-        target = self.feature_random[node_id] * total
+        feature_random, _ = self._random_values(node_id)
+        target = feature_random * total
         feature = int(np.searchsorted(np.cumsum(weights), target, side="left"))
         return min(feature, self.n_features - 1)
 
@@ -150,7 +177,8 @@ class _RandomHistogramTree:
         maximum = float(np.max(values))
         if minimum == maximum:
             return leaf
-        split_value = minimum + self.split_random[node_id] * (maximum - minimum)
+        _, split_random = self._random_values(node_id)
+        split_value = minimum + split_random * (maximum - minimum)
         left_points = [point for point in points if point[feature] <= split_value]
         right_points = [point for point in points if point[feature] > split_value]
         if not left_points or not right_points:
@@ -242,8 +270,6 @@ class StreamRandomHistogramForest(BaseModel):
     ``score_one`` inserts into copies of the trees so it reproduces the
     candidate-inclusive score without mutating learned state.
 
-    ``max_bins`` remains as a backward-compatible alias for ``max_depth``.
-
     References:
         Nesic, S., et al. (2022). STREamRHF: Tree-Based Unsupervised Anomaly
         Detection for Data Streams.
@@ -257,12 +283,7 @@ class StreamRandomHistogramForest(BaseModel):
         max_depth: int = 5,
         window_size: int = 256,
         seed: int | None = None,
-        max_bins: int | None = None,
     ) -> None:
-        if max_bins is not None:
-            if max_depth != 5:
-                raise ValueError("Specify only max_depth or max_bins")
-            max_depth = max_bins
         if n_estimators <= 0:
             raise ValueError("n_estimators must be positive")
         if max_depth <= 0:
@@ -272,22 +293,15 @@ class StreamRandomHistogramForest(BaseModel):
 
         self.n_estimators = n_estimators
         self.max_depth = max_depth
-        self.max_bins = max_depth
         self.window_size = window_size
         self.seed = seed
         self.feature_names: list[str] | None = None
 
-        self.rng = np.random.default_rng(seed)
+        self._tree_seed_sequences = np.random.SeedSequence(seed).spawn(n_estimators)
         self._initial_window: list[np.ndarray] = []
         self._current_window: list[np.ndarray] = []
         self._trees: list[_RandomHistogramTree] = []
         self._forest_size = 0
-        self._feature_random: np.ndarray | None = None
-        self._split_random: np.ndarray | None = None
-
-    def _set_seed(self, seed: int) -> None:
-        """Reset the model-local random number generator."""
-        self.rng = np.random.default_rng(seed)
 
     def _set_or_validate_schema(
         self, x: dict[str, float], *, allow_initialize: bool
@@ -305,7 +319,6 @@ class StreamRandomHistogramForest(BaseModel):
         if self.feature_names is None:
             if allow_initialize:
                 self.feature_names = sorted(x)
-                self._initialize_random_values(len(self.feature_names))
             return
         if set(x) != set(self.feature_names):
             expected = ", ".join(self.feature_names)
@@ -314,19 +327,6 @@ class StreamRandomHistogramForest(BaseModel):
                 "Inconsistent feature keys. "
                 f"Expected [{expected}], received [{received}]."
             )
-
-    def _initialize_random_values(self, n_features: int) -> None:
-        n_nodes = 2**self.max_depth - 1
-        self._feature_random = self.rng.uniform(
-            np.nextafter(0.0, 1.0),
-            1.0,
-            size=(self.n_estimators, n_nodes),
-        )
-        self._split_random = self.rng.uniform(
-            np.nextafter(0.0, 1.0),
-            1.0,
-            size=(self.n_estimators, n_nodes),
-        )
 
     def _vectorize(self, x: dict[str, float]) -> np.ndarray:
         if self.feature_names is None:
@@ -338,19 +338,14 @@ class StreamRandomHistogramForest(BaseModel):
         )
 
     def _build_forest(self, points: list[np.ndarray]) -> None:
-        if (
-            self.feature_names is None
-            or self._feature_random is None
-            or self._split_random is None
-        ):
+        if self.feature_names is None:
             raise RuntimeError("Forest schema is not initialized")
         self._trees = []
         for tree_index in range(self.n_estimators):
             tree = _RandomHistogramTree(
                 self.max_depth,
                 len(self.feature_names),
-                self._feature_random[tree_index],
-                self._split_random[tree_index],
+                self._tree_seed_sequences[tree_index],
             )
             tree.build(points)
             self._trees.append(tree)

@@ -32,6 +32,10 @@ Semantic Versioning.
 
 ### Changed
 
+- `StreamRandomHistogramForest` now uses `max_depth` exclusively; the historical
+  `max_bins` parameter and attribute were removed. Per-node random values are
+  generated lazily so memory scales with visited nodes instead of complete-tree
+  capacity. Exact seeded score sequences may change under the new derivation.
 - `OnlineIsolationForest` now enforces deterministic feature ordering and key-set checks.
 - Dataset module version now uses `aberrant.__version__` as single source of truth.
 - Documentation was rewritten to match the current public API.
