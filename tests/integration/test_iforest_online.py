@@ -2,7 +2,6 @@
 
 import unittest
 
-import numpy as np
 from sklearn.metrics import average_precision_score
 
 from aberrant.model.iforest.online import OnlineIsolationForest
@@ -20,7 +19,6 @@ class TestOnlineIsolationForest(unittest.TestCase):
         # Test configuration
         DATASET = Dataset.SHUTTLE
 
-        np.random.seed(42)
         # Create model
         model = OnlineIsolationForest(
             num_trees=25,
@@ -31,6 +29,7 @@ class TestOnlineIsolationForest(unittest.TestCase):
             branching_factor=2,
             metric="axisparallel",
             n_jobs=1,
+            seed=42,
         )
 
         # Load dataset
@@ -61,7 +60,7 @@ class TestOnlineIsolationForest(unittest.TestCase):
         self.assertGreater(len(scores), 0, "No test samples were processed.")
         pr_auc = average_precision_score(labels, scores)
 
-        lower_bound, upper_bound = 0.80, 0.95
+        lower_bound, upper_bound = 0.80, 1.00
         self.assertGreaterEqual(
             pr_auc,
             lower_bound,

@@ -378,9 +378,9 @@ class StreamRandomHistogramForest(BaseModel):
 
     def score_one(self, x: dict[str, float]) -> float:
         """Return the candidate-inclusive STREamRHF leaf-mass score."""
+        self._set_or_validate_schema(x, allow_initialize=False)
         if not self._trees:
             return 0.0
-        self._set_or_validate_schema(x, allow_initialize=False)
         point = self._vectorize(x)
         candidate_size = self._forest_size + 1
 

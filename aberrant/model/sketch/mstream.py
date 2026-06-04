@@ -311,7 +311,7 @@ class MStream(BaseModel):
         if update:
             self._numeric_min[:] = minimum
             self._numeric_max[:] = maximum
-        return normalized
+        return np.asarray(normalized, dtype=np.float64)
 
     def _numeric_bins(self, normalized: np.ndarray) -> np.ndarray:
         return np.floor(normalized * float(self.buckets - 1)).astype(np.intp)
