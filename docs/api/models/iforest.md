@@ -4,11 +4,14 @@ Public objects from `aberrant.model.iforest`:
 
 - `ASDIsolationForest`
 - `HalfSpaceTrees`
-- `MondrianForest`
+- `MondrianIsolationForest`
 - `OnlineIsolationForest`
 - `RandomCutForest`
 - `StreamRandomHistogramForest`
 - `XStream`
 
 Notes:
-- `MondrianForest(lambda_=...)` uses `lambda_` as the Mondrian lifetime budget.
+- `MondrianIsolationForest(lambda_=...)` uses `lambda_` as the Mondrian lifetime
+  budget and Isolation Forest path-length scoring.
+- `MondrianForest` remains a compatibility alias. The original supervised
+  Mondrian Forest paper defines no anomaly score.

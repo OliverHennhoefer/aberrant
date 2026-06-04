@@ -1,4 +1,4 @@
-"""STARE-style detector for streaming local outlier detection."""
+"""Stationary-region neighbor detector for streaming local outlier detection."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ _Cell: TypeAlias = tuple[int, ...]
 _Entry: TypeAlias = tuple[int, np.ndarray, _Cell]
 
 
-class STARE(BaseModel):
+class StationaryRegionNeighborDetector(BaseModel):
     """
-    STARE-style local outlier detector for streaming data.
+    Stationary-region neighbor detector for streaming data.
 
     The detector keeps a bounded sliding window and quantizes points into
     radius-sized grid cells. Scores are based on the number of neighbors within
@@ -377,10 +377,14 @@ class STARE(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "STARE("
+            "StationaryRegionNeighborDetector("
             f"k={self.k}, radius={self.radius}, window_size={self.window_size}, "
             f"slide_size={self.slide_size}, skip_threshold={self.skip_threshold}, "
             f"time_key={self.time_key!r}, warm_up_slides={self.warm_up_slides}, "
             f"predict_threshold={self.predict_threshold}, eps={self.eps}, "
             f"samples_seen={self._samples_seen}, active_cells={len(self._cell_counts)})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+STARE = StationaryRegionNeighborDetector

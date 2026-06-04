@@ -1,4 +1,4 @@
-"""StreamSpot detector for structural anomaly detection in graph edge streams."""
+"""Signed-sketch structural anomaly detection for graph edge streams."""
 
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ class _GraphState:
     tail: deque[bytes]
 
 
-class StreamSpot(BaseModel):
+class SignedGraphSketchDetector(BaseModel):
     """
-    StreamSpot-style detector for graph-level structural anomalies.
+    Signed-sketch detector for graph-level structural anomalies.
 
     The detector maintains bounded per-graph sketches over edge shingles and an
     online set of cluster centers over graph sketches. Incoming edges are scored
@@ -462,7 +462,7 @@ class StreamSpot(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "StreamSpot("
+            "SignedGraphSketchDetector("
             f"graph_key={self.graph_key!r}, source_key={self.source_key!r}, "
             f"destination_key={self.destination_key!r}, "
             f"edge_type_key={self.edge_type_key!r}, time_key={self.time_key!r}, "
@@ -474,3 +474,7 @@ class StreamSpot(BaseModel):
             f"samples_seen={self._samples_seen}, active_graphs={len(self._graph_states)}, "
             f"initialized_clusters={self._initialized_clusters})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+StreamSpot = SignedGraphSketchDetector

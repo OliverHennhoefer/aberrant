@@ -1,4 +1,4 @@
-"""LODA sketch detector for streaming anomaly detection."""
+"""Bounded streaming LODA adaptation for anomaly detection."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import numpy as np
 from aberrant.base.model import BaseModel
 
 
-class LODA(BaseModel):
+class StreamingLODA(BaseModel):
     """
-    Lightweight On-line Detector of Anomalies (LODA).
+    Bounded streaming adaptation of LODA.
 
     LODA projects each sample to multiple random one-dimensional views and
     maintains per-view streaming histograms. The anomaly score is the mean
@@ -356,7 +356,7 @@ class LODA(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "LODA("
+            "StreamingLODA("
             f"n_projections={self.n_projections}, n_bins={self.n_bins}, "
             f"sparsity={self.sparsity}, warm_up_samples={self.warm_up_samples}, "
             f"decay={self.decay}, time_key={self.time_key!r}, "
@@ -364,3 +364,7 @@ class LODA(BaseModel):
             f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
             f"samples_seen={self._samples_seen}, ready={self._ready})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+LODA = StreamingLODA

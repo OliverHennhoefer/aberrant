@@ -6,8 +6,10 @@ from typing import Any
 __all__ = [
     "KNN",
     "LocalOutlierFactor",
+    "CellNeighborhoodDetector",
     "NETS",
     "SDOStream",
+    "StationaryRegionNeighborDetector",
     "STARE",
 ]
 
@@ -20,13 +22,13 @@ def __getattr__(name: str) -> Any:
     if name == "LocalOutlierFactor":
         module = importlib.import_module("aberrant.model.distance.lof")
         return module.LocalOutlierFactor
-    if name == "NETS":
+    if name in {"CellNeighborhoodDetector", "NETS"}:
         module = importlib.import_module("aberrant.model.distance.nets")
-        return module.NETS
+        return getattr(module, name)
     if name == "SDOStream":
         module = importlib.import_module("aberrant.model.distance.sdostream")
         return module.SDOStream
-    if name == "STARE":
+    if name in {"StationaryRegionNeighborDetector", "STARE"}:
         module = importlib.import_module("aberrant.model.distance.stare")
-        return module.STARE
+        return getattr(module, name)
     raise AttributeError(f"module 'aberrant.model.distance' has no attribute '{name}'")

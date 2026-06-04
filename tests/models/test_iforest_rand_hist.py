@@ -243,6 +243,33 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
             preview_caches,
         )
 
+    def test_score_preview_matches_deepcopy_insert_reference(self):
+        model = StreamRandomHistogramForest(
+            n_estimators=4,
+            max_depth=8,
+            window_size=8,
+            seed=42,
+        )
+        for index in range(20):
+            model.learn_one(
+                {
+                    "x": float(index % 7),
+                    "y": float((index * index) % 11),
+                }
+            )
+
+        query = {"x": 2.5, "y": 7.5}
+        point = model._vectorize(query)
+        candidate_size = model._forest_size + 1
+        expected = 0.0
+        for learned_tree in model._trees:
+            reference_tree = copy.deepcopy(learned_tree)
+            leaf_size = reference_tree.insert(point)
+            if leaf_size > 0:
+                expected += np.log(float(candidate_size) / float(leaf_size))
+
+        self.assertAlmostEqual(model.score_one(query), expected)
+
     def test_model_randomness_does_not_mutate_global_random_state(self):
         random.seed(123)
         expected_next = random.random()

@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.graph import StreamSpot
+from aberrant.model.graph import SignedGraphSketchDetector as StreamSpot
 from tests.integration._settings import MAX_TEST_SHORT, WARMUP_SAMPLES
 
 

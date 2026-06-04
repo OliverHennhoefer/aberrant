@@ -7,6 +7,7 @@ __all__ = [
     "AnoEdgeL",
     "ISCONNA",
     "MIDAS",
+    "SignedGraphSketchDetector",
     "StreamSpot",
 ]
 
@@ -22,7 +23,7 @@ def __getattr__(name: str) -> Any:
     if name == "MIDAS":
         module = importlib.import_module("aberrant.model.graph.midas")
         return module.MIDAS
-    if name == "StreamSpot":
+    if name in {"SignedGraphSketchDetector", "StreamSpot"}:
         module = importlib.import_module("aberrant.model.graph.streamspot")
-        return module.StreamSpot
+        return getattr(module, name)
     raise AttributeError(f"module 'aberrant.model.graph' has no attribute '{name}'")

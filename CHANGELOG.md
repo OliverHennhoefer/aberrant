@@ -15,11 +15,13 @@ Semantic Versioning.
 - Regression tests for `keys=` initialization in multivariate statistical models.
 - Optional dependency extras for `parquet` and benchmark tooling.
 - Repository standards and CI/security/release workflows.
-- `KitNET` online deep detector with phased warm-up, tests, docs, and example script.
+- `OnlineAutoencoderEnsemble` deep detector with phased warm-up, tests, docs,
+  example script, and the historical `KitNET` compatibility alias.
 - `MStream` sketch-based streaming detector with `aberrant.model.sketch` public API,
   unit/integration tests, docs, and example script.
-- `LODA` sketch-based streaming detector with `aberrant.model.sketch` public API,
-  unit/integration tests, docs, and example script.
+- `StreamingLODA` sketch-based detector with `aberrant.model.sketch` public API,
+  unit/integration tests, docs, example script, and the historical `LODA`
+  compatibility alias.
 - `SDOStream` bounded-memory observer-based detector in `aberrant.model.distance`
   with unit/integration tests, docs, and example script.
 - `MIDAS` graph-stream detector in `aberrant.model.graph` with public export,
@@ -32,6 +34,11 @@ Semantic Versioning.
 
 ### Changed
 
+- Paper-derived custom variants now have accurate canonical public names:
+  `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector`,
+  `SignedGraphSketchDetector`, `OnlineAutoencoderEnsemble`,
+  `MondrianIsolationForest`, `StreamingRSHash`, and `StreamingLODA`. Historical
+  names remain compatibility aliases and do not imply paper-score parity.
 - `StreamRandomHistogramForest` now uses `max_depth` exclusively; the historical
   `max_bins` parameter and attribute were removed. Per-node random values are
   generated lazily so memory scales with visited nodes instead of complete-tree

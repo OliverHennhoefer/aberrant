@@ -2,7 +2,7 @@
 
 import unittest
 
-from aberrant.model.graph import StreamSpot
+from aberrant.model.graph import SignedGraphSketchDetector as StreamSpot
 
 
 class TestStreamSpot(unittest.TestCase):
@@ -288,7 +288,7 @@ class TestStreamSpot(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(sketch_dim=128, num_clusters=6, max_graphs=64)
         output = repr(model)
-        self.assertIn("StreamSpot", output)
+        self.assertIn("SignedGraphSketchDetector", output)
         self.assertIn("sketch_dim=128", output)
         self.assertIn("num_clusters=6", output)
         self.assertIn("max_graphs=64", output)

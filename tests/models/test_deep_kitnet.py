@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.deep.kitnet import KitNET
+from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble as KitNET
 
 
 class TestKitNET(unittest.TestCase):
@@ -198,7 +198,7 @@ class TestKitNET(unittest.TestCase):
         model = self.create_model()
         representation = repr(model)
 
-        self.assertIn("KitNET", representation)
+        self.assertIn("OnlineAutoencoderEnsemble", representation)
         self.assertIn("max_ae_size=2", representation)
         self.assertIn("feature_map_grace=12", representation)
         self.assertIn("ad_grace=24", representation)

@@ -1,18 +1,17 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.distance import NETS
+from aberrant.model.distance import StationaryRegionNeighborDetector
 from aberrant.stream.dataset import Dataset, load
 from aberrant.transform.preprocessing import StandardScaler
 
-model = NETS(
-    k=30,
+model = StationaryRegionNeighborDetector(
+    k=40,
     radius=1.5,
     window_size=1024,
     slide_size=128,
-    subspace_dim=3,
-    warm_up_slides=2,
+    skip_threshold=0.1,
+    warm_up_slides=4,
     predict_threshold=0.5,
-    seed=42,
 )
 pipeline = StandardScaler() | model
 

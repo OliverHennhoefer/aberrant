@@ -10,7 +10,7 @@ Imports:
 from aberrant.model.iforest import (
     ASDIsolationForest,
     HalfSpaceTrees,
-    MondrianForest,
+    MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
     StreamRandomHistogramForest,
@@ -20,7 +20,8 @@ from aberrant.model.iforest import (
 
 Use these for general-purpose unsupervised streaming anomaly detection.
 
-`MondrianForest` uses `lambda_` as the Mondrian lifetime budget:
+`MondrianIsolationForest` combines Mondrian block extension with Isolation
+Forest path-length scoring. It uses `lambda_` as the Mondrian lifetime budget:
 - smaller `lambda_` yields coarser partitions
 - larger `lambda_` yields finer partitions
 
@@ -32,7 +33,13 @@ training on the point being evaluated.
 Imports:
 
 ```python
-from aberrant.model.distance import KNN, LocalOutlierFactor, NETS, SDOStream, STARE
+from aberrant.model.distance import (
+    CellNeighborhoodDetector,
+    KNN,
+    LocalOutlierFactor,
+    SDOStream,
+    StationaryRegionNeighborDetector,
+)
 ```
 
 `KNN` requires a similarity engine (for example FAISS):
@@ -56,12 +63,13 @@ model = LocalOutlierFactor(k=10, window_size=1000, distance="euclidean")
 - Returns a continuous LOF score, where values above `1` are more outlier-like.
 - Uses bounded-memory window state (`window_size`).
 
-`NETS` is a bounded streaming detector using cell-level net-effect pruning:
+`CellNeighborhoodDetector` is a bounded point-scoring detector using
+NETS-inspired cell-level net-effect pruning:
 
 ```python
-from aberrant.model.distance import NETS
+from aberrant.model.distance import CellNeighborhoodDetector
 
-model = NETS(
+model = CellNeighborhoodDetector(
     k=30,
     radius=1.5,
     window_size=2048,
@@ -87,12 +95,13 @@ model = SDOStream(k=128, T=256.0, qv=0.3, x_neighbors=8, seed=42)
 - Supports optional explicit time handling through `time_key`.
 - Uses fixed-size observer state (`k`) with exponential fading (`T`).
 
-`STARE` is a bounded sliding-window local outlier detector:
+`StationaryRegionNeighborDetector` is a bounded sliding-window local outlier
+detector with stationary-cell cache invalidation:
 
 ```python
-from aberrant.model.distance import STARE
+from aberrant.model.distance import StationaryRegionNeighborDetector
 
-model = STARE(
+model = StationaryRegionNeighborDetector(
     k=40,
     radius=1.5,
     window_size=2048,
@@ -110,17 +119,18 @@ model = STARE(
 Imports:
 
 ```python
-from aberrant.model.sketch import LODA, MStream, RSHash
+from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 ```
 
-Use `LODA`, `MStream`, and `RSHash` for bounded-memory sketch-based streaming detection.
+Use `StreamingLODA`, `MStream`, and `StreamingRSHash` for bounded-memory
+sketch-based streaming detection.
 
-`LODA` is a random-projection histogram detector:
+`StreamingLODA` is a random-projection histogram detector:
 
 ```python
-from aberrant.model.sketch import LODA
+from aberrant.model.sketch import StreamingLODA
 
-model = LODA(
+model = StreamingLODA(
     n_projections=64,
     n_bins=24,
     sparsity=0.3,
@@ -139,11 +149,12 @@ model = LODA(
 Imports:
 
 ```python
-from aberrant.model.graph import AnoEdgeL, ISCONNA, MIDAS, StreamSpot
+from aberrant.model.graph import AnoEdgeL, ISCONNA, MIDAS, SignedGraphSketchDetector
 ```
 
-Use `AnoEdgeL`, `ISCONNA`, `MIDAS`, and `StreamSpot` for dynamic edge streams where each sample encodes
-source and destination IDs (plus optional timestamp).
+Use `AnoEdgeL`, `ISCONNA`, `MIDAS`, and `SignedGraphSketchDetector` for dynamic
+edge streams where each sample encodes source and destination IDs (plus
+optional timestamp).
 
 - `AnoEdgeL`, `ISCONNA`, and `MIDAS` use bounded-memory sketch state.
 - Supports optional explicit timestamp handling via `time_key`.
@@ -164,13 +175,13 @@ model = AnoEdgeL(
 )
 ```
 
-`StreamSpot` models graph-level structural change with bounded per-graph shingle
-sketches and online cluster summaries:
+`SignedGraphSketchDetector` models graph-level structural change with bounded
+per-graph signed shingle sketches and online Euclidean cluster summaries:
 
 ```python
-from aberrant.model.graph import StreamSpot
+from aberrant.model.graph import SignedGraphSketchDetector
 
-model = StreamSpot(
+model = SignedGraphSketchDetector(
     graph_key="graph",
     source_key="src",
     destination_key="dst",
@@ -218,12 +229,17 @@ Use for compact, interpretable change detectors.
 Imports:
 
 ```python
-from aberrant.model.deep import Autoencoder, KitNET
+from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
 ```
 
 - `Autoencoder` depends on `torch` (`aberrant[dl]`).
-- `KitNET` is an online ensemble of lightweight autoencoders with explicit
+- `OnlineAutoencoderEnsemble` is an online ensemble of lightweight autoencoders with explicit
   warm-up phases (`feature_map_grace`, `ad_grace`).
+
+The historical names `NETS`, `STARE`, `StreamSpot`, `KitNET`,
+`MondrianForest`, `RSHash`, and `LODA` remain compatibility aliases. They refer
+to the variants documented above, not score-compatible reproductions of the
+published algorithms.
 
 ## Core utility models
 

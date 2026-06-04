@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import math
 from dataclasses import dataclass
 
@@ -116,7 +115,12 @@ class _RandomHistogramTree:
         """Build a complete tree from one reference window."""
         self.root = self._build_node(points, depth=0, node_id=0)
 
-    def _random_values(self, node_id: int) -> tuple[float, float]:
+    def _random_values(
+        self,
+        node_id: int,
+        *,
+        cache: bool = True,
+    ) -> tuple[float, float]:
         """Return fixed feature/split quantiles for one visited node."""
         cached = self._node_random.get(node_id)
         if cached is None:
@@ -138,15 +142,22 @@ class _RandomHistogramTree:
                 size=2,
             )
             cached = (float(values[0]), float(values[1]))
-            self._node_random[node_id] = cached
+            if cache:
+                self._node_random[node_id] = cached
         return cached
 
-    def _selected_feature(self, moments: np.ndarray, node_id: int) -> int | None:
+    def _selected_feature(
+        self,
+        moments: np.ndarray,
+        node_id: int,
+        *,
+        cache_random: bool = True,
+    ) -> int | None:
         weights = _kurtosis_weights(moments)
         total = float(np.sum(weights))
         if total <= 0.0:
             return None
-        feature_random, _ = self._random_values(node_id)
+        feature_random, _ = self._random_values(node_id, cache=cache_random)
         target = feature_random * total
         feature = int(np.searchsorted(np.cumsum(weights), target, side="left"))
         return min(feature, self.n_features - 1)
@@ -157,6 +168,7 @@ class _RandomHistogramTree:
         *,
         depth: int,
         node_id: int,
+        cache_random: bool = True,
     ) -> _RHFNode:
         moments = _moments_for(points, self.n_features)
         leaf = _RHFNode(
@@ -168,7 +180,11 @@ class _RandomHistogramTree:
         if len(points) <= 1 or depth >= self.max_depth:
             return leaf
 
-        feature = self._selected_feature(moments, node_id)
+        feature = self._selected_feature(
+            moments,
+            node_id,
+            cache_random=cache_random,
+        )
         if feature is None:
             return leaf
 
@@ -177,7 +193,7 @@ class _RandomHistogramTree:
         maximum = float(np.max(values))
         if minimum == maximum:
             return leaf
-        _, split_random = self._random_values(node_id)
+        _, split_random = self._random_values(node_id, cache=cache_random)
         split_value = minimum + split_random * (maximum - minimum)
         left_points = [point for point in points if point[feature] <= split_value]
         right_points = [point for point in points if point[feature] > split_value]
@@ -194,11 +210,13 @@ class _RandomHistogramTree:
                 left_points,
                 depth=depth + 1,
                 node_id=2 * node_id + 1,
+                cache_random=cache_random,
             ),
             right=self._build_node(
                 right_points,
                 depth=depth + 1,
                 node_id=2 * node_id + 2,
+                cache_random=cache_random,
             ),
         )
 
@@ -235,11 +253,56 @@ class _RandomHistogramTree:
             node.right = self._insert_node(node.right, point)
         return node
 
-    def leaf_size(self, point: np.ndarray) -> int:
-        """Return the size of the leaf reached by point."""
-        node = self.root
-        if node is None:
-            return 0
+    def preview_insert_leaf_size(self, point: np.ndarray) -> int:
+        """Return the candidate leaf size without mutating tree or random cache."""
+        if self.root is None:
+            return 1
+        return self._preview_insert_node(self.root, point)
+
+    def _preview_insert_node(self, node: _RHFNode, point: np.ndarray) -> int:
+        """Preview insertion, rebuilding only a temporary affected subtree."""
+        if node.is_leaf:
+            points = node.collect_points()
+            points.append(point)
+            preview = self._build_node(
+                points,
+                depth=node.depth,
+                node_id=node.node_id,
+                cache_random=False,
+            )
+            return self._leaf_size_from(preview, point)
+
+        updated_moments = node.moments.copy()
+        _update_moments(updated_moments, point)
+        selected_feature = self._selected_feature(
+            updated_moments,
+            node.node_id,
+            cache_random=False,
+        )
+        if selected_feature != node.split_feature:
+            points = node.collect_points()
+            points.append(point)
+            preview = self._build_node(
+                points,
+                depth=node.depth,
+                node_id=node.node_id,
+                cache_random=False,
+            )
+            return self._leaf_size_from(preview, point)
+
+        if node.split_feature is None or node.split_value is None:
+            raise RuntimeError("Invalid split node")
+        if point[node.split_feature] <= node.split_value:
+            if node.left is None:
+                raise RuntimeError("Split node has no left child")
+            return self._preview_insert_node(node.left, point)
+        if node.right is None:
+            raise RuntimeError("Split node has no right child")
+        return self._preview_insert_node(node.right, point)
+
+    @staticmethod
+    def _leaf_size_from(node: _RHFNode, point: np.ndarray) -> int:
+        """Return the leaf size reached by a point from a supplied subtree."""
         while not node.is_leaf:
             if node.split_feature is None or node.split_value is None:
                 raise RuntimeError("Invalid split node")
@@ -252,6 +315,13 @@ class _RandomHistogramTree:
                     raise RuntimeError("Split node has no right child")
                 node = node.right
         return node.size
+
+    def leaf_size(self, point: np.ndarray) -> int:
+        """Return the size of the leaf reached by point."""
+        node = self.root
+        if node is None:
+            return 0
+        return self._leaf_size_from(node, point)
 
 
 class StreamRandomHistogramForest(BaseModel):
@@ -267,8 +337,8 @@ class StreamRandomHistogramForest(BaseModel):
     - anomaly score is the sum of ``log(n / leaf_size)`` across trees after
       candidate insertion.
 
-    ``score_one`` inserts into copies of the trees so it reproduces the
-    candidate-inclusive score without mutating learned state.
+    ``score_one`` previews insertion along the affected tree paths so it
+    reproduces the candidate-inclusive score without mutating learned state.
 
     References:
         Nesic, S., et al. (2022). STREamRHF: Tree-Based Unsupervised Anomaly
@@ -380,9 +450,8 @@ class StreamRandomHistogramForest(BaseModel):
         candidate_size = self._forest_size + 1
 
         score = 0.0
-        for learned_tree in self._trees:
-            tree = copy.deepcopy(learned_tree)
-            leaf_size = tree.insert(point)
+        for tree in self._trees:
+            leaf_size = tree.preview_insert_leaf_size(point)
             if leaf_size > 0:
                 score += math.log(float(candidate_size) / float(leaf_size))
         return float(score)

@@ -1,4 +1,4 @@
-"""NETS detector for streaming distance-based anomaly detection."""
+"""Bounded cell-neighborhood detector for streaming anomaly detection."""
 
 from __future__ import annotations
 
@@ -15,16 +15,16 @@ _Entry: TypeAlias = tuple[int, np.ndarray, _Cell, _Cell, int]
 _MAX_NEIGHBOR_OFFSETS = 20_000
 
 
-class NETS(BaseModel):
+class CellNeighborhoodDetector(BaseModel):
     """
-    NETS-style streaming outlier detector.
+    Bounded cell-neighborhood streaming outlier detector.
 
     The detector keeps a bounded sliding window and quantizes samples into
     full-space and random-subspace cells. Scores are based on neighborhood
     density within ``radius``:
     ``score = 1 - min(neighbor_count / k, 1)``.
 
-    NETS-style set-based processing is approximated via slide-wise net-effect
+    NETS-inspired set-based processing is approximated via slide-wise net-effect
     bookkeeping and cell-level upper-bound pruning before exact refinement.
     This class returns a continuous score for one query point; it does not
     reproduce the paper's exact window-level inlier/outlier set algorithm.
@@ -39,6 +39,7 @@ class NETS(BaseModel):
         Yoon, S., Lee, J.-G., & Lee, B. S. (2019). NETS: Extremely Fast
         Outlier Detection from a Data Stream via Set-Based Processing.
         https://doi.org/10.14778/3342263.3342269
+        Original implementation: https://github.com/kaist-dmlab/NETS
     """
 
     def __init__(
@@ -503,7 +504,7 @@ class NETS(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "NETS("
+            "CellNeighborhoodDetector("
             f"k={self.k}, radius={self.radius}, window_size={self.window_size}, "
             f"slide_size={self.slide_size}, subspace_dim={self.subspace_dim}, "
             f"time_key={self.time_key!r}, warm_up_slides={self.warm_up_slides}, "
@@ -512,3 +513,7 @@ class NETS(BaseModel):
             f"active_full_cells={len(self._full_cell_counts)}, "
             f"active_sub_cells={len(self._sub_cell_counts)})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+NETS = CellNeighborhoodDetector

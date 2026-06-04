@@ -1,4 +1,4 @@
-"""KitNET: online ensemble of autoencoders for anomaly detection."""
+"""Online ensemble of lightweight autoencoders for anomaly detection."""
 
 from __future__ import annotations
 
@@ -84,11 +84,11 @@ class _NumpyAutoencoder:
         return rmse
 
 
-class KitNET(BaseModel):
+class OnlineAutoencoderEnsemble(BaseModel):
     """
-    KitNET online anomaly detector.
+    Online anomaly detector using an ensemble of lightweight autoencoders.
 
-    KitNET first learns a feature grouping from streaming correlations and then
+    The detector first learns feature groups from streaming correlations, then
     trains an ensemble of small autoencoders plus an output autoencoder. This
     implementation uses raw inputs, greedy correlation grouping, and simple
     NumPy autoencoders. The authors' implementation includes its own feature
@@ -406,9 +406,13 @@ class KitNET(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            f"KitNET(max_ae_size={self.max_ae_size}, "
+            f"OnlineAutoencoderEnsemble(max_ae_size={self.max_ae_size}, "
             f"feature_map_grace={self.feature_map_grace}, ad_grace={self.ad_grace}, "
             f"learning_rate={self.learning_rate}, hidden_ratio={self.hidden_ratio}, "
             f"adaptive_after_warmup={self.adaptive_after_warmup}, phase='{self._phase}', "
             f"feature_groups={len(self._feature_groups)})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+KitNET = OnlineAutoencoderEnsemble

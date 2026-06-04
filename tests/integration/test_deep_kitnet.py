@@ -4,7 +4,7 @@ import unittest
 
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.deep.kitnet import KitNET
+from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble as KitNET
 from aberrant.stream.dataset import Dataset, load
 from tests.integration._settings import MAX_TEST_SHORT, WARMUP_SAMPLES
 

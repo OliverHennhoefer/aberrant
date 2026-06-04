@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.sketch import RSHash
+from aberrant.model.sketch import StreamingRSHash as RSHash
 
 
 class TestRSHash(unittest.TestCase):
@@ -202,7 +202,7 @@ class TestRSHash(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(components_num=18, hash_num=5)
         output = repr(model)
-        self.assertIn("RSHash", output)
+        self.assertIn("StreamingRSHash", output)
         self.assertIn("components_num=18", output)
         self.assertIn("hash_num=5", output)
 
