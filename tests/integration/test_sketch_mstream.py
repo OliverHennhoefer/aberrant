@@ -2,68 +2,38 @@
 
 import unittest
 
-from sklearn.metrics import average_precision_score
-
 from aberrant.model.sketch import MStream
-from aberrant.stream.dataset import Dataset, load
-from tests.integration._settings import MAX_TEST_SHORT, WARMUP_SAMPLES
 
 
 class TestMStream(unittest.TestCase):
-    """Test MStream on the SHUTTLE dataset."""
+    """Test MStream's complete-record interaction signal."""
 
-    def test_shuttle_dataset_pr_auc(self) -> None:
-        """Smoke-test MStream quality on SHUTTLE with bounded PR-AUC range."""
-        dataset_stream = load(Dataset.SHUTTLE)
+    def test_novel_record_interaction_scores_above_familiar_record(self) -> None:
+        """
+        Detect a novel combination whose individual attribute values are familiar.
+
+        Original MStream adds a complete-record sketch specifically so this case
+        is detectable even when every singleton attribute value is common.
+        """
         model = MStream(
-            rows=1,
-            buckets=512,
+            rows=4,
+            buckets=2048,
             alpha=0.5,
             time_key="t",
-            interaction_order=2,
-            max_interactions=8,
-            warm_up_buckets=4,
             seed=42,
         )
 
-        labels: list[int] = []
-        scores: list[float] = []
-        warmup_count = 0
-        test_count = 0
+        for timestamp in range(1, 31):
+            for _ in range(8):
+                model.learn_one({"x": 0.0, "y": 0.0, "t": float(timestamp)})
+                model.learn_one({"x": 10.0, "y": 10.0, "t": float(timestamp)})
 
-        for i, (features, label) in enumerate(dataset_stream.stream()):
-            sample = dict(features)
-            sample["t"] = float(i // 128)
-
-            if warmup_count < WARMUP_SAMPLES:
-                if label == 0:
-                    model.learn_one(sample)
-                    warmup_count += 1
-                continue
-
-            if test_count >= MAX_TEST_SHORT:
-                break
-
-            score = model.score_one(sample)
-            model.learn_one(sample)
-            labels.append(label)
-            scores.append(score)
-            test_count += 1
-
-        self.assertGreater(len(scores), 0, "No test samples were processed.")
-        pr_auc = average_precision_score(labels, scores)
-
-        lower_bound, upper_bound = 0.65, 0.90
-        self.assertGreaterEqual(
-            pr_auc,
-            lower_bound,
-            f"PR-AUC {pr_auc:.3f} is below expected range [{lower_bound}, {upper_bound}]",
+        familiar_score = model.score_one({"x": 0.0, "y": 0.0, "t": 31.0})
+        novel_interaction_score = model.score_one(
+            {"x": 0.0, "y": 10.0, "t": 31.0}
         )
-        self.assertLessEqual(
-            pr_auc,
-            upper_bound,
-            f"PR-AUC {pr_auc:.3f} is above expected range [{lower_bound}, {upper_bound}]",
-        )
+
+        self.assertGreater(novel_interaction_score, familiar_score)
 
 
 if __name__ == "__main__":

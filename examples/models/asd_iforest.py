@@ -3,7 +3,13 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from aberrant.model.iforest.asd import ASDIsolationForest
 from aberrant.stream.dataset import Dataset, load
 
-model = ASDIsolationForest(n_estimators=750, max_samples=2750, seed=1)
+model = ASDIsolationForest(
+    n_estimators=100,
+    max_samples=256,
+    window_size=2048,
+    retrain_interval=2048,
+    seed=1,
+)
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 

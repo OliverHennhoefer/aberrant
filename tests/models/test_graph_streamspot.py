@@ -126,6 +126,15 @@ class TestStreamSpot(unittest.TestCase):
         with self.assertRaises(ValueError):
             model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
 
+    def test_score_one_does_not_advance_timestamp(self) -> None:
+        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=1)
+        model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
+        current_bucket = model._current_bucket
+
+        model.score_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 10.0})
+
+        self.assertEqual(model._current_bucket, current_bucket)
+
     def test_internal_clock_fallback_without_time_key(self) -> None:
         model = self.create_model(
             time_key=None,

@@ -86,6 +86,54 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
         self.assertEqual(prediction, 1)  # Default to normal
         self.assertEqual(score, 0.0)  # Default neutral score
 
+    def test_running_statistics_include_first_sample_and_keep_raw_support_vectors(self):
+        model = IncrementalOneClassSVMAdaptiveKernel(seed=42)
+        samples = [
+            {"x": 10.0, "y": -3.0},
+            {"x": 12.0, "y": 1.0},
+            {"x": 14.0, "y": 5.0},
+        ]
+
+        for sample in samples:
+            model.learn_one(sample)
+
+        np.testing.assert_allclose(model.support_vectors[0], [10.0, -3.0])
+        self.assertAlmostEqual(model.feature_stats["x"][0], 12.0)
+        self.assertAlmostEqual(model.feature_stats["y"][0], 1.0)
+        self.assertAlmostEqual(model.feature_stats["x"][1], np.std([10.0, 12.0, 14.0]))
+        self.assertAlmostEqual(model.feature_stats["y"][1], np.std([-3.0, 1.0, 5.0]))
+
+    def test_scoring_does_not_change_coordinates_or_state(self):
+        model = IncrementalOneClassSVMAdaptiveKernel(seed=42)
+        for i in range(30):
+            model.learn_one({"x": float(i), "y": float(i * i)})
+
+        support_before = [vector.copy() for vector in model.support_vectors]
+        stats_before = dict(model.feature_stats)
+        score_1 = model.score_one({"x": 2.0, "y": 4.0})
+        score_2 = model.score_one({"x": 2.0, "y": 4.0})
+
+        self.assertEqual(score_1, score_2)
+        self.assertEqual(model.feature_stats, stats_before)
+        for before, after in zip(support_before, model.support_vectors, strict=True):
+            np.testing.assert_array_equal(before, after)
+
+    def test_invalid_parameters(self):
+        with self.assertRaises(ValueError):
+            IncrementalOneClassSVMAdaptiveKernel(nu=0.0)
+        with self.assertRaises(ValueError):
+            IncrementalOneClassSVMAdaptiveKernel(initial_gamma=0.0)
+        with self.assertRaises(ValueError):
+            IncrementalOneClassSVMAdaptiveKernel(
+                initial_gamma=1.0, gamma_bounds=(2.0, 3.0)
+            )
+        with self.assertRaises(ValueError):
+            IncrementalOneClassSVMAdaptiveKernel(adaptation_rate=0.0)
+        with self.assertRaises(ValueError):
+            IncrementalOneClassSVMAdaptiveKernel(buffer_size=0)
+        with self.assertRaises(ValueError):
+            IncrementalOneClassSVMAdaptiveKernel(sv_budget=0)
+
 
 if __name__ == "__main__":
     # Run with verbosity to see print statements

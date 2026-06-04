@@ -131,7 +131,7 @@ class LocalOutlierFactor(BaseModel):
         # Compute distances to all points in window
         distances = self._compute_distances(query)
 
-        # Get k nearest neighbors
+        # Get the k-distance neighborhood, including all ties at k-distance.
         k_neighbors = self._get_k_neighbors(distances)
 
         # Compute local reachability density for query point
@@ -160,7 +160,7 @@ class LocalOutlierFactor(BaseModel):
                 else:
                     lof_sum += lrd_neighbor / lrd_query
 
-        lof = lof_sum / self.k
+        lof = lof_sum / len(k_neighbors)
         return lof
 
     def _compute_distances(self, point: np.ndarray) -> np.ndarray:
@@ -181,12 +181,17 @@ class LocalOutlierFactor(BaseModel):
     def _get_k_neighbors(
         self, distances: np.ndarray, exclude_index: int | None = None
     ) -> list[int]:
-        """Get the k nearest indices, excluding only a known point itself."""
-        return [
+        """Return all neighbors whose distance is at most the k-distance."""
+        ordered = [
             int(idx)
             for idx in np.argsort(distances)
             if int(idx) != exclude_index
-        ][: self.k]
+        ]
+        if len(ordered) <= self.k:
+            return ordered
+
+        k_distance = distances[ordered[self.k - 1]]
+        return [idx for idx in ordered if distances[idx] <= k_distance]
 
     def _compute_k_distance(self, idx: int) -> float:
         """Compute k-distance for point at index idx."""

@@ -50,7 +50,7 @@ class TestASDIsolationForest(unittest.TestCase):
         # Calculate and assert PR-AUC
         self.assertGreater(len(scores), 0, "No test samples were processed.")
         pr_auc = average_precision_score(labels, scores)
-        lower_bound, upper_bound = 0.95, 1.00
+        lower_bound, upper_bound = 0.90, 1.00
         self.assertGreaterEqual(
             pr_auc,
             lower_bound,

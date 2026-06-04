@@ -36,7 +36,7 @@ Each `x` is `dict[str, float]`.
 | Distance | `KNN`, `LocalOutlierFactor`, `NETS`, `SDOStream`, `STARE` |
 | Sketch | `LODA`, `MStream`, `RSHash` |
 | Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `StreamSpot` |
-| SVM | `GADGETSVM`, `IncrementalOneClassSVMAdaptiveKernel` |
+| SVM | `GraphGatedOneClassSVM`, `IncrementalOneClassSVMAdaptiveKernel` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance` |
 | Deep (`aberrant[dl]`) | `Autoencoder`, `KitNET` |
 | Utility | `ThresholdModel`, `QuantileThreshold`, `NullModel`, `RandomModel` |

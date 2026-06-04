@@ -8,8 +8,6 @@ model = MStream(
     buckets=512,
     alpha=0.5,
     time_key="t",
-    interaction_order=2,
-    max_interactions=8,
     warm_up_buckets=4,
     seed=42,
 )
@@ -18,7 +16,9 @@ labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
 for i, (x, y) in enumerate(dataset.stream()):
-    sample = dict(x)
+    # MStream's author implementation applies log10(1 + x), so adapt this
+    # signed benchmark into its required numeric domain.
+    sample = {key: abs(value) for key, value in x.items()}
     sample["t"] = float(i // 128)
 
     if i < 5000 and y == 0:

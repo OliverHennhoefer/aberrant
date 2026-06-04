@@ -1,9 +1,9 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.svm import GADGETSVM
+from aberrant.model.svm import GraphGatedOneClassSVM
 from aberrant.stream.dataset import Dataset, load
 
-model = GADGETSVM()
+model = GraphGatedOneClassSVM()
 labels, scores = [], []
 dataset = load(Dataset.FRAUD)
 

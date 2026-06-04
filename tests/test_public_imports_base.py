@@ -23,7 +23,11 @@ from aberrant.model.iforest import (
 )
 from aberrant.model.sketch import LODA, MStream, RSHash
 from aberrant.model.stat import MovingAverage, MovingCovariance
-from aberrant.model.svm import GADGETSVM, IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import (
+    GADGETSVM,
+    GraphGatedOneClassSVM,
+    IncrementalOneClassSVMAdaptiveKernel,
+)
 from aberrant.stream import Dataset, load
 from aberrant.stream.dataset import BatchStreamer, DatasetStreamer
 from aberrant.transform.preprocessing import MinMaxScaler, StandardScaler
@@ -63,6 +67,7 @@ def test_public_imports_base_smoke() -> None:
     assert RSHash is not None
     assert IncrementalOneClassSVMAdaptiveKernel is not None
     assert GADGETSVM is not None
+    assert GADGETSVM is GraphGatedOneClassSVM
     assert MovingAverage is not None
     assert MovingCovariance is not None
     assert MinMaxScaler is not None

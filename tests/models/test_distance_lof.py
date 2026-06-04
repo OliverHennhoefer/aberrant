@@ -158,6 +158,12 @@ class TestLocalOutlierFactor(unittest.TestCase):
         self.assertEqual(lof._get_k_neighbors(distances, exclude_index=0), [1, 2])
         self.assertEqual(lof._get_k_neighbors(distances), [0, 1])
 
+    def test_neighbor_selection_includes_all_k_distance_ties(self):
+        lof = LocalOutlierFactor(k=2, window_size=10)
+        distances = np.array([0.0, 1.0, 1.0, 1.0, 2.0])
+
+        self.assertEqual(lof._get_k_neighbors(distances, exclude_index=0), [1, 2, 3])
+
     def test_repr(self):
         """Test string representation."""
         lof = LocalOutlierFactor(k=5, window_size=500, distance="manhattan")

@@ -174,6 +174,15 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         self.assertGreaterEqual(score1, 0.0)
         self.assertGreaterEqual(score2, 0.0)
 
+    def test_schema_change_raises_instead_of_zero_imputation(self):
+        model = self.create_model()
+        model.learn_one({"x": 0.1, "y": 0.2})
+
+        with self.assertRaises(ValueError):
+            model.learn_one({"x": 0.1})
+        with self.assertRaises(ValueError):
+            model.score_one({"x": 0.1})
+
 
 if __name__ == "__main__":
     unittest.main()

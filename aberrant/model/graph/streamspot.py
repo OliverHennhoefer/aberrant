@@ -250,17 +250,16 @@ class StreamSpot(BaseModel):
                 raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
             bucket = self._coerce_bucket(x[self.time_key])
 
+        if self._current_bucket is not None and bucket < self._current_bucket:
+            raise ValueError(
+                f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
+            )
         return bucket, graph_id, src, dst, edge_type
 
     def _rollover_if_needed(self, bucket: int) -> None:
         if self._current_bucket is None:
             self._current_bucket = bucket
             return
-
-        if bucket < self._current_bucket:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
-            )
         self._current_bucket = bucket
 
     def _edge_token(self, src: float, dst: float, edge_type: float | None) -> bytes:
@@ -419,9 +418,8 @@ class StreamSpot(BaseModel):
             self._arrival_index += 1
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score for one edge event."""
-        bucket, graph_id, src, dst, edge_type = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
+        """Compute anomaly score for one edge event without mutating state."""
+        _bucket, graph_id, src, dst, edge_type = self._prepare_sample(x)
 
         if not self._is_warm():
             return 0.0

@@ -1,26 +1,28 @@
-"""Integration test for the GADGETSVM model."""
+"""Integration test for the graph-gated one-class SVM model."""
 
 import unittest
 
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.svm.gadget import GADGETSVM
+from aberrant.model.svm.gadget import GraphGatedOneClassSVM
 from aberrant.stream.dataset import Dataset, load
 from tests.integration._settings import MAX_TEST_STANDARD, WARMUP_SAMPLES
 
 
 class TestGadgetSVM(unittest.TestCase):
-    """Test GADGETSVM with the SHUTTLE dataset."""
+    """Test GraphGatedOneClassSVM with the SHUTTLE dataset."""
 
     def test_shuttle_dataset_pr_auc(self):
         """
-        Tests the GADGETSVM model on the SHUTTLE dataset and snapshots the PR-AUC score.
+        Tests the graph-gated SVM model on SHUTTLE and snapshots PR-AUC.
         """
         # Test configuration
         DATASET = Dataset.SHUTTLE
 
         # Create model
-        model = GADGETSVM(nu=0.1, learning_rate=0.01, lambda_reg=0.01)
+        model = GraphGatedOneClassSVM(
+            nu=0.1, learning_rate=0.01, lambda_reg=0.01
+        )
 
         # Load dataset
         dataset_stream = load(DATASET)

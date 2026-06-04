@@ -26,10 +26,11 @@ class TestASDIsolationForest(unittest.TestCase):
 
         self.assertEqual(forest.n_estimators, 100)
         self.assertEqual(forest.max_samples, 256)
+        self.assertEqual(forest.window_size, 256)
+        self.assertEqual(forest.retrain_interval, 256)
         self.assertIsNone(forest.seed)
         self.assertIsNone(forest.feature_names)
-        self.assertEqual(forest.buffer.shape, (0, 0))
-        self.assertEqual(forest.buffer_count, 0)
+        self.assertEqual(len(forest.window), 0)
         self.assertEqual(len(forest.trees), 0)
 
     def test_initialization_with_custom_params(self):
@@ -38,6 +39,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
         self.assertEqual(forest.n_estimators, 50)
         self.assertEqual(forest.max_samples, 128)
+        self.assertEqual(forest.window_size, 128)
         self.assertEqual(forest.seed, 42)
 
     def test_initialization_validation(self):
@@ -62,6 +64,10 @@ class TestASDIsolationForest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             ASDIsolationForest(max_samples=1)
+        with self.assertRaises(ValueError):
+            ASDIsolationForest(window_size=1)
+        with self.assertRaises(ValueError):
+            ASDIsolationForest(retrain_interval=0)
 
     def test_compute_c_static_method(self):
         """Test the static _compute_c method."""
@@ -83,17 +89,32 @@ class TestASDIsolationForest(unittest.TestCase):
         self.assertGreater(c_10, c_2)
         self.assertGreater(c_100, c_10)
 
-    def test_completed_chunks_do_not_duplicate_boundary_sample(self):
-        forest = ASDIsolationForest(max_samples=3, seed=42)
-        for value in [1.0, 2.0, 3.0]:
+    def test_periodically_retrains_full_forest_on_recent_window(self):
+        forest = ASDIsolationForest(
+            n_estimators=3,
+            max_samples=3,
+            window_size=4,
+            retrain_interval=2,
+            seed=42,
+        )
+        for value in [1.0, 2.0, 3.0, 4.0]:
             forest.learn_one({"feature": value})
 
-        self.assertEqual(len(forest.trees), 1)
-        self.assertEqual(forest.buffer_count, 0)
+        self.assertEqual(len(forest.trees), 3)
+        self.assertEqual(forest._fits_completed, 1)
+        np.testing.assert_array_equal(
+            forest._last_fit_window[:, 0],  # type: ignore[index]
+            np.asarray([1.0, 2.0, 3.0, 4.0]),
+        )
 
-        forest.learn_one({"feature": 4.0})
-        self.assertEqual(forest.buffer_count, 1)
-        self.assertEqual(forest.buffer[0, 0], 4.0)
+        forest.learn_one({"feature": 5.0})
+        self.assertEqual(forest._fits_completed, 1)
+        forest.learn_one({"feature": 6.0})
+        self.assertEqual(forest._fits_completed, 2)
+        np.testing.assert_array_equal(
+            forest._last_fit_window[:, 0],  # type: ignore[index]
+            np.asarray([3.0, 4.0, 5.0, 6.0]),
+        )
 
     def test_tree_selects_from_variable_features(self):
         forest = ASDIsolationForest(max_samples=4, seed=42)
@@ -110,7 +131,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
         # Before learning, no features established
         self.assertIsNone(forest.feature_names)
-        self.assertEqual(forest.buffer.shape, (0, 0))
+        self.assertEqual(len(forest.window), 0)
 
         # First data point establishes features
         first_point = {"c": 3.0, "a": 1.0, "b": 2.0}
@@ -119,8 +140,8 @@ class TestASDIsolationForest(unittest.TestCase):
         # Features should be sorted alphabetically
         expected_order = ["a", "b", "c"]
         self.assertEqual(forest.feature_names, expected_order)
-        self.assertEqual(forest.buffer.shape, (5, 3))  # max_samples x n_features
-        self.assertEqual(forest.buffer_count, 1)
+        self.assertEqual(len(forest.window), 1)
+        self.assertEqual(forest.window[0].shape, (3,))
 
     def test_empty_input_validation(self):
         """Test validation of empty input dictionaries."""
@@ -143,8 +164,8 @@ class TestASDIsolationForest(unittest.TestCase):
         for i in range(20):  # This should trigger multiple tree creations
             forest.learn_one({"feature": float(i)})
 
-        # Should not exceed n_estimators
-        self.assertLessEqual(len(forest.trees), forest.n_estimators)
+        # Every replacement is a complete forest.
+        self.assertEqual(len(forest.trees), forest.n_estimators)
 
     def test_score_before_trees_created(self):
         """Test scoring before any trees are created."""
@@ -163,7 +184,7 @@ class TestASDIsolationForest(unittest.TestCase):
         self.assertEqual(score, 0.0)
 
     def test_missing_features_handling(self):
-        """Test handling of missing features in scoring."""
+        """Test missing features are rejected instead of silently imputed."""
         forest = ASDIsolationForest(max_samples=5, seed=42)
 
         # Learn with certain features
@@ -178,12 +199,8 @@ class TestASDIsolationForest(unittest.TestCase):
         for point in training_data:
             forest.learn_one(point)
 
-        # Score with missing feature (should default to 0.0)
-        score = forest.score_one({"a": 1.0, "b": 2.0})  # Missing "c"
-
-        self.assertIsInstance(score, float)
-        self.assertGreaterEqual(score, 0.0)
-        self.assertLessEqual(score, 1.0)
+        with self.assertRaises(ValueError):
+            forest.score_one({"a": 1.0, "b": 2.0})  # Missing "c"
 
     def test_reproducibility_with_seed(self):
         """Test that same seed produces reproducible results."""
@@ -282,11 +299,11 @@ class TestASDIsolationForest(unittest.TestCase):
             forest_few.learn_one(point.copy())
             forest_many.learn_one(point.copy())
 
-        # Both should have trees (but different numbers)
+        # Both should have complete replacement forests.
         self.assertGreater(len(forest_few.trees), 0)
         self.assertGreater(len(forest_many.trees), 0)
-        self.assertLessEqual(len(forest_few.trees), 3)
-        self.assertLessEqual(len(forest_many.trees), 20)
+        self.assertEqual(len(forest_few.trees), 3)
+        self.assertEqual(len(forest_many.trees), 20)
 
         # Score test points
         test_point = {"feature_0": 10.0, "feature_1": 10.0, "feature_2": 10.0}
@@ -314,6 +331,7 @@ class TestASDIsolationForest(unittest.TestCase):
         self.assertIn("ASDIsolationForest", repr_str)
         self.assertIn("n_estimators=25", repr_str)
         self.assertIn("max_samples=64", repr_str)
+        self.assertIn("window_size=64", repr_str)
         self.assertIn("seed=999", repr_str)
         self.assertIn(f"n_trees={len(forest.trees)}", repr_str)
 
@@ -368,7 +386,7 @@ class TestASDIsolationForest(unittest.TestCase):
             forest.learn_one(point)
 
         # Should handle identical values gracefully
-        self.assertEqual(len(forest.trees), 1)
+        self.assertEqual(len(forest.trees), 2)
 
         # Scoring should work
         score = forest.score_one({"feature": 5.0})
@@ -396,6 +414,16 @@ class TestASDIsolationForest(unittest.TestCase):
 
         self.assertIsInstance(score, float)
         self.assertGreaterEqual(score, 0.0)
+
+    def test_schema_change_raises_instead_of_zero_imputation(self):
+        forest = ASDIsolationForest(n_estimators=1, max_samples=2, seed=42)
+        forest.learn_one({"x": 1.0, "y": 2.0})
+        forest.learn_one({"x": 2.0, "y": 3.0})
+
+        with self.assertRaises(ValueError):
+            forest.learn_one({"x": 3.0})
+        with self.assertRaises(ValueError):
+            forest.score_one({"x": 3.0})
 
 
 if __name__ == "__main__":

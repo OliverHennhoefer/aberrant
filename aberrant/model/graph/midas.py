@@ -16,23 +16,35 @@ class _CountMinSketch:
         self,
         rows: int,
         cols: int,
-        rng: np.random.Generator,
+        rng: np.random.Generator | None = None,
+        row_keys: tuple[bytes, ...] | None = None,
     ) -> None:
         self.rows = rows
         self.cols = cols
         self.table = np.zeros((rows, cols), dtype=np.float64)
-        salts = rng.integers(
-            low=0,
-            high=np.iinfo(np.uint64).max,
-            size=rows,
-            dtype=np.uint64,
-        )
-        self._row_keys = tuple(
-            int(salt).to_bytes(16, byteorder="little", signed=False) for salt in salts
-        )
+        if row_keys is not None:
+            self._row_keys = row_keys
+        elif rng is not None:
+            salts = rng.integers(
+                low=0,
+                high=np.iinfo(np.uint64).max,
+                size=rows,
+                dtype=np.uint64,
+            )
+            self._row_keys = tuple(
+                int(salt).to_bytes(16, byteorder="little", signed=False)
+                for salt in salts
+            )
+        else:
+            raise ValueError("rng or row_keys is required")
         self._row_index = np.arange(rows, dtype=np.intp)
 
-    def _indices(self, payload: bytes) -> np.ndarray:
+    def empty_copy(self) -> _CountMinSketch:
+        """Return an empty sketch with the same hash functions."""
+        return _CountMinSketch(self.rows, self.cols, row_keys=self._row_keys)
+
+    def indices(self, payload: bytes) -> np.ndarray:
+        """Return the payload bucket in every row."""
         indices = np.empty(self.rows, dtype=np.intp)
         for row, row_key in enumerate(self._row_keys):
             digest = hashlib.blake2b(payload, digest_size=8, key=row_key).digest()
@@ -41,33 +53,42 @@ class _CountMinSketch:
             )
         return indices
 
-    def update(self, payload: bytes, value: float = 1.0) -> None:
-        """Add value to the hashed bucket of each row."""
-        indices = self._indices(payload)
+    def update_indices(self, indices: np.ndarray, value: float = 1.0) -> None:
+        """Add value at precomputed row indices."""
         self.table[self._row_index, indices] += value
 
-    def query(self, payload: bytes) -> float:
-        """Return count-min estimate for payload."""
-        indices = self._indices(payload)
+    def query_indices(self, indices: np.ndarray) -> float:
+        """Return the count-min estimate at precomputed row indices."""
         return float(np.min(self.table[self._row_index, indices]))
 
     def clear(self) -> None:
         """Set all bins to zero."""
         self.table.fill(0.0)
 
+    def decay(self, factor: float) -> None:
+        """Multiply all bins by factor."""
+        self.table *= factor
+
 
 class MIDAS(BaseModel):
     """
-    MIDAS-style detector for anomaly detection in dynamic edge streams.
+    MIDAS or MIDAS-R detector for dynamic edge streams.
 
-    MIDAS scores each edge by contrasting its candidate-inclusive count in the
-    current time bucket with a historical expectation derived from cumulative
-    counts. Optionally, a relational score from source and destination
-    frequencies can be fused via ``max``. The edge score follows the MIDAS
-    chi-square form; ``use_relational=True`` is a custom endpoint-independence
-    extension and is not the published MIDAS-R relational sketch.
+    ``use_relational=False`` follows the authors' ``NormalCore``: the current
+    edge sketch is cleared at each new timestamp and the candidate-inclusive
+    edge count is scored against its cumulative count.
+
+    ``use_relational=True`` follows ``RelationalCore`` (MIDAS-R): current edge,
+    source, and destination sketches are decayed at each new timestamp, and the
+    final score is the maximum of their three published chi-square scores.
+
+    ``score_one`` previews rollover and candidate insertion without mutating
+    state. Calling ``score_one(x)`` followed by ``learn_one(x)`` therefore
+    matches the authors' combined update-and-score operation under this
+    library's score-before-learn convention.
 
     Notes:
+    - Source and destination identifiers must be integer-like numbers.
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by fixed-size sketches.
@@ -84,12 +105,12 @@ class MIDAS(BaseModel):
         source_key: str = "src",
         destination_key: str = "dst",
         time_key: str | None = "t",
-        count_min_rows: int = 4,
-        count_min_cols: int = 2048,
-        warm_up_samples: int = 128,
+        count_min_rows: int = 2,
+        count_min_cols: int = 1024,
+        time_decay_factor: float = 0.5,
+        warm_up_samples: int = 0,
         use_relational: bool = True,
         normalize_score: bool = False,
-        eps: float = 1e-9,
         seed: int | None = None,
     ) -> None:
         if not isinstance(source_key, str) or not source_key:
@@ -108,66 +129,48 @@ class MIDAS(BaseModel):
             raise ValueError("count_min_rows must be positive")
         if count_min_cols <= 0:
             raise ValueError("count_min_cols must be positive")
-        if warm_up_samples <= 0:
-            raise ValueError("warm_up_samples must be positive")
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
+        if not (0.0 < time_decay_factor <= 1.0):
+            raise ValueError("time_decay_factor must be in (0, 1]")
+        if warm_up_samples < 0:
+            raise ValueError("warm_up_samples must be non-negative")
 
         self.source_key = source_key
         self.destination_key = destination_key
         self.time_key = time_key
         self.count_min_rows = count_min_rows
         self.count_min_cols = count_min_cols
+        self.time_decay_factor = time_decay_factor
         self.warm_up_samples = warm_up_samples
         self.use_relational = use_relational
         self.normalize_score = normalize_score
-        self.eps = eps
         self.seed = seed
 
         self._reset_state()
 
+    def _new_sketch_pair(self) -> tuple[_CountMinSketch, _CountMinSketch]:
+        current = _CountMinSketch(
+            rows=self.count_min_rows,
+            cols=self.count_min_cols,
+            rng=self._rng,
+        )
+        return current, current.empty_copy()
+
     def _reset_state(self) -> None:
         self._rng = np.random.default_rng(self.seed)
-
-        self._edge_current = _CountMinSketch(
-            rows=self.count_min_rows,
-            cols=self.count_min_cols,
-            rng=self._rng,
-        )
-        self._edge_total = _CountMinSketch(
-            rows=self.count_min_rows,
-            cols=self.count_min_cols,
-            rng=self._rng,
-        )
+        self._edge_current, self._edge_total = self._new_sketch_pair()
 
         self._source_current: _CountMinSketch | None = None
         self._source_total: _CountMinSketch | None = None
         self._destination_current: _CountMinSketch | None = None
         self._destination_total: _CountMinSketch | None = None
         if self.use_relational:
-            self._source_current = _CountMinSketch(
-                rows=self.count_min_rows,
-                cols=self.count_min_cols,
-                rng=self._rng,
-            )
-            self._source_total = _CountMinSketch(
-                rows=self.count_min_rows,
-                cols=self.count_min_cols,
-                rng=self._rng,
-            )
-            self._destination_current = _CountMinSketch(
-                rows=self.count_min_rows,
-                cols=self.count_min_cols,
-                rng=self._rng,
-            )
-            self._destination_total = _CountMinSketch(
-                rows=self.count_min_rows,
-                cols=self.count_min_cols,
-                rng=self._rng,
+            self._source_current, self._source_total = self._new_sketch_pair()
+            self._destination_current, self._destination_total = (
+                self._new_sketch_pair()
             )
 
         self._current_bucket: int | None = None
-        self._bucket_index = 0
+        self._first_bucket: int | None = None
         self._samples_seen = 0
         self._arrival_index = 0
 
@@ -180,25 +183,21 @@ class MIDAS(BaseModel):
         """Number of observed samples processed via learn_one."""
         return self._samples_seen
 
-    def _coerce_numeric(self, value: float, key: str) -> float:
+    @staticmethod
+    def _coerce_integer(value: float, key: str) -> int:
         if not isinstance(value, int | float | np.number):
             raise ValueError(f"Feature '{key}' must be numeric")
         as_float = float(value)
         if not np.isfinite(as_float):
             raise ValueError(f"Feature '{key}' must be finite")
-        return as_float
-
-    def _coerce_bucket(self, value: float) -> int:
-        as_float = self._coerce_numeric(value, self.time_key or "t")
         as_int = int(round(as_float))
         if not np.isclose(as_float, float(as_int), rtol=0.0, atol=1e-9):
-            raise ValueError("Timestamp must be integer-like")
+            raise ValueError(f"Feature '{key}' must be integer-like")
         return as_int
 
-    def _prepare_sample(self, x: dict[str, float]) -> tuple[int, float, float]:
+    def _prepare_sample(self, x: dict[str, float]) -> tuple[int, int, int]:
         if not x:
             raise ValueError("Input dictionary cannot be empty")
-
         if self.source_key not in x:
             raise ValueError(f"Missing source_key '{self.source_key}' in input sample")
         if self.destination_key not in x:
@@ -206,92 +205,109 @@ class MIDAS(BaseModel):
                 f"Missing destination_key '{self.destination_key}' in input sample"
             )
 
-        src = self._coerce_numeric(x[self.source_key], self.source_key)
-        dst = self._coerce_numeric(x[self.destination_key], self.destination_key)
-
+        src = self._coerce_integer(x[self.source_key], self.source_key)
+        dst = self._coerce_integer(x[self.destination_key], self.destination_key)
         if self.time_key is None:
             bucket = self._arrival_index + 1
         else:
             if self.time_key not in x:
                 raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            bucket = self._coerce_bucket(x[self.time_key])
+            bucket = self._coerce_integer(x[self.time_key], self.time_key)
 
-        return bucket, src, dst
-
-    def _rollover_if_needed(self, bucket: int) -> None:
-        if self._current_bucket is None:
-            self._current_bucket = bucket
-            self._bucket_index = 1
-            return
-
-        if bucket < self._current_bucket:
+        if self._current_bucket is not None and bucket < self._current_bucket:
             raise ValueError(
                 f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
             )
+        return bucket, src, dst
+
+    @staticmethod
+    def _source_payload(src: int) -> bytes:
+        return b"s" + int(src).to_bytes(8, byteorder="little", signed=True)
+
+    @staticmethod
+    def _destination_payload(dst: int) -> bytes:
+        return b"d" + int(dst).to_bytes(8, byteorder="little", signed=True)
+
+    @staticmethod
+    def _edge_payload(src: int, dst: int) -> bytes:
+        return (
+            b"e"
+            + int(src).to_bytes(8, byteorder="little", signed=True)
+            + int(dst).to_bytes(8, byteorder="little", signed=True)
+        )
+
+    def _time_index(self, bucket: int) -> int:
+        if self._first_bucket is None:
+            return 1
+        return bucket - self._first_bucket + 1
+
+    def _rollover_for_learning(self, bucket: int) -> None:
+        if self._current_bucket is None:
+            self._current_bucket = bucket
+            self._first_bucket = bucket
+            return
         if bucket == self._current_bucket:
             return
 
-        delta = bucket - self._current_bucket
-        self._edge_current.clear()
-        if self._source_current is not None and self._destination_current is not None:
-            self._source_current.clear()
-            self._destination_current.clear()
-
+        if self.use_relational:
+            self._edge_current.decay(self.time_decay_factor)
+            if self._source_current is not None and self._destination_current is not None:
+                self._source_current.decay(self.time_decay_factor)
+                self._destination_current.decay(self.time_decay_factor)
+        else:
+            self._edge_current.clear()
         self._current_bucket = bucket
-        self._bucket_index += delta
 
-    def _source_payload(self, src: float) -> bytes:
-        return b"s" + np.float64(src).tobytes()
-
-    def _destination_payload(self, dst: float) -> bytes:
-        return b"d" + np.float64(dst).tobytes()
-
-    def _edge_payload(self, src: float, dst: float) -> bytes:
-        return b"e" + np.float64(src).tobytes() + np.float64(dst).tobytes()
-
-    def _edge_score(self, src: float, dst: float) -> tuple[float, float]:
-        edge_payload = self._edge_payload(src, dst)
-        current_count = self._edge_current.query(edge_payload) + 1.0
-        total_count = self._edge_total.query(edge_payload) + 1.0
-
-        expected = total_count / max(float(self._bucket_index), 1.0)
-        score = ((current_count - expected) ** 2) / (expected + self.eps)
-        if not np.isfinite(score):
-            return 0.0, current_count
-        return float(max(score, 0.0)), current_count
-
-    def _relational_score(self, src: float, dst: float, current_count: float) -> float:
-        if (
-            self._source_total is None
-            or self._destination_total is None
-            or not self.use_relational
-        ):
+    @staticmethod
+    def _compute_score(current: float, total: float, time_index: int) -> float:
+        """Return the score from ``NormalCore`` and ``RelationalCore``."""
+        if total == 0.0 or time_index - 1 == 0:
             return 0.0
-
-        source_payload = self._source_payload(src)
-        destination_payload = self._destination_payload(dst)
-        source_total = self._source_total.query(source_payload) + 1.0
-        destination_total = self._destination_total.query(destination_payload) + 1.0
-
-        total_mass = max(float(self._samples_seen + 1), 1.0)
-        expected_relational = (source_total * destination_total) / (
-            total_mass + self.eps
+        return float(
+            ((current - total / float(time_index)) * float(time_index)) ** 2
+            / (total * float(time_index - 1))
         )
-        score = ((current_count - expected_relational) ** 2) / (
-            expected_relational + self.eps
-        )
-        if not np.isfinite(score):
-            return 0.0
-        return float(max(score, 0.0))
+
+    def _candidate_score(
+        self,
+        current: _CountMinSketch,
+        total: _CountMinSketch,
+        payload: bytes,
+        *,
+        rollover: bool,
+        time_index: int,
+    ) -> float:
+        indices = current.indices(payload)
+        current_count = current.query_indices(indices)
+        if rollover:
+            current_count = (
+                current_count * self.time_decay_factor
+                if self.use_relational
+                else 0.0
+            )
+        current_count += 1.0
+        total_count = total.query_indices(indices) + 1.0
+        return self._compute_score(current_count, total_count, time_index)
+
+    def _update_pair(
+        self,
+        current: _CountMinSketch,
+        total: _CountMinSketch,
+        payload: bytes,
+    ) -> None:
+        indices = current.indices(payload)
+        current.update_indices(indices)
+        total.update_indices(indices)
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """Update detector state with one sample."""
+        """Update detector state with one edge."""
         bucket, src, dst = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
-
-        edge_payload = self._edge_payload(src, dst)
-        self._edge_current.update(edge_payload, 1.0)
-        self._edge_total.update(edge_payload, 1.0)
+        self._rollover_for_learning(bucket)
+        self._update_pair(
+            self._edge_current,
+            self._edge_total,
+            self._edge_payload(src, dst),
+        )
 
         if (
             self._source_current is not None
@@ -299,42 +315,77 @@ class MIDAS(BaseModel):
             and self._destination_current is not None
             and self._destination_total is not None
         ):
-            source_payload = self._source_payload(src)
-            destination_payload = self._destination_payload(dst)
-            self._source_current.update(source_payload, 1.0)
-            self._source_total.update(source_payload, 1.0)
-            self._destination_current.update(destination_payload, 1.0)
-            self._destination_total.update(destination_payload, 1.0)
+            self._update_pair(
+                self._source_current,
+                self._source_total,
+                self._source_payload(src),
+            )
+            self._update_pair(
+                self._destination_current,
+                self._destination_total,
+                self._destination_payload(dst),
+            )
 
         self._samples_seen += 1
         if self.time_key is None:
             self._arrival_index += 1
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score for one sample."""
+        """Preview the candidate-inclusive MIDAS or MIDAS-R score."""
         bucket, src, dst = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
-
-        if self._samples_seen < self.warm_up_samples or self._bucket_index < 2:
+        if self._samples_seen < self.warm_up_samples:
             return 0.0
 
-        edge_score, current_count = self._edge_score(src, dst)
-        raw_score = edge_score
+        rollover = self._current_bucket is not None and bucket > self._current_bucket
+        time_index = self._time_index(bucket)
+        scores = [
+            self._candidate_score(
+                self._edge_current,
+                self._edge_total,
+                self._edge_payload(src, dst),
+                rollover=rollover,
+                time_index=time_index,
+            )
+        ]
+        if (
+            self._source_current is not None
+            and self._source_total is not None
+            and self._destination_current is not None
+            and self._destination_total is not None
+        ):
+            scores.append(
+                self._candidate_score(
+                    self._source_current,
+                    self._source_total,
+                    self._source_payload(src),
+                    rollover=rollover,
+                    time_index=time_index,
+                )
+            )
+            scores.append(
+                self._candidate_score(
+                    self._destination_current,
+                    self._destination_total,
+                    self._destination_payload(dst),
+                    rollover=rollover,
+                    time_index=time_index,
+                )
+            )
 
-        if self.use_relational:
-            relational_score = self._relational_score(src, dst, current_count)
-            raw_score = max(raw_score, relational_score)
-
+        score = max(scores)
         if self.normalize_score:
-            return float(raw_score / (1.0 + raw_score))
-        return raw_score
+            return score / (1.0 + score)
+        return score
 
     def __repr__(self) -> str:
         return (
             "MIDAS("
             f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
             f"time_key={self.time_key!r}, count_min_rows={self.count_min_rows}, "
-            f"count_min_cols={self.count_min_cols}, warm_up_samples={self.warm_up_samples}, "
-            f"use_relational={self.use_relational}, normalize_score={self.normalize_score}, "
-            f"eps={self.eps}, seed={self.seed}, samples_seen={self._samples_seen})"
+            f"count_min_cols={self.count_min_cols}, "
+            f"time_decay_factor={self.time_decay_factor}, "
+            f"warm_up_samples={self.warm_up_samples}, "
+            f"use_relational={self.use_relational}, "
+            f"normalize_score={self.normalize_score}, seed={self.seed}, "
+            f"samples_seen={self._samples_seen})"
         )

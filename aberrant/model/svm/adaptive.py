@@ -10,9 +10,10 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
     Experimental incremental one-class kernel model with adaptive gamma.
 
     This is a custom budgeted support-vector heuristic, not an implementation
-    of a published incremental One-Class SVM optimizer. Running standardization
-    changes over time while stored support vectors remain in their historical
-    coordinate systems; callers should treat scores as heuristic.
+    of a published incremental One-Class SVM optimizer. Support vectors and the
+    recent-data buffer are stored in raw feature coordinates. Kernel values are
+    computed after applying the current running standardization to both
+    operands, so all comparisons use one consistent coordinate system.
     """
 
     def __init__(
@@ -25,274 +26,281 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         sv_budget: int = 100,
         tolerance: float = 1e-6,
         seed: int | None = None,
-    ):
+    ) -> None:
+        if not (0.0 < nu <= 1.0):
+            raise ValueError("nu must be in (0, 1]")
+        if initial_gamma <= 0.0:
+            raise ValueError("initial_gamma must be positive")
+        if (
+            gamma_bounds[0] <= 0.0
+            or gamma_bounds[0] > gamma_bounds[1]
+            or not gamma_bounds[0] <= initial_gamma <= gamma_bounds[1]
+        ):
+            raise ValueError(
+                "gamma_bounds must be positive, ordered, and contain initial_gamma"
+            )
+        if not (0.0 < adaptation_rate <= 1.0):
+            raise ValueError("adaptation_rate must be in (0, 1]")
+        if buffer_size <= 0:
+            raise ValueError("buffer_size must be positive")
+        if sv_budget <= 0:
+            raise ValueError("sv_budget must be positive")
+        if tolerance < 0.0:
+            raise ValueError("tolerance must be non-negative")
+
         self.nu = nu
-        self.gamma = initial_gamma
+        self.gamma = float(initial_gamma)
         self.gamma_min, self.gamma_max = gamma_bounds
         self.adaptation_rate = adaptation_rate
         self.buffer_size = buffer_size
         self.sv_budget = sv_budget
         self.tolerance = tolerance
 
-        # Model parameters
+        # Support vectors deliberately remain in raw coordinates.
         self.support_vectors: list[np.ndarray] = []
         self.alpha: list[float] = []
-        self.birth_sample: list[int] = []  # Track SV creation time
+        self.birth_sample: list[int] = []
         self.rho: float = 0.0
+        self.K_sv: np.ndarray | None = None
 
-        # Adaptation mechanism
         self.data_buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
         self.n_samples: int = 0
 
-        # Precomputed kernel matrix
-        self.K_sv: np.ndarray | None = None
-
-        # Feature handling
         self.feature_order: tuple[str, ...] | None = None
-        self.feature_stats: dict[str, tuple[float, float]] = {}  # For standardization
+        self.feature_stats: dict[str, tuple[float, float]] = {}
+        self._feature_mean: np.ndarray | None = None
+        self._feature_m2: np.ndarray | None = None
+        self._stats_count = 0
 
-        # Random number generator
         self.rng = np.random.default_rng(seed)
 
-    def _get_feature_vector(self, x: dict[str, float]) -> np.ndarray:
-        """Convert feature dictionary to standardized numpy array."""
+    def _get_raw_feature_vector(self, x: dict[str, float]) -> np.ndarray:
+        """Convert a feature dictionary to a stable-order raw vector."""
+        if not x:
+            raise ValueError("Input dictionary cannot be empty")
+
         if self.feature_order is None:
             self.feature_order = tuple(sorted(x.keys()))
-            # Initialize feature statistics
-            for feature in self.feature_order:
-                self.feature_stats[feature] = (0.0, 1.0)  # (mean, std)
+            n_features = len(self.feature_order)
+            self._feature_mean = np.zeros(n_features, dtype=np.float64)
+            self._feature_m2 = np.zeros(n_features, dtype=np.float64)
+            self.feature_stats = dict.fromkeys(self.feature_order, (0.0, 1.0))
 
         if tuple(sorted(x.keys())) != self.feature_order:
             raise ValueError("Inconsistent feature keys")
 
-        # Standardize features using running statistics
-        x_vec = np.zeros(len(self.feature_order))
-        for i, feature in enumerate(self.feature_order):
-            mean, std = self.feature_stats[feature]
-            value = x[feature]
-            x_vec[i] = (value - mean) / (std + 1e-8) if std > 0 else value
+        vector = np.fromiter(
+            (float(x[feature]) for feature in self.feature_order),
+            dtype=np.float64,
+            count=len(self.feature_order),
+        )
+        if not np.all(np.isfinite(vector)):
+            raise ValueError("All feature values must be finite")
+        return vector
 
-        return x_vec
+    def _update_feature_stats(self, x: np.ndarray) -> None:
+        """Update population mean/variance with a valid Welford accumulator."""
+        if self._feature_mean is None or self._feature_m2 is None:
+            raise RuntimeError("Feature statistics are not initialized")
 
-    def _update_feature_stats(self, x: dict[str, float]):
-        """Update running feature statistics for standardization"""
-        if not self.feature_stats:
-            return
+        self._stats_count += 1
+        count = self._stats_count
+        delta = x - self._feature_mean
+        self._feature_mean += delta / count
+        delta2 = x - self._feature_mean
+        self._feature_m2 += delta * delta2
 
-        for feature, value in x.items():
-            old_mean, old_std = self.feature_stats[feature]
-            n = self.n_samples
+        std = self._feature_std()
+        if self.feature_order is None:
+            raise RuntimeError("Feature order is not initialized")
+        self.feature_stats = {
+            feature: (float(self._feature_mean[index]), float(std[index]))
+            for index, feature in enumerate(self.feature_order)
+        }
 
-            # Update mean and std using Welford's algorithm
-            new_mean = old_mean + (value - old_mean) / (n + 1)
-            if n > 0:
-                new_std = np.sqrt(
-                    (n * old_std**2 + (value - old_mean) * (value - new_mean)) / (n + 1)
-                )
-            else:
-                new_std = 1.0
+    def _feature_std(self) -> np.ndarray:
+        """Return population standard deviations with stable zero-variance scale."""
+        if self._feature_m2 is None:
+            raise RuntimeError("Feature statistics are not initialized")
+        if self._stats_count <= 1:
+            return np.ones_like(self._feature_m2)
 
-            self.feature_stats[feature] = (new_mean, new_std)
+        variance = np.maximum(self._feature_m2 / self._stats_count, 0.0)
+        std = np.sqrt(variance)
+        return np.where(std > 0.0, std, 1.0)
+
+    def _standardize(self, x: np.ndarray) -> np.ndarray:
+        """Standardize a raw vector using the current running statistics."""
+        if self._feature_mean is None:
+            raise RuntimeError("Feature statistics are not initialized")
+        return (x - self._feature_mean) / self._feature_std()
 
     def _rbf_kernel(self, x1: np.ndarray, x2: np.ndarray) -> float:
-        """Compute RBF kernel value between two vectors."""
-        squared_distance = np.sum((x1 - x2) ** 2)
-        return np.exp(-self.gamma * squared_distance)
+        """Compute the RBF kernel after consistently standardizing raw vectors."""
+        difference = self._standardize(x1) - self._standardize(x2)
+        return float(np.exp(-self.gamma * float(np.dot(difference, difference))))
 
     def _compute_kernel_row(self, x: np.ndarray) -> np.ndarray:
-        """Compute kernel values between x and all support vectors."""
-        return np.array([self._rbf_kernel(x, sv) for sv in self.support_vectors])
+        """Compute kernel values between a raw query and all raw support vectors."""
+        return np.fromiter(
+            (self._rbf_kernel(x, sv) for sv in self.support_vectors),
+            dtype=np.float64,
+            count=len(self.support_vectors),
+        )
 
-    def _update_kernel_matrix(self, new_sv: np.ndarray | None = None):
-        """Efficient kernel matrix update with corrected dimension handling"""
+    def _update_kernel_matrix(self) -> None:
+        """Recompute the support-vector kernel matrix in current coordinates."""
         n_sv = len(self.support_vectors)
-
         if n_sv == 0:
             self.K_sv = None
             return
 
-        if new_sv is not None:
-            # Compute kernel values between new_sv and all existing SVs (including itself)
-            new_row = np.array(
-                [self._rbf_kernel(new_sv, sv) for sv in self.support_vectors]
-            )
+        standardized = np.vstack(
+            [self._standardize(vector) for vector in self.support_vectors]
+        )
+        squared_norms = np.sum(standardized * standardized, axis=1)
+        distances = (
+            squared_norms[:, None]
+            + squared_norms[None, :]
+            - 2.0 * standardized @ standardized.T
+        )
+        np.maximum(distances, 0.0, out=distances)
+        self.K_sv = np.exp(-self.gamma * distances)
 
-            if self.K_sv is None:
-                # First support vector
-                self.K_sv = np.array([[new_row[0]]])
-            else:
-                # Existing SVs count (before adding new one)
-                old_count = n_sv - 1
-
-                # Separate existing and self-similar values
-                k = new_row[:old_count]  # Kernel with existing SVs
-                kappa = new_row[old_count]  # Kernel with self
-
-                # Convert to proper shapes
-                k_col = k.reshape(-1, 1)  # Column vector
-                k_row = k.reshape(1, -1)  # Row vector
-
-                # Build new kernel matrix blocks
-                top = np.hstack([self.K_sv, k_col])
-                bottom = np.hstack([k_row, np.array([[kappa]])])
-                self.K_sv = np.vstack([top, bottom])
-        else:
-            # Full recompute when gamma changes or SV removed
-            self.K_sv = np.zeros((n_sv, n_sv))
-            for i in range(n_sv):
-                for j in range(i, n_sv):
-                    k_val = self._rbf_kernel(
-                        self.support_vectors[i], self.support_vectors[j]
-                    )
-                    self.K_sv[i, j] = k_val
-                    self.K_sv[j, i] = k_val
-
-    def _update_rho(self):
-        """Recalculate rho as median decision value of support vectors."""
+    def _update_rho(self) -> None:
+        """Recalculate rho as the median support-vector decision value."""
         if not self.support_vectors or self.K_sv is None:
             self.rho = 0.0
             return
 
-        decision_values = self.K_sv @ np.array(self.alpha)
-        self.rho = np.median(decision_values)
+        decision_values = self.K_sv @ np.asarray(self.alpha, dtype=np.float64)
+        self.rho = float(np.median(decision_values))
 
     def _estimate_optimal_gamma(self) -> float:
-        """Estimate optimal gamma based on standardized data distribution."""
+        """Estimate gamma from pairwise distances in the recent raw-data buffer."""
         if len(self.data_buffer) < 10:
             return self.gamma
 
-        # Standardize buffer data
-        data_array = np.array(list(self.data_buffer))
-        means = np.mean(data_array, axis=0)
-        stds = np.std(data_array, axis=0) + 1e-8
-        data_array = (data_array - means) / stds
+        data_array = np.vstack(self.data_buffer)
+        standardized = np.vstack([self._standardize(row) for row in data_array])
 
-        # Sample random pairs
-        n_samples = min(50, len(data_array))
-        indices = self.rng.choice(len(data_array), size=n_samples, replace=False)
-        sampled_data = data_array[indices]
+        n_samples = min(50, len(standardized))
+        indices = self.rng.choice(len(standardized), size=n_samples, replace=False)
+        sampled_data = standardized[indices]
 
-        # Compute pairwise distances
-        distances = []
+        distances: list[float] = []
         for i in range(n_samples):
             for j in range(i + 1, min(i + 10, n_samples)):
-                dist = np.linalg.norm(sampled_data[i] - sampled_data[j])
-                if dist > 1e-10:  # Skip near-identical points
-                    distances.append(dist)
+                distance = float(np.linalg.norm(sampled_data[i] - sampled_data[j]))
+                if distance > 1e-10:
+                    distances.append(distance)
 
         if not distances:
             return self.gamma
 
-        # Use median distance for robust estimation
-        median_distance = np.median(distances)
+        median_distance = float(np.median(distances))
         optimal_gamma = 1.0 / (2.0 * median_distance**2)
-        return np.clip(optimal_gamma, self.gamma_min, self.gamma_max)
+        return float(np.clip(optimal_gamma, self.gamma_min, self.gamma_max))
 
-    def _adapt_gamma(self):
-        """Adapt gamma parameter based on recent data."""
-        if self.n_samples % 20 != 0:  # Adapt every 20 samples
+    def _adapt_gamma(self) -> None:
+        """Adapt gamma every 20 learned samples."""
+        if self.n_samples % 20 != 0:
             return
 
         target_gamma = self._estimate_optimal_gamma()
         gamma_diff = target_gamma - self.gamma
+        if abs(gamma_diff) <= 0.01 * self.gamma:
+            return
 
-        if abs(gamma_diff) > 0.01 * self.gamma:
-            self.gamma += self.adaptation_rate * gamma_diff
-            self.gamma = np.clip(self.gamma, self.gamma_min, self.gamma_max)
-            self._update_kernel_matrix()  # Full recompute
-            self._update_rho()
+        self.gamma += self.adaptation_rate * gamma_diff
+        self.gamma = float(np.clip(self.gamma, self.gamma_min, self.gamma_max))
+        self._update_kernel_matrix()
+        self._update_rho()
 
-    def _manage_support_vectors(self, x: np.ndarray, alpha_new: float):
-        """Add new support vector and manage budget using combined criteria."""
-        # Add new support vector
+    def _manage_support_vectors(self, x: np.ndarray, alpha_new: float) -> None:
+        """Add a raw support vector and enforce the configured budget."""
         self.support_vectors.append(x.copy())
-        self.alpha.append(alpha_new)
+        self.alpha.append(float(alpha_new))
         self.birth_sample.append(self.n_samples)
 
-        # Enforce budget constraint
         if len(self.support_vectors) > self.sv_budget:
-            # Calculate combined removal score (low alpha + old age)
             max_alpha = max(self.alpha)
             max_age = self.n_samples - min(self.birth_sample)
-
             scores = []
-            for alpha_val, birth in zip(self.alpha, self.birth_sample, strict=False):
+            for alpha_value, birth in zip(
+                self.alpha, self.birth_sample, strict=True
+            ):
                 age = self.n_samples - birth
-                norm_alpha = alpha_val / (max_alpha + 1e-8)
-                norm_age = age / (max_age + 1e-8)
-                # Higher score = better candidate for removal
-                scores.append(0.4 * (1 - norm_alpha) + 0.6 * norm_age)
+                normalized_alpha = alpha_value / (max_alpha + 1e-8)
+                normalized_age = age / (max_age + 1e-8)
+                scores.append(
+                    0.4 * (1.0 - normalized_alpha) + 0.6 * normalized_age
+                )
 
-            idx_remove = np.argmax(scores)
-            del self.support_vectors[idx_remove]
-            del self.alpha[idx_remove]
-            del self.birth_sample[idx_remove]
+            remove_index = int(np.argmax(scores))
+            del self.support_vectors[remove_index]
+            del self.alpha[remove_index]
+            del self.birth_sample[remove_index]
 
-            # Full kernel recompute after removal
-            self._update_kernel_matrix()
-        else:
-            # Incremental update for new vector
-            self._update_kernel_matrix(new_sv=x)
-
+        self._update_kernel_matrix()
         self._update_rho()
 
     def _decision_function(self, x: np.ndarray) -> float:
-        """Compute decision function value with stability checks."""
+        """Compute the decision value for a raw feature vector."""
         if not self.support_vectors:
             return -self.rho
 
         kernel_values = self._compute_kernel_row(x)
-        return np.dot(self.alpha, kernel_values) - self.rho
+        return float(np.dot(self.alpha, kernel_values) - self.rho)
 
-    def learn_one(self, x: dict[str, float]):
+    def learn_one(self, x: dict[str, float]) -> None:
         """Incrementally learn from one sample."""
-        # Update feature statistics before standardization
-        self._update_feature_stats(x)
-        x_vec = self._get_feature_vector(x)
+        raw_vector = self._get_raw_feature_vector(x)
+        self._update_feature_stats(raw_vector)
         self.n_samples += 1
-        self.data_buffer.append(x_vec.copy())
+        self.data_buffer.append(raw_vector.copy())
 
-        # Handle first sample
+        # Running normalization changed, so existing kernel values and rho must
+        # be expressed in the new common coordinate system before comparison.
+        if self.support_vectors:
+            self._update_kernel_matrix()
+            self._update_rho()
+
         if not self.support_vectors:
-            self._manage_support_vectors(x_vec, 1.0 / (self.nu * 10))
+            self._manage_support_vectors(raw_vector, 1.0 / (self.nu * 10.0))
             return
 
-        # Compute decision value with current model
-        decision_value = self._decision_function(x_vec)
-
-        # Check margin violation with hysteresis
+        decision_value = self._decision_function(raw_vector)
         if decision_value < -self.tolerance:
             alpha_new = min(-decision_value, 1.0 / self.nu)
-            self._manage_support_vectors(x_vec, alpha_new)
+            self._manage_support_vectors(raw_vector, alpha_new)
 
-        # Perform gamma adaptation
         self._adapt_gamma()
 
     def predict_one(self, x: dict[str, float]) -> int:
-        """Predict if sample is normal (1) or anomaly (-1)."""
+        """Predict normal (1) or anomalous (-1)."""
         if not self.support_vectors:
-            return 1  # Default to normal
+            return 1
 
-        x_vec = self._get_feature_vector(x)
-        decision_value = self._decision_function(x_vec)
+        raw_vector = self._get_raw_feature_vector(x)
+        decision_value = self._decision_function(raw_vector)
         return 1 if decision_value >= -self.tolerance else -1
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score (higher = more anomalous)."""
+        """Compute anomaly score (higher means more anomalous)."""
         if not self.support_vectors:
             return 0.0
 
-        x_vec = self._get_feature_vector(x)
-        decision_value = self._decision_function(x_vec)
-        return -decision_value
+        raw_vector = self._get_raw_feature_vector(x)
+        return -self._decision_function(raw_vector)
 
-    def get_model_info(self) -> dict:
-        """Get current model information."""
+    def get_model_info(self) -> dict[str, object]:
+        """Return current model diagnostics."""
         return {
             "n_support_vectors": len(self.support_vectors),
             "gamma": self.gamma,
             "rho": self.rho,
             "n_samples_processed": self.n_samples,
             "buffer_size": len(self.data_buffer),
-            "sv_ages": [self.n_samples - b for b in self.birth_sample],
+            "sv_ages": [self.n_samples - birth for birth in self.birth_sample],
         }

@@ -11,9 +11,9 @@ model = AnoEdgeL(
     count_min_rows=128,
     count_min_cols=128,
     num_hashes=4,
-    local_radius=1,
+    num_dense_submatrices=1,
     time_decay_factor=1.0,
-    warm_up_samples=128,
+    warm_up_samples=0,
     normalize_score=False,
     seed=42,
 )
@@ -31,9 +31,7 @@ for i, (x, y) in enumerate(dataset.stream()):
             warmup_count += 1
         continue
 
-    # For this Shuttle mapping, anomalies tend to be frequent edge motifs.
-    # AnoEdge scores edge novelty, so we invert the score for evaluation.
-    score = -model.score_one(sample)
+    score = model.score_one(sample)
     model.learn_one(sample)
     labels.append(y)
     scores.append(score)

@@ -149,7 +149,7 @@ source and destination IDs (plus optional timestamp).
 - Supports optional explicit timestamp handling via `time_key`.
 - Returns a continuous non-negative anomaly score.
 
-`AnoEdgeL` scores edge novelty using local sketch-density context:
+`AnoEdgeL` scores whether a mapped edge belongs to a locally dense submatrix:
 
 ```python
 from aberrant.model.graph import AnoEdgeL
@@ -160,7 +160,7 @@ model = AnoEdgeL(
     count_min_rows=128,
     count_min_cols=128,
     num_hashes=4,
-    local_radius=1,
+    num_dense_submatrices=1,
 )
 ```
 
@@ -187,10 +187,16 @@ model = StreamSpot(
 Imports:
 
 ```python
-from aberrant.model.svm import GADGETSVM, IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import (
+    GraphGatedOneClassSVM,
+    IncrementalOneClassSVMAdaptiveKernel,
+)
 ```
 
 Use when margin-based decision boundaries are preferred.
+
+`GADGETSVM` is retained only as a backward-compatible alias for
+`GraphGatedOneClassSVM`; it is not the published GADGET algorithm.
 
 ## Statistical family
 

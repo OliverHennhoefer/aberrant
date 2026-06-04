@@ -2,7 +2,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from numpy import argsort, empty, inf, log, ndarray, sort, split, vstack, zeros
-from numpy.random import choice, random, uniform
 
 from aberrant.base.model import BaseModel
 
@@ -107,6 +106,7 @@ class TrueOnlineITree:
         branching_factor: int,
         data_size: int,
         metric: str = "axisparallel",
+        rng: np.random.Generator | None = None,
     ) -> None:
         """
         Initialize a TrueOnlineITree.
@@ -118,6 +118,7 @@ class TrueOnlineITree:
             branching_factor: Number of children per internal node.
             data_size: Expected size of the data window.
             metric: Splitting metric ('axisparallel').
+            rng: Instance-local random number generator.
         """
         self.max_leaf_samples = max_leaf_samples
         self.type = type
@@ -125,6 +126,7 @@ class TrueOnlineITree:
         self.branching_factor = branching_factor
         self.data_size = data_size
         self.metric = metric
+        self.rng = np.random.default_rng() if rng is None else rng
         self.depth_limit = self.get_random_path_length(
             self.branching_factor,
             self.max_leaf_samples,
@@ -144,7 +146,7 @@ class TrueOnlineITree:
             Self for method chaining.
         """
         # Subsample data to improve diversity among trees
-        data = data[random(data.shape[0]) < self.subsample]
+        data = data[self.rng.random(data.shape[0]) < self.subsample]
         if data.shape[0] >= 1:
             # Update the counter of data seen so far
             self.data_size += data.shape[0]
@@ -172,7 +174,7 @@ class TrueOnlineITree:
             Self for method chaining.
         """
         # Subsample data to improve diversity among trees
-        data = data[random(data.shape[0]) < self.subsample]
+        data = data[self.rng.random(data.shape[0]) < self.subsample]
         if data.shape[0] >= 1:
             # Update the counter of data seen so far
             self.data_size -= data.shape[0]
@@ -218,7 +220,7 @@ class TrueOnlineITree:
             ):
                 # Sample data_size points uniformly at random within the bounding box defined by
                 # the vectors of minimum and maximum values of data seen so far by the current node
-                data_sampled = uniform(
+                data_sampled = self.rng.uniform(
                     node.min_values,
                     node.max_values,
                     size=(node.data_size, data.shape[1]),
@@ -373,7 +375,7 @@ class TrueOnlineITree:
             # Sample projection vector (axis-parallel)
             if self.metric == "axisparallel":
                 projection_vector = zeros(data.shape[1])
-                projection_vector[choice(projection_vector.shape[0])] = 1.0
+                projection_vector[self.rng.choice(projection_vector.shape[0])] = 1.0
             else:
                 raise ValueError(f"Bad metric {self.metric}")
 
@@ -382,7 +384,7 @@ class TrueOnlineITree:
 
             # Sample split values
             split_values = sort(
-                uniform(
+                self.rng.uniform(
                     min(projected_data),
                     max(projected_data),
                     size=self.branching_factor - 1,
@@ -524,6 +526,7 @@ class OnlineIsolationForest(BaseModel):
         branching_factor: int = 2,
         metric: str = "axisparallel",
         n_jobs: int = 1,
+        seed: int | None = None,
     ) -> None:
         """
         Initialize a TrueOnlineIForest.
@@ -537,6 +540,7 @@ class OnlineIsolationForest(BaseModel):
             branching_factor: Number of children per internal node.
             metric: Splitting metric ('axisparallel').
             n_jobs: Number of parallel jobs.
+            seed: Random seed used to create independent per-tree generators.
         """
         # Parameter validation
         if num_trees <= 0:
@@ -558,7 +562,9 @@ class OnlineIsolationForest(BaseModel):
         self.branching_factor = branching_factor
         self.metric = metric
         self.n_jobs = n_jobs if n_jobs != -1 else None
+        self.seed = seed
 
+        child_seeds = np.random.SeedSequence(seed).spawn(num_trees)
         self.trees: list[TrueOnlineITree] = [
             TrueOnlineITree(
                 max_leaf_samples=max_leaf_samples,
@@ -567,8 +573,9 @@ class OnlineIsolationForest(BaseModel):
                 branching_factor=branching_factor,
                 data_size=0,
                 metric=metric,
+                rng=np.random.default_rng(child_seed),
             )
-            for _ in range(num_trees)
+            for child_seed in child_seeds
         ]
 
         self.data_window: list[ndarray] = []
