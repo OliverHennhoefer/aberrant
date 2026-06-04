@@ -31,17 +31,18 @@ class QuantileThreshold(BaseModel):
         >>> model = ASDIsolationForest()
         >>> threshold = QuantileThreshold(quantile=0.95)
         >>> for point in stream:
-        ...     model.learn_one(point)
         ...     score = model.score_one(point)
+        ...     is_anomaly = threshold.score_one({"score": score}) >= 1.0
+        ...     model.learn_one(point)
         ...     threshold.learn_one({"score": score})
-        ...     if threshold.score_one({"score": score}) >= 1.0:
+        ...     if is_anomaly:
         ...         print("Anomaly detected!")
 
     Note:
         The model expects input dictionaries with a score key (default "score").
         The score_one method returns:
         - 1.0 if the score exceeds the threshold (anomaly)
-        - score/threshold if below threshold (normalized, in [0, 1))
+        - max(score/threshold, 0.0) if below threshold (normalized, in [0, 1))
         - 0.0 during warmup (insufficient data for threshold)
     """
 
@@ -135,7 +136,7 @@ class QuantileThreshold(BaseModel):
             return 1.0
 
         # Return normalized score
-        return score / self._threshold
+        return max(score / self._threshold, 0.0)
 
     def reset(self) -> None:
         """Reset the model to its initial state."""

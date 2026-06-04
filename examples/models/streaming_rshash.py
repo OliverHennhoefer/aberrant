@@ -1,32 +1,36 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.sketch import MStream
+from aberrant.model.sketch import StreamingRSHash
 from aberrant.stream.dataset import Dataset, load
 
-model = MStream(
-    rows=1,
-    buckets=512,
-    alpha=0.5,
+model = StreamingRSHash(
+    components_num=24,
+    hash_num=4,
+    bins=512,
+    subspace_size=3,
+    decay=0.01,
+    warm_up_samples=128,
     time_key="t",
-    warm_up_buckets=4,
     seed=42,
 )
 
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
+warmup_count = 0
 for i, (x, y) in enumerate(dataset.stream()):
-    # MStream's author implementation applies log10(1 + x), so adapt this
-    # signed benchmark into its required numeric domain.
-    sample = {key: abs(value) for key, value in x.items()}
-    sample["t"] = float(i // 128)
+    sample = dict(x)
+    sample["t"] = float(i)
 
-    if i < 5000 and y == 0:
-        model.learn_one(sample)
+    if warmup_count < 2_000:
+        if y == 0:
+            model.learn_one(sample)
+            warmup_count += 1
         continue
 
     score = model.score_one(sample)
     model.learn_one(sample)
+
     labels.append(y)
     scores.append(score)
 

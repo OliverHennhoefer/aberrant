@@ -4,7 +4,7 @@ import unittest
 
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.iforest.mondrian import MondrianForest
+from aberrant.model.iforest.mondrian import MondrianIsolationForest as MondrianForest
 from aberrant.stream.dataset import Dataset, load
 from tests.integration._settings import MAX_TEST_STANDARD, WARMUP_SAMPLES
 

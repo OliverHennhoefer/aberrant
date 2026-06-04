@@ -2,7 +2,7 @@
 
 import unittest
 
-from aberrant.model.graph import StreamSpot
+from aberrant.model.graph import SignedGraphSketchDetector as StreamSpot
 
 
 class TestStreamSpot(unittest.TestCase):
@@ -99,7 +99,9 @@ class TestStreamSpot(unittest.TestCase):
                 {"graph": 1.0, "src": 1.0, "dst": 2.0, "etype": 0.0, "t": float("inf")}
             )
         with self.assertRaises(ValueError):
-            model.score_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "etype": 0.0, "t": 1.5})
+            model.score_one(
+                {"graph": 1.0, "src": 1.0, "dst": 2.0, "etype": 0.0, "t": 1.5}
+            )
 
     def test_score_is_zero_before_warmup(self) -> None:
         model = self.create_model(warm_up_graphs=6, shingle_size=1, edge_type_key=None)
@@ -125,6 +127,15 @@ class TestStreamSpot(unittest.TestCase):
             model.score_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
         with self.assertRaises(ValueError):
             model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
+
+    def test_score_one_does_not_advance_timestamp(self) -> None:
+        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=1)
+        model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
+        current_bucket = model._current_bucket
+
+        model.score_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 10.0})
+
+        self.assertEqual(model._current_bucket, current_bucket)
 
     def test_internal_clock_fallback_without_time_key(self) -> None:
         model = self.create_model(
@@ -245,7 +256,9 @@ class TestStreamSpot(unittest.TestCase):
                 }
             )
 
-        score = model.score_one({"graph": 777.0, "src": 888.0, "dst": 999.0, "t": 120.0})
+        score = model.score_one(
+            {"graph": 777.0, "src": 888.0, "dst": 999.0, "t": 120.0}
+        )
         self.assertGreaterEqual(score, 0.0)
         self.assertLess(score, 1.0)
 
@@ -275,7 +288,7 @@ class TestStreamSpot(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(sketch_dim=128, num_clusters=6, max_graphs=64)
         output = repr(model)
-        self.assertIn("StreamSpot", output)
+        self.assertIn("SignedGraphSketchDetector", output)
         self.assertIn("sketch_dim=128", output)
         self.assertIn("num_clusters=6", output)
         self.assertIn("max_graphs=64", output)

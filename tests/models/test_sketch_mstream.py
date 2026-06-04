@@ -2,11 +2,13 @@
 
 import unittest
 
+import numpy as np
+
 from aberrant.model.sketch import MStream
 
 
 class TestMStream(unittest.TestCase):
-    """Test suite for MStream."""
+    """Test suite for the author-grounded MStream implementation."""
 
     def create_model(self, **overrides: object) -> MStream:
         defaults: dict[str, object] = {
@@ -14,22 +16,20 @@ class TestMStream(unittest.TestCase):
             "buckets": 128,
             "alpha": 0.7,
             "time_key": "t",
-            "interaction_order": 2,
-            "max_interactions": 8,
-            "warm_up_buckets": 1,
+            "categorical_features": ("category",),
+            "warm_up_buckets": 0,
             "seed": 42,
         }
         defaults.update(overrides)
         return MStream(**defaults)
 
-    def test_initialization_defaults(self) -> None:
+    def test_initialization_defaults_match_author_parameters(self) -> None:
         model = MStream()
         self.assertEqual(model.rows, 2)
         self.assertEqual(model.buckets, 1024)
         self.assertEqual(model.alpha, 0.6)
-        self.assertEqual(model.interaction_order, 2)
-        self.assertEqual(model.max_interactions, 64)
-        self.assertEqual(model.warm_up_buckets, 1)
+        self.assertEqual(model.categorical_features, ())
+        self.assertEqual(model.warm_up_buckets, 0)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -43,67 +43,165 @@ class TestMStream(unittest.TestCase):
         with self.assertRaises(ValueError):
             MStream(time_key="")
         with self.assertRaises(ValueError):
-            MStream(interaction_order=3)
+            MStream(categorical_features=("",))
         with self.assertRaises(ValueError):
-            MStream(max_interactions=-1)
+            MStream(categorical_features=("a", "a"))
         with self.assertRaises(ValueError):
-            MStream(warm_up_buckets=0)
+            MStream(time_key="t", categorical_features=("t",))
         with self.assertRaises(ValueError):
-            MStream(eps=0.0)
+            MStream(warm_up_buckets=-1)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
-
         with self.assertRaises(ValueError):
             model.learn_one({})
         with self.assertRaises(ValueError):
-            model.learn_one({"t": 1.0, "x": "bad"})  # type: ignore[arg-type]
+            model.learn_one({"t": 1.0, "x": "bad", "category": 1.0})  # type: ignore[arg-type]
         with self.assertRaises(ValueError):
-            model.learn_one({"x": 1.0})  # Missing time key.
+            model.learn_one({"x": 1.0, "category": 1.0})
         with self.assertRaises(ValueError):
-            model.learn_one({"t": float("nan"), "x": 1.0})
+            model.learn_one({"t": float("nan"), "x": 1.0, "category": 1.0})
         with self.assertRaises(ValueError):
-            model.score_one({"t": float("inf"), "x": 1.0})
+            model.learn_one({"t": 1.0, "x": -1.0, "category": 1.0})
+        with self.assertRaises(ValueError):
+            model.learn_one({"t": 1.0, "x": 1.0, "category": 1.5})
 
-    def test_score_is_zero_before_warmup(self) -> None:
+    def test_counts_to_anomaly_matches_author_formula(self) -> None:
+        total = 8.0
+        current = 4.0
+        time_index = 5
+        mean = total / time_index
+        squared_error = max(0.0, current - mean) ** 2
+        expected = squared_error / mean + squared_error / (mean * 4.0)
+        self.assertAlmostEqual(
+            MStream._counts_to_anomaly(total, current, time_index),
+            expected,
+        )
+        self.assertEqual(MStream._counts_to_anomaly(8.0, 1.0, 5), 0.0)
+
+    def test_numeric_transform_and_online_min_max_match_author_code(self) -> None:
+        model = MStream(rows=1, buckets=11, time_key="t", seed=1)
+        model.learn_one({"t": 1.0, "x": 0.0})
+        model.learn_one({"t": 1.0, "x": 99.0})
+
+        normalized = model._normalize_numeric(
+            np.asarray([9.0], dtype=np.float64),
+            update=False,
+        )
+        expected = np.log10(10.0) / np.log10(100.0)
+        self.assertAlmostEqual(float(normalized[0]), expected)
+
+    def test_creates_individual_and_complete_record_sketches(self) -> None:
+        model = self.create_model(rows=3, buckets=64)
+        model.learn_one({"t": 1.0, "x": 1.0, "y": 2.0, "category": 3.0})
+
+        self.assertEqual(model._numeric_current.shape, (2, 64))  # type: ignore[union-attr]
+        self.assertEqual(model._categorical_current.shape, (1, 3, 64))  # type: ignore[union-attr]
+        self.assertEqual(model._record_current.shape, (3, 64))  # type: ignore[union-attr]
+
+    def test_full_record_hash_uses_all_attributes(self) -> None:
+        model = MStream(rows=1, buckets=4, time_key="t", seed=1)
+        model.score_one({"t": 1.0, "x": 1.0, "y": 1.0})
+        self.assertIsNotNone(model._record_numeric_planes)
+        model._record_numeric_planes[:] = np.asarray(
+            [[[1.0, -1.0], [-1.0, 1.0]]],
+            dtype=np.float64,
+        )
+
+        first = model._record_bins(
+            np.asarray([1.0, 0.0]),
+            np.asarray([], dtype=np.int64),
+        )
+        second = model._record_bins(
+            np.asarray([0.0, 1.0]),
+            np.asarray([], dtype=np.int64),
+        )
+        self.assertNotEqual(int(first[0]), int(second[0]))
+
+    def test_score_matches_sum_of_attribute_and_record_contributions(self) -> None:
+        model = MStream(rows=1, buckets=128, time_key="t", seed=3)
+        sample = {"t": 1.0, "x": 1.0}
+        model.learn_one(sample)
+        normalized = model._normalize_numeric(
+            np.asarray([1.0], dtype=np.float64),
+            update=False,
+        )
+        numeric_bin = int(model._numeric_bins(normalized)[0])
+        record_bin = int(
+            model._record_bins(normalized, np.asarray([], dtype=np.int64))[0]
+        )
+        self.assertIsNotNone(model._numeric_current)
+        self.assertIsNotNone(model._numeric_total)
+        self.assertIsNotNone(model._record_current)
+        self.assertIsNotNone(model._record_total)
+        model._numeric_current[0, numeric_bin] = 3.0
+        model._numeric_total[0, numeric_bin] = 7.0
+        model._record_current[0, record_bin] = 4.0
+        model._record_total[0, record_bin] = 8.0
+
+        query = {"t": 5.0, "x": 1.0}
+        expected = np.log1p(
+            MStream._counts_to_anomaly(8.0, 3.0 * model.alpha + 1.0, 5)
+            + MStream._counts_to_anomaly(9.0, 4.0 * model.alpha + 1.0, 5)
+        )
+        self.assertAlmostEqual(model.score_one(query), float(expected))
+
+    def test_rollover_decays_current_counts_once_like_author_code(self) -> None:
+        model = self.create_model(rows=1, buckets=1024)
+        sample = {"t": 1.0, "x": 1.0, "category": 2.0}
+        model.learn_one(sample)
+        current_sum = float(np.sum(model._record_current))
+
+        model.learn_one({"t": 100.0, "x": 2.0, "category": 3.0})
+        expected = current_sum * model.alpha + 1.0
+        self.assertAlmostEqual(float(np.sum(model._record_current)), expected)
+
+    def test_score_one_does_not_advance_decay_or_normalize_state(self) -> None:
+        model = self.create_model()
+        model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
+        current_bucket = model._current_bucket
+        numeric_min = model._numeric_min.copy()  # type: ignore[union-attr]
+        current = model._record_current.copy()  # type: ignore[union-attr]
+
+        first = model.score_one({"t": 10.0, "x": 100.0, "category": 9.0})
+        second = model.score_one({"t": 10.0, "x": 100.0, "category": 9.0})
+
+        self.assertEqual(first, second)
+        self.assertEqual(model._current_bucket, current_bucket)
+        np.testing.assert_array_equal(model._numeric_min, numeric_min)
+        np.testing.assert_array_equal(model._record_current, current)
+
+    def test_score_is_zero_before_optional_warmup(self) -> None:
         model = self.create_model(warm_up_buckets=2)
-        model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
-
-        score = model.score_one({"t": 2.0, "a": 1.1, "b": 2.1})
-        self.assertEqual(score, 0.0)
+        model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
+        self.assertEqual(
+            model.score_one({"t": 2.0, "x": 1.0, "category": 2.0}),
+            0.0,
+        )
 
     def test_feature_schema_mismatch_raises(self) -> None:
         model = self.create_model()
-        model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
-
+        model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
         with self.assertRaises(ValueError):
-            model.learn_one({"t": 1.0, "a": 1.0, "c": 2.0})
+            model.learn_one({"t": 1.0, "y": 1.0, "category": 2.0})
+
+    def test_missing_configured_categorical_feature_raises(self) -> None:
+        model = self.create_model()
+        with self.assertRaises(ValueError):
+            model.learn_one({"t": 1.0, "x": 1.0})
 
     def test_non_monotonic_timestamp_raises(self) -> None:
         model = self.create_model()
-        model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
-        model.learn_one({"t": 2.0, "a": 1.0, "b": 2.0})
-
+        model.learn_one({"t": 2.0, "x": 1.0, "category": 2.0})
         with self.assertRaises(ValueError):
-            model.score_one({"t": 1.0, "a": 1.0, "b": 2.0})
+            model.score_one({"t": 1.0, "x": 1.0, "category": 2.0})
 
     def test_internal_clock_fallback_without_time_key(self) -> None:
-        model = self.create_model(
-            time_key=None,
-            interaction_order=1,
-            warm_up_buckets=1,
-            max_interactions=None,
-        )
-
-        first_point = {"a": 1.0, "b": 2.0}
-        second_point = {"a": 1.1, "b": 2.1}
-
-        self.assertEqual(model.score_one(first_point), 0.0)
-        model.learn_one(first_point)
-
-        score = model.score_one(second_point)
-        self.assertIsInstance(score, float)
-        self.assertGreaterEqual(score, 0.0)
+        model = MStream(time_key=None, seed=3)
+        sample = {"x": 1.0, "y": 2.0}
+        model.learn_one(sample)
+        model.learn_one(sample)
+        self.assertEqual(model._current_bucket, 2)
 
     def test_deterministic_with_seed(self) -> None:
         model1 = self.create_model(seed=7)
@@ -112,79 +210,46 @@ class TestMStream(unittest.TestCase):
         for i in range(60):
             point = {
                 "t": float(i // 4),
-                "a": float(i % 5),
-                "b": float((i * 3) % 7),
+                "x": float(i % 5),
+                "category": float((i * 3) % 7),
             }
             model1.learn_one(point)
             model2.learn_one(point)
 
-        query = {"t": 30.0, "a": 2.5, "b": 4.5}
+        query = {"t": 30.0, "x": 2.5, "category": 4.0}
         self.assertAlmostEqual(
             model1.score_one(query),
             model2.score_one(query),
             places=12,
         )
 
-    def test_outlier_scores_higher_than_normal(self) -> None:
-        model = self.create_model(
-            rows=2,
-            buckets=256,
-            alpha=0.5,
-            interaction_order=1,
-            max_interactions=None,
-            warm_up_buckets=3,
-            seed=11,
-        )
-
-        for i in range(320):
-            point = {
-                "t": float(i // 16),
-                "a": float((i % 7) * 0.02),
-                "b": float((i % 5) * 0.02),
-            }
-            model.learn_one(point)
-
-        normal_score = model.score_one({"t": 50.0, "a": 0.04, "b": 0.02})
-        outlier_score = model.score_one({"t": 50.0, "a": 10.0, "b": -10.0})
-
-        self.assertGreaterEqual(normal_score, 0.0)
-        self.assertGreater(outlier_score, normal_score)
-
     def test_sketch_shapes_are_bounded(self) -> None:
-        model = self.create_model(buckets=64, max_interactions=4)
-        model.learn_one({"t": 0.0, "a": 1.0, "b": 2.0, "c": 3.0})
-
-        if model._current_sketch is None or model._historical_sketch is None:
-            self.fail("Sketch tensors were not initialized")
-
-        current_shape = model._current_sketch.shape
-        historical_shape = model._historical_sketch.shape
+        model = self.create_model(buckets=64)
+        model.learn_one({"t": 0.0, "x": 1.0, "category": 3.0})
+        numeric_shape = model._numeric_current.shape  # type: ignore[union-attr]
+        categorical_shape = model._categorical_current.shape  # type: ignore[union-attr]
+        record_shape = model._record_current.shape  # type: ignore[union-attr]
 
         for i in range(1, 300):
             model.learn_one(
                 {
                     "t": float(i // 3),
-                    "a": float(i % 10),
-                    "b": float((i * 2) % 11),
-                    "c": float((i * 3) % 13),
+                    "x": float(i % 10),
+                    "category": float((i * 2) % 11),
                 }
             )
 
-        self.assertEqual(model._current_sketch.shape, current_shape)
-        self.assertEqual(model._historical_sketch.shape, historical_shape)
+        self.assertEqual(model._numeric_current.shape, numeric_shape)  # type: ignore[union-attr]
+        self.assertEqual(model._categorical_current.shape, categorical_shape)  # type: ignore[union-attr]
+        self.assertEqual(model._record_current.shape, record_shape)  # type: ignore[union-attr]
 
     def test_reset_restores_cold_state(self) -> None:
         model = self.create_model()
-        for i in range(30):
-            model.learn_one({"t": float(i // 2), "a": float(i), "b": float(i + 1)})
-
-        self.assertTrue(model._ready)
+        model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
         model.reset()
-
-        self.assertFalse(model._ready)
-        self.assertEqual(model._seen_buckets, 0)
+        self.assertEqual(model.n_samples_seen, 0)
         self.assertIsNone(model._feature_order)
-        self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
+        self.assertIsNone(model._current_bucket)
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(rows=3, buckets=256)
@@ -192,6 +257,7 @@ class TestMStream(unittest.TestCase):
         self.assertIn("MStream", output)
         self.assertIn("rows=3", output)
         self.assertIn("buckets=256", output)
+        self.assertIn("categorical_features=('category',)", output)
 
 
 if __name__ == "__main__":

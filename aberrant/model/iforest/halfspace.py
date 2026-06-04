@@ -33,26 +33,20 @@ class HSTNode:
     threshold: float
     left: "HSTNode | HSTLeaf" = field(default_factory=HSTLeaf)
     right: "HSTNode | HSTLeaf" = field(default_factory=HSTLeaf)
-    l_mass_left: int = 0  # Current window left mass
-    l_mass_right: int = 0  # Current window right mass
-    r_mass_left: int = 0  # Reference window left mass
-    r_mass_right: int = 0  # Reference window right mass
+    l_mass: int = 0
+    r_mass: int = 0
 
     def pivot_mass(self) -> None:
-        """Copy learning masses to reference masses and reset learning masses."""
-        self.r_mass_left = self.l_mass_left
-        self.r_mass_right = self.l_mass_right
-        self.l_mass_left = 0
-        self.l_mass_right = 0
+        """Copy learning mass to reference mass and reset learning mass."""
+        self.r_mass = self.l_mass
+        self.l_mass = 0
         self.left.pivot_mass()
         self.right.pivot_mass()
 
     def reset_mass(self) -> None:
         """Recursively reset all mass counters (for full reset)."""
-        self.l_mass_left = 0
-        self.l_mass_right = 0
-        self.r_mass_left = 0
-        self.r_mass_right = 0
+        self.l_mass = 0
+        self.r_mass = 0
         self.left.reset_mass()
         self.right.reset_mass()
 
@@ -69,6 +63,11 @@ class HalfSpaceTrees(BaseModel):
     training. Anomalies are identified by having low mass - they fall
     into regions of feature space that are rarely visited.
 
+    Each tree first creates the randomly perturbed work space described in the
+    paper. Every internal node then selects a random feature and bisects that
+    feature's current interval at its midpoint. Reference and latest-window
+    masses are recorded at every traversed node.
+
     IMPORTANT: This algorithm assumes features are scaled to [0, 1].
     Use MinMaxScaler in a pipeline for best results.
 
@@ -84,8 +83,8 @@ class HalfSpaceTrees(BaseModel):
         >>> from aberrant.model.iforest import HalfSpaceTrees
         >>> pipeline = MinMaxScaler() | HalfSpaceTrees(n_trees=25)
         >>> for point in stream:
-        ...     pipeline.learn_one(point)
         ...     score = pipeline.score_one(point)
+        ...     pipeline.learn_one(point)
         ...     if score > 0.5:  # Threshold for anomaly
         ...         print("Anomaly detected!")
 
@@ -94,6 +93,7 @@ class HalfSpaceTrees(BaseModel):
         detection for streaming data. In Proceedings of the Twenty-Second
         International Joint Conference on Artificial Intelligence
         (pp. 1511-1516).
+        https://www.ijcai.org/Proceedings/11/Papers/254.pdf
     """
 
     def __init__(
@@ -123,13 +123,18 @@ class HalfSpaceTrees(BaseModel):
         self.feature_names: list[str] | None = None
         self._n_features: int = 0
         self._trees: list[HSTNode | HSTLeaf] = []
+        self._workspaces: list[tuple[np.ndarray, np.ndarray]] = []
         self._samples_in_window: int = 0
-        self._total_samples_learned: int = 0  # Never resets, used for scoring check
-        self._reference_window_size: int = 0  # Size of last complete window for scoring
+        self._reference_window_size: int = 0
         self._initialized: bool = False
         self._x_array: np.ndarray = np.empty(0)
 
-    def _build_tree(self, depth: int = 0) -> HSTNode | HSTLeaf:
+    def _build_tree(
+        self,
+        lower: np.ndarray,
+        upper: np.ndarray,
+        depth: int = 0,
+    ) -> HSTNode | HSTLeaf:
         """
         Recursively build a random half-space tree.
 
@@ -142,23 +147,64 @@ class HalfSpaceTrees(BaseModel):
         if depth >= self.height:
             return HSTLeaf()
 
-        # Random feature and threshold
+        # Algorithm 1: choose a dimension and bisect its propagated interval.
         feature = int(self.rng.integers(0, self._n_features))
-        # Use padding to avoid narrow splits near boundaries
-        padding = 0.15
-        threshold = float(self.rng.uniform(padding, 1.0 - padding))
+        threshold = float((lower[feature] + upper[feature]) / 2.0)
+
+        left_upper = upper.copy()
+        left_upper[feature] = threshold
+        right_lower = lower.copy()
+        right_lower[feature] = threshold
 
         return HSTNode(
             feature=feature,
             threshold=threshold,
-            left=self._build_tree(depth + 1),
-            right=self._build_tree(depth + 1),
+            left=self._build_tree(lower, left_upper, depth + 1),
+            right=self._build_tree(right_lower, upper, depth + 1),
         )
 
     def _initialize_trees(self) -> None:
-        """Build all trees in the ensemble."""
-        self._trees = [self._build_tree() for _ in range(self.n_trees)]
+        """Build paper-faithful random work spaces and midpoint HS-Trees."""
+        trees: list[HSTNode | HSTLeaf] = []
+        workspaces: list[tuple[np.ndarray, np.ndarray]] = []
+        for _ in range(self.n_trees):
+            center = self.rng.uniform(0.0, 1.0, size=self._n_features)
+            half_width = 2.0 * np.maximum(center, 1.0 - center)
+            lower = center - half_width
+            upper = center + half_width
+            workspaces.append((lower.copy(), upper.copy()))
+            trees.append(self._build_tree(lower, upper))
+        self._trees = trees
+        self._workspaces = workspaces
         self._initialized = True
+
+    def _validate_schema(self, x: dict[str, float]) -> None:
+        """Set the first feature schema or reject any later schema change."""
+        if not x:
+            raise ValueError("Input dictionary cannot be empty")
+
+        if self.feature_names is None:
+            self.feature_names = sorted(x.keys())
+            self._n_features = len(self.feature_names)
+            self._x_array = np.zeros(self._n_features)
+            return
+
+        if set(x) != set(self.feature_names):
+            expected = ", ".join(self.feature_names)
+            received = ", ".join(sorted(x))
+            raise ValueError(
+                "Inconsistent feature keys. "
+                f"Expected [{expected}], received [{received}]."
+            )
+
+    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
+        """Validate and convert a sample using the established feature order."""
+        self._validate_schema(x)
+        if self.feature_names is None:
+            raise RuntimeError("Feature schema is not initialized")
+        for index, feature in enumerate(self.feature_names):
+            self._x_array[index] = x[feature]
+        return self._x_array
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -171,58 +217,39 @@ class HalfSpaceTrees(BaseModel):
             x: Feature dictionary with string keys and float values.
                 Values should be in [0, 1] range for best results.
         """
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        # Initialize on first sample
-        if self.feature_names is None:
-            self.feature_names = sorted(x.keys())
-            self._n_features = len(self.feature_names)
-            self._x_array = np.zeros(self._n_features)
+        x_array = self._vectorize(x)
 
         # Build trees on first sample
         if not self._initialized:
             self._initialize_trees()
 
-        # Convert to array
-        for i, f in enumerate(self.feature_names):
-            self._x_array[i] = x.get(f, 0.0)
-
         # Update mass in each tree
         for tree in self._trees:
-            self._update_mass(tree, self._x_array, depth=0)
+            self._update_mass(tree, x_array)
 
-        # Track samples for scoring availability
         self._samples_in_window += 1
-        self._total_samples_learned += 1
 
-        # Check if window is complete - reset masses for new window
         if self._samples_in_window >= self.window_size:
-            # Save current window size for scoring normalization
             self._reference_window_size = self._samples_in_window
             self._reset_masses()
             self._samples_in_window = 0
 
-    def _update_mass(self, node: HSTNode | HSTLeaf, x: np.ndarray, depth: int) -> None:
+    def _update_mass(self, node: HSTNode | HSTLeaf, x: np.ndarray) -> None:
         """
         Recursively update learning mass counters along the path to leaf.
 
         Args:
             node: Current node.
             x: Feature vector.
-            depth: Current depth.
         """
+        node.l_mass += 1
         if isinstance(node, HSTLeaf):
-            node.l_mass += 1
             return
 
-        # Traverse based on split, updating learning masses
         if x[node.feature] < node.threshold:
-            node.l_mass_left += 1
-            self._update_mass(node.left, x, depth + 1)
+            self._update_mass(node.left, x)
         else:
-            node.l_mass_right += 1
-            self._update_mass(node.right, x, depth + 1)
+            self._update_mass(node.right, x)
 
     def _reset_masses(self) -> None:
         """Pivot masses: copy learning masses to reference, reset learning masses."""
@@ -245,45 +272,23 @@ class HalfSpaceTrees(BaseModel):
         Returns:
             Anomaly score in [0, 1]. Higher = more anomalous.
         """
-        # Need to have seen at least one sample to have valid trees
-        if not self._initialized or self._total_samples_learned == 0:
+        if not self._initialized or self._reference_window_size == 0:
             return 0.0
 
-        if self.feature_names is None:
-            return 0.0
+        x_array = self._vectorize(x)
 
-        # Convert to array
-        for i, f in enumerate(self.feature_names):
-            self._x_array[i] = x.get(f, 0.0)
-
-        # Determine whether to use reference masses (after first pivot) or
-        # learning masses (during first window)
-        use_reference = self._reference_window_size > 0
-
-        # Accumulate weighted mass from all trees
         total_score = 0.0
         for tree in self._trees:
-            tree_score = self._compute_tree_score(
-                tree, self._x_array, depth=0, use_reference=use_reference
-            )
-            total_score += tree_score
+            total_score += self._compute_tree_score(tree, x_array, depth=0)
 
-        # Compute maximum possible score using appropriate window size
-        if use_reference:
-            effective_window = self._reference_window_size
-        else:
-            effective_window = self._samples_in_window
-        max_score = self.n_trees * effective_window * ((2 ** (self.height + 1)) - 1)
-
+        max_score = self.n_trees * self._reference_window_size * (2**self.height)
         if max_score <= 0:
             return 0.0
 
-        # Normalize and invert (low mass = high anomaly score)
-        normalized = total_score / max_score
-        return 1.0 - normalized
+        return float(np.clip(1.0 - total_score / max_score, 0.0, 1.0))
 
     def _compute_tree_score(
-        self, node: HSTNode | HSTLeaf, x: np.ndarray, depth: int, use_reference: bool
+        self, node: HSTNode | HSTLeaf, x: np.ndarray, depth: int
     ) -> float:
         """
         Compute weighted mass score for a single tree.
@@ -292,27 +297,15 @@ class HalfSpaceTrees(BaseModel):
             node: Current node.
             x: Feature vector.
             depth: Current depth.
-            use_reference: If True, use reference masses (r_mass). If False, use
-                learning masses (l_mass).
-
         Returns:
             Weighted mass contribution.
         """
-        if isinstance(node, HSTLeaf):
-            mass = node.r_mass if use_reference else node.l_mass
-            return mass * (2**depth)
+        if isinstance(node, HSTLeaf) or node.r_mass <= 0.1 * self.window_size:
+            return node.r_mass * (2**depth)
 
-        # Get mass and traverse
         if x[node.feature] < node.threshold:
-            mass = node.r_mass_left if use_reference else node.l_mass_left
-            return mass * (2**depth) + self._compute_tree_score(
-                node.left, x, depth + 1, use_reference
-            )
-        else:
-            mass = node.r_mass_right if use_reference else node.l_mass_right
-            return mass * (2**depth) + self._compute_tree_score(
-                node.right, x, depth + 1, use_reference
-            )
+            return self._compute_tree_score(node.left, x, depth + 1)
+        return self._compute_tree_score(node.right, x, depth + 1)
 
     def __repr__(self) -> str:
         return (

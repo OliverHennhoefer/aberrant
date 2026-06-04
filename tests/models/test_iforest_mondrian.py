@@ -5,7 +5,13 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.iforest.mondrian import MondrianForest, MondrianNode, MondrianTree
+from aberrant.model.iforest.mondrian import (
+    MondrianIsolationForest as MondrianForest,
+)
+from aberrant.model.iforest.mondrian import (
+    MondrianNode,
+    MondrianTree,
+)
 from tests.utils import DataGenerator
 
 
@@ -310,7 +316,7 @@ class TestMondrianForest(unittest.TestCase):
         """repr should include key hyperparameters."""
         forest = MondrianForest(n_estimators=25, subspace_size=8, lambda_=2.5, seed=999)
         repr_string = repr(forest)
-        self.assertIn("MondrianForest", repr_string)
+        self.assertIn("MondrianIsolationForest", repr_string)
         self.assertIn("n_estimators=25", repr_string)
         self.assertIn("subspace_size=8", repr_string)
         self.assertIn("lambda_=2.5", repr_string)

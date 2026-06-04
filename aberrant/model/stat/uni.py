@@ -5,6 +5,22 @@ from collections import deque
 from aberrant.base.model import BaseModel
 
 
+def _extract_univariate_value(
+    x: dict[str, float], feature_name: str | None
+) -> tuple[str, float]:
+    """Validate a univariate sample and return its stable feature name and value."""
+    if len(x) != 1:
+        raise ValueError("Input must contain exactly one key-value pair.")
+
+    sample_feature = next(iter(x))
+    if feature_name is not None and sample_feature != feature_name:
+        raise ValueError(
+            f"Input feature must be {feature_name!r}, got {sample_feature!r}."
+        )
+
+    return feature_name or sample_feature, float(x[sample_feature])
+
+
 class _BaseMovingUnivariate(BaseModel):
     """Base class for univariate moving window models to reduce code duplication."""
 
@@ -32,22 +48,13 @@ class _BaseMovingUnivariate(BaseModel):
         Raises:
             ValueError: If input doesn't contain exactly one feature.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-
-        if self.feature_name is None:
-            # Extract the single value efficiently
-            self.feature_name = next(iter(x))
-
-        value = x.get(self.feature_name)
-        if value is not None and isinstance(value, int | float):
-            self.window.append(float(value))
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def _extract_value(self, x: dict[str, float]) -> float:
         """Extract single value from input dictionary efficiently."""
-        if self.feature_name is not None:
-            return float(x[self.feature_name])
-        return float(next(iter(x.values())))
+        _, value = _extract_univariate_value(x, self.feature_name)
+        return value
 
 
 class MovingAverage(_BaseMovingUnivariate):
@@ -81,9 +88,10 @@ class MovingAverage(_BaseMovingUnivariate):
         if len(self.window) == 0:
             return 0.0
 
-        current_mean = sum(self.window) / len(self.window)
+        window_sum = sum(self.window)
+        current_mean = window_sum / len(self.window)
         new_value = self._extract_value(x)
-        new_mean = (sum(self.window) + new_value) / (len(self.window) + 1)
+        new_mean = (window_sum + new_value) / (len(self.window) + 1)
 
         difference = new_mean - current_mean
         return abs(difference) if self.abs_diff else difference
@@ -122,15 +130,9 @@ class MovingHarmonicAverage(_BaseMovingUnivariate):
         Args:
             x: Dictionary with exactly one key-value pair.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-
-        if self.feature_name is None:
-            self.feature_name = next(iter(x))
-
-        value = x.get(self.feature_name, 0)
-        if value != 0 and isinstance(value, int | float):
-            self.window.append(float(value))
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        if value != 0:
+            self.window.append(value)
 
     def score_one(self, x: dict[str, float]) -> float:
         """
@@ -150,11 +152,17 @@ class MovingHarmonicAverage(_BaseMovingUnivariate):
             return 0.0
 
         # Calculate harmonic means
-        current_harmonic = len(self.window) / sum(1 / val for val in self.window)
+        current_reciprocal_sum = sum(1 / val for val in self.window)
+        if current_reciprocal_sum == 0:
+            raise ValueError("Harmonic mean is undefined for this window.")
+        current_harmonic = len(self.window) / current_reciprocal_sum
 
         # Include new value
         all_values = list(self.window) + [new_value]
-        new_harmonic = len(all_values) / sum(1 / val for val in all_values)
+        new_reciprocal_sum = sum(1 / val for val in all_values)
+        if new_reciprocal_sum == 0:
+            raise ValueError("Harmonic mean is undefined after adding the sample.")
+        new_harmonic = len(all_values) / new_reciprocal_sum
 
         difference = new_harmonic - current_harmonic
         return abs(difference) if self.abs_diff else difference
@@ -206,13 +214,9 @@ class MovingGeometricAverage(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            if list(x.values())[0] > 0:
-                self.window.append(list(x.values())[0])
-        elif x[self.feature_name] > 0:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        if value > 0:
+            self.window.append(value)
 
     def score_one(self, x) -> float:
         """Calculate and return the difference between the gemetric average of the current window (including the new data point)
@@ -226,21 +230,25 @@ class MovingGeometricAverage(BaseModel):
             float: The difference between the new geometric average (including `x`) and the current geometric average of the window.
             If the original window has zero or fewer elements, returns 0.
         """
+        _, value = _extract_univariate_value(x, self.feature_name)
+        if value <= 0:
+            raise ValueError("MovingGeometricAverage requires positive values.")
+
         actual_window_length = len(self.window)
         if actual_window_length <= 1 or (
             actual_window_length <= 2 and self.absoluteValues
         ):
-            return 1
+            return 0.0
         else:
             if self.absoluteValues:
                 window_growth = [
                     self.window[i + 1] / self.window[i]
                     for i in range(actual_window_length - 1)
                 ]
-                score_factor = list(x.values())[0] / self.window[-1]
+                score_factor = value / self.window[-1]
             else:
                 window_growth = self.window
-                score_factor = list(x.values())[0]
+                score_factor = value
             window_product = 1
             for value in window_growth:
                 window_product *= value
@@ -281,12 +289,8 @@ class MovingMedian(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def score_one(self, x) -> float:
         """Calculate and return the difference between the median of the current window (including the new data point)
@@ -305,7 +309,8 @@ class MovingMedian(BaseModel):
             return 0
         sorted_data = sorted(self.window)
         window_score = sorted_data.copy()
-        window_score.append(list(x.values())[0])
+        _, value = _extract_univariate_value(x, self.feature_name)
+        window_score.append(value)
         window_score.sort()
 
         mid_index_old = actual_window_length // 2
@@ -351,6 +356,8 @@ class MovingQuantile(BaseModel):
             ValueError: If window_size is not a positive integer."""
         if window_size <= 0:
             raise ValueError("Window size must be a positive integer.")
+        if not 0 <= quantile <= 1:
+            raise ValueError("quantile must be between 0 and 1.")
         self.window: deque[float] = deque([], maxlen=window_size)
         self.feature_name: str | None = key
         self.quantile = quantile
@@ -364,12 +371,8 @@ class MovingQuantile(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def _quantile(self, sorted_list: list) -> float:
         window_length = len(sorted_list)
@@ -405,7 +408,8 @@ class MovingQuantile(BaseModel):
 
         sorted_window: list = sorted(self.window)
         score_data: list = sorted_window.copy()
-        score_data.append(list(x.values())[0])
+        _, value = _extract_univariate_value(x, self.feature_name)
+        score_data.append(value)
         score_data.sort()
 
         score = self._quantile(score_data) - self._quantile(sorted_window)
@@ -436,12 +440,8 @@ class MovingVariance(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def score_one(self, x) -> float:
         """Calculate and return the difference between the moving variance of the current window (including the new data point)
@@ -460,7 +460,8 @@ class MovingVariance(BaseModel):
             return 0
         else:
             score_window = list(self.window)
-            score_window.append(list(x.values())[0])
+            _, value = _extract_univariate_value(x, self.feature_name)
+            score_window.append(value)
 
             mean_window = sum(self.window) / actual_window_length
             mean_score = sum(score_window) / len(score_window)
@@ -506,12 +507,8 @@ class MovingInterquartileRange(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def __score_one_quantile(self, sorted_list, quantile) -> float:
         """Calculate and return the value of a quantile of the values in the window.
@@ -548,7 +545,8 @@ class MovingInterquartileRange(BaseModel):
 
         sorted_data = sorted(self.window)
         score_window = sorted_data.copy()
-        score_window.append(list(x.values())[0])
+        _, value = _extract_univariate_value(x, self.feature_name)
+        score_window.append(value)
         score_window.sort()
         iqr_window = self.__score_one_quantile(
             sorted_data, 0.75
@@ -584,12 +582,8 @@ class MovingAverageAbsoluteDeviation(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def score_one(self, x) -> float:
         """Calculate and return the difference between the moving average absolute deviation of the current window (including the new data point)
@@ -608,7 +602,8 @@ class MovingAverageAbsoluteDeviation(BaseModel):
             return 0
         else:
             score_window = list(self.window)
-            score_window.append(list(x.values())[0])
+            _, value = _extract_univariate_value(x, self.feature_name)
+            score_window.append(value)
             mean_window = sum(self.window) / actual_window_length
             mean_score = sum(score_window) / len(score_window)
             dev_window = (
@@ -648,12 +643,8 @@ class MovingKurtosis(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def score_one(self, x) -> float:
         """Calculate and return the difference between the kurtosis of the current window (including the new data point)
@@ -672,7 +663,8 @@ class MovingKurtosis(BaseModel):
             return 0
         else:
             score_window = list(self.window)
-            score_window.append(list(x.values())[0])
+            _, value = _extract_univariate_value(x, self.feature_name)
+            score_window.append(value)
             mean_window = sum(self.window) / actual_window_length
             mean_score = sum(score_window) / len(score_window)
 
@@ -726,12 +718,8 @@ class MovingSkewness(BaseModel):
         Raises:
             AssertionError: If the input dictionary contains more than one key-value pair or is empty.
         """
-        if len(x) != 1:
-            raise ValueError("Input must contain exactly one key-value pair.")
-        if self.feature_name is None:
-            self.window.append(list(x.values())[0])
-        else:
-            self.window.append(x[self.feature_name])
+        self.feature_name, value = _extract_univariate_value(x, self.feature_name)
+        self.window.append(value)
 
     def score_one(self, x) -> float:
         """Calculate and return the difference between the skewness of the current window (including the new data point)
@@ -750,7 +738,8 @@ class MovingSkewness(BaseModel):
             return 0
         else:
             score_window = list(self.window)
-            score_window.append(list(x.values())[0])
+            _, value = _extract_univariate_value(x, self.feature_name)
+            score_window.append(value)
 
             mean_window = sum(self.window) / actual_window_length
             mean_score = sum(score_window) / len(score_window)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from collections import deque
 from dataclasses import dataclass
 
@@ -107,24 +108,32 @@ class _RandomCutTree:
 
     def score_point(self, point: np.ndarray) -> float:
         """
-        Score one point against the current tree.
+        Preview the candidate's collusive displacement.
 
-        This queries the leaf reached by routing the point through existing cuts
-        and combines leaf codisp with normalized distance to the reached leaf's
-        representative point.
+        Reference RRCF scoring inserts the candidate, computes its CoDisp, and
+        then removes it. Restoring the generator state also makes this preview
+        observationally non-mutating for future learned inserts.
         """
         if self.root is None:
             return 0.0
 
-        leaf = self._query_leaf(point)
-        codisp = self._codisp_from_leaf(leaf)
+        temporary_id = -1
+        if temporary_id in self._id_to_leaf:
+            raise RuntimeError("Temporary score ID collides with a learned point ID")
+        rng_state = copy.deepcopy(self.rng.bit_generator.state)
+        self.insert(temporary_id, point)
+        try:
+            return self.codisp(temporary_id)
+        finally:
+            self.remove(temporary_id)
+            self.rng.bit_generator.state = rng_state
 
-        if self.root.bbox_min is None or self.root.bbox_max is None:
-            return codisp
-
-        scale = float(np.sum(self.root.bbox_max - self.root.bbox_min)) + 1e-12
-        distance = float(np.sum(np.abs(point - leaf.point)))
-        return codisp * (1.0 + distance / scale)
+    def codisp(self, point_id: int) -> float:
+        """Return collusive displacement for a stored point ID."""
+        leaf = self._id_to_leaf.get(point_id)
+        if leaf is None:
+            raise KeyError(f"Point ID {point_id} does not exist in tree")
+        return self._codisp_from_leaf(leaf)
 
     def _insert_node(
         self,
@@ -251,17 +260,8 @@ class _RandomCutTree:
         cut_value = float(bbox_min[cut_dim] + (offset - previous))
         return cut_dim, cut_value
 
-    def _query_leaf(self, point: np.ndarray) -> _RCFLeaf:
-        """Traverse tree cuts and return reached leaf."""
-        node = self.root
-        while isinstance(node, _RCFBranch):
-            node = node.left if point[node.cut_dim] <= node.cut_value else node.right
-        if node is None:
-            raise RuntimeError("Tree is unexpectedly empty")
-        return node
-
     def _codisp_from_leaf(self, leaf: _RCFLeaf) -> float:
-        """Compute codisp-like score from leaf to root."""
+        """Compute the reference collusive displacement from leaf to root."""
         node: _RCFLeaf | _RCFBranch = leaf
         if node.parent is None:
             return 0.0
@@ -291,15 +291,26 @@ class RandomCutForest(BaseModel):
     recent shingled points. `learn_one` performs one-sample updates and
     forgetting, while `score_one` returns an anomaly score for one sample.
 
+    Tree insertion/removal and raw anomaly scoring follow Random Cut Tree
+    mechanics. ``score_one`` temporarily inserts each query, computes its
+    collusive displacement (CoDisp), removes it, and restores RNG state. Optional
+    exponential scaling is a monotonic presentation transform over raw CoDisp.
+
     Args:
         n_trees: Number of random cut trees.
         sample_size: Maximum number of stored shingled points.
         shingle_size: Number of consecutive points concatenated per tree insert.
         warmup_samples: Number of inserted shingles before non-zero scoring.
             If `None`, defaults to `sample_size`.
-        normalize_score: If True, map raw score to [0, 1].
+        normalize_score: If True, map raw CoDisp to [0, 1].
         score_scale: Scale for score normalization when enabled.
         seed: Random seed for reproducibility.
+
+    References:
+        Guha, S., Mishra, N., Roy, G., & Schrijvers, O. (2016). Robust Random
+        Cut Forest Based Anomaly Detection on Streams.
+        https://proceedings.mlr.press/v48/guha16.html
+        Reference implementation: https://github.com/aws/random-cut-forest-by-aws
     """
 
     def __init__(
@@ -308,7 +319,7 @@ class RandomCutForest(BaseModel):
         sample_size: int = 256,
         shingle_size: int = 1,
         warmup_samples: int | None = None,
-        normalize_score: bool = True,
+        normalize_score: bool = False,
         score_scale: float = 8.0,
         seed: int | None = None,
     ) -> None:

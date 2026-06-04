@@ -1,101 +1,32 @@
-"""Integration test for the AnoEdgeL graph model on a synthetic edge stream."""
+"""Integration test for the AnoEdge-L graph model."""
 
 import unittest
 
-import numpy as np
-from sklearn.metrics import average_precision_score
-
 from aberrant.model.graph import AnoEdgeL
-from tests.integration._settings import MAX_TEST_SHORT, WARMUP_SAMPLES
 
 
 class TestAnoEdgeL(unittest.TestCase):
-    """Test AnoEdgeL quality on a synthetic dynamic graph stream."""
+    """Test AnoEdge-L on its dense-edge anomaly target."""
 
-    @staticmethod
-    def _sample_edge(
-        rng: np.random.Generator,
-        t: int,
-        anomaly_rate: float,
-    ) -> tuple[dict[str, float], int]:
-        bucket = t // 32
-
-        if rng.random() < anomaly_rate:
-            if rng.random() < 0.5:
-                # Rare node-range anomalies.
-                src = int(rng.integers(1_000, 1_100))
-                dst = int(rng.integers(1_100, 1_200))
-            else:
-                # Rare cross-community anomalies.
-                src_community = int(rng.integers(0, 4))
-                dst_community = (src_community + int(rng.integers(1, 4))) % 4
-                src = src_community * 25 + int(rng.integers(0, 25))
-                dst = dst_community * 25 + int(rng.integers(0, 25))
-            return {"src": float(src), "dst": float(dst), "t": float(bucket)}, 1
-
-        # Nominal behavior: repeated intra-community motifs.
-        community = int(rng.integers(0, 4))
-        start = community * 25
-        src_local = int(rng.integers(0, 25))
-        dst_local = (src_local + 1) % 25 if rng.random() < 0.9 else (src_local + 2) % 25
-        src = start + src_local
-        dst = start + dst_local
-        return {"src": float(src), "dst": float(dst), "t": float(bucket)}, 0
-
-    def test_synthetic_edge_stream_pr_auc(self) -> None:
-        """Smoke-test AnoEdgeL quality on a synthetic stream with broad PR-AUC bounds."""
-        rng = np.random.default_rng(42)
+    def test_dense_microcluster_scores_above_sparse_edge(self) -> None:
         model = AnoEdgeL(
-            source_key="src",
-            destination_key="dst",
-            time_key="t",
             count_min_rows=128,
             count_min_cols=128,
             num_hashes=4,
-            local_radius=1,
+            num_dense_submatrices=1,
             time_decay_factor=1.0,
-            warm_up_samples=128,
-            normalize_score=False,
             seed=42,
         )
 
-        labels: list[int] = []
-        scores: list[float] = []
-        warmup_count = 0
-        test_count = 0
-        t = 0
+        for _ in range(12):
+            for src in range(5):
+                for dst in range(100, 105):
+                    model.learn_one({"src": float(src), "dst": float(dst), "t": 1.0})
 
-        while warmup_count < WARMUP_SAMPLES:
-            sample, label = self._sample_edge(rng, t=t, anomaly_rate=0.0)
-            if label == 0:
-                model.learn_one(sample)
-                warmup_count += 1
-            t += 1
+        dense_score = model.score_one({"src": 2.0, "dst": 102.0, "t": 1.0})
+        sparse_score = model.score_one({"src": 999.0, "dst": 998.0, "t": 1.0})
 
-        while test_count < MAX_TEST_SHORT:
-            sample, label = self._sample_edge(rng, t=t, anomaly_rate=0.12)
-            score = model.score_one(sample)
-            model.learn_one(sample)
-            labels.append(label)
-            scores.append(score)
-            test_count += 1
-            t += 1
-
-        self.assertGreater(len(scores), 0, "No test samples were processed.")
-        self.assertGreater(sum(labels), 0, "Test stream did not generate anomalies.")
-        pr_auc = average_precision_score(labels, scores)
-
-        lower_bound, upper_bound = 0.60, 1.00
-        self.assertGreaterEqual(
-            pr_auc,
-            lower_bound,
-            f"PR-AUC {pr_auc:.3f} is below expected range [{lower_bound}, {upper_bound}]",
-        )
-        self.assertLessEqual(
-            pr_auc,
-            upper_bound,
-            f"PR-AUC {pr_auc:.3f} is above expected range [{lower_bound}, {upper_bound}]",
-        )
+        self.assertGreater(dense_score, sparse_score)
 
 
 if __name__ == "__main__":

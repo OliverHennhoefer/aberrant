@@ -23,8 +23,8 @@ from aberrant.transform.preprocessing import StandardScaler
 pipeline = StandardScaler() | OnlineIsolationForest(window_size=512)
 
 for x in stream_of_feature_dicts:
-    pipeline.learn_one(x)
     score = pipeline.score_one(x)
+    pipeline.learn_one(x)
 ```
 
 ## Notes

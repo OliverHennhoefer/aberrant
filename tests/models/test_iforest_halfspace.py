@@ -36,10 +36,8 @@ class TestHSTDataStructures(unittest.TestCase):
         node = HSTNode(feature=0, threshold=0.5)
         self.assertEqual(node.feature, 0)
         self.assertEqual(node.threshold, 0.5)
-        self.assertEqual(node.l_mass_left, 0)
-        self.assertEqual(node.l_mass_right, 0)
-        self.assertEqual(node.r_mass_left, 0)
-        self.assertEqual(node.r_mass_right, 0)
+        self.assertEqual(node.l_mass, 0)
+        self.assertEqual(node.r_mass, 0)
         self.assertIsInstance(node.left, HSTLeaf)
         self.assertIsInstance(node.right, HSTLeaf)
 
@@ -53,16 +51,12 @@ class TestHSTDataStructures(unittest.TestCase):
             threshold=0.5,
             left=left_leaf,
             right=right_leaf,
-            l_mass_left=10,
-            l_mass_right=8,
-            r_mass_left=4,
-            r_mass_right=3,
+            l_mass=10,
+            r_mass=4,
         )
         node.reset_mass()
-        self.assertEqual(node.l_mass_left, 0)
-        self.assertEqual(node.l_mass_right, 0)
-        self.assertEqual(node.r_mass_left, 0)
-        self.assertEqual(node.r_mass_right, 0)
+        self.assertEqual(node.l_mass, 0)
+        self.assertEqual(node.r_mass, 0)
         self.assertEqual(left_leaf.l_mass, 0)
         self.assertEqual(left_leaf.r_mass, 0)
         self.assertEqual(right_leaf.l_mass, 0)
@@ -77,15 +71,12 @@ class TestHSTDataStructures(unittest.TestCase):
             threshold=0.5,
             left=left_leaf,
             right=right_leaf,
-            l_mass_left=10,
-            l_mass_right=8,
+            l_mass=10,
         )
         node.pivot_mass()
         # Learning masses should be copied to reference, then reset
-        self.assertEqual(node.l_mass_left, 0)
-        self.assertEqual(node.l_mass_right, 0)
-        self.assertEqual(node.r_mass_left, 10)
-        self.assertEqual(node.r_mass_right, 8)
+        self.assertEqual(node.l_mass, 0)
+        self.assertEqual(node.r_mass, 10)
         self.assertEqual(left_leaf.l_mass, 0)
         self.assertEqual(left_leaf.r_mass, 5)
         self.assertEqual(right_leaf.l_mass, 0)
@@ -163,6 +154,42 @@ class TestHalfSpaceTrees(unittest.TestCase):
         self.assertIsInstance(score, float)
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
+
+    def test_score_is_zero_until_reference_window_is_complete(self):
+        hst = HalfSpaceTrees(n_trees=3, height=3, window_size=5, seed=42)
+        for _ in range(4):
+            hst.learn_one({"x": 0.5})
+            self.assertEqual(hst.score_one({"x": 0.5}), 0.0)
+
+    def test_tree_recursively_bisects_propagated_intervals(self):
+        hst = HalfSpaceTrees(n_trees=1, height=4, window_size=5, seed=42)
+        hst.learn_one({"x": 0.5, "y": 0.5})
+        tree = hst._trees[0]
+        lower, upper = hst._workspaces[0]
+
+        def assert_midpoints(node, current_lower, current_upper):
+            if isinstance(node, HSTLeaf):
+                return
+            expected = (current_lower[node.feature] + current_upper[node.feature]) / 2.0
+            self.assertAlmostEqual(node.threshold, expected)
+
+            left_upper = current_upper.copy()
+            left_upper[node.feature] = node.threshold
+            right_lower = current_lower.copy()
+            right_lower[node.feature] = node.threshold
+            assert_midpoints(node.left, current_lower, left_upper)
+            assert_midpoints(node.right, right_lower, current_upper)
+
+        assert_midpoints(tree, lower, upper)
+
+    def test_schema_change_raises(self):
+        hst = HalfSpaceTrees(n_trees=1, height=2, window_size=2, seed=42)
+        hst.learn_one({"x": 0.5, "y": 0.5})
+        with self.assertRaises(ValueError):
+            hst.learn_one({"x": 0.5})
+        hst.learn_one({"x": 0.6, "y": 0.6})
+        with self.assertRaises(ValueError):
+            hst.score_one({"x": 0.5})
 
     def test_normal_point_low_score(self):
         """Test that frequently visited regions have low anomaly scores."""

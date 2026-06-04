@@ -56,12 +56,12 @@ class TestAutoencoderOnShuttle(unittest.TestCase):
                     warmup_count += 1
                 continue
 
-            # Test phase: learn from all samples and collect scores
+            # Test phase: score each unseen sample before updating the model
             if test_count >= MAX_TEST_SHORT:
                 break
 
-            model.learn_one(features)
             score = model.score_one(features)
+            model.learn_one(features)
 
             labels.append(label)
             scores.append(score)

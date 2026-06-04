@@ -1,10 +1,10 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.distance import STARE
+from aberrant.model.distance import StationaryRegionNeighborDetector
 from aberrant.stream.dataset import Dataset, load
 from aberrant.transform.preprocessing import StandardScaler
 
-model = STARE(
+model = StationaryRegionNeighborDetector(
     k=40,
     radius=1.5,
     window_size=1024,

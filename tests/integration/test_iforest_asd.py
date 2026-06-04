@@ -41,8 +41,8 @@ class TestASDIsolationForest(unittest.TestCase):
             if test_count >= MAX_TEST_STANDARD:
                 break
 
-            model.learn_one(features)
             score = model.score_one(features)
+            model.learn_one(features)
             labels.append(label)
             scores.append(score)
             test_count += 1
@@ -50,7 +50,7 @@ class TestASDIsolationForest(unittest.TestCase):
         # Calculate and assert PR-AUC
         self.assertGreater(len(scores), 0, "No test samples were processed.")
         pr_auc = average_precision_score(labels, scores)
-        lower_bound, upper_bound = 0.80, 0.95
+        lower_bound, upper_bound = 0.90, 1.00
         self.assertGreaterEqual(
             pr_auc,
             lower_bound,

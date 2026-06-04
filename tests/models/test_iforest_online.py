@@ -23,6 +23,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
             branching_factor=2,
             metric="axisparallel",
             n_jobs=1,
+            seed=42,
         )
 
     def setUp(self):
@@ -39,6 +40,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
             branching_factor=3,
             metric="axisparallel",
             n_jobs=1,
+            seed=42,
         )
 
         self.assertEqual(model.num_trees, 5)
@@ -47,6 +49,35 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         self.assertEqual(model.subsample, 0.8)
         self.assertEqual(model.window_size, 256)
         self.assertEqual(model.branching_factor, 3)
+        self.assertEqual(model.seed, 42)
+
+    def test_seed_is_reproducible_and_does_not_mutate_global_rng(self):
+        np.random.seed(123)
+        expected = np.random.random(5)
+        np.random.seed(123)
+
+        model_1 = OnlineIsolationForest(
+            num_trees=3,
+            max_leaf_samples=4,
+            window_size=20,
+            seed=7,
+        )
+        model_2 = OnlineIsolationForest(
+            num_trees=3,
+            max_leaf_samples=4,
+            window_size=20,
+            seed=7,
+        )
+        for i in range(30):
+            point = {"x": float(i % 7), "y": float((i * 3) % 11)}
+            model_1.learn_one(point)
+            model_2.learn_one(point)
+
+        self.assertEqual(
+            model_1.score_one({"x": 2.0, "y": 4.0}),
+            model_2.score_one({"x": 2.0, "y": 4.0}),
+        )
+        np.testing.assert_array_equal(np.random.random(5), expected)
 
     def test_initialization_invalid_parameters(self):
         """Test initialization with invalid parameters raises errors."""

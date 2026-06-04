@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.iforest.random_cut import RandomCutForest
+from aberrant.model.iforest.random_cut import RandomCutForest, _RandomCutTree
 
 
 class TestRandomCutForest(unittest.TestCase):
@@ -28,7 +28,7 @@ class TestRandomCutForest(unittest.TestCase):
         self.assertEqual(model.sample_size, 256)
         self.assertEqual(model.shingle_size, 1)
         self.assertEqual(model.warmup_samples, 256)
-        self.assertTrue(model.normalize_score)
+        self.assertFalse(model.normalize_score)
         self.assertFalse(model._ready)
 
     def test_invalid_parameters(self):
@@ -129,6 +129,45 @@ class TestRandomCutForest(unittest.TestCase):
         outlier_score = model.score_one({"x": 6.0, "y": 6.0})
         self.assertGreater(outlier_score, normal_score)
 
+    def test_tree_score_matches_reference_insert_codisp_remove(self):
+        """score_point should equal candidate-inclusive reference CoDisp."""
+        points = [
+            np.asarray([0.0, 0.0]),
+            np.asarray([0.1, 0.0]),
+            np.asarray([0.0, 0.1]),
+            np.asarray([3.0, 3.0]),
+        ]
+        preview_tree = _RandomCutTree(np.random.default_rng(42))
+        reference_tree = _RandomCutTree(np.random.default_rng(42))
+        for point_id, point in enumerate(points):
+            preview_tree.insert(point_id, point)
+            reference_tree.insert(point_id, point)
+
+        query = np.asarray([8.0, 8.0])
+        preview_score = preview_tree.score_point(query)
+        reference_tree.insert(99, query)
+        reference_score = reference_tree.codisp(99)
+
+        self.assertEqual(preview_score, reference_score)
+        self.assertEqual(preview_tree.size, len(points))
+        self.assertNotIn(-1, preview_tree._id_to_leaf)
+
+    def test_tree_score_preview_restores_rng_state(self):
+        """Scoring must not change the random cuts used by future inserts."""
+        scored_tree = _RandomCutTree(np.random.default_rng(7))
+        control_tree = _RandomCutTree(np.random.default_rng(7))
+        for point_id in range(8):
+            point = np.asarray([float(point_id), float(point_id % 3)])
+            scored_tree.insert(point_id, point)
+            control_tree.insert(point_id, point)
+
+        scored_tree.score_point(np.asarray([20.0, 20.0]))
+        new_point = np.asarray([9.0, 4.0])
+        scored_tree.insert(9, new_point)
+        control_tree.insert(9, new_point)
+
+        self.assertEqual(scored_tree.codisp(9), control_tree.codisp(9))
+
     def test_shingle_support(self):
         """Model should support shingled streaming state."""
         model = RandomCutForest(
@@ -144,7 +183,6 @@ class TestRandomCutForest(unittest.TestCase):
         score = model.score_one({"x": 51.0, "y": 1.0})
         self.assertIsInstance(score, float)
         self.assertGreaterEqual(score, 0.0)
-        self.assertLessEqual(score, 1.0)
 
     def test_raw_score_mode(self):
         """Raw score mode should return a non-negative continuous score."""

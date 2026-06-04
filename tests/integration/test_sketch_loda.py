@@ -4,7 +4,7 @@ import unittest
 
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.sketch import LODA
+from aberrant.model.sketch import StreamingLODA as LODA
 from aberrant.stream.dataset import Dataset, load
 from aberrant.transform.preprocessing import StandardScaler
 from tests.integration._settings import MAX_TEST_SHORT, WARMUP_SAMPLES

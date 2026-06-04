@@ -42,10 +42,13 @@ class IncrementalOneClassSVM:
         return self.rho - np.dot(self.w, x_vec) if self.w is not None else 0.0
 
 
-class GADGETSVM(BaseModel):
+class GraphGatedOneClassSVM(BaseModel):
     """
-    Optimized GADGET SVM with precomputed roots, efficient traversal,
-    and correct graph node initialization.
+    Graph-gated ensemble of incremental linear one-class SVM heuristics.
+
+    The graph determines which node models are updated and scored. This custom
+    anomaly detector is unrelated to the published GADGET distributed
+    averaging and optimization algorithm.
     """
 
     def __init__(
@@ -142,3 +145,7 @@ class GADGETSVM(BaseModel):
                 queue.extend(self.graph[node])
 
         return max(max_score, 0.0)  # Ensure non-negative minimum
+
+
+# Backward-compatible alias for the historical, misleading public name.
+GADGETSVM = GraphGatedOneClassSVM

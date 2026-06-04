@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.sketch import LODA
+from aberrant.model.sketch import StreamingLODA as LODA
 
 
 class TestLODA(unittest.TestCase):
@@ -249,7 +249,7 @@ class TestLODA(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(n_projections=18, n_bins=14, sparsity=0.25)
         output = repr(model)
-        self.assertIn("LODA", output)
+        self.assertIn("StreamingLODA", output)
         self.assertIn("n_projections=18", output)
         self.assertIn("n_bins=14", output)
         self.assertIn("sparsity=0.25", output)

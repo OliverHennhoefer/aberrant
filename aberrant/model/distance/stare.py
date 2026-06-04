@@ -1,4 +1,4 @@
-"""STARE-style detector for streaming local outlier detection."""
+"""Stationary-region neighbor detector for streaming local outlier detection."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ _Cell: TypeAlias = tuple[int, ...]
 _Entry: TypeAlias = tuple[int, np.ndarray, _Cell]
 
 
-class STARE(BaseModel):
+class StationaryRegionNeighborDetector(BaseModel):
     """
-    STARE-style local outlier detector for streaming data.
+    Stationary-region neighbor detector for streaming data.
 
     The detector keeps a bounded sliding window and quantizes points into
     radius-sized grid cells. Scores are based on the number of neighbors within
@@ -24,12 +24,19 @@ class STARE(BaseModel):
 
     A lightweight stationary-region skipping approximation is implemented via
     per-cell cache invalidation at slide boundaries: cells whose occupancy
-    changed less than ``skip_threshold`` keep cached neighbor estimates.
+    changed less than ``skip_threshold`` keep cached neighbor estimates. Unlike
+    the paper, this class uses radius-neighbor counts rather than kernel-density
+    estimates and returns a per-query score rather than a top-n outlier set.
 
     Notes:
     - Scores are continuous and bounded in ``[0, 1]``.
     - State is bounded by ``window_size``.
     - Feature schema is fixed after the first ``learn_one`` call.
+
+    References:
+        Yoon, S., Lee, J.-G., & Lee, B. S. (2020). Ultrafast Local Outlier
+        Detection from a Data Stream with Stationary Region Skipping.
+        https://doi.org/10.1145/3394486.3403171
     """
 
     def __init__(
@@ -370,10 +377,14 @@ class STARE(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "STARE("
+            "StationaryRegionNeighborDetector("
             f"k={self.k}, radius={self.radius}, window_size={self.window_size}, "
             f"slide_size={self.slide_size}, skip_threshold={self.skip_threshold}, "
             f"time_key={self.time_key!r}, warm_up_slides={self.warm_up_slides}, "
             f"predict_threshold={self.predict_threshold}, eps={self.eps}, "
             f"samples_seen={self._samples_seen}, active_cells={len(self._cell_counts)})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+STARE = StationaryRegionNeighborDetector

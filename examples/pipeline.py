@@ -32,12 +32,12 @@ for i, (x, y) in enumerate(dataset.stream()):
             pca_pipeline.learn_one(x)
         continue
 
-    baseline_pipeline.learn_one(x)
-    pca_pipeline.learn_one(x)
-
     labels.append(y)
     baseline_scores.append(baseline_pipeline.score_one(x))
     pca_scores.append(pca_pipeline.score_one(x))
+
+    baseline_pipeline.learn_one(x)
+    pca_pipeline.learn_one(x)
 
 baseline_pr_auc = average_precision_score(labels, baseline_scores)
 pca_pr_auc = average_precision_score(labels, pca_scores)

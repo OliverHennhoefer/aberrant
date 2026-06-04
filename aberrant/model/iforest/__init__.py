@@ -6,6 +6,7 @@ from typing import Any
 __all__ = [
     "ASDIsolationForest",
     "HalfSpaceTrees",
+    "MondrianIsolationForest",
     "MondrianForest",
     "OnlineIsolationForest",
     "RandomCutForest",
@@ -16,6 +17,10 @@ __all__ = [
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "ASDIsolationForest": ("aberrant.model.iforest.asd", "ASDIsolationForest"),
     "HalfSpaceTrees": ("aberrant.model.iforest.halfspace", "HalfSpaceTrees"),
+    "MondrianIsolationForest": (
+        "aberrant.model.iforest.mondrian",
+        "MondrianIsolationForest",
+    ),
     "MondrianForest": ("aberrant.model.iforest.mondrian", "MondrianForest"),
     "OnlineIsolationForest": ("aberrant.model.iforest.online", "OnlineIsolationForest"),
     "RandomCutForest": ("aberrant.model.iforest.random_cut", "RandomCutForest"),

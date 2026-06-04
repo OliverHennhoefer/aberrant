@@ -15,23 +15,37 @@ Semantic Versioning.
 - Regression tests for `keys=` initialization in multivariate statistical models.
 - Optional dependency extras for `parquet` and benchmark tooling.
 - Repository standards and CI/security/release workflows.
-- `KitNET` online deep detector with phased warm-up, tests, docs, and example script.
+- `OnlineAutoencoderEnsemble` deep detector with phased warm-up, tests, docs,
+  example script, and the historical `KitNET` compatibility alias.
 - `MStream` sketch-based streaming detector with `aberrant.model.sketch` public API,
   unit/integration tests, docs, and example script.
-- `LODA` sketch-based streaming detector with `aberrant.model.sketch` public API,
-  unit/integration tests, docs, and example script.
+- `StreamingLODA` sketch-based detector with `aberrant.model.sketch` public API,
+  unit/integration tests, docs, example script, and the historical `LODA`
+  compatibility alias.
 - `SDOStream` bounded-memory observer-based detector in `aberrant.model.distance`
   with unit/integration tests, docs, and example script.
 - `MIDAS` graph-stream detector in `aberrant.model.graph` with public export,
   unit/integration tests, docs, and example script.
 - `AnoEdgeL` graph-stream detector in `aberrant.model.graph` with public export,
   unit/integration tests, docs, and example script.
+- `XLagDAMP` pure-online time-series discord detector based on the original
+  authors' X-Lag Amnesic DAMP implementation, with bounded history, reference
+  formula tests, synthetic integration coverage, docs, and example script.
 - Production hardening CI jobs for base-install smoke and optional-extras smoke.
 - Trusted SHA256 checksums for built-in dataset artifacts.
 - `py.typed` marker for downstream type-checker support.
 
 ### Changed
 
+- Paper-derived custom variants now have accurate canonical public names:
+  `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector`,
+  `SignedGraphSketchDetector`, `OnlineAutoencoderEnsemble`,
+  `MondrianIsolationForest`, `StreamingRSHash`, and `StreamingLODA`. Historical
+  names remain compatibility aliases and do not imply paper-score parity.
+- `StreamRandomHistogramForest` now uses `max_depth` exclusively; the historical
+  `max_bins` parameter and attribute were removed. Per-node random values are
+  generated lazily so memory scales with visited nodes instead of complete-tree
+  capacity. Exact seeded score sequences may change under the new derivation.
 - `OnlineIsolationForest` now enforces deterministic feature ordering and key-set checks.
 - Dataset module version now uses `aberrant.__version__` as single source of truth.
 - Documentation was rewritten to match the current public API.

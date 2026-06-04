@@ -2,52 +2,213 @@
 
 from __future__ import annotations
 
-import hashlib
+import math
+from collections.abc import Callable
 
 import numpy as np
 
 from aberrant.base.model import BaseModel
 
+_MatrixValue = Callable[[int, int], float]
+
+
+class _DenseSubmatrix:
+    """Local dense-submatrix state ported from the authors' ``Submatrix``."""
+
+    def __init__(self, row: int, col: int, value: float = 0.0) -> None:
+        self.total = float(value)
+        self.row_sums = {row: float(value)}
+        self.col_sums = {col: float(value)}
+
+    def copy(self) -> _DenseSubmatrix:
+        """Return an independent copy for non-mutating score previews."""
+        result = object.__new__(_DenseSubmatrix)
+        result.total = self.total
+        result.row_sums = self.row_sums.copy()
+        result.col_sums = self.col_sums.copy()
+        return result
+
+    @property
+    def density(self) -> float:
+        """Return sum divided by the geometric mean of selected dimensions."""
+        return self.total / math.sqrt(len(self.row_sums) * len(self.col_sums))
+
+    def decay(self, factor: float) -> None:
+        """Decay the submatrix statistics in place."""
+        self.total *= factor
+        for row in self.row_sums:
+            self.row_sums[row] *= factor
+        for col in self.col_sums:
+            self.col_sums[col] *= factor
+
+    def _add_row(self, row: int, value: float, matrix: _MatrixValue) -> None:
+        self.row_sums[row] = value
+        for col in self.col_sums:
+            self.col_sums[col] += matrix(row, col)
+
+    def _add_col(self, col: int, value: float, matrix: _MatrixValue) -> None:
+        self.col_sums[col] = value
+        for row in self.row_sums:
+            self.row_sums[row] += matrix(row, col)
+
+    def _del_row(self, row: int, matrix: _MatrixValue) -> None:
+        del self.row_sums[row]
+        for col in self.col_sums:
+            self.col_sums[col] -= matrix(row, col)
+
+    def _del_col(self, col: int, matrix: _MatrixValue) -> None:
+        del self.col_sums[col]
+        for row in self.row_sums:
+            self.row_sums[row] -= matrix(row, col)
+
+    def check_and_add(self, row: int, col: int, matrix: _MatrixValue) -> bool:
+        """Add candidate dimensions only when they increase density."""
+        row_present = row in self.row_sums
+        col_present = col in self.col_sums
+
+        if row_present and col_present:
+            self.total += 1.0
+            self.row_sums[row] += 1.0
+            self.col_sums[col] += 1.0
+            return False
+
+        row_sum = (
+            0.0
+            if row_present
+            else sum(matrix(row, selected_col) for selected_col in self.col_sums)
+        )
+        col_sum = (
+            0.0
+            if col_present
+            else sum(matrix(selected_row, col) for selected_row in self.row_sums)
+        )
+        n_rows = len(self.row_sums) + int(not row_present)
+        n_cols = len(self.col_sums) + int(not col_present)
+        candidate_total = self.total + row_sum + col_sum
+        if not row_present and not col_present:
+            candidate_total += matrix(row, col)
+
+        candidate_density = candidate_total / math.sqrt(n_rows * n_cols)
+        if self.density >= candidate_density:
+            return False
+
+        if not row_present and not col_present:
+            self._add_row(row, row_sum, matrix)
+            self._add_col(col, col_sum + matrix(row, col), matrix)
+        elif not row_present:
+            self._add_row(row, row_sum, matrix)
+        elif not col_present:
+            self._add_col(col, col_sum, matrix)
+        self.total = candidate_total
+        return True
+
+    def check_and_delete(self, matrix: _MatrixValue) -> bool:
+        """Delete the weakest row or column when doing so increases density."""
+        min_row: tuple[int, float] | None = None
+        if len(self.row_sums) > 1:
+            min_row = min(self.row_sums.items(), key=lambda item: (item[1], item[0]))
+
+        min_col: tuple[int, float] | None = None
+        if len(self.col_sums) > 1:
+            min_col = min(self.col_sums.items(), key=lambda item: (item[1], item[0]))
+
+        row_density = 0.0
+        if min_row is not None:
+            row_density = (self.total - min_row[1]) / math.sqrt(
+                (len(self.row_sums) - 1) * len(self.col_sums)
+            )
+
+        col_density = 0.0
+        if min_col is not None:
+            col_density = (self.total - min_col[1]) / math.sqrt(
+                len(self.row_sums) * (len(self.col_sums) - 1)
+            )
+
+        if self.density < row_density and col_density < row_density:
+            if min_row is None:
+                return False
+            self._del_row(min_row[0], matrix)
+            self.total -= min_row[1]
+            return True
+        if self.density < col_density and row_density < col_density:
+            if min_col is None:
+                return False
+            self._del_col(min_col[0], matrix)
+            self.total -= min_col[1]
+            return True
+        return False
+
+    def likelihood(self, row: int, col: int, matrix: _MatrixValue) -> float:
+        """Return the local edge likelihood used by AnoEdge-L."""
+        score = sum(matrix(selected_row, col) for selected_row in self.row_sums)
+        score += sum(matrix(row, selected_col) for selected_col in self.col_sums)
+        count = len(self.row_sums) + len(self.col_sums)
+
+        if row in self.row_sums and col in self.col_sums:
+            score -= matrix(row, col)
+            count -= 1
+        return score / float(count)
+
 
 class AnoEdgeL(BaseModel):
     """
-    AnoEdge-L style detector for dynamic graph edge streams.
+    AnoEdge-L local dense-submatrix detector for dynamic graph edge streams.
 
-    The detector maps source and destination node identifiers into multiple
-    fixed-size sketch planes and evaluates each candidate edge using local
-    neighborhood density around its hashed cell. The final score is the median
-    of per-plane rarity-density scores.
+    Source and destination identifiers are hashed into higher-order count-min
+    sketch matrices. For every sketch plane, one or more local dense
+    submatrices are maintained with the authors' greedy add/delete updates. The
+    edge score is the minimum across planes of the summed local-submatrix
+    likelihoods.
+
+    The authors' implementation inserts an edge before updating submatrices and
+    scoring it. ``score_one`` reproduces that candidate-inclusive operation on
+    copies of the small submatrix states, without mutating the sketch or
+    advancing time. ``learn_one`` applies the same operation to learned state.
 
     Notes:
-    - Scores are continuous and non-negative.
+    - Source and destination identifiers must be integer-like numbers.
+    - Scores are continuous and non-negative; denser anomalous edges score
+      higher.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
-    - State is bounded by ``num_hashes * count_min_rows * count_min_cols``.
+    - State is bounded by the configured higher-order sketch dimensions.
+
+    References:
+        Bhatia, S., Wadhwa, M., Kawaguchi, K., Shah, N., Yu, P. S., &
+        Hooi, B. (2023). Sketch-Based Anomaly Detection in Streaming Graphs.
+        https://doi.org/10.1145/3580305.3599273
+        Original implementation: https://github.com/Stream-AD/AnoGraph
     """
 
     @staticmethod
-    def _validate_required_name(value: str, label: str) -> str:
-        if not isinstance(value, str) or not value:
-            raise ValueError(f"{label} must be a non-empty string")
-        return value
+    def _validate_keys(
+        source_key: str,
+        destination_key: str,
+        time_key: str | None,
+    ) -> None:
+        if not isinstance(source_key, str) or not source_key:
+            raise ValueError("source_key must be a non-empty string")
+        if not isinstance(destination_key, str) or not destination_key:
+            raise ValueError("destination_key must be a non-empty string")
+        if source_key == destination_key:
+            raise ValueError("source_key and destination_key must be different")
+        if time_key is not None and (not isinstance(time_key, str) or not time_key):
+            raise ValueError("time_key must be a non-empty string or None")
+        if time_key is not None and time_key in (source_key, destination_key):
+            raise ValueError(
+                "time_key must be different from source_key and destination_key"
+            )
 
     @staticmethod
-    def _validate_optional_name(value: str | None, label: str) -> str | None:
-        if value is not None and (not isinstance(value, str) or not value):
-            raise ValueError(f"{label} must be a non-empty string or None")
-        return value
-
-    @staticmethod
-    def _validate_hyperparameters(
+    def _validate_parameters(
         *,
         count_min_rows: int,
         count_min_cols: int,
         num_hashes: int,
-        local_radius: int,
+        num_dense_submatrices: int,
         time_decay_factor: float,
         warm_up_samples: int,
         normalize_score: bool,
         predict_threshold: float,
-        eps: float,
     ) -> None:
         if count_min_rows <= 0:
             raise ValueError("count_min_rows must be positive")
@@ -55,23 +216,24 @@ class AnoEdgeL(BaseModel):
             raise ValueError("count_min_cols must be positive")
         if num_hashes <= 0:
             raise ValueError("num_hashes must be positive")
-        if local_radius < 0:
-            raise ValueError("local_radius must be non-negative")
+        if num_dense_submatrices <= 0:
+            raise ValueError("num_dense_submatrices must be positive")
+        if num_dense_submatrices > min(count_min_rows, count_min_cols):
+            raise ValueError(
+                "num_dense_submatrices cannot exceed either sketch dimension"
+            )
         if not (0.0 < time_decay_factor <= 1.0):
             raise ValueError("time_decay_factor must be in (0, 1]")
-        if warm_up_samples <= 0:
-            raise ValueError("warm_up_samples must be positive")
-        if normalize_score:
-            if not (0.0 <= predict_threshold <= 1.0):
-                raise ValueError(
-                    "predict_threshold must be in [0, 1] when normalize_score=True"
-                )
-        elif predict_threshold < 0.0:
+        if warm_up_samples < 0:
+            raise ValueError("warm_up_samples must be non-negative")
+        if normalize_score and not (0.0 <= predict_threshold <= 1.0):
+            raise ValueError(
+                "predict_threshold must be in [0, 1] when normalize_score=True"
+            )
+        if not normalize_score and predict_threshold < 0.0:
             raise ValueError(
                 "predict_threshold must be non-negative when normalize_score=False"
             )
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
 
     def __init__(
         self,
@@ -81,86 +243,66 @@ class AnoEdgeL(BaseModel):
         count_min_rows: int = 256,
         count_min_cols: int = 256,
         num_hashes: int = 4,
-        local_radius: int = 2,
+        num_dense_submatrices: int = 1,
         time_decay_factor: float = 1.0,
-        warm_up_samples: int = 128,
+        warm_up_samples: int = 0,
         normalize_score: bool = False,
         predict_threshold: float = 0.5,
-        eps: float = 1e-9,
         seed: int | None = None,
     ) -> None:
-        self.source_key = self._validate_required_name(source_key, "source_key")
-        self.destination_key = self._validate_required_name(
-            destination_key, "destination_key"
-        )
-        self.time_key = self._validate_optional_name(time_key, "time_key")
-
-        if self.source_key == self.destination_key:
-            raise ValueError("source_key and destination_key must be different")
-        if self.time_key is not None and self.time_key in (
-            self.source_key,
-            self.destination_key,
-        ):
-            raise ValueError(
-                "time_key must be different from source_key and destination_key"
-            )
-        self._validate_hyperparameters(
+        self._validate_keys(source_key, destination_key, time_key)
+        self._validate_parameters(
             count_min_rows=count_min_rows,
             count_min_cols=count_min_cols,
             num_hashes=num_hashes,
-            local_radius=local_radius,
+            num_dense_submatrices=num_dense_submatrices,
             time_decay_factor=time_decay_factor,
             warm_up_samples=warm_up_samples,
             normalize_score=normalize_score,
             predict_threshold=predict_threshold,
-            eps=eps,
         )
 
+        self.source_key = source_key
+        self.destination_key = destination_key
+        self.time_key = time_key
         self.count_min_rows = count_min_rows
         self.count_min_cols = count_min_cols
         self.num_hashes = num_hashes
-        self.local_radius = local_radius
+        self.num_dense_submatrices = num_dense_submatrices
         self.time_decay_factor = time_decay_factor
         self.warm_up_samples = warm_up_samples
         self.normalize_score = normalize_score
         self.predict_threshold = predict_threshold
-        self.eps = eps
         self.seed = seed
 
         self._reset_state()
 
     def _reset_state(self) -> None:
         self._rng = np.random.default_rng(self.seed)
-        max_uint64 = int(np.iinfo(np.uint64).max)
-        row_salts = self._rng.integers(
-            low=0,
-            high=max_uint64,
+        hash_modulus = max(self.count_min_rows, self.count_min_cols)
+        self._hash_a = self._rng.integers(
+            1,
+            max(hash_modulus, 2),
             size=self.num_hashes,
-            dtype=np.uint64,
+            dtype=np.int64,
         )
-        col_salts = self._rng.integers(
-            low=0,
-            high=max_uint64,
+        self._hash_b = self._rng.integers(
+            0,
+            hash_modulus,
             size=self.num_hashes,
-            dtype=np.uint64,
+            dtype=np.int64,
         )
-        self._row_keys = tuple(
-            int(salt).to_bytes(16, byteorder="little", signed=False)
-            for salt in row_salts
-        )
-        self._col_keys = tuple(
-            int(salt).to_bytes(16, byteorder="little", signed=False)
-            for salt in col_salts
-        )
-
         self._sketch = np.zeros(
             (self.num_hashes, self.count_min_rows, self.count_min_cols),
             dtype=np.float64,
         )
-        self._row_mass = np.zeros((self.num_hashes, self.count_min_rows), dtype=np.float64)
-        self._col_mass = np.zeros((self.num_hashes, self.count_min_cols), dtype=np.float64)
-        self._total_mass = np.zeros(self.num_hashes, dtype=np.float64)
-
+        self._dense_submatrices = [
+            [
+                _DenseSubmatrix(index, index)
+                for index in range(self.num_dense_submatrices)
+            ]
+            for _ in range(self.num_hashes)
+        ]
         self._current_bucket: int | None = None
         self._arrival_index = 0
         self._samples_seen = 0
@@ -174,25 +316,21 @@ class AnoEdgeL(BaseModel):
         """Number of observed samples processed via learn_one."""
         return self._samples_seen
 
-    def _coerce_numeric(self, value: float, key: str) -> float:
+    @staticmethod
+    def _coerce_integer(value: float, key: str) -> int:
         if not isinstance(value, int | float | np.number):
             raise ValueError(f"Feature '{key}' must be numeric")
         as_float = float(value)
         if not np.isfinite(as_float):
             raise ValueError(f"Feature '{key}' must be finite")
-        return as_float
-
-    def _coerce_bucket(self, value: float) -> int:
-        as_float = self._coerce_numeric(value, self.time_key or "t")
         as_int = int(round(as_float))
         if not np.isclose(as_float, float(as_int), rtol=0.0, atol=1e-9):
-            raise ValueError("Timestamp must be integer-like")
+            raise ValueError(f"Feature '{key}' must be integer-like")
         return as_int
 
-    def _prepare_sample(self, x: dict[str, float]) -> tuple[int, float, float]:
+    def _prepare_sample(self, x: dict[str, float]) -> tuple[int, int, int]:
         if not x:
             raise ValueError("Input dictionary cannot be empty")
-
         if self.source_key not in x:
             raise ValueError(f"Missing source_key '{self.source_key}' in input sample")
         if self.destination_key not in x:
@@ -200,144 +338,114 @@ class AnoEdgeL(BaseModel):
                 f"Missing destination_key '{self.destination_key}' in input sample"
             )
 
-        src = self._coerce_numeric(x[self.source_key], self.source_key)
-        dst = self._coerce_numeric(x[self.destination_key], self.destination_key)
-
+        src = self._coerce_integer(x[self.source_key], self.source_key)
+        dst = self._coerce_integer(x[self.destination_key], self.destination_key)
         if self.time_key is None:
             bucket = self._arrival_index + 1
         else:
             if self.time_key not in x:
                 raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            bucket = self._coerce_bucket(x[self.time_key])
+            bucket = self._coerce_integer(x[self.time_key], self.time_key)
 
-        return bucket, src, dst
-
-    def _rollover_if_needed(self, bucket: int) -> None:
-        if self._current_bucket is None:
-            self._current_bucket = bucket
-            return
-
-        if bucket < self._current_bucket:
+        if self._current_bucket is not None and bucket < self._current_bucket:
             raise ValueError(
                 f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
             )
+        return bucket, src, dst
+
+    def _hash(self, value: int, plane: int, size: int) -> int:
+        return (value * int(self._hash_a[plane]) + int(self._hash_b[plane])) % size
+
+    def _hashed_cells(self, src: int, dst: int) -> list[tuple[int, int, int]]:
+        return [
+            (
+                plane,
+                self._hash(src, plane, self.count_min_rows),
+                self._hash(dst, plane, self.count_min_cols),
+            )
+            for plane in range(self.num_hashes)
+        ]
+
+    def _rollover_for_learning(self, bucket: int) -> None:
+        if self._current_bucket is None:
+            self._current_bucket = bucket
+            return
         if bucket == self._current_bucket:
             return
 
-        delta = bucket - self._current_bucket
-        decay = self.time_decay_factor**delta
-        self._sketch *= decay
-        self._row_mass *= decay
-        self._col_mass *= decay
-        self._total_mass *= decay
+        self._sketch *= self.time_decay_factor
+        for plane_submatrices in self._dense_submatrices:
+            for submatrix in plane_submatrices:
+                submatrix.decay(self.time_decay_factor)
         self._current_bucket = bucket
 
-    def _source_payload(self, src: float) -> bytes:
-        return b"s" + np.float64(src).tobytes()
+    def _preview_plane(
+        self,
+        plane: int,
+        row: int,
+        col: int,
+        *,
+        rollover: bool,
+    ) -> float:
+        factor = self.time_decay_factor if rollover else 1.0
+        sketch = self._sketch[plane]
 
-    def _destination_payload(self, dst: float) -> bytes:
-        return b"d" + np.float64(dst).tobytes()
+        def matrix_value(query_row: int, query_col: int) -> float:
+            candidate = 1.0 if query_row == row and query_col == col else 0.0
+            return float(sketch[query_row, query_col]) * factor + candidate
 
-    def _hash_index(self, payload: bytes, key: bytes, size: int) -> int:
-        digest = hashlib.blake2b(payload, digest_size=8, key=key).digest()
-        return int.from_bytes(digest, byteorder="little", signed=False) % size
+        score = 0.0
+        for learned in self._dense_submatrices[plane]:
+            submatrix = learned.copy()
+            if rollover:
+                submatrix.decay(factor)
+            if submatrix.check_and_add(row, col, matrix_value):
+                while submatrix.check_and_delete(matrix_value):
+                    pass
+            score += submatrix.likelihood(row, col, matrix_value)
+        return score
 
-    def _hashed_cells(self, src: float, dst: float) -> list[tuple[int, int, int]]:
-        src_payload = self._source_payload(src)
-        dst_payload = self._destination_payload(dst)
-        cells: list[tuple[int, int, int]] = []
+    def _update_plane(self, plane: int, row: int, col: int) -> float:
+        sketch = self._sketch[plane]
+        sketch[row, col] += 1.0
 
-        for h, (row_key, col_key) in enumerate(
-            zip(self._row_keys, self._col_keys, strict=True)
-        ):
-            row = self._hash_index(src_payload, row_key, self.count_min_rows)
-            col = self._hash_index(dst_payload, col_key, self.count_min_cols)
-            cells.append((h, row, col))
-        return cells
+        def matrix_value(query_row: int, query_col: int) -> float:
+            return float(sketch[query_row, query_col])
 
-    def _local_density(self, h: int, row: int, col: int) -> float:
-        row_start = max(0, row - self.local_radius)
-        row_stop = min(self.count_min_rows, row + self.local_radius + 1)
-        col_start = max(0, col - self.local_radius)
-        col_stop = min(self.count_min_cols, col + self.local_radius + 1)
-
-        area = float((row_stop - row_start) * (col_stop - col_start))
-        if area <= 0.0:
-            return 0.0
-
-        window_sum = float(
-            np.sum(
-                self._sketch[h, row_start:row_stop, col_start:col_stop],
-                dtype=np.float64,
-            )
-        )
-        return (window_sum + 1.0) / area
-
-    def _score_hashed_cell(self, h: int, row: int, col: int) -> float:
-        candidate_cell = self._sketch[h, row, col] + 1.0
-        if candidate_cell <= 0.0:
-            return 0.0
-
-        local_density = self._local_density(h, row, col)
-        total_mass = self._total_mass[h]
-        global_density = (total_mass + 1.0) / float(
-            self.count_min_rows * self.count_min_cols
-        )
-
-        row_mass = self._row_mass[h, row] + 1.0
-        col_mass = self._col_mass[h, col] + 1.0
-        marginal_expectation = (row_mass * col_mass) / (total_mass + 1.0)
-
-        density_ratio = local_density / (global_density + self.eps)
-        pair_surprise = marginal_expectation / (candidate_cell + self.eps)
-        node_novelty = 1.0 / np.sqrt(row_mass * col_mass)
-
-        boosted_surprise = float(
-            np.log1p(max(density_ratio, 0.0)) * np.log1p(max(pair_surprise, 0.0))
-        )
-        score = boosted_surprise + node_novelty
-        if not np.isfinite(score):
-            return 0.0
-        return float(max(score, 0.0))
+        score = 0.0
+        for submatrix in self._dense_submatrices[plane]:
+            if submatrix.check_and_add(row, col, matrix_value):
+                while submatrix.check_and_delete(matrix_value):
+                    pass
+            score += submatrix.likelihood(row, col, matrix_value)
+        return score
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """Update detector state with one sample."""
+        """Insert an edge and update the local dense-submatrix states."""
         bucket, src, dst = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
-
-        for h, row, col in self._hashed_cells(src, dst):
-            self._sketch[h, row, col] += 1.0
-            self._row_mass[h, row] += 1.0
-            self._col_mass[h, col] += 1.0
-            self._total_mass[h] += 1.0
+        self._rollover_for_learning(bucket)
+        for plane, row, col in self._hashed_cells(src, dst):
+            self._update_plane(plane, row, col)
 
         self._samples_seen += 1
         if self.time_key is None:
             self._arrival_index += 1
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score for one sample."""
+        """Preview the candidate-inclusive AnoEdge-L score without mutation."""
         bucket, src, dst = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
-
         if self._samples_seen < self.warm_up_samples:
             return 0.0
 
-        scores = [
-            self._score_hashed_cell(h, row, col)
-            for h, row, col in self._hashed_cells(src, dst)
-        ]
-        if not scores:
-            return 0.0
-
-        raw_score = float(np.median(np.asarray(scores, dtype=np.float64)))
-        if not np.isfinite(raw_score):
-            raw_score = 0.0
-        raw_score = max(raw_score, 0.0)
-
+        rollover = self._current_bucket is not None and bucket > self._current_bucket
+        score = min(
+            self._preview_plane(plane, row, col, rollover=rollover)
+            for plane, row, col in self._hashed_cells(src, dst)
+        )
+        score = float(max(score, 0.0))
         if self.normalize_score:
-            return float(raw_score / (1.0 + raw_score))
-        return raw_score
+            return score / (1.0 + score)
+        return score
 
     def predict_one(self, x: dict[str, float]) -> int:
         """Return binary anomaly prediction using ``predict_threshold``."""
@@ -349,9 +457,10 @@ class AnoEdgeL(BaseModel):
             f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
             f"time_key={self.time_key!r}, count_min_rows={self.count_min_rows}, "
             f"count_min_cols={self.count_min_cols}, num_hashes={self.num_hashes}, "
-            f"local_radius={self.local_radius}, time_decay_factor={self.time_decay_factor}, "
+            f"num_dense_submatrices={self.num_dense_submatrices}, "
+            f"time_decay_factor={self.time_decay_factor}, "
             f"warm_up_samples={self.warm_up_samples}, "
             f"normalize_score={self.normalize_score}, "
-            f"predict_threshold={self.predict_threshold}, eps={self.eps}, "
-            f"seed={self.seed}, samples_seen={self._samples_seen})"
+            f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
+            f"samples_seen={self._samples_seen})"
         )

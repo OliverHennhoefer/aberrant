@@ -1,15 +1,14 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest.mondrian import MondrianForest
+from aberrant.model.svm import GraphGatedOneClassSVM
 from aberrant.stream.dataset import Dataset, load
 
-# lambda_ is the Mondrian lifetime budget: larger values allow finer partitions.
-model = MondrianForest(n_estimators=120, subspace_size=128, lambda_=1.0, seed=1)
+model = GraphGatedOneClassSVM()
 labels, scores = [], []
-dataset = load(Dataset.SHUTTLE)
+dataset = load(Dataset.FRAUD)
 
 for i, (x, y) in enumerate(dataset.stream()):
-    if i < 10_000:
+    if i < 2_000:
         if y == 0:
             model.learn_one(x)
         continue

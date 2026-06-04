@@ -8,22 +8,36 @@ from aberrant.model.distance import (
     KNN,
     NETS,
     STARE,
+    CellNeighborhoodDetector,
     LocalOutlierFactor,
     SDOStream,
+    StationaryRegionNeighborDetector,
 )
-from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, StreamSpot
+from aberrant.model.graph import (
+    ISCONNA,
+    MIDAS,
+    AnoEdgeL,
+    SignedGraphSketchDetector,
+    StreamSpot,
+)
 from aberrant.model.iforest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianForest,
+    MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
     StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.sketch import LODA, MStream, RSHash
+from aberrant.model.sketch import LODA, MStream, RSHash, StreamingLODA, StreamingRSHash
 from aberrant.model.stat import MovingAverage, MovingCovariance
-from aberrant.model.svm import GADGETSVM, IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import (
+    GADGETSVM,
+    GraphGatedOneClassSVM,
+    IncrementalOneClassSVMAdaptiveKernel,
+)
+from aberrant.model.timeseries import XLagDAMP
 from aberrant.stream import Dataset, load
 from aberrant.stream.dataset import BatchStreamer, DatasetStreamer
 from aberrant.transform.preprocessing import MinMaxScaler, StandardScaler
@@ -44,25 +58,27 @@ def test_public_imports_base_smoke() -> None:
     assert QuantileThreshold is not None
     assert KNN is not None
     assert LocalOutlierFactor is not None
-    assert NETS is not None
+    assert NETS is CellNeighborhoodDetector
     assert SDOStream is not None
-    assert STARE is not None
+    assert STARE is StationaryRegionNeighborDetector
     assert AnoEdgeL is not None
     assert ISCONNA is not None
     assert MIDAS is not None
-    assert StreamSpot is not None
+    assert StreamSpot is SignedGraphSketchDetector
     assert ASDIsolationForest is not None
     assert HalfSpaceTrees is not None
-    assert MondrianForest is not None
+    assert MondrianForest is MondrianIsolationForest
     assert OnlineIsolationForest is not None
     assert RandomCutForest is not None
     assert StreamRandomHistogramForest is not None
     assert XStream is not None
-    assert LODA is not None
+    assert LODA is StreamingLODA
     assert MStream is not None
-    assert RSHash is not None
+    assert RSHash is StreamingRSHash
     assert IncrementalOneClassSVMAdaptiveKernel is not None
     assert GADGETSVM is not None
+    assert GADGETSVM is GraphGatedOneClassSVM
+    assert XLagDAMP is not None
     assert MovingAverage is not None
     assert MovingCovariance is not None
     assert MinMaxScaler is not None

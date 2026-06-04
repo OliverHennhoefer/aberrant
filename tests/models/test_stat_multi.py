@@ -218,7 +218,7 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
         )
 
     def test_score_one(self):
-        mmd = MovingMahalanobisDistance(window_size=10)
+        mmd = MovingMahalanobisDistance(window_size=10, bias=False)
         values = np.array([[1, 2], [2, 3], [2, 3.5], [3, 5], [5, 10]])
         for point in values:
             mmd.learn_one({"a": point[0], "b": point[1]})
@@ -233,6 +233,16 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
         score = float(diff.T @ inv_cov_matrix @ diff)
 
         self.assertEqual(scored, score)
+
+    def test_score_one_supports_one_dimensional_input_and_bias(self):
+        biased = MovingMahalanobisDistance(window_size=3, bias=True)
+        unbiased = MovingMahalanobisDistance(window_size=3, bias=False)
+        for value in [1.0, 2.0, 3.0]:
+            biased.learn_one({"value": value})
+            unbiased.learn_one({"value": value})
+
+        self.assertAlmostEqual(biased.score_one({"value": 4.0}), 6.0)
+        self.assertAlmostEqual(unbiased.score_one({"value": 4.0}), 4.0)
 
 
 if __name__ == "__main__":

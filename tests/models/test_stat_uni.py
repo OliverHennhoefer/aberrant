@@ -129,6 +129,14 @@ class TestMovingHarmonicAverage(unittest.TestCase):
         self.assertEqual(ma.score_one({"value": 0}), 0)
         self.assertEqual(ma.score_one({"value": 1}), 0)
 
+    def test_undefined_harmonic_mean_raises_value_error(self):
+        model = MovingHarmonicAverage(3)
+        model.learn_one({"value": 1.0})
+        model.learn_one({"value": -1.0})
+
+        with self.assertRaisesRegex(ValueError, "undefined for this window"):
+            model.score_one({"value": 2.0})
+
 
 class TestMovingGeometricAverage(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
@@ -159,12 +167,12 @@ class TestMovingGeometricAverage(unittest.TestCase):
 
     def test_score_one_with_empty_window(self):
         m = MovingGeometricAverage(window_size=3)
-        self.assertEqual(m.score_one({"value": 1}), 1)
+        self.assertEqual(m.score_one({"value": 1}), 0)
 
     def test_score_one_with_single_value_in_window(self):
         m = MovingGeometricAverage(window_size=3)
         m.learn_one({"feature": 2.0})
-        self.assertEqual(m.score_one({"value": 1}), 1)
+        self.assertEqual(m.score_one({"feature": 1}), 0)
 
     def test_score_one_with_multiple_values_absolute_values(self):
         m = MovingGeometricAverage(window_size=5, abs_diff=False, absoluteValues=True)
@@ -194,7 +202,15 @@ class TestMovingGeometricAverage(unittest.TestCase):
         ma = MovingGeometricAverage(3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
-        self.assertEqual(ma.score_one({"value": 1}), 1)
+        self.assertEqual(ma.score_one({"value": 1}), 0)
+
+    def test_score_one_rejects_nonpositive_value(self):
+        model = MovingGeometricAverage(3)
+        model.learn_one({"value": 1.0})
+        model.learn_one({"value": 2.0})
+
+        with self.assertRaisesRegex(ValueError, "requires positive values"):
+            model.score_one({"value": -1.0})
 
 
 class TestMovingMedian(unittest.TestCase):
@@ -268,6 +284,10 @@ class TestMovingQuantile(unittest.TestCase):
     def test_initialization(self):
         with self.assertRaises(ValueError):
             MovingQuantile(window_size=0)
+        with self.assertRaises(ValueError):
+            MovingQuantile(window_size=3, quantile=-0.1)
+        with self.assertRaises(ValueError):
+            MovingQuantile(window_size=3, quantile=1.1)
 
         model = MovingQuantile(window_size=3, quantile=0.5)
         self.assertEqual(model.window.maxlen, 3)
@@ -347,6 +367,29 @@ class TestMovingQuantile(unittest.TestCase):
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 1}), 0)
+
+
+class TestUnivariateFeatureSchema(unittest.TestCase):
+    def test_all_moving_models_lock_to_first_learned_feature(self):
+        models = [
+            MovingAverage(3),
+            MovingHarmonicAverage(3),
+            MovingGeometricAverage(3),
+            MovingMedian(3),
+            MovingQuantile(3),
+            MovingVariance(3),
+            MovingInterquartileRange(3),
+            MovingAverageAbsoluteDeviation(3),
+            MovingKurtosis(3),
+            MovingSkewness(3),
+        ]
+
+        for model in models:
+            with self.subTest(model=model.__class__.__name__):
+                model.learn_one({"expected": 1.0})
+                self.assertEqual(model.feature_name, "expected")
+                with self.assertRaises(ValueError):
+                    model.learn_one({"unexpected": 2.0})
 
 
 class TestMovingVariance(unittest.TestCase):

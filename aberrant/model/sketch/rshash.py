@@ -1,4 +1,4 @@
-"""RS-Hash sketch detector for streaming anomaly detection."""
+"""Bounded streaming RS-Hash adaptation for anomaly detection."""
 
 from __future__ import annotations
 
@@ -11,13 +11,15 @@ from aberrant.base.model import BaseModel
 _HASH_MODULUS = np.int64(2_147_483_647)  # Large Mersenne prime.
 
 
-class RSHash(BaseModel):
+class StreamingRSHash(BaseModel):
     """
-    RS-Hash detector for bounded-memory online anomaly detection.
+    Bounded-memory streaming adaptation of RS-Hash.
 
     RS-Hash keeps an ensemble of randomized feature subspaces and hashes each
     sample into fixed-size count tables with exponential fading. Low hashed
-    occupancy indicates potentially anomalous behavior.
+    occupancy indicates potentially anomalous behavior. Online z-score
+    normalization and exponential fading are streaming adaptations in this
+    implementation and do not reproduce the paper's exact window procedure.
 
     Notes:
     - Scores are continuous, non-negative, and bounded in ``[0, 1]``.
@@ -27,6 +29,7 @@ class RSHash(BaseModel):
     References:
         Sathe, S., & Aggarwal, C. C. (2016). Subspace Outlier Detection in
         Linear Time with Randomized Hashing. IEEE ICDM.
+        https://www.charuaggarwal.net/linearout.pdf
     """
 
     def __init__(
@@ -407,10 +410,14 @@ class RSHash(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "RSHash("
+            "StreamingRSHash("
             f"components_num={self.components_num}, hash_num={self.hash_num}, "
             f"bins={self.bins}, subspace_size={self.subspace_size}, "
             f"bin_width={self.bin_width}, decay={self.decay}, "
             f"warm_up_samples={self.warm_up_samples}, time_key={self.time_key!r}, "
             f"seed={self.seed}, samples_seen={self._samples_seen})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+RSHash = StreamingRSHash

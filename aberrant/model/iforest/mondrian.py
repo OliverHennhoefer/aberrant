@@ -1,4 +1,4 @@
-"""Online Mondrian Forest for streaming anomaly detection."""
+"""Mondrian-tree isolation forest for streaming anomaly detection."""
 
 from __future__ import annotations
 
@@ -268,15 +268,25 @@ class MondrianTree:
         return self.score_one(self._projected_buffer)
 
 
-class MondrianForest(BaseModel):
+class MondrianIsolationForest(BaseModel):
     """
-    Online Mondrian Forest for anomaly detection.
+    Online isolation forest built from Mondrian trees.
+
+    The tree update follows online Mondrian block-extension mechanics, while
+    anomaly scoring uses Isolation Forest path-length normalization. The
+    original Mondrian Forest is a supervised classification model and does not
+    define this anomaly score, so this class is a custom hybrid.
 
     Args:
         n_estimators: Number of trees in the forest.
         subspace_size: Number of features sampled per tree.
         lambda_: Mondrian lifetime budget.
         seed: Random seed for reproducibility.
+
+    References:
+        Lakshminarayanan, B., Roy, D. M., & Teh, Y. W. (2014). Mondrian
+        Forests: Efficient Online Random Forests.
+        https://proceedings.neurips.cc/paper_files/paper/2014/hash/195f15384c2a79cedf293e4a847ce85c-Abstract.html
     """
 
     def __init__(
@@ -419,9 +429,13 @@ class MondrianForest(BaseModel):
         return _average_path_length(self.n_samples)
 
     def __repr__(self) -> str:
-        """Return a string representation of the MondrianForest."""
+        """Return a string representation of the MondrianIsolationForest."""
         return (
-            f"MondrianForest(n_estimators={self.n_estimators}, "
+            f"MondrianIsolationForest(n_estimators={self.n_estimators}, "
             f"subspace_size={self.subspace_size}, "
             f"lambda_={self.lambda_}, seed={self.seed})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+MondrianForest = MondrianIsolationForest

@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.distance import STARE
+from aberrant.model.distance import StationaryRegionNeighborDetector as STARE
 
 
 class TestSTARE(unittest.TestCase):
@@ -241,7 +241,7 @@ class TestSTARE(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(k=9, window_size=128, slide_size=16)
         output = repr(model)
-        self.assertIn("STARE", output)
+        self.assertIn("StationaryRegionNeighborDetector", output)
         self.assertIn("k=9", output)
         self.assertIn("window_size=128", output)
         self.assertIn("slide_size=16", output)

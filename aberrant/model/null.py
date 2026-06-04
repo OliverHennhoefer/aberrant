@@ -13,8 +13,8 @@ class NullModel(BaseModel):
 
     Example:
         >>> model = NullModel()
-        >>> model.learn_one({"feature1": 1.0, "feature2": 2.0})
         >>> score = model.score_one({"feature1": 1.0, "feature2": 2.0})
+        >>> model.learn_one({"feature1": 1.0, "feature2": 2.0})
         >>> print(score)  # Always 0.0
     """
 

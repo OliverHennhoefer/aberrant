@@ -22,8 +22,8 @@ for i, (x, y) in enumerate(dataset.stream()):
             pipeline.learn_one(x)
         continue
 
-    pipeline.learn_one(x)
     score = pipeline.score_one(x)
+    pipeline.learn_one(x)
 
     labels.append(y)
     scores.append(score)

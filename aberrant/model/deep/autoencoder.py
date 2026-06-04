@@ -98,10 +98,26 @@ class Autoencoder(BaseModel):
         Args:
             x: Input feature dictionary.
             tensor: Pre-allocated tensor to fill (modified in-place).
+
+        Raises:
+            ValueError: If the input schema does not match the architecture or the
+                schema established by the first sample.
         """
-        # Establish feature order on first call for consistency
         if self._feature_order is None:
-            self._feature_order = sorted(x.keys())
+            feature_order = sorted(x.keys())
+            if len(feature_order) != self.model.input_size:
+                raise ValueError(
+                    f"Expected {self.model.input_size} features, got "
+                    f"{len(feature_order)}."
+                )
+            self._feature_order = feature_order
+        elif len(x) != len(self._feature_order) or any(
+            key not in x for key in self._feature_order
+        ):
+            feature_order = sorted(x.keys())
+            raise ValueError(
+                f"Input features must be {self._feature_order}, got {feature_order}."
+            )
 
         # Fill tensor directly from dictionary values
         for i, key in enumerate(self._feature_order):

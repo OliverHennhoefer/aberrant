@@ -14,6 +14,8 @@ This guide explains ABERRANT design conventions and practical streaming usage.
 - `aberrant.model.ThresholdModel`: binary score (`0.0` normal, `1.0` anomaly).
 - `aberrant.model.iforest.*`: bounded score in `[0, 1]` (higher means more anomalous).
 - `aberrant.model.distance.LocalOutlierFactor`: unbounded positive LOF-like score (`~1` normal, higher outlierness).
+- `aberrant.model.timeseries.XLagDAMP`: z-normalized left-discord distance;
+  highest peaks are discord candidates.
 - `aberrant.model.svm.*`: margin-style continuous score (scale is model-specific).
 - `aberrant.model.stat.*`: delta/statistic scores, usually unbounded.
 

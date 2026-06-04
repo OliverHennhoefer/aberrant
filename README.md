@@ -32,13 +32,14 @@ Each `x` is `dict[str, float]`.
 
 | Family | Algorithms |
 | --- | --- |
-| Isolation Forest | `ASDIsolationForest`, `HalfSpaceTrees`, `MondrianForest`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` |
-| Distance | `KNN`, `LocalOutlierFactor`, `NETS`, `SDOStream`, `STARE` |
-| Sketch | `LODA`, `MStream`, `RSHash` |
-| Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `StreamSpot` |
-| SVM | `GADGETSVM`, `IncrementalOneClassSVMAdaptiveKernel` |
+| Isolation Forest | `ASDIsolationForest`, `HalfSpaceTrees`, `MondrianIsolationForest`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` |
+| Distance | `CellNeighborhoodDetector`, `KNN`, `LocalOutlierFactor`, `SDOStream`, `StationaryRegionNeighborDetector` |
+| Sketch | `MStream`, `StreamingLODA`, `StreamingRSHash` |
+| Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `SignedGraphSketchDetector` |
+| Time Series | `XLagDAMP` |
+| SVM | `GraphGatedOneClassSVM`, `IncrementalOneClassSVMAdaptiveKernel` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance` |
-| Deep (`aberrant[dl]`) | `Autoencoder`, `KitNET` |
+| Deep (`aberrant[dl]`) | `Autoencoder`, `OnlineAutoencoderEnsemble` |
 | Utility | `ThresholdModel`, `QuantileThreshold`, `NullModel`, `RandomModel` |
 | Drift Detection | `ADWIN`, `KSWIN`, `PageHinkley` |
 
@@ -90,6 +91,7 @@ Optional extras:
 - `aberrant.model.distance`
 - `aberrant.model.sketch`
 - `aberrant.model.graph`
+- `aberrant.model.timeseries`
 - `aberrant.model.svm`
 - `aberrant.model.stat`
 - `aberrant.model.deep` (optional extra)

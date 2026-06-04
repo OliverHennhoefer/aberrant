@@ -1,26 +1,20 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest.asd import ASDIsolationForest
+from aberrant.model.iforest import MondrianIsolationForest
 from aberrant.stream.dataset import Dataset, load
 
-model = ASDIsolationForest(
-    n_estimators=100,
-    max_samples=256,
-    window_size=2048,
-    retrain_interval=2048,
-    seed=1,
+# lambda_ is the Mondrian lifetime budget: larger values allow finer partitions.
+model = MondrianIsolationForest(
+    n_estimators=120, subspace_size=128, lambda_=1.0, seed=1
 )
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
 for i, (x, y) in enumerate(dataset.stream()):
-    if i < 10_000 and y == 0:
-        model.learn_one(x)
-        continue
-
     if i < 10_000:
+        if y == 0:
+            model.learn_one(x)
         continue
-
     score = model.score_one(x)
     model.learn_one(x)
 

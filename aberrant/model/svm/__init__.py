@@ -5,6 +5,7 @@ from typing import Any
 
 __all__ = [
     "GADGETSVM",
+    "GraphGatedOneClassSVM",
     "IncrementalOneClassSVMAdaptiveKernel",
 ]
 
@@ -14,7 +15,7 @@ def __getattr__(name: str) -> Any:
     if name == "IncrementalOneClassSVMAdaptiveKernel":
         module = importlib.import_module("aberrant.model.svm.adaptive")
         return module.IncrementalOneClassSVMAdaptiveKernel
-    if name == "GADGETSVM":
+    if name in {"GADGETSVM", "GraphGatedOneClassSVM"}:
         module = importlib.import_module("aberrant.model.svm.gadget")
-        return module.GADGETSVM
+        return getattr(module, name)
     raise AttributeError(f"module 'aberrant.model.svm' has no attribute '{name}'")

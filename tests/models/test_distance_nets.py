@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.distance import NETS
+from aberrant.model.distance import CellNeighborhoodDetector as NETS
 
 
 class TestNETS(unittest.TestCase):
@@ -193,8 +193,12 @@ class TestNETS(unittest.TestCase):
         # Intentional private-state checks: these invariants validate bounded-memory
         # behavior and internal count consistency that are not exposed publicly.
         self.assertLessEqual(len(model._window_entries), 12)
-        self.assertEqual(sum(model._full_cell_counts.values()), len(model._window_entries))
-        self.assertEqual(sum(model._sub_cell_counts.values()), len(model._window_entries))
+        self.assertEqual(
+            sum(model._full_cell_counts.values()), len(model._window_entries)
+        )
+        self.assertEqual(
+            sum(model._sub_cell_counts.values()), len(model._window_entries)
+        )
 
     def test_score_only_queries_do_not_grow_neighbor_cache(self) -> None:
         model = self.create_model(
@@ -314,7 +318,7 @@ class TestNETS(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(k=9, window_size=128, slide_size=16, subspace_dim=1)
         output = repr(model)
-        self.assertIn("NETS", output)
+        self.assertIn("CellNeighborhoodDetector", output)
         self.assertIn("k=9", output)
         self.assertIn("window_size=128", output)
         self.assertIn("slide_size=16", output)

@@ -1,10 +1,10 @@
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.graph import StreamSpot
+from aberrant.model.graph import SignedGraphSketchDetector
 
 rng = np.random.default_rng(42)
-model = StreamSpot(
+model = SignedGraphSketchDetector(
     graph_key="graph",
     source_key="src",
     destination_key="dst",

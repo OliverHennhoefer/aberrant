@@ -1,4 +1,4 @@
-"""StreamSpot detector for structural anomaly detection in graph edge streams."""
+"""Signed-sketch structural anomaly detection for graph edge streams."""
 
 from __future__ import annotations
 
@@ -19,19 +19,27 @@ class _GraphState:
     tail: deque[bytes]
 
 
-class StreamSpot(BaseModel):
+class SignedGraphSketchDetector(BaseModel):
     """
-    StreamSpot-style detector for graph-level structural anomalies.
+    Signed-sketch detector for graph-level structural anomalies.
 
     The detector maintains bounded per-graph sketches over edge shingles and an
     online set of cluster centers over graph sketches. Incoming edges are scored
     by the distance between their host graph's candidate sketch and the nearest
-    cluster center.
+    cluster center. This implementation uses signed count sketches and online
+    Euclidean centroids; the original StreamSpot uses Hamming-distance sketches
+    and a different clustering procedure.
 
     Notes:
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by ``max_graphs``, ``sketch_dim``, and ``num_clusters``.
+
+    References:
+        Manzoor, E., Milajerdi, S. M., & Akoglu, L. (2016). Fast Memory-efficient
+        Anomaly Detection in Streaming Heterogeneous Graphs.
+        https://arxiv.org/abs/1607.04930
+        Original implementation: https://github.com/sbustreamspot/sbustreamspot
     """
 
     @staticmethod
@@ -125,7 +133,9 @@ class StreamSpot(BaseModel):
         self.destination_key = self._validate_required_name(
             destination_key, "destination_key"
         )
-        self.edge_type_key = self._validate_optional_name(edge_type_key, "edge_type_key")
+        self.edge_type_key = self._validate_optional_name(
+            edge_type_key, "edge_type_key"
+        )
         self.time_key = self._validate_optional_name(time_key, "time_key")
 
         self._validate_key_uniqueness(
@@ -242,17 +252,16 @@ class StreamSpot(BaseModel):
                 raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
             bucket = self._coerce_bucket(x[self.time_key])
 
+        if self._current_bucket is not None and bucket < self._current_bucket:
+            raise ValueError(
+                f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
+            )
         return bucket, graph_id, src, dst, edge_type
 
     def _rollover_if_needed(self, bucket: int) -> None:
         if self._current_bucket is None:
             self._current_bucket = bucket
             return
-
-        if bucket < self._current_bucket:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
-            )
         self._current_bucket = bucket
 
     def _edge_token(self, src: float, dst: float, edge_type: float | None) -> bytes:
@@ -370,7 +379,9 @@ class StreamSpot(BaseModel):
             self._initialized_clusters += 1
             return
 
-        nearest_index, _distance_sq = self._nearest_cluster_index_and_distance_sq(sketch)
+        nearest_index, _distance_sq = self._nearest_cluster_index_and_distance_sq(
+            sketch
+        )
         if nearest_index is None:
             return
 
@@ -411,9 +422,8 @@ class StreamSpot(BaseModel):
             self._arrival_index += 1
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score for one edge event."""
-        bucket, graph_id, src, dst, edge_type = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
+        """Compute anomaly score for one edge event without mutating state."""
+        _bucket, graph_id, src, dst, edge_type = self._prepare_sample(x)
 
         if not self._is_warm():
             return 0.0
@@ -452,7 +462,7 @@ class StreamSpot(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "StreamSpot("
+            "SignedGraphSketchDetector("
             f"graph_key={self.graph_key!r}, source_key={self.source_key!r}, "
             f"destination_key={self.destination_key!r}, "
             f"edge_type_key={self.edge_type_key!r}, time_key={self.time_key!r}, "
@@ -464,3 +474,7 @@ class StreamSpot(BaseModel):
             f"samples_seen={self._samples_seen}, active_graphs={len(self._graph_states)}, "
             f"initialized_clusters={self._initialized_clusters})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+StreamSpot = SignedGraphSketchDetector

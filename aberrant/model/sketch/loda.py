@@ -1,4 +1,4 @@
-"""LODA sketch detector for streaming anomaly detection."""
+"""Bounded streaming LODA adaptation for anomaly detection."""
 
 from __future__ import annotations
 
@@ -9,13 +9,16 @@ import numpy as np
 from aberrant.base.model import BaseModel
 
 
-class LODA(BaseModel):
+class StreamingLODA(BaseModel):
     """
-    Lightweight On-line Detector of Anomalies (LODA).
+    Bounded streaming adaptation of LODA.
 
     LODA projects each sample to multiple random one-dimensional views and
     maintains per-view streaming histograms. The anomaly score is the mean
-    negative log-density across projections.
+    negative log-density across projections. It uses a fixed number of
+    projections and fixed warm-up bin edges, so it is a bounded streaming
+    adaptation rather than an exact reproduction of the paper's model-selection
+    procedure.
 
     Notes:
     - Scores are continuous and non-negative.
@@ -26,6 +29,7 @@ class LODA(BaseModel):
     References:
         Pevny, T. (2016). Loda: Lightweight on-line detector of anomalies.
         Machine Learning, 102, 275-304.
+        https://doi.org/10.1007/s10994-015-5521-0
     """
 
     def __init__(
@@ -232,7 +236,9 @@ class LODA(BaseModel):
         indices = np.empty(self.n_projections, dtype=np.intp)
         for projection in range(self.n_projections):
             edge_row = edges[projection]
-            index = int(np.searchsorted(edge_row, projected[projection], side="right")) - 1
+            index = (
+                int(np.searchsorted(edge_row, projected[projection], side="right")) - 1
+            )
             indices[projection] = int(np.clip(index, 0, self.n_bins - 1))
         return indices
 
@@ -274,7 +280,11 @@ class LODA(BaseModel):
         self._ready = True
 
     def _update_histograms(self, projected: np.ndarray) -> None:
-        if self._bin_edges is None or self._bin_counts is None or self._bin_totals is None:
+        if (
+            self._bin_edges is None
+            or self._bin_counts is None
+            or self._bin_totals is None
+        ):
             raise RuntimeError("Histogram state is not initialized")
 
         if self.decay < 1.0:
@@ -287,7 +297,11 @@ class LODA(BaseModel):
         self._bin_totals += 1.0
 
     def _score_projected(self, projected: np.ndarray) -> float:
-        if self._bin_edges is None or self._bin_counts is None or self._bin_totals is None:
+        if (
+            self._bin_edges is None
+            or self._bin_counts is None
+            or self._bin_totals is None
+        ):
             return 0.0
 
         bins = self._bin_indices_from_edges(projected, self._bin_edges)
@@ -342,7 +356,7 @@ class LODA(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "LODA("
+            "StreamingLODA("
             f"n_projections={self.n_projections}, n_bins={self.n_bins}, "
             f"sparsity={self.sparsity}, warm_up_samples={self.warm_up_samples}, "
             f"decay={self.decay}, time_key={self.time_key!r}, "
@@ -350,3 +364,7 @@ class LODA(BaseModel):
             f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
             f"samples_seen={self._samples_seen}, ready={self._ready})"
         )
+
+
+# Backward-compatible alias for the historical paper-derived public name.
+LODA = StreamingLODA
