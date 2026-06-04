@@ -44,8 +44,11 @@ class IncrementalOneClassSVM:
 
 class GADGETSVM(BaseModel):
     """
-    Optimized GADGET SVM with precomputed roots, efficient traversal,
-    and correct graph node initialization.
+    Graph-gated ensemble of incremental linear one-class SVM heuristics.
+
+    The graph determines which node models are updated and scored. Despite the
+    historical class name, this is not an implementation of the published
+    GADGET distributed averaging/optimization algorithm.
     """
 
     def __init__(

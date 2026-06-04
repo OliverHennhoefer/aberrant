@@ -89,7 +89,11 @@ class KitNET(BaseModel):
     KitNET online anomaly detector.
 
     KitNET first learns a feature grouping from streaming correlations and then
-    trains an ensemble of small autoencoders plus an output autoencoder.
+    trains an ensemble of small autoencoders plus an output autoencoder. This
+    implementation uses raw inputs, greedy correlation grouping, and simple
+    NumPy autoencoders. The authors' implementation includes its own feature
+    mapper and normalized denoising autoencoders, so scores are not expected to
+    match it exactly.
 
     The model is stateful and sample-wise:
     - ``learn_one`` updates model state with a single sample.
@@ -104,6 +108,7 @@ class KitNET(BaseModel):
         Mirsky, Y., Doitshman, T., Elovici, Y., & Shabtai, A. (2018).
         Kitsune: An Ensemble of Autoencoders for Online Network Intrusion
         Detection. NDSS 2018.
+        Original KitNET implementation: https://github.com/ymirsky/KitNET-py
     """
 
     def __init__(

@@ -272,11 +272,21 @@ class MondrianForest(BaseModel):
     """
     Online Mondrian Forest for anomaly detection.
 
+    The tree update follows online Mondrian block-extension mechanics, while
+    anomaly scoring uses Isolation Forest path-length normalization. The
+    original Mondrian Forest is a supervised classification model and does not
+    define this anomaly score, so this class is a custom hybrid.
+
     Args:
         n_estimators: Number of trees in the forest.
         subspace_size: Number of features sampled per tree.
         lambda_: Mondrian lifetime budget.
         seed: Random seed for reproducibility.
+
+    References:
+        Lakshminarayanan, B., Roy, D. M., & Teh, Y. W. (2014). Mondrian
+        Forests: Efficient Online Random Forests.
+        https://proceedings.neurips.cc/paper_files/paper/2014/hash/195f15384c2a79cedf293e4a847ce85c-Abstract.html
     """
 
     def __init__(

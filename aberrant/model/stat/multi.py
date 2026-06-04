@@ -299,17 +299,17 @@ class MovingMahalanobisDistance(BaseModel):
         if self.feature_names is None or len(self.window) < 3:
             return 0
         previous_points = np.array(list(self.window))
-        cov_matrix = np.cov(previous_points, rowvar=False)
-        if cov_matrix.shape[0] == cov_matrix.shape[1]:
-            try:
-                inv_cov_matrix = np.linalg.inv(cov_matrix)
-            except np.linalg.LinAlgError:
-                # Add regularization to handle singular matrices
-                regularization = 1e-6 * np.eye(cov_matrix.shape[0])
-                if np.trace(cov_matrix) > 0:
-                    regularization *= np.trace(cov_matrix) / cov_matrix.shape[0]
-                cov_matrix = cov_matrix + regularization
-                inv_cov_matrix = np.linalg.inv(cov_matrix)
+        cov_matrix = np.atleast_2d(
+            np.cov(previous_points, rowvar=False, bias=self.bias)
+        )
+        try:
+            inv_cov_matrix = np.linalg.inv(cov_matrix)
+        except np.linalg.LinAlgError:
+            # Add scale-aware regularization to handle singular matrices.
+            regularization = 1e-6 * np.eye(cov_matrix.shape[0])
+            if np.trace(cov_matrix) > 0:
+                regularization *= np.trace(cov_matrix) / cov_matrix.shape[0]
+            inv_cov_matrix = np.linalg.inv(cov_matrix + regularization)
 
         feature_mean = np.mean(previous_points, axis=0)
         x_vector = np.array([x[key] for key in self.feature_names])

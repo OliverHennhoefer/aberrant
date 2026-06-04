@@ -63,12 +63,20 @@ class MIDAS(BaseModel):
     MIDAS scores each edge by contrasting its candidate-inclusive count in the
     current time bucket with a historical expectation derived from cumulative
     counts. Optionally, a relational score from source and destination
-    frequencies can be fused via ``max``.
+    frequencies can be fused via ``max``. The edge score follows the MIDAS
+    chi-square form; ``use_relational=True`` is a custom endpoint-independence
+    extension and is not the published MIDAS-R relational sketch.
 
     Notes:
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by fixed-size sketches.
+
+    References:
+        Bhatia, S., Hooi, B., Yoon, M., Shin, K., & Faloutsos, C. (2020).
+        MIDAS: Microcluster-Based Detector of Anomalies in Edge Streams.
+        https://ojs.aaai.org/index.php/AAAI/article/view/5724
+        Original implementation: https://github.com/Stream-AD/MIDAS
     """
 
     def __init__(

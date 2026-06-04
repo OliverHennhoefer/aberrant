@@ -40,8 +40,8 @@ class TestGadgetSVM(unittest.TestCase):
             if test_count >= MAX_TEST_STANDARD:
                 break
 
-            model.learn_one(features)
             score = model.score_one(features)
+            model.learn_one(features)
             labels.append(label)
             scores.append(score)
             test_count += 1

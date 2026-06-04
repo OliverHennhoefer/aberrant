@@ -47,6 +47,8 @@ class XStream(BaseModel):
     References:
         Manzoor, E., Lamba, H., & Akoglu, L. (2018). xStream: Outlier
         Detection in Feature-Evolving Data Streams. KDD '18.
+        https://doi.org/10.1145/3219819.3220107
+        Original implementation: https://github.com/cmuxstream/cmuxstream-core
     """
 
     def __init__(

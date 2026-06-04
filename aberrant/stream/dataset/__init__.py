@@ -87,8 +87,8 @@ def load(
 
         # Stream through data
         for features, label in dataset.stream():
-            model.learn_one(features)
             score = model.score_one(features)
+            model.learn_one(features)
 
             if score > threshold:
                 print(f"Anomaly detected: {features}")

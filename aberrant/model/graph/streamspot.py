@@ -26,12 +26,20 @@ class StreamSpot(BaseModel):
     The detector maintains bounded per-graph sketches over edge shingles and an
     online set of cluster centers over graph sketches. Incoming edges are scored
     by the distance between their host graph's candidate sketch and the nearest
-    cluster center.
+    cluster center. This implementation uses signed count sketches and online
+    Euclidean centroids; the original StreamSpot uses Hamming-distance sketches
+    and a different clustering procedure.
 
     Notes:
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by ``max_graphs``, ``sketch_dim``, and ``num_clusters``.
+
+    References:
+        Manzoor, E., Milajerdi, S. M., & Akoglu, L. (2016). Fast Memory-efficient
+        Anomaly Detection in Streaming Heterogeneous Graphs.
+        https://arxiv.org/abs/1607.04930
+        Original implementation: https://github.com/sbustreamspot/sbustreamspot
     """
 
     @staticmethod

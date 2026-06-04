@@ -15,8 +15,8 @@ for i, (x, y) in enumerate(dataset.stream()):
     if i < 10_000:
         continue
 
-    model.learn_one(x)
     score = model.score_one(x)
+    model.learn_one(x)
 
     labels.append(y)
     scores.append(score)

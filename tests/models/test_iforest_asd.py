@@ -2,6 +2,8 @@
 
 import unittest
 
+import numpy as np
+
 from aberrant.model.iforest.asd import ASDIsolationForest
 from tests.utils import DataGenerator
 
@@ -52,17 +54,21 @@ class TestASDIsolationForest(unittest.TestCase):
         # Test invalid max_samples
         with self.assertRaises(ValueError) as context:
             ASDIsolationForest(max_samples=0)
-        self.assertIn("max_samples must be positive", str(context.exception))
+        self.assertIn("max_samples must be greater than 1", str(context.exception))
 
         with self.assertRaises(ValueError) as context:
             ASDIsolationForest(max_samples=-1)
-        self.assertIn("max_samples must be positive", str(context.exception))
+        self.assertIn("max_samples must be greater than 1", str(context.exception))
+
+        with self.assertRaises(ValueError):
+            ASDIsolationForest(max_samples=1)
 
     def test_compute_c_static_method(self):
         """Test the static _compute_c method."""
         # Test edge cases
         self.assertEqual(ASDIsolationForest._compute_c(0), 0.0)
         self.assertEqual(ASDIsolationForest._compute_c(1), 0.0)
+        self.assertEqual(ASDIsolationForest._compute_c(2), 1.0)
 
         # Test normal cases
         c_2 = ASDIsolationForest._compute_c(2)
@@ -76,6 +82,27 @@ class TestASDIsolationForest(unittest.TestCase):
         # c should increase with sample size
         self.assertGreater(c_10, c_2)
         self.assertGreater(c_100, c_10)
+
+    def test_completed_chunks_do_not_duplicate_boundary_sample(self):
+        forest = ASDIsolationForest(max_samples=3, seed=42)
+        for value in [1.0, 2.0, 3.0]:
+            forest.learn_one({"feature": value})
+
+        self.assertEqual(len(forest.trees), 1)
+        self.assertEqual(forest.buffer_count, 0)
+
+        forest.learn_one({"feature": 4.0})
+        self.assertEqual(forest.buffer_count, 1)
+        self.assertEqual(forest.buffer[0, 0], 4.0)
+
+    def test_tree_selects_from_variable_features(self):
+        forest = ASDIsolationForest(max_samples=4, seed=42)
+        forest.feature_names = ["constant", "varying"]
+        data = np.array([[1.0, 1.0], [1.0, 2.0], [1.0, 3.0], [1.0, 4.0]])
+
+        tree = forest._build_tree(data)
+
+        self.assertEqual(tree["split_feature"], "varying")
 
     def test_feature_names_initialization(self):
         """Test feature names establishment on first sample."""

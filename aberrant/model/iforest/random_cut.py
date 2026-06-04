@@ -291,6 +291,10 @@ class RandomCutForest(BaseModel):
     recent shingled points. `learn_one` performs one-sample updates and
     forgetting, while `score_one` returns an anomaly score for one sample.
 
+    Tree insertion/removal follows Random Cut Tree mechanics. The score combines
+    codisp with distance to the routed leaf and optional exponential scaling;
+    this is a custom score and is not the paper's displacement/codisp score.
+
     Args:
         n_trees: Number of random cut trees.
         sample_size: Maximum number of stored shingled points.
@@ -300,6 +304,12 @@ class RandomCutForest(BaseModel):
         normalize_score: If True, map raw score to [0, 1].
         score_scale: Scale for score normalization when enabled.
         seed: Random seed for reproducibility.
+
+    References:
+        Guha, S., Mishra, N., Roy, G., & Schrijvers, O. (2016). Robust Random
+        Cut Forest Based Anomaly Detection on Streams.
+        https://proceedings.mlr.press/v48/guha16.html
+        Reference implementation: https://github.com/aws/random-cut-forest-by-aws
     """
 
     def __init__(

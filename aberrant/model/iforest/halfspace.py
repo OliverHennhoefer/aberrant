@@ -69,6 +69,11 @@ class HalfSpaceTrees(BaseModel):
     training. Anomalies are identified by having low mass - they fall
     into regions of feature space that are rarely visited.
 
+    This implementation samples each node threshold independently in
+    ``[0.15, 0.85]``. The paper's tree construction recursively bisects
+    propagated feature-space intervals, so this class is an HST-inspired
+    variant rather than an exact implementation.
+
     IMPORTANT: This algorithm assumes features are scaled to [0, 1].
     Use MinMaxScaler in a pipeline for best results.
 
@@ -84,8 +89,8 @@ class HalfSpaceTrees(BaseModel):
         >>> from aberrant.model.iforest import HalfSpaceTrees
         >>> pipeline = MinMaxScaler() | HalfSpaceTrees(n_trees=25)
         >>> for point in stream:
-        ...     pipeline.learn_one(point)
         ...     score = pipeline.score_one(point)
+        ...     pipeline.learn_one(point)
         ...     if score > 0.5:  # Threshold for anomaly
         ...         print("Anomaly detected!")
 
@@ -94,6 +99,7 @@ class HalfSpaceTrees(BaseModel):
         detection for streaming data. In Proceedings of the Twenty-Second
         International Joint Conference on Artificial Intelligence
         (pp. 1511-1516).
+        https://www.ijcai.org/Proceedings/11/Papers/254.pdf
     """
 
     def __init__(

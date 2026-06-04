@@ -22,6 +22,11 @@ class SDOStream(BaseModel):
     - Scores are continuous, non-negative distances.
     - State is bounded by ``k`` and independent of stream length.
     - Feature schema is fixed after the first ``learn_one`` call.
+
+    References:
+        Hartl, A., Iglesias Vazquez, F., & Zseby, T. (2020). SDOstream:
+        Low-Density Models for Streaming Outlier Detection.
+        https://www.esann.org/sites/default/files/proceedings/2020/ES2020-143.pdf
     """
 
     def __init__(

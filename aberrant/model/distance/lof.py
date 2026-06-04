@@ -36,8 +36,8 @@ class LocalOutlierFactor(BaseModel):
     Example:
         >>> lof = LocalOutlierFactor(k=5, window_size=500)
         >>> for point in data_stream:
-        ...     lof.learn_one(point)
         ...     score = lof.score_one(point)
+        ...     lof.learn_one(point)
         ...     if score > 1.5:  # LOF > 1 indicates outlier
         ...         print("Anomaly detected!")
 
@@ -46,6 +46,7 @@ class LocalOutlierFactor(BaseModel):
         LOF: identifying density-based local outliers. In Proceedings
         of the 2000 ACM SIGMOD International Conference on Management
         of Data (pp. 93-104).
+        https://doi.org/10.1145/342009.335388
 
         Pokrajac, D., Lazarevic, A., & Latecki, L. J. (2007). Incremental
         local outlier detection for data streams. In 2007 IEEE Symposium
@@ -144,7 +145,9 @@ class LocalOutlierFactor(BaseModel):
         for neighbor_idx in k_neighbors:
             neighbor_point = self._points[neighbor_idx]
             neighbor_distances = self._compute_distances(neighbor_point)
-            neighbor_k_neighbors = self._get_k_neighbors(neighbor_distances)
+            neighbor_k_neighbors = self._get_k_neighbors(
+                neighbor_distances, exclude_index=neighbor_idx
+            )
             lrd_neighbor = self._compute_lrd(
                 neighbor_point, neighbor_k_neighbors, neighbor_distances
             )
@@ -175,40 +178,21 @@ class LocalOutlierFactor(BaseModel):
 
         return distances
 
-    def _get_k_neighbors(self, distances: np.ndarray) -> list[int]:
-        """Get indices of k nearest neighbors (excluding self if distance=0)."""
-        # Sort by distance and get indices
-        sorted_indices = np.argsort(distances)
-
-        neighbors = []
-        zero_distance_indices = []
-
-        for idx in sorted_indices:
-            if distances[idx] > 0:
-                # Normal case: add non-zero distance neighbors
-                neighbors.append(idx)
-            else:
-                # Track zero-distance points (could be self or duplicates)
-                zero_distance_indices.append(idx)
-            if len(neighbors) >= self.k:
-                break
-
-        # If we don't have enough neighbors, include zero-distance points as fallback
-        # This handles edge cases like duplicate points in the window
-        if len(neighbors) < self.k:
-            for idx in zero_distance_indices:
-                if idx not in neighbors:
-                    neighbors.append(idx)
-                if len(neighbors) >= self.k:
-                    break
-
-        return neighbors[: self.k]
+    def _get_k_neighbors(
+        self, distances: np.ndarray, exclude_index: int | None = None
+    ) -> list[int]:
+        """Get the k nearest indices, excluding only a known point itself."""
+        return [
+            int(idx)
+            for idx in np.argsort(distances)
+            if int(idx) != exclude_index
+        ][: self.k]
 
     def _compute_k_distance(self, idx: int) -> float:
         """Compute k-distance for point at index idx."""
         point = self._points[idx]
         distances = self._compute_distances(point)
-        k_neighbors = self._get_k_neighbors(distances)
+        k_neighbors = self._get_k_neighbors(distances, exclude_index=idx)
         if len(k_neighbors) < self.k:
             return float("inf")
         return distances[k_neighbors[-1]]

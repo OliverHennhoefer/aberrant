@@ -7,7 +7,12 @@ from aberrant.base.model import BaseModel
 
 class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
     """
-    Incremental One-Class SVM with Adaptive Kernel Tuning.
+    Experimental incremental one-class kernel model with adaptive gamma.
+
+    This is a custom budgeted support-vector heuristic, not an implementation
+    of a published incremental One-Class SVM optimizer. Running standardization
+    changes over time while stored support vectors remain in their historical
+    coordinate systems; callers should treat scores as heuristic.
     """
 
     def __init__(

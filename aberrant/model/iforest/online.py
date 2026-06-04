@@ -505,6 +505,13 @@ class OnlineIsolationForest(BaseModel):
 
     Implements the actual Online Isolation Forest algorithm from the paper with
     sliding window management, incremental updates, and correct formulas.
+
+    References:
+        Leveni, F., Weigert Cassales, G., Pfahringer, B., Bifet, A., &
+        Boracchi, G. (2024). Online Isolation Forest.
+        https://proceedings.mlr.press/v235/leveni24a.html
+        Original implementation:
+        https://github.com/ineveLoppiliF/Online-Isolation-Forest
     """
 
     def __init__(

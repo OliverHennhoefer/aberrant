@@ -12,8 +12,8 @@ for i, (x, y) in enumerate(dataset.stream()):
         if y == 0:
             model.learn_one(x)
         continue
-    model.learn_one(x)
     score = model.score_one(x)
+    model.learn_one(x)
 
     labels.append(y)
     scores.append(score)

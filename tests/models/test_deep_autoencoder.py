@@ -69,6 +69,16 @@ class TestAutoencoder(unittest.TestCase):
         self.assertIsInstance(score, float)
         self.assertGreaterEqual(score, 0.0)
 
+    def test_rejects_wrong_feature_count_and_schema_changes(self):
+        model = self.create_model()
+
+        with self.assertRaisesRegex(ValueError, "Expected 3 features"):
+            model.learn_one({"a": 1.0, "b": 2.0})
+
+        model.learn_one({"a": 1.0, "b": 2.0, "c": 3.0})
+        with self.assertRaisesRegex(ValueError, "Input features must be"):
+            model.score_one({"a": 1.0, "b": 2.0, "d": 3.0})
+
     def test_basic_learning_and_scoring(self):
         """Test basic learning and scoring functionality."""
         model = self.create_model()

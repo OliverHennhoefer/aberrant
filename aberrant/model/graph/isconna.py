@@ -64,12 +64,20 @@ class ISCONNA(BaseModel):
     optional timestamp keys. It keeps decayed "current" sketches and cumulative
     "total" sketches for edge and endpoint frequencies, and scores each edge
     by contrasting current conditional surprise against historical conditional
-    surprise.
+    surprise. This is a frequency-only approximation: it does not implement
+    ISCONNA's consecutive-presence/absence pattern component or its three-score
+    aggregation.
 
     Notes:
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by a fixed sketch size.
+
+    References:
+        Liu, R., Bhatia, S., & Hooi, B. (2021). Isconna: Streaming Anomaly
+        Detection with Frequency and Patterns.
+        https://arxiv.org/abs/2104.01632
+        Original implementation: https://github.com/liurui39660/Isconna
     """
 
     def __init__(

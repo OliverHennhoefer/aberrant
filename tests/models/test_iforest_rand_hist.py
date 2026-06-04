@@ -3,6 +3,7 @@
 Real dataset tests are in tests/integration/test_iforest_models.py
 """
 
+import random
 import unittest
 
 from aberrant.model.iforest.rand_hist import StreamRandomHistogramForest
@@ -141,6 +142,16 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         score2 = model2.score_one(test_point)
 
         self.assertEqual(score1, score2, "Same seed should produce identical results")
+
+    def test_model_randomness_does_not_mutate_global_random_state(self):
+        random.seed(123)
+        expected_next = random.random()
+        random.seed(123)
+
+        model = self.create_model()
+        model.learn_one({"feature": 1.0})
+
+        self.assertEqual(random.random(), expected_next)
 
     def test_repeated_values(self):
         """Test behavior with repeated values (histogram binning edge case)."""

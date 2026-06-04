@@ -44,8 +44,8 @@ class TestUnivariateStatisticalModels(unittest.TestCase):
             if test_count >= self.MAX_TEST_SAMPLES:
                 break
 
-            model.learn_one(x_uni)
             score = model.score_one(x_uni)
+            model.learn_one(x_uni)
             labels.append(label)
             scores.append(score)
             test_count += 1

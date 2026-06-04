@@ -120,6 +120,13 @@ class TestQuantileThreshold(unittest.TestCase):
         self.assertGreater(score, 0.0)
         self.assertLess(score, 1.0)
 
+    def test_negative_scores_are_clipped_to_normalized_lower_bound(self):
+        qt = QuantileThreshold(quantile=0.9, window_size=10)
+        for score in range(10):
+            qt.learn_one({"score": float(score)})
+
+        self.assertEqual(qt.score_one({"score": -1.0}), 0.0)
+
     def test_threshold_updates_with_new_data(self):
         """Test that threshold updates as new data arrives."""
         qt = QuantileThreshold(quantile=0.9, window_size=100)

@@ -26,10 +26,20 @@ class MStream(BaseModel):
     ``c`` is evaluated as the candidate-inclusive current estimate
     (``current + 1``) to match score-before-learn streaming usage.
 
+    This implementation hashes singleton and optional pairwise feature views.
+    The original MStream separately hashes every feature and the entire record,
+    so scores are not expected to match the authors' implementation.
+
     Notes:
     - Scores are continuous and non-negative.
     - Scores are ``0.0`` until warm-up is complete.
     - Feature schema is fixed after the first sample (excluding ``time_key``).
+
+    References:
+        Bhatia, S., Jain, A., Li, P., Kumar, R., & Hooi, B. (2021). MStream:
+        Fast Anomaly Detection in Multi-Aspect Streams.
+        https://doi.org/10.1145/3442381.3450023
+        Original implementation: https://github.com/Stream-AD/MStream
     """
 
     def __init__(

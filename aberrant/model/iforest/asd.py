@@ -14,12 +14,21 @@ class ASDIsolationForest(BaseModel):
     Optimized Online ASD Isolation Forest for anomaly detection.
 
     This implementation uses NumPy for efficient computations and maintains
-    a sliding window of isolation trees for online anomaly detection.
+    a bounded queue of isolation trees built from disjoint stream chunks. It
+    is a lightweight streaming adaptation, not an exact implementation of the
+    published iForestASD sliding-window retraining algorithm.
 
     Args:
         n_estimators: Number of trees in the iforest.
         max_samples: Number of samples used to build each tree.
         seed: Random seed for reproducibility.
+
+    References:
+        Ding, Z., & Fei, M. (2013). An Anomaly Detection Approach Based on
+        Isolation Forest Algorithm for Streaming Data using Sliding Window.
+        https://www.sciencedirect.com/science/article/pii/S1474667016314999
+        Liu, F. T., Ting, K. M., & Zhou, Z.-H. (2008). Isolation Forest.
+        https://doi.org/10.1109/ICDM.2008.17
     """
 
     # Euler-Mascheroni constant for path length calculations
@@ -36,8 +45,8 @@ class ASDIsolationForest(BaseModel):
         # Validate parameters
         if n_estimators <= 0:
             raise ValueError(f"n_estimators must be positive, got {n_estimators}")
-        if max_samples <= 0:
-            raise ValueError(f"max_samples must be positive, got {max_samples}")
+        if max_samples <= 1:
+            raise ValueError(f"max_samples must be greater than 1, got {max_samples}")
 
         self.n_estimators = n_estimators
         self.max_samples = max_samples
@@ -69,6 +78,8 @@ class ASDIsolationForest(BaseModel):
         """
         if n <= 1:
             return 0.0
+        if n == 2:
+            return 1.0
         harmonic = math.log(n - 1) + ASDIsolationForest.EULER_MASCHERONI
         return 2.0 * harmonic - 2.0 * (n - 1) / n
 
@@ -105,9 +116,8 @@ class ASDIsolationForest(BaseModel):
             if len(self.trees) > self.n_estimators:
                 self.trees.popleft()
 
-            # Start new buffer with just the current sample
-            self.buffer[0] = self._x_converted
-            self.buffer_count = 1
+            # The completed chunk already contains the current sample.
+            self.buffer_count = 0
 
     def _build_tree(self, data_arr: np.ndarray) -> dict[str, Any]:
         """
@@ -147,13 +157,15 @@ class ASDIsolationForest(BaseModel):
         if n <= 1 or current_height >= max_height:
             return {"size": n, "c": self._compute_c(n)}
 
-        # Select random feature using numpy's RNG
-        feature_idx = self.rng.integers(0, data_arr.shape[1])
+        # Select only from features that can produce a non-empty split.
+        node_values = data_arr[indices]
+        variable_features = np.flatnonzero(np.ptp(node_values, axis=0) > 0)
+        if len(variable_features) == 0:
+            return {"size": n, "c": self._compute_c(n)}
+
+        feature_idx = int(self.rng.choice(variable_features))
         feature_vals = data_arr[indices, feature_idx]
         min_val, max_val = np.min(feature_vals), np.max(feature_vals)
-
-        if min_val == max_val:
-            return {"size": n, "c": self._compute_c(n)}
 
         # Generate split value using numpy's RNG
         split_val = self.rng.uniform(min_val, max_val)

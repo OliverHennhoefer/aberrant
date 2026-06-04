@@ -16,12 +16,18 @@ class AnoEdgeL(BaseModel):
     The detector maps source and destination node identifiers into multiple
     fixed-size sketch planes and evaluates each candidate edge using local
     neighborhood density around its hashed cell. The final score is the median
-    of per-plane rarity-density scores.
+    of per-plane rarity-density scores. It is a local-density approximation and
+    does not implement the dense-submatrix search used by the paper's AnoEdge-L.
 
     Notes:
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by ``num_hashes * count_min_rows * count_min_cols``.
+
+    References:
+        Bhatia, S., Wadhwa, M., Kawaguchi, K., Shah, N., Yu, P. S., &
+        Hooi, B. (2023). Sketch-Based Anomaly Detection in Streaming Graphs.
+        Original implementation: https://github.com/Stream-AD/AnoGraph
     """
 
     @staticmethod

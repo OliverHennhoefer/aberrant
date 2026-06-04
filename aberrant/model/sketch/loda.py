@@ -15,7 +15,10 @@ class LODA(BaseModel):
 
     LODA projects each sample to multiple random one-dimensional views and
     maintains per-view streaming histograms. The anomaly score is the mean
-    negative log-density across projections.
+    negative log-density across projections. It uses a fixed number of
+    projections and fixed warm-up bin edges, so it is a bounded streaming
+    adaptation rather than an exact reproduction of the paper's model-selection
+    procedure.
 
     Notes:
     - Scores are continuous and non-negative.
@@ -26,6 +29,7 @@ class LODA(BaseModel):
     References:
         Pevny, T. (2016). Loda: Lightweight on-line detector of anomalies.
         Machine Learning, 102, 275-304.
+        https://doi.org/10.1007/s10994-015-5521-0
     """
 
     def __init__(

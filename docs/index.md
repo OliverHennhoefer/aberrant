@@ -31,8 +31,8 @@ from aberrant.model.iforest import OnlineIsolationForest
 model = OnlineIsolationForest(window_size=512, num_trees=50)
 
 for point in stream_of_feature_dicts:
-    model.learn_one(point)
     score = model.score_one(point)
+    model.learn_one(point)
     if score > 0.8:
         print("anomaly", score)
 ```

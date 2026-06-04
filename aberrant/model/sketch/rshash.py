@@ -17,7 +17,9 @@ class RSHash(BaseModel):
 
     RS-Hash keeps an ensemble of randomized feature subspaces and hashes each
     sample into fixed-size count tables with exponential fading. Low hashed
-    occupancy indicates potentially anomalous behavior.
+    occupancy indicates potentially anomalous behavior. Online z-score
+    normalization and exponential fading are streaming adaptations in this
+    implementation and do not reproduce the paper's exact window procedure.
 
     Notes:
     - Scores are continuous, non-negative, and bounded in ``[0, 1]``.
@@ -27,6 +29,7 @@ class RSHash(BaseModel):
     References:
         Sathe, S., & Aggarwal, C. C. (2016). Subspace Outlier Detection in
         Linear Time with Randomized Hashing. IEEE ICDM.
+        https://www.charuaggarwal.net/linearout.pdf
     """
 
     def __init__(

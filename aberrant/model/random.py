@@ -18,8 +18,8 @@ class RandomModel(BaseModel):
 
     Example:
         >>> model = RandomModel(seed=42)
-        >>> model.learn_one({"feature1": 1.0, "feature2": 2.0})
         >>> score = model.score_one({"feature1": 1.0, "feature2": 2.0})
+        >>> model.learn_one({"feature1": 1.0, "feature2": 2.0})
         >>> print(f"Random score: {score:.3f}")
     """
 

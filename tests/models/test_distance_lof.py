@@ -4,6 +4,8 @@ import math
 import random
 import unittest
 
+import numpy as np
+
 from aberrant.model.distance.lof import LocalOutlierFactor
 
 
@@ -146,6 +148,15 @@ class TestLocalOutlierFactor(unittest.TestCase):
         score = lof.score_one({"x": 1.0, "y": 1.0})
         self.assertIsInstance(score, float)
         self.assertFalse(math.isnan(score))
+
+    def test_neighbor_selection_excludes_self_but_keeps_duplicate_points(self):
+        lof = LocalOutlierFactor(k=2, window_size=10)
+        for value in [0.0, 0.0, 1.0, 2.0]:
+            lof.learn_one({"x": value})
+
+        distances = np.array([0.0, 0.0, 1.0, 2.0])
+        self.assertEqual(lof._get_k_neighbors(distances, exclude_index=0), [1, 2])
+        self.assertEqual(lof._get_k_neighbors(distances), [0, 1])
 
     def test_repr(self):
         """Test string representation."""

@@ -1,4 +1,3 @@
-import random
 from collections import deque
 
 import numpy as np
@@ -10,11 +9,21 @@ class StreamRandomHistogramForest(BaseModel):
     """
     Online Stream Random Histogram Forest for anomaly detection.
 
+    Despite its historical name, this is an ensemble of independent random
+    per-feature histograms with exponential decay; it does not construct trees.
+    It is therefore not an implementation of the tree- and kurtosis-based
+    STREamRHF algorithm.
+
     Args:
         n_estimators (int): Number of histogram trees in the iforest.
         max_bins (int): Number of bins per dimension.
         window_size (int): Max number of instances stored per histogram.
         seed (Optional[int]): Random seed for reproducibility.
+
+    References:
+        Nesic, S., et al. (2022). STREamRHF: Tree-Based Unsupervised Anomaly
+        Detection for Data Streams.
+        https://doi.org/10.1109/AICCSA56895.2022.10017876
     """
 
     def __init__(
@@ -41,14 +50,11 @@ class StreamRandomHistogramForest(BaseModel):
         self.feature_names: list[str] | None = None
         self.histograms: deque = deque()
 
-        # Initialize random number generator
+        # Keep randomness local so constructing a model cannot affect callers.
         self.rng = np.random.default_rng(seed)
-        if seed is not None:
-            random.seed(seed)
 
     def _set_seed(self, seed: int) -> None:
-        """Set random seed for reproducibility (deprecated - use rng instead)."""
-        random.seed(seed)
+        """Reset the model-local random number generator."""
         self.rng = np.random.default_rng(seed)
 
     def learn_one(self, x: dict[str, float]) -> None:
@@ -64,8 +70,8 @@ class StreamRandomHistogramForest(BaseModel):
         """Initialize a random histogram tree."""
         bins = {}
         for feature in self.feature_names:
-            min_val = random.uniform(0, 0.5)
-            max_val = random.uniform(0.5, 1.0)
+            min_val = self.rng.uniform(0, 0.5)
+            max_val = self.rng.uniform(0.5, 1.0)
             bin_edges = np.linspace(min_val, max_val, self.max_bins + 1)
             bins[feature] = {
                 "edges": bin_edges,
