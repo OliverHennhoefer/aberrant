@@ -12,9 +12,7 @@ class TestDenseSubmatrix(unittest.TestCase):
     """Directly verify the authors' local dense-submatrix operations."""
 
     def test_adds_rows_and_columns_only_when_density_improves(self) -> None:
-        matrix = np.asarray(
-            [[5.0, 5.0, 0.0], [5.0, 5.0, 0.0], [0.0, 0.0, 1.0]]
-        )
+        matrix = np.asarray([[5.0, 5.0, 0.0], [5.0, 5.0, 0.0], [0.0, 0.0, 1.0]])
 
         def value(row: int, col: int) -> float:
             return float(matrix[row, col])

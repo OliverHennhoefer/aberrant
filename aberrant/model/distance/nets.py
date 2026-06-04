@@ -240,10 +240,13 @@ class NETS(BaseModel):
             count=len(feature_order),
         )
 
-        if self._init_subspace_if_needed(
-            n_features=vector.shape[0],
-            mutate_schema=mutate_schema,
-        ) is None:
+        if (
+            self._init_subspace_if_needed(
+                n_features=vector.shape[0],
+                mutate_schema=mutate_schema,
+            )
+            is None
+        ):
             return None
         return vector
 
@@ -272,14 +275,19 @@ class NETS(BaseModel):
                 return False
         return True
 
-    def _neighbor_cells(self, cell: _Cell, cell_counts: dict[_Cell, int]) -> list[_Cell]:
+    def _neighbor_cells(
+        self, cell: _Cell, cell_counts: dict[_Cell, int]
+    ) -> list[_Cell]:
         n_active_cells = len(cell_counts)
         if n_active_cells == 0:
             return []
 
         n_dims = len(cell)
         neighbor_offsets = 3**n_dims
-        if neighbor_offsets <= n_active_cells and neighbor_offsets <= _MAX_NEIGHBOR_OFFSETS:
+        if (
+            neighbor_offsets <= n_active_cells
+            and neighbor_offsets <= _MAX_NEIGHBOR_OFFSETS
+        ):
             offsets = self._neighbor_offsets_for_dims(n_dims)
             return [
                 candidate

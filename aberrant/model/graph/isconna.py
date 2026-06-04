@@ -234,9 +234,7 @@ class ISCONNA(BaseModel):
         if current == 0.0 or accumulated == 0.0 or time <= 1:
             return 0.0
         return float(
-            2.0
-            * current
-            * abs(np.log(current * float(time - 1) / accumulated))
+            2.0 * current * abs(np.log(current * float(time - 1) / accumulated))
         )
 
     def _reset_group(self, group: _CMSGroup) -> None:
@@ -411,9 +409,7 @@ class ISCONNA(BaseModel):
             return 0.0
 
         frequency, width, gap = self._component_scores(bucket, src, dst)
-        score = (
-            frequency**self.alpha * width**self.beta * gap**self.gamma
-        )
+        score = frequency**self.alpha * width**self.beta * gap**self.gamma
         if not np.isfinite(score):
             score = 0.0
         score = float(max(score, 0.0))

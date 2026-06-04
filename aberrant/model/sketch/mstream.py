@@ -190,9 +190,7 @@ class MStream(BaseModel):
 
         self._numeric_min = np.full(n_numeric, np.inf, dtype=np.float64)
         self._numeric_max = np.full(n_numeric, -np.inf, dtype=np.float64)
-        self._numeric_current = np.zeros(
-            (n_numeric, self.buckets), dtype=np.float64
-        )
+        self._numeric_current = np.zeros((n_numeric, self.buckets), dtype=np.float64)
         self._numeric_total = np.zeros_like(self._numeric_current)
 
         high = max(self.buckets, 2)
@@ -297,9 +295,7 @@ class MStream(BaseModel):
     def _is_rollover(self, bucket: int) -> bool:
         return self._current_bucket is not None and bucket > self._current_bucket
 
-    def _normalize_numeric(
-        self, numeric: np.ndarray, *, update: bool
-    ) -> np.ndarray:
+    def _normalize_numeric(self, numeric: np.ndarray, *, update: bool) -> np.ndarray:
         if self._numeric_min is None or self._numeric_max is None:
             raise RuntimeError("Numeric state is not initialized")
         transformed = np.log10(1.0 + numeric)
@@ -346,9 +342,9 @@ class MStream(BaseModel):
         if self._record_numeric_planes.shape[1] == 0:
             numeric_hash = np.zeros(self.rows, dtype=np.int64)
         else:
-            signs = np.einsum(
-                "rbn,n->rb", self._record_numeric_planes, normalized
-            ) >= 0.0
+            signs = (
+                np.einsum("rbn,n->rb", self._record_numeric_planes, normalized) >= 0.0
+            )
             bit_weights = np.left_shift(
                 np.int64(1),
                 np.arange(signs.shape[1], dtype=np.int64),
@@ -360,7 +356,9 @@ class MStream(BaseModel):
             if categorical.size
             else np.zeros(self.rows, dtype=np.int64)
         )
-        return np.asarray((numeric_hash + categorical_hash) % self.buckets, dtype=np.intp)
+        return np.asarray(
+            (numeric_hash + categorical_hash) % self.buckets, dtype=np.intp
+        )
 
     @staticmethod
     def _counts_to_anomaly(total: float, current: float, time_index: int) -> float:
@@ -411,8 +409,7 @@ class MStream(BaseModel):
         numeric_decay = self.alpha if rollover else 1.0
         for feature_index, bin_index in enumerate(numeric_bins):
             current = (
-                self._numeric_current[feature_index, bin_index] * numeric_decay
-                + 1.0
+                self._numeric_current[feature_index, bin_index] * numeric_decay + 1.0
             )
             total = self._numeric_total[feature_index, bin_index] + 1.0
             total_score += self._counts_to_anomaly(total, current, time_index)

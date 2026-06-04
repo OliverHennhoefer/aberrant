@@ -236,7 +236,9 @@ class LODA(BaseModel):
         indices = np.empty(self.n_projections, dtype=np.intp)
         for projection in range(self.n_projections):
             edge_row = edges[projection]
-            index = int(np.searchsorted(edge_row, projected[projection], side="right")) - 1
+            index = (
+                int(np.searchsorted(edge_row, projected[projection], side="right")) - 1
+            )
             indices[projection] = int(np.clip(index, 0, self.n_bins - 1))
         return indices
 
@@ -278,7 +280,11 @@ class LODA(BaseModel):
         self._ready = True
 
     def _update_histograms(self, projected: np.ndarray) -> None:
-        if self._bin_edges is None or self._bin_counts is None or self._bin_totals is None:
+        if (
+            self._bin_edges is None
+            or self._bin_counts is None
+            or self._bin_totals is None
+        ):
             raise RuntimeError("Histogram state is not initialized")
 
         if self.decay < 1.0:
@@ -291,7 +297,11 @@ class LODA(BaseModel):
         self._bin_totals += 1.0
 
     def _score_projected(self, projected: np.ndarray) -> float:
-        if self._bin_edges is None or self._bin_counts is None or self._bin_totals is None:
+        if (
+            self._bin_edges is None
+            or self._bin_counts is None
+            or self._bin_totals is None
+        ):
             return 0.0
 
         bins = self._bin_indices_from_edges(projected, self._bin_edges)

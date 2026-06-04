@@ -193,8 +193,12 @@ class TestNETS(unittest.TestCase):
         # Intentional private-state checks: these invariants validate bounded-memory
         # behavior and internal count consistency that are not exposed publicly.
         self.assertLessEqual(len(model._window_entries), 12)
-        self.assertEqual(sum(model._full_cell_counts.values()), len(model._window_entries))
-        self.assertEqual(sum(model._sub_cell_counts.values()), len(model._window_entries))
+        self.assertEqual(
+            sum(model._full_cell_counts.values()), len(model._window_entries)
+        )
+        self.assertEqual(
+            sum(model._sub_cell_counts.values()), len(model._window_entries)
+        )
 
     def test_score_only_queries_do_not_grow_neighbor_cache(self) -> None:
         model = self.create_model(

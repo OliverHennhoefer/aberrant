@@ -165,9 +165,7 @@ class MIDAS(BaseModel):
         self._destination_total: _CountMinSketch | None = None
         if self.use_relational:
             self._source_current, self._source_total = self._new_sketch_pair()
-            self._destination_current, self._destination_total = (
-                self._new_sketch_pair()
-            )
+            self._destination_current, self._destination_total = self._new_sketch_pair()
 
         self._current_bucket: int | None = None
         self._first_bucket: int | None = None
@@ -251,7 +249,10 @@ class MIDAS(BaseModel):
 
         if self.use_relational:
             self._edge_current.decay(self.time_decay_factor)
-            if self._source_current is not None and self._destination_current is not None:
+            if (
+                self._source_current is not None
+                and self._destination_current is not None
+            ):
                 self._source_current.decay(self.time_decay_factor)
                 self._destination_current.decay(self.time_decay_factor)
         else:
@@ -281,9 +282,7 @@ class MIDAS(BaseModel):
         current_count = current.query_indices(indices)
         if rollover:
             current_count = (
-                current_count * self.time_decay_factor
-                if self.use_relational
-                else 0.0
+                current_count * self.time_decay_factor if self.use_relational else 0.0
             )
         current_count += 1.0
         total_count = total.query_indices(indices) + 1.0

@@ -183,9 +183,7 @@ class LocalOutlierFactor(BaseModel):
     ) -> list[int]:
         """Return all neighbors whose distance is at most the k-distance."""
         ordered = [
-            int(idx)
-            for idx in np.argsort(distances)
-            if int(idx) != exclude_index
+            int(idx) for idx in np.argsort(distances) if int(idx) != exclude_index
         ]
         if len(ordered) <= self.k:
             return ordered

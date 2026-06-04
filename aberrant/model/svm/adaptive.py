@@ -227,15 +227,11 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
             max_alpha = max(self.alpha)
             max_age = self.n_samples - min(self.birth_sample)
             scores = []
-            for alpha_value, birth in zip(
-                self.alpha, self.birth_sample, strict=True
-            ):
+            for alpha_value, birth in zip(self.alpha, self.birth_sample, strict=True):
                 age = self.n_samples - birth
                 normalized_alpha = alpha_value / (max_alpha + 1e-8)
                 normalized_age = age / (max_age + 1e-8)
-                scores.append(
-                    0.4 * (1.0 - normalized_alpha) + 0.6 * normalized_age
-                )
+                scores.append(0.4 * (1.0 - normalized_alpha) + 0.6 * normalized_age)
 
             remove_index = int(np.argmax(scores))
             del self.support_vectors[remove_index]

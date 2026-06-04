@@ -81,7 +81,9 @@ class TestMIDAS(unittest.TestCase):
         expected = ((current - total / timestamp) * timestamp) ** 2 / (
             total * (timestamp - 1)
         )
-        self.assertAlmostEqual(MIDAS._compute_score(current, total, timestamp), expected)
+        self.assertAlmostEqual(
+            MIDAS._compute_score(current, total, timestamp), expected
+        )
         self.assertEqual(MIDAS._compute_score(1.0, 1.0, 1), 0.0)
 
     def test_current_and_total_sketches_share_hash_functions(self) -> None:

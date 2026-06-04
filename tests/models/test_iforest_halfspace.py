@@ -170,9 +170,7 @@ class TestHalfSpaceTrees(unittest.TestCase):
         def assert_midpoints(node, current_lower, current_upper):
             if isinstance(node, HSTLeaf):
                 return
-            expected = (
-                current_lower[node.feature] + current_upper[node.feature]
-            ) / 2.0
+            expected = (current_lower[node.feature] + current_upper[node.feature]) / 2.0
             self.assertAlmostEqual(node.threshold, expected)
 
             left_upper = current_upper.copy()

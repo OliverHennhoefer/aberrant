@@ -29,9 +29,7 @@ class TestMStream(unittest.TestCase):
                 model.learn_one({"x": 10.0, "y": 10.0, "t": float(timestamp)})
 
         familiar_score = model.score_one({"x": 0.0, "y": 0.0, "t": 31.0})
-        novel_interaction_score = model.score_one(
-            {"x": 0.0, "y": 10.0, "t": 31.0}
-        )
+        novel_interaction_score = model.score_one({"x": 0.0, "y": 10.0, "t": 31.0})
 
         self.assertGreater(novel_interaction_score, familiar_score)
 

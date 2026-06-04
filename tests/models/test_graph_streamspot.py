@@ -99,7 +99,9 @@ class TestStreamSpot(unittest.TestCase):
                 {"graph": 1.0, "src": 1.0, "dst": 2.0, "etype": 0.0, "t": float("inf")}
             )
         with self.assertRaises(ValueError):
-            model.score_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "etype": 0.0, "t": 1.5})
+            model.score_one(
+                {"graph": 1.0, "src": 1.0, "dst": 2.0, "etype": 0.0, "t": 1.5}
+            )
 
     def test_score_is_zero_before_warmup(self) -> None:
         model = self.create_model(warm_up_graphs=6, shingle_size=1, edge_type_key=None)
@@ -254,7 +256,9 @@ class TestStreamSpot(unittest.TestCase):
                 }
             )
 
-        score = model.score_one({"graph": 777.0, "src": 888.0, "dst": 999.0, "t": 120.0})
+        score = model.score_one(
+            {"graph": 777.0, "src": 888.0, "dst": 999.0, "t": 120.0}
+        )
         self.assertGreaterEqual(score, 0.0)
         self.assertLess(score, 1.0)
 

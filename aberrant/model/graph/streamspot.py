@@ -133,7 +133,9 @@ class StreamSpot(BaseModel):
         self.destination_key = self._validate_required_name(
             destination_key, "destination_key"
         )
-        self.edge_type_key = self._validate_optional_name(edge_type_key, "edge_type_key")
+        self.edge_type_key = self._validate_optional_name(
+            edge_type_key, "edge_type_key"
+        )
         self.time_key = self._validate_optional_name(time_key, "time_key")
 
         self._validate_key_uniqueness(
@@ -377,7 +379,9 @@ class StreamSpot(BaseModel):
             self._initialized_clusters += 1
             return
 
-        nearest_index, _distance_sq = self._nearest_cluster_index_and_distance_sq(sketch)
+        nearest_index, _distance_sq = self._nearest_cluster_index_and_distance_sq(
+            sketch
+        )
         if nearest_index is None:
             return
 

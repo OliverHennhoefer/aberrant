@@ -141,9 +141,7 @@ class TestISCONNA(unittest.TestCase):
                 {"src": 1.0, "dst": float(timestamp + 10), "t": float(timestamp)}
             )
 
-        bucket, src, dst = model._prepare_sample(
-            {"src": 1.0, "dst": 99.0, "t": 8.0}
-        )
+        bucket, src, dst = model._prepare_sample({"src": 1.0, "dst": 99.0, "t": 8.0})
         edge = model._preview_group(
             model._edge,
             model._indices(src, dst),
@@ -183,9 +181,7 @@ class TestISCONNA(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(model._current_bucket, current_bucket)
-        np.testing.assert_array_equal(
-            model._edge.frequency_current, frequency_before
-        )
+        np.testing.assert_array_equal(model._edge.frequency_current, frequency_before)
         np.testing.assert_array_equal(model._edge.gap_current, gap_before)
 
     def test_score_is_zero_before_optional_warmup(self) -> None:

@@ -20,9 +20,7 @@ class TestGadgetSVM(unittest.TestCase):
         DATASET = Dataset.SHUTTLE
 
         # Create model
-        model = GraphGatedOneClassSVM(
-            nu=0.1, learning_rate=0.01, lambda_reg=0.01
-        )
+        model = GraphGatedOneClassSVM(nu=0.1, learning_rate=0.01, lambda_reg=0.01)
 
         # Load dataset
         dataset_stream = load(DATASET)

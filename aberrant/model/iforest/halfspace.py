@@ -281,9 +281,7 @@ class HalfSpaceTrees(BaseModel):
         for tree in self._trees:
             total_score += self._compute_tree_score(tree, x_array, depth=0)
 
-        max_score = (
-            self.n_trees * self._reference_window_size * (2**self.height)
-        )
+        max_score = self.n_trees * self._reference_window_size * (2**self.height)
         if max_score <= 0:
             return 0.0
 
