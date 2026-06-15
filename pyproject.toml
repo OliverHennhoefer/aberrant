@@ -43,9 +43,7 @@ dev = [
     "torch>=2.6.0,<3.0.0",
 ]
 docs = [
-    "mkdocs",
-    "mkdocs-material[imaging]",
-    "mkdocstrings[python]",
+    "zensical",
     "pygments>=2.20.0",
 ]
 eval = ["scikit-learn>=1.6.1,<2.0.0"]
@@ -62,9 +60,7 @@ all = [
     "pytest-cov>=6.0.0,<8.0.0",
     "hypothesis>=6.0.0,<7.0.0",
     "mypy>=1.13.0,<3.0.0",
-    "mkdocs",
-    "mkdocs-material[imaging]",
-    "mkdocstrings[python]",
+    "zensical",
     # Keep docs stack aligned with the `docs` extra above.
     "pygments>=2.20.0",
     "scikit-learn>=1.6.1,<2.0.0",

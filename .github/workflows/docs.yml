@@ -2,9 +2,21 @@ name: Docs
 
 on:
   pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
   push:
     branches:
       - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -33,7 +45,7 @@ jobs:
         run: uv sync --extra docs
 
       - name: Validate docs (strict)
-        run: uv run mkdocs build --strict -f docs/mkdocs.yml
+        run: uv run zensical build --strict --config-file mkdocs.yml
 
       - name: Setup Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -6,8 +6,8 @@ repo_url: https://github.com/OliverHennhoefer/aberrant
 repo_name: OliverHennhoefer/aberrant
 edit_uri: edit/main/docs/
 
-docs_dir: .
-site_dir: ../site
+docs_dir: docs
+site_dir: site
 strict: true
 
 theme:
