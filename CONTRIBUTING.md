@@ -22,7 +22,7 @@ Run these before opening a PR:
 uv run python -m ruff check .
 uv run python -m mypy aberrant
 uv run python -m pytest -q
-uv run python -m build
+uv build
 ```
 
 To run integration tests directly:

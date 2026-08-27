@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -26,9 +26,10 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "numpy>=2.2.3",
-    "tqdm>=4.67.1",
-    "scipy>=1.15.2"
+    "filelock>=3.20.0,<4.0.0",
+    "numpy>=2.2.3,<3.0.0",
+    "tqdm>=4.67.1,<5.0.0",
+    "scipy>=1.15.2,<2.0.0"
 ]
 
 [project.optional-dependencies]
@@ -43,9 +44,10 @@ dev = [
     "torch>=2.6.0,<3.0.0",
 ]
 docs = [
-    "zensical",
+    "zensical>=0.0.45,<0.1.0",
     "pygments>=2.20.0",
 ]
+security = ["pip-audit==2.9.0"]
 eval = ["scikit-learn>=1.6.1,<2.0.0"]
 dl = ["torch>=2.6.0,<3.0.0"]
 benchmark = [
@@ -60,13 +62,14 @@ all = [
     "pytest-cov>=6.0.0,<8.0.0",
     "hypothesis>=6.0.0,<7.0.0",
     "mypy>=1.13.0,<3.0.0",
-    "zensical",
+    "zensical>=0.0.45,<0.1.0",
     # Keep docs stack aligned with the `docs` extra above.
     "pygments>=2.20.0",
     "scikit-learn>=1.6.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",
     "river>=0.22.0,<1.0.0",
     "pytest-benchmark>=5.0.0,<6.0.0",
+    "pip-audit==2.9.0",
     # Keep in sync with the `faiss` extra above; avoid self-referential extras.
     "faiss-cpu>=1.10.0,<2.0.0",
 ]
@@ -79,6 +82,9 @@ all = [
 
 [tool.hatch.version]
 path = "aberrant/__init__.py"
+
+[tool.uv]
+required-version = "==0.9.9"
 
 # Ruff configuration
 [tool.ruff]

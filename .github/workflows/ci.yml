@@ -9,25 +9,30 @@ on:
 permissions:
   contents: read
 
+env:
+  UV_VERSION: "0.9.9"
+
 jobs:
   minimal-install-smoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python
         run: uv python install 3.11
 
       - name: Install base dependencies only
-        run: uv sync
+        run: uv sync --locked
 
       - name: Base install smoke
         run: |
-          uv run python - <<'PY'
+          uv run --locked python - <<'PY'
           import aberrant
           from aberrant.base import Pipeline
           from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
@@ -54,49 +59,53 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Ruff
-        run: uv run python -m ruff check .
+        run: uv run --locked python -m ruff check .
 
       - name: Mypy
-        run: uv run python -m mypy aberrant
+        run: uv run --locked python -m mypy aberrant
 
       - name: Unit tests
-        run: uv run python -m pytest tests/models tests/drift tests/transformers -q
+        run: uv run --locked python -m pytest tests/models tests/drift tests/transformers -q
 
   extras-smoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python
         run: uv python install 3.11
 
       - name: Install extras
-        run: uv sync --extra dev --extra faiss
+        run: uv sync --locked --extra dev --extra faiss
 
       - name: Extras import smoke
         run: |
-          uv run python - <<'PY'
-          from aberrant.model.deep import Autoencoder, KitNET
+          uv run --locked python - <<'PY'
+          from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
           from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
 
           assert Autoencoder is not None
-          assert KitNET is not None
+          assert OnlineAutoencoderEnsemble is not None
           engine = FaissSimilaritySearchEngine(window_size=8, warm_up=2)
           engine.append({"x": 0.0, "y": 0.0})
           engine.append({"x": 1.0, "y": 1.0})
@@ -104,46 +113,50 @@ jobs:
           PY
 
       - name: FAISS model smoke tests
-        run: uv run python -m pytest tests/models/test_distance_knn.py -q
+        run: uv run --locked python -m pytest tests/models/test_distance_knn.py -q
 
   integration-smoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Integration smoke
-        run: uv run python -m pytest tests/test_public_imports_base.py tests/test_public_imports_extras.py tests/integration -q
+        run: uv run --locked python -m pytest tests/test_public_imports_base.py tests/test_public_imports_extras.py tests/integration -q
 
   coverage:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Coverage
-        run: uv run python -m pytest tests/models tests/drift tests/transformers --cov=aberrant --cov-report=xml --cov-report=term-missing -q
+        run: uv run --locked python -m pytest tests/models tests/drift tests/transformers --cov=aberrant --cov-report=xml --cov-report=term-missing -q
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -152,10 +165,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python
         run: uv python install 3.11
