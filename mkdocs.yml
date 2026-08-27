@@ -12,6 +12,8 @@ strict: true
 
 theme:
   name: material
+  logo: img/flavicon.png
+  favicon: img/flavicon.png
   icon:
     repo: fontawesome/brands/github
   features:
