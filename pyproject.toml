@@ -47,7 +47,7 @@ docs = [
     "zensical>=0.0.45,<0.1.0",
     "pygments>=2.20.0",
 ]
-security = ["pip-audit==2.9.0"]
+security = ["pip-audit==2.10.1"]
 eval = ["scikit-learn>=1.6.1,<2.0.0"]
 dl = ["torch>=2.6.0,<3.0.0"]
 benchmark = [
@@ -69,7 +69,7 @@ all = [
     "torch>=2.6.0,<3.0.0",
     "river>=0.22.0,<1.0.0",
     "pytest-benchmark>=5.0.0,<6.0.0",
-    "pip-audit==2.9.0",
+    "pip-audit==2.10.1",
     # Keep in sync with the `faiss` extra above; avoid self-referential extras.
     "faiss-cpu>=1.10.0,<2.0.0",
 ]
