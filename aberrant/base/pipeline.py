@@ -1,21 +1,27 @@
 """Pipeline for chaining transformers and models together."""
 
-from typing import Any
+from typing import Generic, TypeVar, overload
 
 from .exceptions import IncompatibleComponentError, PipelineError
+from .protocols import FeatureMap, ModelProtocol, TransformerProtocol
+
+_Terminal = TypeVar("_Terminal", TransformerProtocol, ModelProtocol)
 
 
-class Pipeline:
-    """
-    Pipeline for chaining transformers and models.
+class Pipeline(Generic[_Terminal]):
+    """Chain one or more transformers and an optional terminal model.
 
-    A pipeline allows you to chain multiple components together, where the output
-    of one component becomes the input of the next. The pipeline can contain
-    transformers (which modify data) and models (which score data).
+    ``learn_one`` uses post-update transformations: each transformer first
+    learns from its current input and then transforms that input for the next
+    stage. ``score_one`` and ``transform_one`` never update transformer state.
+
+    The first component must be a transformer. The second component may be
+    another transformer or a terminal model. A pipeline ending in a model
+    cannot be extended further.
 
     Args:
-        first: The first component in the pipeline (transformer or model).
-        second: The second component in the pipeline (transformer or model).
+        first: A transformer or a transformer-ending pipeline.
+        second: A transformer or terminal anomaly model.
 
     Example:
         >>> scaler = MinMaxScaler()
@@ -25,69 +31,103 @@ class Pipeline:
         >>> score = pipeline.score_one({"feature": 2.0})
     """
 
-    def __init__(self, first: Any, second: Any) -> None:
-        self._validate_components(first, second)
-        self.first = first
-        self.second = second
+    def __init__(self, first: TransformerProtocol, second: _Terminal) -> None:
+        self._validate_first(first)
+        terminal_kind = self._component_kind(second)
 
-    def learn_one(self, x: dict[str, float]) -> None:
-        """
-        Learn from a single data point through the pipeline.
+        self.first: TransformerProtocol = first
+        self.second: _Terminal = second
 
-        Args:
-            x: A dictionary representing a single data point.
-        """
-        self.first.learn_one(x)
-        transformed_x = self.first.transform_one(x)
-        self.second.learn_one(transformed_x)
-
-    def transform_one(self, x: dict[str, float]) -> dict[str, float]:
-        """
-        Transform a single data point through the pipeline.
-
-        Args:
-            x: A dictionary representing a single data point.
-
-        Returns:
-            The transformed data point.
-        """
-        transformed_x = self.first.transform_one(x)
-        transformed = self.second.transform_one(transformed_x)
-        if not isinstance(transformed, dict):
-            raise PipelineError(
-                "The final transformer must return a dict[str, float] from transform_one."
-            )
-        return transformed
-
-    def score_one(self, x: dict[str, float]) -> float:
-        """
-        Score a single data point using the pipeline.
-
-        Args:
-            x: A dictionary representing a single data point.
-
-        Returns:
-            The anomaly score for the data point.
-
-        Raises:
-            PipelineError: If the final component doesn't support scoring.
-        """
-        transformed_x = self.first.transform_one(x)
-
-        if hasattr(self.second, "score_one"):
-            score = self.second.score_one(transformed_x)
-            if not isinstance(score, int | float):
-                raise PipelineError(
-                    "The final component must return a numeric score from score_one."
-                )
-            return float(score)
+        self._transformers: tuple[TransformerProtocol, ...]
+        if isinstance(first, Pipeline):
+            self._transformers = first._transformers
         else:
+            self._transformers = (first,)
+
+        self._model: ModelProtocol | None = None
+        if isinstance(second, Pipeline):
+            self._transformers += second._transformers
+            self._model = second._model
+        elif terminal_kind == "transformer":
+            assert isinstance(second, TransformerProtocol)
+            self._transformers += (second,)
+        else:
+            assert isinstance(second, ModelProtocol)
+            self._model = second
+
+    @property
+    def ends_in_transformer(self) -> bool:
+        """Whether this pipeline can transform output and accept another stage."""
+        return self._model is None
+
+    def learn_one(self, x: FeatureMap) -> None:
+        """Learn from one sample using each transformer's updated state."""
+        current = x
+        final_transformer_index = len(self._transformers) - 1
+
+        for index, transformer in enumerate(self._transformers):
+            transformer.learn_one(current)
+            needs_output = index < final_transformer_index or self._model is not None
+            if needs_output:
+                current = self._checked_transform(transformer, current)
+
+        if self._model is not None:
+            self._model.learn_one(current)
+
+    def transform_one(
+        self: "Pipeline[TransformerProtocol]", x: FeatureMap
+    ) -> FeatureMap:
+        """Transform one sample through a transformer-ending pipeline."""
+        if self._model is not None:
             raise PipelineError(
-                f"The final component ({self.second.__class__.__name__}) does not have a 'score_one' method."
+                "transform_one is only available on a transformer-ending pipeline."
             )
 
-    def __or__(self, other: Any) -> "Pipeline":
-        """Overload the | operator to allow further chaining of pipelines."""
+        current = x
+        for transformer in self._transformers:
+            current = self._checked_transform(transformer, current)
+        return current
+
+    def score_one(self: "Pipeline[ModelProtocol]", x: FeatureMap) -> float:
+        """Score one sample without updating any pipeline component."""
+        if self._model is None:
+            raise PipelineError("score_one requires a model-ending pipeline.")
+
+        current = x
+        for transformer in self._transformers:
+            current = self._checked_transform(transformer, current)
+
+        score = self._model.score_one(current)
+        if not isinstance(score, int | float):
+            raise PipelineError(
+                "The final component must return a numeric score from score_one."
+            )
+        return float(score)
+
+    @overload
+    def __or__(
+        self: "Pipeline[TransformerProtocol]", other: TransformerProtocol
+    ) -> "Pipeline[TransformerProtocol]": ...
+
+    @overload
+    def __or__(
+        self: "Pipeline[TransformerProtocol]", other: ModelProtocol
+    ) -> "Pipeline[ModelProtocol]": ...
+
+    def __or__(
+        self: "Pipeline[TransformerProtocol]",
+        other: TransformerProtocol | ModelProtocol,
+    ) -> "Pipeline[TransformerProtocol] | Pipeline[ModelProtocol]":
+        """Append a transformer or terminal model to this pipeline."""
+        if not self.ends_in_transformer:
+            raise IncompatibleComponentError(
+                self.second.__class__.__name__,
+                "a transformer-ending pipeline before another component",
+            )
+        if self._component_kind(other) == "transformer":
+            assert isinstance(other, TransformerProtocol)
+            return Pipeline(self, other)
+        assert isinstance(other, ModelProtocol)
         return Pipeline(self, other)
 
     def __repr__(self) -> str:
@@ -96,32 +136,56 @@ class Pipeline:
 
     def __str__(self) -> str:
         """Return a human-readable string representation of the pipeline."""
-        return f"{self.first.__class__.__name__} | {self.second.__class__.__name__}"
+        names = [component.__class__.__name__ for component in self._transformers]
+        if self._model is not None:
+            names.append(self._model.__class__.__name__)
+        return " | ".join(names)
 
-    def _validate_components(self, first: Any, second: Any) -> None:
-        """
-        Validate that the pipeline components are compatible.
+    @staticmethod
+    def _checked_transform(
+        transformer: TransformerProtocol, x: FeatureMap
+    ) -> FeatureMap:
+        transformed = transformer.transform_one(x)
+        if not isinstance(transformed, dict):
+            raise PipelineError(
+                "Each transformer must return a dict[str, float] from transform_one."
+            )
+        return transformed
 
-        Args:
-            first: The first component.
-            second: The second component.
+    @staticmethod
+    def _validate_first(first: TransformerProtocol) -> None:
+        if isinstance(first, Pipeline):
+            if not first.ends_in_transformer:
+                raise IncompatibleComponentError(
+                    first.__class__.__name__, "a transformer-ending pipeline"
+                )
+            return
 
-        Raises:
-            IncompatibleComponentError: If components are not compatible.
-        """
-        # Check first component has required methods
-        if not hasattr(first, "learn_one"):
+        if not isinstance(first, TransformerProtocol):
             raise IncompatibleComponentError(
-                first.__class__.__name__, "component with 'learn_one' method"
+                first.__class__.__name__,
+                "component with callable 'learn_one' and 'transform_one' methods",
             )
 
-        if not hasattr(first, "transform_one"):
-            raise IncompatibleComponentError(
-                first.__class__.__name__, "component with 'transform_one' method"
-            )
+    @staticmethod
+    def _component_kind(
+        component: TransformerProtocol | ModelProtocol,
+    ) -> str:
+        if isinstance(component, Pipeline):
+            return "transformer" if component.ends_in_transformer else "model"
 
-        # Check second component has required methods
-        if not hasattr(second, "learn_one"):
+        is_transformer = isinstance(component, TransformerProtocol)
+        is_model = isinstance(component, ModelProtocol)
+        if is_transformer and not is_model:
+            return "transformer"
+        if is_model and not is_transformer:
+            return "model"
+        if is_transformer and is_model:
             raise IncompatibleComponentError(
-                second.__class__.__name__, "component with 'learn_one' method"
+                component.__class__.__name__,
+                "an unambiguous transformer or model component",
             )
+        raise IncompatibleComponentError(
+            component.__class__.__name__,
+            "component with callable 'learn_one' plus 'transform_one' or 'score_one'",
+        )

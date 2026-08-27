@@ -1,12 +1,10 @@
 """Base transformer interface for online data transformation."""
 
 import abc
-from typing import TYPE_CHECKING, Any
+from typing import overload
 
 from aberrant.base.pipeline import Pipeline
-
-if TYPE_CHECKING:
-    from aberrant.base.pipeline import Pipeline
+from aberrant.base.protocols import ModelProtocol, TransformerProtocol
 
 
 class BaseTransformer(abc.ABC):
@@ -44,7 +42,19 @@ class BaseTransformer(abc.ABC):
         """
         raise NotImplementedError
 
-    def __or__(self, other: Any) -> "Pipeline":
+    @overload
+    def __or__(self, other: TransformerProtocol) -> "Pipeline[TransformerProtocol]": ...
+
+    @overload
+    def __or__(self, other: ModelProtocol) -> "Pipeline[ModelProtocol]": ...
+
+    def __or__(
+        self, other: TransformerProtocol | ModelProtocol
+    ) -> "Pipeline[TransformerProtocol] | Pipeline[ModelProtocol]":
+        if isinstance(other, TransformerProtocol) and not isinstance(
+            other, ModelProtocol
+        ):
+            return Pipeline(self, other)
         return Pipeline(self, other)
 
     def __repr__(self) -> str:

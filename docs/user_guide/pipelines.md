@@ -2,6 +2,21 @@
 
 Pipelines chain transformers and models with `|`.
 
+## Learning order
+
+Pipeline learning uses a **post-update transform** at every transformer stage:
+
+1. The transformer learns from its current input.
+2. The same input is transformed with the transformer's updated state.
+3. The transformed value is passed to the next transformer or terminal model.
+
+`score_one` and `transform_one` do not update transformer state. For online
+evaluation, score a sample before calling `learn_one` when the score must only
+depend on previously observed samples.
+
+A model is terminal: a pipeline can contain any number of transformers followed
+by at most one model, and no component can be appended after that model.
+
 ## Example: scaler + KNN
 
 ```python

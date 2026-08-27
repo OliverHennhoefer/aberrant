@@ -6,7 +6,7 @@ in the aberrant library.
 """
 
 import importlib
-from typing import Any
+from typing import TYPE_CHECKING
 
 from aberrant.base.exceptions import (
     AberrantError,
@@ -19,28 +19,49 @@ from aberrant.base.exceptions import (
 )
 from aberrant.base.model import BaseModel
 from aberrant.base.pipeline import Pipeline
+from aberrant.base.protocols import (
+    FeatureMap,
+    LearnerProtocol,
+    ModelProtocol,
+    TransformerProtocol,
+)
 from aberrant.base.similarity import BaseSimilaritySearchEngine
 from aberrant.base.transformer import BaseTransformer
 
+if TYPE_CHECKING:
+    from aberrant.base.architecture import Architecture as Architecture
+
 __all__ = [
-    "Architecture",
     "BaseModel",
     "BaseSimilaritySearchEngine",
     "BaseTransformer",
+    "FeatureMap",
     "IncompatibleComponentError",
     "ModelNotFittedError",
     "AberrantError",
     "Pipeline",
     "PipelineError",
+    "LearnerProtocol",
+    "ModelProtocol",
     "TransformationError",
+    "TransformerProtocol",
     "UnsupportedFeatureError",
     "ValidationError",
 ]
 
 
-def __getattr__(name: str) -> Any:
-    """Lazy import of Architecture to avoid torch dependency."""
+def __getattr__(name: str) -> object:
+    """Load the optional torch architecture base on explicit access."""
     if name == "Architecture":
-        module = importlib.import_module("aberrant.base.architecture")
-        return module.Architecture
+        try:
+            module = importlib.import_module("aberrant.base.architecture")
+        except ModuleNotFoundError as exc:
+            if exc.name == "torch":
+                raise ImportError(
+                    "Architecture requires the optional 'dl' dependencies"
+                ) from exc
+            raise
+        architecture = module.Architecture
+        globals()[name] = architecture
+        return architecture
     raise AttributeError(f"module 'aberrant.base' has no attribute '{name}'")
