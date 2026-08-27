@@ -3,7 +3,7 @@
 Online anomaly detection for real streams.
 
 ABERRANT is for systems that score and adapt one event at a time.  
-No batch retraining loop required. No framework lock-in.
+No external batch retraining loop required. No framework lock-in.
 
 ## Why ABERRANT
 

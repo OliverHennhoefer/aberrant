@@ -153,27 +153,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["aberrant.drift.kswin"]
 disable_error_code = ["import-untyped"]
-
-[[tool.mypy.overrides]]
-# Temporary typing tech debt.
-# Keep this list frozen (do not add new modules) and remove entries incrementally.
-# TODO: Track phased removal of this suppression block in a dedicated issue.
-module = [
-    "aberrant.model.iforest.asd",
-    "aberrant.model.iforest.halfspace",
-    "aberrant.model.iforest.mondrian",
-    "aberrant.model.iforest.online",
-    "aberrant.model.iforest.rand_hist",
-    "aberrant.model.iforest.random_cut",
-    "aberrant.model.stat.multi",
-    "aberrant.model.stat.uni",
-    "aberrant.model.svm.adaptive",
-    "aberrant.model.svm.gadget",
-    "aberrant.model.sketch.rshash",
-    "aberrant.model.distance.lof",
-    "aberrant.model.distance.sdostream",
-    "aberrant.model.deep.autoencoder",
-    "aberrant.utils.deep.architecture",
-    "aberrant.transform.projection.incremental_pca",
-]
-ignore_errors = true

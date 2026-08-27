@@ -233,9 +233,6 @@ from aberrant.model.svm import (
 
 Use when margin-based decision boundaries are preferred.
 
-`GADGETSVM` is retained only as a backward-compatible alias for
-`GraphGatedOneClassSVM`; it is not the published GADGET algorithm.
-
 ## Statistical family
 
 Imports:
@@ -262,11 +259,6 @@ from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
 - `Autoencoder` depends on `torch` (`aberrant[dl]`).
 - `OnlineAutoencoderEnsemble` is an online ensemble of lightweight autoencoders with explicit
   warm-up phases (`feature_map_grace`, `ad_grace`).
-
-The historical names `NETS`, `STARE`, `StreamSpot`, `KitNET`,
-`MondrianForest`, `RSHash`, and `LODA` remain compatibility aliases. They refer
-to the variants documented above, not score-compatible reproductions of the
-published algorithms.
 
 ## Core utility models
 

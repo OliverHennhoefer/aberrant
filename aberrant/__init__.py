@@ -1,8 +1,9 @@
 """ABERRANT: Online Anomaly Detection library for streaming data.
 
 A Python library implementing the online learning paradigm for anomaly
-detection. All models process data one point at a time, updating their
-state incrementally without storing historical data.
+detection. Models process data one point at a time and update their state
+incrementally. Memory strategies vary from fixed-size summaries to bounded
+windows and periodic internal rebuilds.
 
 Modules:
     base: Core abstract classes (BaseModel, BaseTransformer, Pipeline)

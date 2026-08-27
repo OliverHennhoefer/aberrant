@@ -12,8 +12,8 @@ Public objects from `aberrant.model.sketch`:
 
 `StreamingRSHash` is a bounded-memory randomized subspace hashing detector.
 
-`LODA` and `RSHash` remain compatibility aliases for these bounded streaming
-adaptations; they do not imply paper-procedure or score parity.
+These are bounded streaming adaptations and do not imply paper-procedure or
+score parity.
 
 Notes:
 - Supports optional explicit timestamp handling via `time_key`.

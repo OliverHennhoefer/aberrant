@@ -10,6 +10,8 @@ This section documents the supported ABERRANT public surface.
 - `aberrant.model.iforest`
 - `aberrant.model.distance`
 - `aberrant.model.sketch`
+- `aberrant.model.graph`
+- `aberrant.model.timeseries`
 - `aberrant.model.svm`
 - `aberrant.model.stat`
 - `aberrant.model.deep`
