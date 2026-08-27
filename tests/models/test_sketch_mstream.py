@@ -83,8 +83,11 @@ class TestMStream(unittest.TestCase):
         model = MStream(rows=1, buckets=11, time_key="t", seed=1)
         model.learn_one({"t": 1.0, "x": 0.0})
         model.learn_one({"t": 1.0, "x": 99.0})
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
 
         normalized = model._normalize_numeric(
+            model._state.numeric,
             np.asarray([9.0], dtype=np.float64),
             update=False,
         )
@@ -94,25 +97,30 @@ class TestMStream(unittest.TestCase):
     def test_creates_individual_and_complete_record_sketches(self) -> None:
         model = self.create_model(rows=3, buckets=64)
         model.learn_one({"t": 1.0, "x": 1.0, "y": 2.0, "category": 3.0})
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
 
-        self.assertEqual(model._numeric_current.shape, (2, 64))  # type: ignore[union-attr]
-        self.assertEqual(model._categorical_current.shape, (1, 3, 64))  # type: ignore[union-attr]
-        self.assertEqual(model._record_current.shape, (3, 64))  # type: ignore[union-attr]
+        self.assertEqual(model._state.numeric.counts.current.shape, (2, 64))
+        self.assertEqual(model._state.categorical.counts.current.shape, (1, 3, 64))
+        self.assertEqual(model._state.record.counts.current.shape, (3, 64))
 
     def test_full_record_hash_uses_all_attributes(self) -> None:
         model = MStream(rows=1, buckets=4, time_key="t", seed=1)
-        model.score_one({"t": 1.0, "x": 1.0, "y": 1.0})
-        self.assertIsNotNone(model._record_numeric_planes)
-        model._record_numeric_planes[:] = np.asarray(
+        model.learn_one({"t": 1.0, "x": 1.0, "y": 1.0})
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        model._state.record.numeric_planes[:] = np.asarray(
             [[[1.0, -1.0], [-1.0, 1.0]]],
             dtype=np.float64,
         )
 
         first = model._record_bins(
+            model._state.record,
             np.asarray([1.0, 0.0]),
             np.asarray([], dtype=np.int64),
         )
         second = model._record_bins(
+            model._state.record,
             np.asarray([0.0, 1.0]),
             np.asarray([], dtype=np.int64),
         )
@@ -122,22 +130,26 @@ class TestMStream(unittest.TestCase):
         model = MStream(rows=1, buckets=128, time_key="t", seed=3)
         sample = {"t": 1.0, "x": 1.0}
         model.learn_one(sample)
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        state = model._state
         normalized = model._normalize_numeric(
+            state.numeric,
             np.asarray([1.0], dtype=np.float64),
             update=False,
         )
         numeric_bin = int(model._numeric_bins(normalized)[0])
         record_bin = int(
-            model._record_bins(normalized, np.asarray([], dtype=np.int64))[0]
+            model._record_bins(
+                state.record,
+                normalized,
+                np.asarray([], dtype=np.int64),
+            )[0]
         )
-        self.assertIsNotNone(model._numeric_current)
-        self.assertIsNotNone(model._numeric_total)
-        self.assertIsNotNone(model._record_current)
-        self.assertIsNotNone(model._record_total)
-        model._numeric_current[0, numeric_bin] = 3.0
-        model._numeric_total[0, numeric_bin] = 7.0
-        model._record_current[0, record_bin] = 4.0
-        model._record_total[0, record_bin] = 8.0
+        state.numeric.counts.current[0, numeric_bin] = 3.0
+        state.numeric.counts.total[0, numeric_bin] = 7.0
+        state.record.counts.current[0, record_bin] = 4.0
+        state.record.counts.total[0, record_bin] = 8.0
 
         query = {"t": 5.0, "x": 1.0}
         expected = np.log1p(
@@ -150,26 +162,47 @@ class TestMStream(unittest.TestCase):
         model = self.create_model(rows=1, buckets=1024)
         sample = {"t": 1.0, "x": 1.0, "category": 2.0}
         model.learn_one(sample)
-        current_sum = float(np.sum(model._record_current))
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        current_sum = float(np.sum(model._state.record.counts.current))
 
         model.learn_one({"t": 100.0, "x": 2.0, "category": 3.0})
         expected = current_sum * model.alpha + 1.0
-        self.assertAlmostEqual(float(np.sum(model._record_current)), expected)
+        self.assertAlmostEqual(
+            float(np.sum(model._state.record.counts.current)),
+            expected,
+        )
 
     def test_score_one_does_not_advance_decay_or_normalize_state(self) -> None:
         model = self.create_model()
         model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
-        current_bucket = model._current_bucket
-        numeric_min = model._numeric_min.copy()  # type: ignore[union-attr]
-        current = model._record_current.copy()  # type: ignore[union-attr]
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        state = model._state
+        current_bucket = state.current_bucket
+        numeric_min = state.numeric.minimum.copy()
+        current = state.record.counts.current.copy()
 
         first = model.score_one({"t": 10.0, "x": 100.0, "category": 9.0})
         second = model.score_one({"t": 10.0, "x": 100.0, "category": 9.0})
 
         self.assertEqual(first, second)
-        self.assertEqual(model._current_bucket, current_bucket)
-        np.testing.assert_array_equal(model._numeric_min, numeric_min)
-        np.testing.assert_array_equal(model._record_current, current)
+        self.assertEqual(state.current_bucket, current_bucket)
+        np.testing.assert_array_equal(state.numeric.minimum, numeric_min)
+        np.testing.assert_array_equal(state.record.counts.current, current)
+
+    def test_score_before_learning_does_not_initialize_schema_or_rng_state(
+        self,
+    ) -> None:
+        model = self.create_model()
+        rng_state = model._rng.bit_generator.state
+
+        score = model.score_one({"t": 1.0, "x": 2.0, "category": 3.0})
+
+        self.assertEqual(score, 0.0)
+        self.assertIsNone(model._boundary.schema.names)
+        self.assertIsNone(model._state)
+        self.assertEqual(model._rng.bit_generator.state, rng_state)
 
     def test_score_is_zero_before_optional_warmup(self) -> None:
         model = self.create_model(warm_up_buckets=2)
@@ -201,7 +234,9 @@ class TestMStream(unittest.TestCase):
         sample = {"x": 1.0, "y": 2.0}
         model.learn_one(sample)
         model.learn_one(sample)
-        self.assertEqual(model._current_bucket, 2)
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        self.assertEqual(model._state.current_bucket, 2)
 
     def test_deterministic_with_seed(self) -> None:
         model1 = self.create_model(seed=7)
@@ -226,9 +261,11 @@ class TestMStream(unittest.TestCase):
     def test_sketch_shapes_are_bounded(self) -> None:
         model = self.create_model(buckets=64)
         model.learn_one({"t": 0.0, "x": 1.0, "category": 3.0})
-        numeric_shape = model._numeric_current.shape  # type: ignore[union-attr]
-        categorical_shape = model._categorical_current.shape  # type: ignore[union-attr]
-        record_shape = model._record_current.shape  # type: ignore[union-attr]
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        numeric_shape = model._state.numeric.counts.current.shape
+        categorical_shape = model._state.categorical.counts.current.shape
+        record_shape = model._state.record.counts.current.shape
 
         for i in range(1, 300):
             model.learn_one(
@@ -239,17 +276,20 @@ class TestMStream(unittest.TestCase):
                 }
             )
 
-        self.assertEqual(model._numeric_current.shape, numeric_shape)  # type: ignore[union-attr]
-        self.assertEqual(model._categorical_current.shape, categorical_shape)  # type: ignore[union-attr]
-        self.assertEqual(model._record_current.shape, record_shape)  # type: ignore[union-attr]
+        self.assertEqual(model._state.numeric.counts.current.shape, numeric_shape)
+        self.assertEqual(
+            model._state.categorical.counts.current.shape,
+            categorical_shape,
+        )
+        self.assertEqual(model._state.record.counts.current.shape, record_shape)
 
     def test_reset_restores_cold_state(self) -> None:
         model = self.create_model()
         model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
         model.reset()
         self.assertEqual(model.n_samples_seen, 0)
-        self.assertIsNone(model._feature_order)
-        self.assertIsNone(model._current_bucket)
+        self.assertIsNone(model._boundary.schema.names)
+        self.assertIsNone(model._state)
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(rows=3, buckets=256)

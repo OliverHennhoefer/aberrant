@@ -23,7 +23,7 @@ class TestOnlineIsolationForest(unittest.TestCase):
         model = OnlineIsolationForest(
             num_trees=25,
             max_leaf_samples=32,
-            type="adaptive",
+            tree_type="adaptive",
             subsample=1.0,
             window_size=1024,
             branching_factor=2,

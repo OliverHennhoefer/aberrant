@@ -4,6 +4,7 @@ Real dataset tests are in tests/integration/test_iforest_models.py
 """
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -17,7 +18,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         return OnlineIsolationForest(
             num_trees=3,  # Small for fast testing
             max_leaf_samples=8,
-            type="fixed",
+            tree_type="fixed",
             subsample=1.0,
             window_size=50,
             branching_factor=2,
@@ -34,7 +35,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         model = OnlineIsolationForest(
             num_trees=5,
             max_leaf_samples=16,
-            type="fixed",
+            tree_type="fixed",
             subsample=0.8,
             window_size=256,
             branching_factor=3,
@@ -45,7 +46,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
         self.assertEqual(model.num_trees, 5)
         self.assertEqual(model.max_leaf_samples, 16)
-        self.assertEqual(model.type, "fixed")
+        self.assertEqual(model.tree_type, "fixed")
         self.assertEqual(model.subsample, 0.8)
         self.assertEqual(model.window_size, 256)
         self.assertEqual(model.branching_factor, 3)
@@ -91,7 +92,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
         # Invalid type
         with self.assertRaises(ValueError):
-            OnlineIsolationForest(type="invalid_type")
+            OnlineIsolationForest(tree_type="invalid_type")
 
         # Invalid subsample
         with self.assertRaises(ValueError):
@@ -103,6 +104,15 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         # Invalid branching_factor
         with self.assertRaises(ValueError):
             OnlineIsolationForest(branching_factor=1)
+
+        with self.assertRaisesRegex(ValueError, "window_size must be positive"):
+            OnlineIsolationForest(window_size=0)
+
+        with self.assertRaisesRegex(ValueError, "metric must be 'axisparallel'"):
+            OnlineIsolationForest(metric="unsupported")
+
+        with self.assertRaisesRegex(ValueError, "n_jobs must be -1 or a positive"):
+            OnlineIsolationForest(n_jobs=0)
 
     def test_empty_dict_handling(self):
         """Test handling of empty feature dictionary."""
@@ -116,6 +126,13 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         except (ValueError, KeyError):
             # Acceptable to reject empty dict
             pass
+
+    def test_n_jobs_minus_one_uses_all_available_cpus(self):
+        with patch("aberrant.model.iforest.online.os.cpu_count", return_value=3):
+            model = OnlineIsolationForest(num_trees=2, n_jobs=-1, seed=42)
+
+        self.assertEqual(model.n_jobs, -1)
+        self.assertEqual(model._max_workers, 3)
 
     def test_nan_inf_handling(self):
         """Test handling of NaN and Inf values."""
@@ -147,7 +164,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         model = OnlineIsolationForest(
             num_trees=2,
             max_leaf_samples=4,
-            type="fixed",
+            tree_type="fixed",
             window_size=10,  # Very small window for testing
             n_jobs=1,
         )
@@ -175,6 +192,22 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
 
+    def test_batch_input_is_not_retained_by_reference(self):
+        model = OnlineIsolationForest(
+            num_trees=2,
+            max_leaf_samples=4,
+            window_size=10,
+            n_jobs=1,
+            seed=42,
+        )
+        batch = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+        model.learn_batch(batch)
+
+        batch[:] = 99.0
+
+        np.testing.assert_array_equal(model.data_window[0], [1.0, 2.0])
+        np.testing.assert_array_equal(model.data_window[1], [3.0, 4.0])
+
     def test_type_variants(self):
         """Test different multiplier types (fixed vs adaptive)."""
         for type_name in ["fixed", "adaptive"]:
@@ -182,13 +215,13 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
                 model = OnlineIsolationForest(
                     num_trees=2,
                     max_leaf_samples=8,
-                    type=type_name,
+                    tree_type=type_name,
                     window_size=50,
                     n_jobs=1,
                 )
 
                 # Should initialize without error
-                self.assertEqual(model.type, type_name)
+                self.assertEqual(model.tree_type, type_name)
 
                 # Basic functionality test
                 point = {"feature1": 1.0, "feature2": 2.0}

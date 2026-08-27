@@ -5,50 +5,56 @@ from __future__ import annotations
 import hashlib
 from collections import OrderedDict, deque
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import coerce_finite_number
+
+
+@dataclass(slots=True)
+class _ScratchState:
+    """Reusable traversal buffers."""
+
+    z: np.ndarray
+    bins: np.ndarray
+    feature_visits: np.ndarray
+    hash_dots: np.ndarray
+
+
+@dataclass(slots=True)
+class _XStreamState:
+    """Complete initialized chain and sketch state."""
+
+    deltamax: np.ndarray
+    chain_dims: np.ndarray
+    shift: np.ndarray
+    cms_current: np.ndarray
+    cms_reference: np.ndarray
+    hash_coeffs_mod: np.ndarray
+    hash_offsets_mod: np.ndarray
+    scratch: _ScratchState
+    samples_seen: int = 0
+    samples_in_window: int = 0
+    completed_windows: int = 0
+
+    @property
+    def reference_ready(self) -> bool:
+        """Return whether a complete reference window exists."""
+        return self.completed_windows > 0
 
 
 class XStream(BaseModel):
-    """
-    xStream detector using StreamHash and half-space chains.
+    """StreamHash and half-space-chain detector for evolving feature streams.
 
-    xStream is a bounded-memory, streaming anomaly detector designed for
-    evolving-feature data streams. It hashes sparse feature dictionaries into a
-    fixed-dimensional projected space and maintains count-min sketches over
-    recursively partitioned bins.
-
-    The detector is sample-wise and stateful:
-    - ``learn_one`` updates online sketches
-    - ``score_one`` returns an anomaly score in ``[0, 1]`` (higher is more
-      anomalous)
-
-    Warm-up behavior:
-    - Scores are ``0.0`` until the model is initialized from
-      ``init_sample_size`` projected points and at least one reference window
-      is available.
-
-    Args:
-        k: StreamHash projection dimensionality.
-        n_chains: Number of half-space chains in the ensemble.
-        depth: Number of levels per chain.
-        cms_width: Width of each count-min sketch row.
-        cms_num_hashes: Number of hash rows per count-min sketch.
-        window_size: Number of samples per reference window.
-        init_sample_size: Number of projected samples used to initialize range
-            statistics and chain parameters.
-        density: Fraction of non-zero StreamHash dimensions per feature.
-        max_feature_cache_size: Maximum number of feature hash mappings to keep
-            in memory. ``None`` disables eviction.
-        seed: Random seed for reproducibility.
+    Scores remain zero until ``init_sample_size`` projected points initialize
+    the chains and one complete reference window has been observed.
 
     References:
         Manzoor, E., Lamba, H., & Akoglu, L. (2018). xStream: Outlier
         Detection in Feature-Evolving Data Streams. KDD '18.
         https://doi.org/10.1145/3219819.3220107
-        Original implementation: https://github.com/cmuxstream/cmuxstream-core
     """
 
     def __init__(
@@ -94,65 +100,36 @@ class XStream(BaseModel):
         self.max_feature_cache_size = max_feature_cache_size
         self.seed = seed
 
-        self.rng = np.random.default_rng(seed)
         self._reset_state()
 
     def _reset_state(self) -> None:
-        """Initialize or reset internal state."""
-        self._ready: bool = False
-        self._reference_ready: bool = False
-        self._samples_seen: int = 0
-        self._samples_in_window: int = 0
+        self.rng = np.random.default_rng(self.seed)
+        self._state: _XStreamState | None = None
         self._init_buffer: deque[np.ndarray] = deque(maxlen=self.init_sample_size)
-
-        self._deltamax: np.ndarray | None = None
-        self._chain_dims: np.ndarray | None = None
-        self._shift: np.ndarray | None = None
-        self._cms_current: np.ndarray | None = None
-        self._cms_reference: np.ndarray | None = None
-
-        self._hash_coeffs: np.ndarray | None = None
-        self._hash_offsets: np.ndarray | None = None
-        self._hash_coeffs_mod: np.ndarray | None = None
-        self._hash_offsets_mod: np.ndarray | None = None
-        self._scratch_z: np.ndarray | None = None
-        self._scratch_bins: np.ndarray | None = None
-        self._scratch_feature_visits: np.ndarray | None = None
-        self._scratch_hash_dots: np.ndarray | None = None
-
-        # Cache sparse StreamHash mappings for seen feature names:
-        # feature -> (indices, signs)
         self._feature_cache: OrderedDict[str, tuple[np.ndarray, np.ndarray]] = (
             OrderedDict()
         )
 
     def reset(self) -> None:
         """Reset learned state while keeping hyperparameters."""
-        self.rng = np.random.default_rng(self.seed)
         self._reset_state()
 
-    def _validate_input(self, x: dict[str, float]) -> None:
-        """Validate one-sample input dictionary."""
+    @staticmethod
+    def _validate_input(x: dict[str, float]) -> None:
         if not x:
             raise ValueError("Input dictionary cannot be empty")
-
         for key, value in x.items():
             if not isinstance(key, str):
                 raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
+            coerce_finite_number(value, label=f"Feature '{key}'")
 
     def _feature_seed(self, feature: str) -> int:
-        """Create deterministic seed for one feature name."""
         seed_prefix = "none" if self.seed is None else str(self.seed)
         payload = f"{seed_prefix}|{feature}".encode()
         digest = hashlib.blake2b(payload, digest_size=8).digest()
         return int.from_bytes(digest, byteorder="little", signed=False)
 
     def _feature_projection(self, feature: str) -> tuple[np.ndarray, np.ndarray]:
-        """Get cached sparse projection indices and signs for one feature."""
         cached = self._feature_cache.get(feature)
         if cached is not None:
             self._feature_cache.move_to_end(feature)
@@ -162,9 +139,10 @@ class XStream(BaseModel):
         local_rng = np.random.default_rng(self._feature_seed(feature))
         indices = local_rng.choice(self.k, size=nnz, replace=False).astype(np.int32)
         signs = local_rng.choice(
-            np.array([-1.0, 1.0], dtype=np.float64), size=nnz, replace=True
+            np.array([-1.0, 1.0], dtype=np.float64),
+            size=nnz,
+            replace=True,
         )
-
         mapping = (indices, signs)
         self._feature_cache[feature] = mapping
         if (
@@ -175,252 +153,175 @@ class XStream(BaseModel):
         return mapping
 
     def _project_one(self, x: dict[str, float]) -> np.ndarray:
-        """Project sparse dict sample into fixed-dimensional StreamHash vector."""
         y = np.zeros(self.k, dtype=np.float64)
-
         for feature, value in x.items():
             indices, signs = self._feature_projection(feature)
             y[indices] += float(value) * signs
-
         return y
 
-    def _initialize_model(self) -> None:
-        """Initialize chain/sketch state from buffered projected samples."""
-        if len(self._init_buffer) < self.init_sample_size:
-            return
-
+    def _create_state(self) -> _XStreamState:
         projected = np.vstack(self._init_buffer)
-
         deltamax = np.ptp(projected, axis=0) / 2.0
         deltamax[deltamax <= 0.0] = 1.0
-        self._deltamax = deltamax
 
-        self._chain_dims = self.rng.integers(
-            0, self.k, size=(self.n_chains, self.depth), dtype=np.int32
+        chain_dims = self.rng.integers(
+            0,
+            self.k,
+            size=(self.n_chains, self.depth),
+            dtype=np.int32,
         )
-        self._shift = (
+        shift = (
             self.rng.uniform(low=0.0, high=1.0, size=(self.n_chains, self.k))
-            * self._deltamax
+            * deltamax
         )
-
-        self._cms_current = np.zeros(
+        cms_current = np.zeros(
             (self.n_chains, self.depth, self.cms_num_hashes, self.cms_width),
             dtype=np.int32,
         )
-        self._cms_reference = np.zeros_like(self._cms_current)
-
-        self._hash_coeffs = self.rng.integers(
+        hash_coeffs = self.rng.integers(
             1,
             np.iinfo(np.int32).max,
             size=(self.cms_num_hashes, self.k),
             dtype=np.int64,
         )
-        self._hash_offsets = self.rng.integers(
+        hash_offsets = self.rng.integers(
             0,
             np.iinfo(np.int32).max,
             size=(self.n_chains, self.depth, self.cms_num_hashes),
             dtype=np.int64,
         )
-        self._hash_coeffs_mod = self._hash_coeffs % self.cms_width
-        self._hash_offsets_mod = self._hash_offsets % self.cms_width
-        self._scratch_z = np.zeros(self.k, dtype=np.float64)
-        # Use Python-int bins so large finite features cannot overflow int64.
-        self._scratch_bins = np.zeros(self.k, dtype=object)
-        self._scratch_feature_visits = np.zeros(self.k, dtype=np.int32)
-        self._scratch_hash_dots = np.zeros(self.cms_num_hashes, dtype=np.int64)
+        return _XStreamState(
+            deltamax=deltamax,
+            chain_dims=chain_dims,
+            shift=shift,
+            cms_current=cms_current,
+            cms_reference=np.zeros_like(cms_current),
+            hash_coeffs_mod=hash_coeffs % self.cms_width,
+            hash_offsets_mod=hash_offsets % self.cms_width,
+            scratch=_ScratchState(
+                z=np.zeros(self.k, dtype=np.float64),
+                # Python integers prevent overflow for very large finite features.
+                bins=np.zeros(self.k, dtype=object),
+                feature_visits=np.zeros(self.k, dtype=np.int32),
+                hash_dots=np.zeros(self.cms_num_hashes, dtype=np.int64),
+            ),
+        )
 
-        self._ready = True
-        self._samples_in_window = 0
-
+    def _initialize_model(self) -> None:
+        if len(self._init_buffer) < self.init_sample_size:
+            return
+        projected = tuple(self._init_buffer)
+        state = self._create_state()
         for point in projected:
-            self._learn_projected(point)
-
+            self._learn_projected(state, point)
+        self._state = state
         self._init_buffer.clear()
-
-    def _update_sketch(self, y: np.ndarray, sketch: np.ndarray) -> None:
-        """Update one sketch tensor for a projected sample."""
-        if (
-            self._deltamax is None
-            or self._chain_dims is None
-            or self._shift is None
-            or self._hash_coeffs_mod is None
-            or self._hash_offsets_mod is None
-            or self._scratch_z is None
-            or self._scratch_bins is None
-            or self._scratch_feature_visits is None
-            or self._scratch_hash_dots is None
-        ):
-            raise RuntimeError("Model is not initialized")
-
-        hash_index = np.arange(self.cms_num_hashes, dtype=np.intp)
-
-        for chain in range(self.n_chains):
-            for level, buckets in self._iter_chain_buckets(
-                y,
-                chain,
-                self._scratch_z,
-                self._scratch_bins,
-                self._scratch_feature_visits,
-                self._scratch_hash_dots,
-            ):
-                sketch[chain, level, hash_index, buckets] += 1
 
     def _iter_chain_buckets(
         self,
+        state: _XStreamState,
         y: np.ndarray,
         chain: int,
-        z: np.ndarray,
-        bins: np.ndarray,
-        feature_visits: np.ndarray,
-        hash_dots: np.ndarray,
     ) -> Iterator[tuple[int, np.ndarray]]:
-        """
-        Yield traversal buckets for each level of one chain.
-
-        This helper centralizes half-space chain traversal shared by sketch
-        update and scoring paths.
-        """
-        if (
-            self._deltamax is None
-            or self._chain_dims is None
-            or self._shift is None
-            or self._hash_coeffs_mod is None
-            or self._hash_offsets_mod is None
-        ):
-            raise RuntimeError("Model is not initialized")
-
-        z.fill(0.0)
-        bins.fill(0)
-        feature_visits.fill(0)
-        hash_dots.fill(0)
-        hash_coeffs_mod = self._hash_coeffs_mod
-        hash_offsets_mod = self._hash_offsets_mod[chain, :, :]
+        scratch = state.scratch
+        scratch.z.fill(0.0)
+        scratch.bins.fill(0)
+        scratch.feature_visits.fill(0)
+        scratch.hash_dots.fill(0)
+        hash_offsets_mod = state.hash_offsets_mod[chain]
 
         for level in range(self.depth):
-            feature = int(self._chain_dims[chain, level])
-            feature_visits[feature] += 1
-
-            if feature_visits[feature] == 1:
-                z_new = (y[feature] + self._shift[chain, feature]) / self._deltamax[
-                    feature
-                ]
+            feature = int(state.chain_dims[chain, level])
+            scratch.feature_visits[feature] += 1
+            if scratch.feature_visits[feature] == 1:
+                z_new = (
+                    y[feature] + state.shift[chain, feature]
+                ) / state.deltamax[feature]
             else:
                 z_new = (
-                    2.0 * z[feature]
-                    - self._shift[chain, feature] / self._deltamax[feature]
+                    2.0 * scratch.z[feature]
+                    - state.shift[chain, feature] / state.deltamax[feature]
                 )
 
-            z[feature] = z_new
+            scratch.z[feature] = z_new
             bin_new = int(np.floor(z_new))
-
-            if bin_new != bins[feature]:
-                delta = bin_new - bins[feature]
-                bins[feature] = bin_new
+            if bin_new != scratch.bins[feature]:
+                delta = bin_new - scratch.bins[feature]
+                scratch.bins[feature] = bin_new
                 delta_mod = int(delta % self.cms_width)
                 if delta_mod:
-                    hash_dots = (
-                        hash_dots + delta_mod * hash_coeffs_mod[:, feature]
+                    scratch.hash_dots = (
+                        scratch.hash_dots
+                        + delta_mod * state.hash_coeffs_mod[:, feature]
                     ) % self.cms_width
 
-            buckets = (hash_dots + hash_offsets_mod[level, :]) % self.cms_width
+            buckets = (
+                scratch.hash_dots + hash_offsets_mod[level]
+            ) % self.cms_width
             yield level, buckets.astype(np.intp)
 
-    def _learn_projected(self, y: np.ndarray) -> None:
-        """Learn one projected sample and maintain current/reference windows."""
-        if self._cms_current is None:
-            raise RuntimeError("Model is not initialized")
+    def _update_sketch(
+        self,
+        state: _XStreamState,
+        y: np.ndarray,
+        sketch: np.ndarray,
+    ) -> None:
+        hash_index = np.arange(self.cms_num_hashes, dtype=np.intp)
+        for chain in range(self.n_chains):
+            for level, buckets in self._iter_chain_buckets(state, y, chain):
+                sketch[chain, level, hash_index, buckets] += 1
 
-        self._update_sketch(y, self._cms_current)
-        self._samples_seen += 1
-        self._samples_in_window += 1
-
-        if self._samples_in_window >= self.window_size:
-            if self._cms_reference is None:
-                raise RuntimeError("Reference sketch is not initialized")
-            self._cms_reference[...] = self._cms_current
-            self._cms_current.fill(0)
-            self._samples_in_window = 0
-            self._reference_ready = True
+    def _learn_projected(self, state: _XStreamState, y: np.ndarray) -> None:
+        self._update_sketch(state, y, state.cms_current)
+        state.samples_seen += 1
+        state.samples_in_window += 1
+        if state.samples_in_window >= self.window_size:
+            state.cms_reference[...] = state.cms_current
+            state.cms_current.fill(0)
+            state.samples_in_window = 0
+            state.completed_windows += 1
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """
-        Update model state with one sample.
-
-        Args:
-            x: Feature dictionary with string keys and numeric values.
-        """
+        """Update model state with one sample."""
         self._validate_input(x)
         y = self._project_one(x)
-
-        if not self._ready:
+        state = self._state
+        if state is None:
             self._init_buffer.append(y)
             self._initialize_model()
             return
+        self._learn_projected(state, y)
 
-        self._learn_projected(y)
-
-    def _score_projected(self, y: np.ndarray) -> float:
-        """Compute anomaly score for one projected sample."""
-        if (
-            self._deltamax is None
-            or self._chain_dims is None
-            or self._shift is None
-            or self._cms_reference is None
-            or self._hash_coeffs_mod is None
-            or self._hash_offsets_mod is None
-            or self._scratch_z is None
-            or self._scratch_bins is None
-            or self._scratch_feature_visits is None
-            or self._scratch_hash_dots is None
-        ):
-            return 0.0
-
+    def _score_projected(self, state: _XStreamState, y: np.ndarray) -> float:
         hash_index = np.arange(self.cms_num_hashes, dtype=np.intp)
         chain_scores = np.empty(self.n_chains, dtype=np.float64)
-
         for chain in range(self.n_chains):
             best_level_score = np.inf
-
-            for level, buckets in self._iter_chain_buckets(
-                y,
-                chain,
-                self._scratch_z,
-                self._scratch_bins,
-                self._scratch_feature_visits,
-                self._scratch_hash_dots,
-            ):
-                counts = self._cms_reference[chain, level, hash_index, buckets]
+            for level, buckets in self._iter_chain_buckets(state, y, chain):
+                counts = state.cms_reference[chain, level, hash_index, buckets]
                 estimated_count = int(np.min(counts))
-
                 level_score = np.log2(1.0 + estimated_count) + (level + 1.0)
                 best_level_score = min(best_level_score, level_score)
-
             chain_scores[chain] = 2.0 ** (1.0 - best_level_score)
 
         score = float(np.mean(chain_scores))
         return float(np.clip(score, 0.0, 1.0))
 
     def score_one(self, x: dict[str, float]) -> float:
-        """
-        Compute anomaly score for one sample.
-
-        Returns:
-            Score in ``[0, 1]`` where larger values indicate greater anomaly.
-        """
+        """Return an anomaly score in ``[0, 1]`` without learning."""
         self._validate_input(x)
-
-        if not self._ready or not self._reference_ready:
+        state = self._state
+        if state is None or not state.reference_ready:
             return 0.0
-
-        y = self._project_one(x)
-        return self._score_projected(y)
+        return self._score_projected(state, self._project_one(x))
 
     def __repr__(self) -> str:
+        state = self._state
         return (
             f"XStream(k={self.k}, n_chains={self.n_chains}, depth={self.depth}, "
             f"cms_width={self.cms_width}, cms_num_hashes={self.cms_num_hashes}, "
             f"window_size={self.window_size}, init_sample_size={self.init_sample_size}, "
             f"density={self.density}, max_feature_cache_size={self.max_feature_cache_size}, "
-            f"feature_cache_size={len(self._feature_cache)}, ready={self._ready}, "
-            f"reference_ready={self._reference_ready})"
+            f"feature_cache_size={len(self._feature_cache)}, ready={state is not None}, "
+            f"reference_ready={state is not None and state.reference_ready})"
         )

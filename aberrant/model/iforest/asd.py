@@ -4,11 +4,33 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from typing import Any
+from dataclasses import dataclass
+from typing import TypeAlias
 
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
+
+
+@dataclass(frozen=True, slots=True)
+class _ASDLeaf:
+    """Terminal isolation-tree node."""
+
+    correction: float
+
+
+@dataclass(frozen=True, slots=True)
+class _ASDBranch:
+    """Binary isolation-tree split."""
+
+    feature: int
+    threshold: float
+    left: _ASDNode
+    right: _ASDNode
+
+
+_ASDNode: TypeAlias = _ASDLeaf | _ASDBranch
 
 
 class ASDIsolationForest(BaseModel):
@@ -77,15 +99,14 @@ class ASDIsolationForest(BaseModel):
         self.retrain_interval = resolved_interval
         self.seed = seed
 
-        self.feature_names: list[str] | None = None
+        self._schema = FeatureSchema()
         self.window: deque[np.ndarray] = deque(maxlen=self.window_size)
-        self.trees: list[dict[str, Any]] = []
+        self.trees: list[_ASDNode] = []
         self.c_n = self._compute_c(min(self.max_samples, self.window_size))
 
         self._samples_since_retrain = 0
         self._fits_completed = 0
         self._last_fit_window: np.ndarray | None = None
-        self._x_converted = np.empty(0, dtype=np.float64)
         self.rng = np.random.default_rng(seed)
 
     @staticmethod
@@ -98,43 +119,10 @@ class ASDIsolationForest(BaseModel):
         harmonic = math.log(n - 1) + ASDIsolationForest.EULER_MASCHERONI
         return 2.0 * harmonic - 2.0 * (n - 1) / n
 
-    def _set_or_validate_schema(self, x: dict[str, float]) -> None:
-        """Set the first feature schema or reject later schema changes."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-        if self.feature_names is None:
-            self.feature_names = sorted(x)
-            self._x_converted = np.zeros(len(self.feature_names), dtype=np.float64)
-            return
-
-        if set(x) != set(self.feature_names):
-            expected = ", ".join(self.feature_names)
-            received = ", ".join(sorted(x))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected}], received [{received}]."
-            )
-
-    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
-        if self.feature_names is None:
-            raise RuntimeError("Feature schema is not initialized")
-        for index, feature in enumerate(self.feature_names):
-            self._x_converted[index] = float(x[feature])
-        return self._x_converted.copy()
-
     def learn_one(self, x: dict[str, float]) -> None:
         """Add one sample to the sliding window and retrain when due."""
-        self._set_or_validate_schema(x)
-        self.window.append(self._vectorize(x))
+        prepared = self._schema.preview(x)
+        self.window.append(prepared.values.copy())
         self._samples_since_retrain += 1
 
         initial_fit_due = not self.trees and len(self.window) == self.window_size
@@ -143,6 +131,7 @@ class ASDIsolationForest(BaseModel):
         )
         if initial_fit_due or replacement_due:
             self._fit_forest()
+        self._schema.commit(prepared)
 
     def _fit_forest(self) -> None:
         """Replace the complete forest using the current reference window."""
@@ -151,7 +140,7 @@ class ASDIsolationForest(BaseModel):
             return
 
         sample_size = min(self.max_samples, len(data))
-        trees: list[dict[str, Any]] = []
+        trees: list[_ASDNode] = []
         for _ in range(self.n_estimators):
             indices = self.rng.choice(len(data), size=sample_size, replace=False)
             trees.append(self._build_tree(data[indices]))
@@ -162,7 +151,7 @@ class ASDIsolationForest(BaseModel):
         self._fits_completed += 1
         self._last_fit_window = data.copy()
 
-    def _build_tree(self, data_arr: np.ndarray) -> dict[str, Any]:
+    def _build_tree(self, data_arr: np.ndarray) -> _ASDNode:
         """Build one isolation tree from a sampled window."""
         indices = np.arange(data_arr.shape[0])
         max_height = math.ceil(math.log2(max(data_arr.shape[0], 2)))
@@ -174,16 +163,16 @@ class ASDIsolationForest(BaseModel):
         indices: np.ndarray,
         max_height: int,
         current_height: int = 0,
-    ) -> dict[str, Any]:
+    ) -> _ASDNode:
         """Recursively build an isolation tree."""
         n_samples = len(indices)
         if n_samples <= 1 or current_height >= max_height:
-            return {"size": n_samples, "c": self._compute_c(n_samples)}
+            return _ASDLeaf(correction=self._compute_c(n_samples))
 
         node_values = data_arr[indices]
         variable_features = np.flatnonzero(np.ptp(node_values, axis=0) > 0)
         if len(variable_features) == 0:
-            return {"size": n_samples, "c": self._compute_c(n_samples)}
+            return _ASDLeaf(correction=self._compute_c(n_samples))
 
         feature_index = int(self.rng.choice(variable_features))
         feature_values = data_arr[indices, feature_index]
@@ -191,48 +180,50 @@ class ASDIsolationForest(BaseModel):
             self.rng.uniform(np.min(feature_values), np.max(feature_values))
         )
         left_mask = feature_values < split_value
-        return {
-            "split_feature": self.feature_names[feature_index],
-            "split_val": split_value,
-            "left": self._build_tree_recursive(
+        return _ASDBranch(
+            feature=feature_index,
+            threshold=split_value,
+            left=self._build_tree_recursive(
                 data_arr,
                 indices[left_mask],
                 max_height,
                 current_height + 1,
             ),
-            "right": self._build_tree_recursive(
+            right=self._build_tree_recursive(
                 data_arr,
                 indices[~left_mask],
                 max_height,
                 current_height + 1,
             ),
-            "size": n_samples,
-        }
+        )
 
     @staticmethod
-    def _compute_path_length(x: dict[str, float], tree: dict[str, Any]) -> float:
+    def _compute_path_length(values: np.ndarray, tree: _ASDNode) -> float:
         """Compute one sample's path length through an isolation tree."""
         depth = 0
         current_node = tree
-        while "split_feature" in current_node:
-            feature_value = x[current_node["split_feature"]]
-            if feature_value < current_node["split_val"]:
-                current_node = current_node["left"]
+        while isinstance(current_node, _ASDBranch):
+            feature_value = values[current_node.feature]
+            if feature_value < current_node.threshold:
+                current_node = current_node.left
             else:
-                current_node = current_node["right"]
+                current_node = current_node.right
             depth += 1
-        return depth + current_node["c"]
+        return float(depth + current_node.correction)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute the current replacement forest's anomaly score."""
-        if not x:
-            return 0.0
-        self._set_or_validate_schema(x)
+        prepared = self._schema.preview(x)
         if not self.trees or self.c_n <= 0.0:
             return 0.0
 
         average_path = float(
-            np.mean([self._compute_path_length(x, tree) for tree in self.trees])
+            np.mean(
+                [
+                    self._compute_path_length(prepared.values, tree)
+                    for tree in self.trees
+                ]
+            )
         )
         return float(2.0 ** (-average_path / self.c_n))
 

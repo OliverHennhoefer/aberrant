@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.iforest.asd import ASDIsolationForest
+from aberrant.model.iforest.asd import ASDIsolationForest, _ASDBranch
 from tests.utils import DataGenerator
 
 
@@ -29,7 +29,7 @@ class TestASDIsolationForest(unittest.TestCase):
         self.assertEqual(forest.window_size, 256)
         self.assertEqual(forest.retrain_interval, 256)
         self.assertIsNone(forest.seed)
-        self.assertIsNone(forest.feature_names)
+        self.assertIsNone(forest._schema.names)
         self.assertEqual(len(forest.window), 0)
         self.assertEqual(len(forest.trees), 0)
 
@@ -118,19 +118,20 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_tree_selects_from_variable_features(self):
         forest = ASDIsolationForest(max_samples=4, seed=42)
-        forest.feature_names = ["constant", "varying"]
         data = np.array([[1.0, 1.0], [1.0, 2.0], [1.0, 3.0], [1.0, 4.0]])
 
         tree = forest._build_tree(data)
 
-        self.assertEqual(tree["split_feature"], "varying")
+        self.assertIsInstance(tree, _ASDBranch)
+        assert isinstance(tree, _ASDBranch)
+        self.assertEqual(tree.feature, 1)
 
     def test_feature_names_initialization(self):
         """Test feature names establishment on first sample."""
         forest = ASDIsolationForest(max_samples=5)
 
         # Before learning, no features established
-        self.assertIsNone(forest.feature_names)
+        self.assertIsNone(forest._schema.names)
         self.assertEqual(len(forest.window), 0)
 
         # First data point establishes features
@@ -139,7 +140,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
         # Features should be sorted alphabetically
         expected_order = ["a", "b", "c"]
-        self.assertEqual(forest.feature_names, expected_order)
+        self.assertEqual(forest._schema.names, tuple(expected_order))
         self.assertEqual(len(forest.window), 1)
         self.assertEqual(forest.window[0].shape, (3,))
 
@@ -152,9 +153,8 @@ class TestASDIsolationForest(unittest.TestCase):
             forest.learn_one({})
         self.assertIn("Input dictionary cannot be empty", str(context.exception))
 
-        # Empty dictionary should return 0.0 for score_one
-        score = forest.score_one({})
-        self.assertEqual(score, 0.0)
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            forest.score_one({})
 
     def test_tree_limit_enforcement(self):
         """Test that number of trees doesn't exceed n_estimators."""
@@ -403,10 +403,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
         # Verify feature order is alphabetical
         expected_order = ["a", "m", "z"]
-        self.assertEqual(forest.feature_names, expected_order)
-
-        # Pre-allocated conversion array should be right size
-        self.assertEqual(len(forest._x_converted), 3)
+        self.assertEqual(forest._schema.names, tuple(expected_order))
 
         # Subsequent points should work with same feature order
         forest.learn_one({"z": 6.0, "a": 4.0, "m": 5.0})

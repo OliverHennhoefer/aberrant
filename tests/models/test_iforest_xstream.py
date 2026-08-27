@@ -32,8 +32,7 @@ class TestXStream(unittest.TestCase):
         self.assertEqual(model.depth, 15)
         self.assertEqual(model.window_size, 256)
         self.assertEqual(model.max_feature_cache_size, 10_000)
-        self.assertFalse(model._ready)
-        self.assertFalse(model._reference_ready)
+        self.assertIsNone(model._state)
 
     def test_invalid_parameters(self):
         """Test parameter validation."""
@@ -176,9 +175,10 @@ class TestXStream(unittest.TestCase):
         for i in range(8):
             model.learn_one({"x": float(i), "y": float(i + 1)})
 
-        self.assertTrue(model._ready)
-        self.assertTrue(model._reference_ready)
-        self.assertEqual(model._samples_in_window, 0)
+        self.assertIsNotNone(model._state)
+        assert model._state is not None
+        self.assertTrue(model._state.reference_ready)
+        self.assertEqual(model._state.samples_in_window, 0)
 
     def test_outlier_scores_higher_than_normal(self):
         """Outlier should score higher than near-cluster point."""
@@ -203,10 +203,9 @@ class TestXStream(unittest.TestCase):
         for i in range(50):
             model.learn_one({"x": float(i), "y": float(i * 2)})
 
-        self.assertTrue(model._ready)
+        self.assertIsNotNone(model._state)
         model.reset()
-        self.assertFalse(model._ready)
-        self.assertFalse(model._reference_ready)
+        self.assertIsNone(model._state)
         self.assertEqual(model.score_one({"x": 1.0, "y": 2.0}), 0.0)
 
     def test_repr_contains_key_config(self):
