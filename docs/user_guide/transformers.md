@@ -31,3 +31,5 @@ for x in stream_of_feature_dicts:
 
 - Keep feature keys consistent across the stream.
 - `HalfSpaceTrees` works best after min-max scaling to `[0, 1]`.
+- `IncrementalPCA` implements uncentered PCA; center or standardize inputs
+  upstream when mean-centered PCA semantics are required.

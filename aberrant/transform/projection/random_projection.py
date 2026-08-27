@@ -1,5 +1,7 @@
 """Random projection transformer for dimensionality reduction."""
 
+import math
+
 import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
@@ -19,6 +21,7 @@ class RandomProjection(BaseTransformer):
         Reference:
             Achlioptas D. (2003) "Database-friendly random projections:
             Johnson-Lindenstrauss with binary coins"
+            https://doi.org/10.1016/S0022-0000(03)00025-4
 
         Args:
             n_components: Target number of dimensions after transformation.
@@ -33,7 +36,7 @@ class RandomProjection(BaseTransformer):
         if n_components < 1:
             raise ValueError("n_components must be greater than 0")
         self.n_components = n_components
-        self.feature_names = keys
+        self.feature_names = list(keys) if keys is not None else None
         self.seed = seed
 
         self.n_dimensions = 0
@@ -62,11 +65,34 @@ class RandomProjection(BaseTransformer):
             )
         else:
             rng = np.random.default_rng(self.seed)
-            self.random_matrix = 3 ** (0.5) * rng.choice(
+            # Achlioptas' sparse projection uses entries in
+            # {-sqrt(3 / k), 0, sqrt(3 / k)} so that E[||Rx||^2] = ||x||^2.
+            self.random_matrix = np.sqrt(3.0 / self.n_components) * rng.choice(
                 [-1, 0, 1],
                 size=(self.n_dimensions, self.n_components),
                 p=[1 / 6, 2 / 3, 1 / 6],
             )
+
+    @staticmethod
+    def _validate_input(x: dict[str, float]) -> None:
+        """Validate projection inputs before establishing persistent schema."""
+        for key, value in x.items():
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Feature '{key}' must be numeric") from e
+            if not math.isfinite(numeric):
+                raise ValueError(f"Feature '{key}' must be finite")
+
+    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
+        """Build a stable-order vector and reject extra schema fields."""
+        if self.feature_names is None:
+            raise RuntimeError("Feature schema is not initialized")
+        data_vector = np.array([x[key] for key in self.feature_names], dtype=float)
+        if len(x) != len(self.feature_names):
+            unexpected = sorted(set(x).difference(self.feature_names))
+            raise ValueError(f"Input contains unexpected feature(s): {unexpected}")
+        return data_vector
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -78,6 +104,7 @@ class RandomProjection(BaseTransformer):
         Raises:
             ValueError: If n_components is greater than the number of features in x.
         """
+        self._validate_input(x)
         if self.feature_names is None and len(x) >= 1:
             self.feature_names = list(x.keys())
             self._initialize_random_matrix()
@@ -96,12 +123,13 @@ class RandomProjection(BaseTransformer):
             RuntimeError: If called before learning feature names.
         """
 
+        self._validate_input(x)
         if self.feature_names is None:
             raise RuntimeError(
                 "Cannot transform before learning. Call learn_one() first or provide keys."
             )
 
-        data_vector = np.array([x[key] for key in self.feature_names])
+        data_vector = self._vectorize(x)
         transformed_x = self.random_matrix.T @ data_vector
         return {f"component_{i}": float(val) for i, val in enumerate(transformed_x)}
 

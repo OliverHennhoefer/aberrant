@@ -184,6 +184,17 @@ class TestQuantileThreshold(unittest.TestCase):
 class TestQuantileThresholdEdgeCases(unittest.TestCase):
     """Test QuantileThreshold edge cases."""
 
+    def test_non_finite_scores_are_rejected_without_poisoning_window(self):
+        qt = QuantileThreshold(window_size=50)
+
+        with self.assertRaisesRegex(ValueError, "score must be finite"):
+            qt.learn_one({"score": float("nan")})
+        with self.assertRaisesRegex(ValueError, "score must be finite"):
+            qt.score_one({"score": float("inf")})
+
+        self.assertEqual(qt.n_scores, 0)
+        self.assertIsNone(qt.threshold)
+
     def test_zero_threshold_handling(self):
         """Test handling when all scores are zero (threshold would be 0)."""
         qt = QuantileThreshold(window_size=50)

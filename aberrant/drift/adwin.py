@@ -2,7 +2,7 @@
 
 import math
 
-from aberrant.drift.base import BaseDriftDetector
+from aberrant.drift.base import BaseDriftDetector, _finite_observation
 
 
 class ADWIN(BaseDriftDetector):
@@ -19,7 +19,7 @@ class ADWIN(BaseDriftDetector):
 
     Args:
         delta: Significance level for drift detection. Lower values make
-            the detector more sensitive. Default is 0.002.
+            the detector more conservative. Default is 0.002.
         clock: How often to check for drift (every `clock` samples).
             Default is 32.
         max_buckets: Maximum number of buckets per level. Default is 5.
@@ -39,6 +39,8 @@ class ADWIN(BaseDriftDetector):
         Bifet, A., & Gavalda, R. (2007). Learning from time-changing data
         with adaptive windowing. In Proceedings of the 2007 SIAM
         International Conference on Data Mining (pp. 443-448).
+        Reference implementation:
+        https://github.com/Waikato/moa/blob/master/moa/src/main/java/moa/classifiers/core/driftdetection/ADWIN.java
     """
 
     def __init__(
@@ -133,6 +135,8 @@ class ADWIN(BaseDriftDetector):
         Returns:
             self: Returns self for method chaining.
         """
+        x = _finite_observation(x)
+
         # Auto-reset after drift detection (following River's behavior)
         if self._drift_detected:
             self._soft_reset()
@@ -258,8 +262,11 @@ class ADWIN(BaseDriftDetector):
 
     def _remove_oldest(self, count: int) -> None:
         """Remove the oldest `count` elements from the window."""
+        original_total = self._total
+        original_variance = self._variance
+        original_width = self._width
         removed_sum = 0.0
-        removed_var = 0.0
+        removed_variance = 0.0
         removed_count = 0
 
         # Remove from highest levels (oldest data) first
@@ -269,24 +276,41 @@ class ADWIN(BaseDriftDetector):
                 self._bucket_count[level] > 0 and removed_count + bucket_size <= count
             ):
                 # Remove oldest bucket at this level
-                removed_sum += self._bucket_sum[level][0]
-                removed_var += self._bucket_variance[level][0]
+                bucket_sum = self._bucket_sum[level][0]
+                bucket_variance = self._bucket_variance[level][0]
+                if removed_count > 0:
+                    removed_mean = removed_sum / removed_count
+                    bucket_mean = bucket_sum / bucket_size
+                    removed_variance += (
+                        removed_count
+                        * bucket_size
+                        * (removed_mean - bucket_mean) ** 2
+                        / (removed_count + bucket_size)
+                    )
+                removed_sum += bucket_sum
+                removed_variance += bucket_variance
                 removed_count += bucket_size
 
                 self._bucket_sum[level] = self._bucket_sum[level][1:]
                 self._bucket_variance[level] = self._bucket_variance[level][1:]
                 self._bucket_count[level] -= 1
 
-        self._total -= removed_sum
-        self._width -= removed_count
+        self._total = original_total - removed_sum
+        self._width = original_width - removed_count
 
-        # Recalculate variance (simplified approach).
-        # Note: This is an approximation. The true variance after removal would
-        # require recomputing from the remaining data. This simplification may
-        # lead to slight underestimation in long streams, but is computationally
-        # efficient. River uses a C-optimized implementation for this.
-        if self._width > 1:
-            self._variance = max(0.0, self._variance - removed_var)
+        if self._width > 0 and removed_count > 0:
+            removed_mean = removed_sum / removed_count
+            remaining_mean = self._total / self._width
+            between_groups = (
+                removed_count
+                * self._width
+                * (removed_mean - remaining_mean) ** 2
+                / original_width
+            )
+            self._variance = max(
+                0.0,
+                original_variance - removed_variance - between_groups,
+            )
         else:
             self._variance = 0.0
 

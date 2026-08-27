@@ -85,6 +85,16 @@ class TestADWIN(unittest.TestCase):
             detector.update(float(i))
         self.assertEqual(detector.width, 10)
 
+    def test_non_finite_observation_is_rejected_without_mutating_state(self):
+        detector = ADWIN()
+        detector.update(1.0)
+
+        with self.assertRaisesRegex(ValueError, "observation must be finite"):
+            detector.update(float("nan"))
+
+        self.assertEqual(detector.width, 1)
+        self.assertEqual(detector.estimation, 1.0)
+
     def test_estimation_property(self):
         """Test the estimation (mean) property."""
         detector = ADWIN()
@@ -112,6 +122,18 @@ class TestADWIN(unittest.TestCase):
         detector.update(1.0)
         detector.update(2.0)
         self.assertAlmostEqual(detector.variance, 0.25, places=10)
+
+    def test_variance_remains_exact_after_oldest_bucket_removal(self):
+        """Removing a subwindow must remove within- and between-group variance."""
+        detector = ADWIN(clock=1000, max_buckets=10)
+        for value in [1.0, 2.0, 10.0, 11.0]:
+            detector.update(value)
+
+        detector._remove_oldest(2)
+
+        self.assertEqual(detector.width, 2)
+        self.assertAlmostEqual(detector.estimation, 10.5, places=12)
+        self.assertAlmostEqual(detector.variance, 0.25, places=12)
 
     def test_variance_empty_window(self):
         """Test variance returns 0 for empty/single-element window."""

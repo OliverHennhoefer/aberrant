@@ -1,5 +1,6 @@
 """Quantile-based adaptive threshold for anomaly detection."""
 
+import math
 from collections import deque
 
 import numpy as np
@@ -84,6 +85,17 @@ class QuantileThreshold(BaseModel):
         """Number of scores currently in the window."""
         return len(self._scores)
 
+    @staticmethod
+    def _validated_score(value: float) -> float:
+        """Return a finite Python float without allowing persistent state poisoning."""
+        try:
+            score = float(value)
+        except (TypeError, ValueError) as e:
+            raise ValueError("score must be numeric") from e
+        if not math.isfinite(score):
+            raise ValueError("score must be finite")
+        return score
+
     def learn_one(self, x: dict[str, float]) -> None:
         """
         Update the threshold estimate with a new score.
@@ -94,7 +106,7 @@ class QuantileThreshold(BaseModel):
         if self.score_key not in x:
             raise ValueError(f"Input must contain '{self.score_key}' key")
 
-        score = x[self.score_key]
+        score = self._validated_score(x[self.score_key])
         self._scores.append(score)
 
         # Update threshold if we have enough samples
@@ -121,7 +133,7 @@ class QuantileThreshold(BaseModel):
         if self.score_key not in x:
             raise ValueError(f"Input must contain '{self.score_key}' key")
 
-        score = x[self.score_key]
+        score = self._validated_score(x[self.score_key])
 
         # During warmup, return 0 (no anomalies)
         if self._threshold is None:

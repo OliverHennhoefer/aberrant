@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from aberrant.drift.base import BaseDriftDetector
+from aberrant.drift.base import BaseDriftDetector, _finite_observation
 
 
 class PageHinkley(BaseDriftDetector):
@@ -121,6 +121,8 @@ class PageHinkley(BaseDriftDetector):
         Returns:
             self: Returns self for method chaining.
         """
+        x = _finite_observation(x)
+
         # Auto-reset after drift detection (following River's behavior)
         if self._drift_detected:
             self._soft_reset()

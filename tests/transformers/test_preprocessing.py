@@ -61,6 +61,14 @@ class TestMinMaxScaler(unittest.TestCase):
         self.assertAlmostEqual(result["feature1"], 0.0, places=10)
         self.assertAlmostEqual(result["feature2"], 0.0, places=10)
 
+    def test_invalid_feature_range_and_non_finite_learning_value(self):
+        with self.assertRaisesRegex(ValueError, "lower bound must be less"):
+            MinMaxScaler(feature_range=(1.0, 1.0))
+
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            self.scaler.learn_one({"x": float("nan")})
+        self.assertNotIn("x", self.scaler.min)
+
     def test_single_data_point(self):
         """Test behavior with single data point."""
         single_data = {"feature1": 42.0}
@@ -204,6 +212,12 @@ class TestStandardScaler(unittest.TestCase):
         # With single point, variance is 0, should use safe division
         result = self.scaler.transform_one(single_data)
         self.assertAlmostEqual(result["feature1"], 0.0, places=10)  # Safe div returns 0
+
+    def test_non_finite_learning_value_does_not_poison_statistics(self):
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            self.scaler.learn_one({"x": float("inf")})
+
+        self.assertEqual(self.scaler.counts["x"], 0)
 
     def test_zero_variance_feature(self):
         """Test handling of features with zero variance."""
@@ -367,6 +381,12 @@ class TestRandomProjections(unittest.TestCase):
             "Transformed data should have the same number of components as n_components.",
         )
 
+    def test_transform_rejects_extra_features(self):
+        projection = RandomProjection(1, keys=["x", "y"], seed=42)
+
+        with self.assertRaisesRegex(ValueError, "unexpected feature"):
+            projection.transform_one({"x": 1.0, "y": 2.0, "z": 3.0})
+
     def test_error_with_too_many_n_components(self):
         with self.assertRaises(ValueError) as context:
             RandomProjection(n_components=15, keys=self.feature_keys[:10])
@@ -439,10 +459,10 @@ class TestRandomProjections(unittest.TestCase):
         rp.learn_one(datapoint)
         expected_random_matrix = np.array(
             [
-                [0.0, 0.0, 1.73205081],
-                [0.0, -1.73205081, 1.73205081],
-                [0.0, 0.0, -1.73205081],
-                [0.0, 0.0, 1.73205081],
+                [0.0, 0.0, 1.0],
+                [0.0, -1.0, 1.0],
+                [0.0, 0.0, -1.0],
+                [0.0, 0.0, 1.0],
                 [0.0, 0.0, 0.0],
             ]
         )
@@ -454,19 +474,32 @@ class TestRandomProjections(unittest.TestCase):
         )  # test creating random matrix (alomost equal)
 
         dict_values = rp.transform_one(datapoint)
-        expectation_transformed = [
-            0.0,
-            -0.760159755997111,
-            1.8214325922668038,
-        ]
+        expected_transformed = expected_random_matrix.T @ np.fromiter(
+            datapoint.values(), dtype=float
+        )
         transformed_values = [
             dict_values["component_0"],
             dict_values["component_1"],
             dict_values["component_2"],
         ]
         np.testing.assert_allclose(
-            expectation_transformed, transformed_values, rtol=1e-14, atol=1e-14
-        )  # test transforming point with proper floating-point comparison
+            expected_transformed, transformed_values, rtol=1e-14, atol=1e-14
+        )
+
+    def test_projection_owns_configured_feature_names(self):
+        keys = ["a", "b", "c"]
+        projection = RandomProjection(2, keys=keys, seed=42)
+        keys[0] = "changed"
+
+        self.assertEqual(projection.feature_names, ["a", "b", "c"])
+
+    def test_projection_rejects_non_finite_values_before_learning_schema(self):
+        projection = RandomProjection(1)
+
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            projection.learn_one({"x": float("nan")})
+
+        self.assertIsNone(projection.feature_names)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 """Incremental Principal Component Analysis transformer."""
 
+import math
+
 import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
@@ -9,8 +11,10 @@ class IncrementalPCA(BaseTransformer):
     """
     Incremental Principal Component Analysis for online dimensionality reduction.
 
-    Implements an online PCA algorithm that can process data points one at a time,
-    maintaining principal components without storing all historical data.
+    Implements an uncentered online PCA algorithm that can process data points one
+    at a time, maintaining principal components without storing all historical data.
+    Inputs are projected around the origin; center or standardize them upstream when
+    conventional mean-centered PCA semantics are required.
 
     Args:
         n_components: Number of principal components to keep.
@@ -52,7 +56,7 @@ class IncrementalPCA(BaseTransformer):
         - Cardot, H. & Degras, D. (2015). "Online Principal Component Analysis in High Dimension: Which Algorithm to Choose?"
 
         Algorithm Steps:
-        1. Initialization phase: Collect n0 samples and perform standard PCA
+        1. Initialization phase: Collect n0 samples and perform uncentered PCA
         2. Online phase: For each new sample x_t at time t:
            - Apply forgetting factor: λ ← (1-f)λ where f = 1/t
            - Scale new sample: x ← √f * x_t
@@ -62,14 +66,25 @@ class IncrementalPCA(BaseTransformer):
            - Update eigendecomposition of diag(λ) + x̂x̂^T
            - Keep top n_components eigenvalues/vectors
         """
-        self.n_components: int = n_components
-        self.n0: int = n0
-        self.feature_names: list[str] | None = keys
-        self.tol: float = tol
         super().__init__()
 
+        if n_components <= 0:
+            raise ValueError("n_components must be positive")
+        if n0 <= 0:
+            raise ValueError("n0 must be positive")
+        if tol < 0:
+            raise ValueError("tol must be non-negative")
         if forgetting_factor is not None and not (0 < forgetting_factor < 1):
             raise ValueError("forgetting_factor must be 0 < forgetting_factor < 1")
+
+        self.n_components: int = n_components
+        self.n0: int = n0
+        self.feature_names: list[str] | None = list(keys) if keys is not None else None
+        if self.feature_names is not None and len(self.feature_names) != len(
+            set(self.feature_names)
+        ):
+            raise ValueError("Feature names cannot contain duplicates")
+        self.tol: float = tol
         self.forgetting_factor = forgetting_factor
 
         # State variables
@@ -92,6 +107,27 @@ class IncrementalPCA(BaseTransformer):
                 raise ValueError(
                     f"n_components ({self.n_components}) must be <= number of features ({len(self.feature_names)})"
                 )
+
+    @staticmethod
+    def _validate_input(x: dict[str, float]) -> None:
+        """Reject values that would irreversibly poison PCA state."""
+        for key, value in x.items():
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Feature '{key}' must be numeric") from e
+            if not math.isfinite(numeric):
+                raise ValueError(f"Feature '{key}' must be finite")
+
+    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
+        """Build a stable-order vector and reject extra schema fields."""
+        if self.feature_names is None:
+            raise RuntimeError("Feature schema is not initialized")
+        data_vector = np.array([x[key] for key in self.feature_names], dtype=float)
+        if len(x) != len(self.feature_names):
+            unexpected = sorted(set(x).difference(self.feature_names))
+            raise ValueError(f"Input contains unexpected feature(s): {unexpected}")
+        return data_vector
 
     def _update_online_pca(self, data_vector: np.ndarray) -> None:
         """
@@ -116,7 +152,7 @@ class IncrementalPCA(BaseTransformer):
 
         # Compute residual and check if subspace expansion is needed
         residual = x_scaled - self.vectors @ xhat
-        norm_residual = np.linalg.norm(residual)
+        norm_residual = float(np.linalg.norm(residual))
 
         if norm_residual >= self.tol:
             lambda_updated, xhat = self._expand_subspace(
@@ -223,12 +259,12 @@ class IncrementalPCA(BaseTransformer):
         Raises:
             ValueError: If `n_components` is greater than the number of features in `x`.
         """
+        self._validate_input(x)
         if self.feature_names is None:
             self.feature_names = list(x.keys())
             self._check_n_features()
 
-        # Convert input dictionary to NumPy array
-        data_vector = np.array([x[key] for key in self.feature_names])
+        data_vector = self._vectorize(x)
 
         if self.n0_reached:
             self._update_online_pca(data_vector)
@@ -248,13 +284,14 @@ class IncrementalPCA(BaseTransformer):
             Transformed data point as dictionary with component names as keys.
         """
 
+        self._validate_input(x)
+        data_vector = self._vectorize(x) if self.feature_names is not None else None
         if self.n0_reached:
-            if self.feature_names is None:
+            if data_vector is None:
                 raise RuntimeError(
                     "Cannot transform before learning. Call learn_one() first or provide keys."
                 )
 
-            data_vector = np.array([x[key] for key in self.feature_names])
             transformed_x = self.vectors.T @ data_vector
             return {f"component_{i}": float(val) for i, val in enumerate(transformed_x)}
         else:

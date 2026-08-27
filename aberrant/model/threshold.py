@@ -51,8 +51,8 @@ class ThresholdModel(BaseModel):
         if ceiling is None and floor is None:
             raise ValueError("At least one of 'ceiling' or 'floor' must be provided")
 
-        self.ceiling = ceiling
-        self.floor = floor
+        self.ceiling = dict(ceiling) if isinstance(ceiling, dict) else ceiling
+        self.floor = dict(floor) if isinstance(floor, dict) else floor
 
     def learn_one(self, x: dict[str, float]) -> None:
         """

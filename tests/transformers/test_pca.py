@@ -17,6 +17,28 @@ class TestIncrementalPCA(unittest.TestCase):
             ipca.transform_one(x), {"component_0": 0.0, "component_1": 0.0}
         )
 
+    def test_invalid_initialization_parameters(self):
+        with self.assertRaisesRegex(ValueError, "n_components must be positive"):
+            IncrementalPCA(0)
+        with self.assertRaisesRegex(ValueError, "n0 must be positive"):
+            IncrementalPCA(1, n0=0)
+        with self.assertRaisesRegex(ValueError, "tol must be non-negative"):
+            IncrementalPCA(1, tol=-1.0)
+        with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
+            IncrementalPCA(1, keys=["x", "x"])
+
+    def test_keys_are_owned_and_non_finite_values_do_not_poison_state(self):
+        keys = ["x", "y"]
+        ipca = IncrementalPCA(1, n0=2, keys=keys)
+        keys[0] = "changed"
+
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            ipca.learn_one({"x": float("inf"), "y": 1.0})
+
+        self.assertEqual(ipca.feature_names, ["x", "y"])
+        self.assertEqual(ipca.n_samples_seen, 0)
+        self.assertEqual(ipca.window, [])
+
     def test_q_greater_d_init(self):
         with self.assertRaises(ValueError):
             ipca = IncrementalPCA(  # noqa
@@ -48,6 +70,18 @@ class TestIncrementalPCA(unittest.TestCase):
         )
         with self.assertRaises(KeyError):
             ipca3.learn_one(x)
+
+    def test_rejects_schema_extras_during_learning_and_warmup_transform(self):
+        ipca = IncrementalPCA(1, n0=3, keys=["x", "y"])
+
+        with self.assertRaisesRegex(ValueError, "unexpected feature"):
+            ipca.learn_one({"x": 1.0, "y": 2.0, "z": 3.0})
+
+        ipca.learn_one({"x": 1.0, "y": 2.0})
+        with self.assertRaises(KeyError):
+            ipca.transform_one({"x": 1.0})
+
+        self.assertEqual(ipca.n_samples_seen, 1)
 
     def test_initialization(self):  # compare to incRpca from R (onlinePCA package)
         data = np.array([[1, 2, 2.5, 5, 5], [10, 10.5, 11, 8, 4], [3, 3.5, 7, 10, 9]])

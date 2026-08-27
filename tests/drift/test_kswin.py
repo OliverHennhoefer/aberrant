@@ -72,6 +72,15 @@ class TestKSWIN(unittest.TestCase):
         result = detector.update(1.0)
         self.assertIs(result, detector)
 
+    def test_non_finite_observation_is_rejected_without_mutating_window(self):
+        detector = KSWIN()
+        detector.update(1.0)
+
+        with self.assertRaisesRegex(ValueError, "observation must be finite"):
+            detector.update(float("inf"))
+
+        self.assertEqual(list(detector._window), [1.0])
+
     def test_no_drift_before_full_window(self):
         """Test that no drift is detected before window is full."""
         detector = KSWIN(window_size=100)

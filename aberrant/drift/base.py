@@ -1,6 +1,18 @@
 """Base class for concept drift detectors."""
 
 import abc
+import math
+
+
+def _finite_observation(x: float) -> float:
+    """Validate an observation before it reaches persistent detector state."""
+    try:
+        value = float(x)
+    except (TypeError, ValueError) as e:
+        raise ValueError("observation must be numeric") from e
+    if not math.isfinite(value):
+        raise ValueError("observation must be finite")
+    return value
 
 
 class BaseDriftDetector(abc.ABC):

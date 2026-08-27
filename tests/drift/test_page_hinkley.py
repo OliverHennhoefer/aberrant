@@ -79,6 +79,16 @@ class TestPageHinkley(unittest.TestCase):
         result = detector.update(1.0)
         self.assertIs(result, detector)
 
+    def test_non_finite_observation_is_rejected_without_mutating_state(self):
+        detector = PageHinkley()
+        detector.update(1.0)
+
+        with self.assertRaisesRegex(ValueError, "observation must be finite"):
+            detector.update(float("-inf"))
+
+        self.assertEqual(detector._n, 1)
+        self.assertEqual(detector.mean, 1.0)
+
     def test_mean_property(self):
         """Test the mean property tracks running mean."""
         detector = PageHinkley()

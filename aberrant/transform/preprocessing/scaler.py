@@ -6,6 +6,17 @@ from collections import Counter, defaultdict
 from aberrant.base.transformer import BaseTransformer
 
 
+def _finite_value(feature: str, value: float) -> float:
+    """Validate a scalar before it reaches persistent streaming statistics."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"Feature '{feature}' must be numeric") from e
+    if not math.isfinite(numeric):
+        raise ValueError(f"Feature '{feature}' must be finite")
+    return numeric
+
+
 class MinMaxScaler(BaseTransformer):
     """
     Min-max scaler for normalizing features to a specified range.
@@ -30,7 +41,14 @@ class MinMaxScaler(BaseTransformer):
             feature_range: The desired range of transformed features (default is (0, 1)).
         """
         super().__init__()
-        self.feature_range = feature_range
+        if len(feature_range) != 2:
+            raise ValueError("feature_range must contain exactly two values")
+        lower, upper = (float(bound) for bound in feature_range)
+        if not math.isfinite(lower) or not math.isfinite(upper):
+            raise ValueError("feature_range bounds must be finite")
+        if lower >= upper:
+            raise ValueError("feature_range lower bound must be less than upper bound")
+        self.feature_range = (lower, upper)
         self.min: dict[str, float] = {}
         self.max: dict[str, float] = {}
 
@@ -42,12 +60,13 @@ class MinMaxScaler(BaseTransformer):
             x: A dictionary of feature-value pairs.
         """
         for feature, value in x.items():
+            numeric_value = _finite_value(feature, value)
             if feature not in self.min:
                 self.min[feature] = math.inf
                 self.max[feature] = -math.inf
 
-            self.min[feature] = min(self.min[feature], value)
-            self.max[feature] = max(self.max[feature], value)
+            self.min[feature] = min(self.min[feature], numeric_value)
+            self.max[feature] = max(self.max[feature], numeric_value)
 
     def transform_one(self, x: dict[str, float]) -> dict[str, float]:
         """
@@ -64,6 +83,7 @@ class MinMaxScaler(BaseTransformer):
         """
         scaled_x = {}
         for feature, value in x.items():
+            numeric_value = _finite_value(feature, value)
             if feature not in self.min or feature not in self.max:
                 raise ValueError(
                     f"Feature '{feature}' has not been seen during learning."
@@ -74,7 +94,7 @@ class MinMaxScaler(BaseTransformer):
                 scaled_x[feature] = float(self.feature_range[0])
             else:
                 # Standard min-max scaling formula
-                scaled_value = (value - self.min[feature]) / (
+                scaled_value = (numeric_value - self.min[feature]) / (
                     self.max[feature] - self.min[feature]
                 )
                 scaled_value = (
@@ -130,14 +150,15 @@ class StandardScaler(BaseTransformer):
             x: A dictionary of feature-value pairs.
         """
         for feature, value in x.items():
+            numeric_value = _finite_value(feature, value)
             self.counts[feature] += 1
             old_mean = self.means[feature]
 
             # Welford's online algorithm for mean and variance
-            self.means[feature] += (value - old_mean) / self.counts[feature]
+            self.means[feature] += (numeric_value - old_mean) / self.counts[feature]
             if self.with_std:
-                self.sum_sq_diffs[feature] += (value - old_mean) * (
-                    value - self.means[feature]
+                self.sum_sq_diffs[feature] += (numeric_value - old_mean) * (
+                    numeric_value - self.means[feature]
                 )
 
     def _safe_div(self, a: float, b: float) -> float:
@@ -159,6 +180,7 @@ class StandardScaler(BaseTransformer):
         """
         scaled_x = {}
         for feature, value in x.items():
+            numeric_value = _finite_value(feature, value)
             if feature not in self.means:
                 raise ValueError(
                     f"Feature '{feature}' has not been seen during learning."
@@ -171,9 +193,11 @@ class StandardScaler(BaseTransformer):
                     else 0.0
                 )
                 std_dev = variance**0.5
-                scaled_x[feature] = self._safe_div(value - self.means[feature], std_dev)
+                scaled_x[feature] = self._safe_div(
+                    numeric_value - self.means[feature], std_dev
+                )
             else:
-                scaled_x[feature] = value - self.means[feature]
+                scaled_x[feature] = numeric_value - self.means[feature]
 
         return scaled_x
 

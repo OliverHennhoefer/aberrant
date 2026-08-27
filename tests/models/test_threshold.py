@@ -296,6 +296,17 @@ class TestThresholdModel(unittest.TestCase):
         self.assertEqual(score1, 1.0)  # Violates ceiling=10
         self.assertEqual(score2, 0.0)  # Does not violate ceiling=20
 
+    def test_threshold_mappings_are_owned_by_the_model(self):
+        ceiling = {"x": 10.0}
+        floor = {"x": 0.0}
+        model = ThresholdModel(ceiling=ceiling, floor=floor)
+
+        ceiling["x"] = 100.0
+        floor["x"] = -100.0
+
+        self.assertEqual(model.score_one({"x": 11.0}), 1.0)
+        self.assertEqual(model.score_one({"x": -1.0}), 1.0)
+
     def test_streaming_consistency(self):
         """Test that model behaves consistently in streaming scenario."""
         model = ThresholdModel(ceiling=5.0, floor=0.0)

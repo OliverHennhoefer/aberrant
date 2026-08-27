@@ -5,7 +5,7 @@ from collections import deque
 
 from scipy.stats import ks_2samp
 
-from aberrant.drift.base import BaseDriftDetector
+from aberrant.drift.base import BaseDriftDetector, _finite_observation
 
 
 class KSWIN(BaseDriftDetector):
@@ -108,6 +108,7 @@ class KSWIN(BaseDriftDetector):
         Returns:
             self: Returns self for method chaining.
         """
+        x = _finite_observation(x)
         self._drift_detected = False
         self._window.append(x)
 

@@ -75,7 +75,10 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
                 )
 
         was_full = len(self.window) == self.window_size
-        self.window.append(x)
+        # Own the retained sample. Otherwise caller mutation can make the window
+        # disagree with the vectors already stored in the FAISS index.
+        stored = dict(x)
+        self.window.append(stored)
 
         # Rebuild when index is uninitialized, key schema changed, or eviction occurred.
         if self._index_needs_rebuild or self.index is None or was_full:
@@ -83,7 +86,7 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
             self._index_needs_rebuild = False
         else:
             # For non-evicting appends, incrementally add one vector.
-            self.index.add(self._dict_to_vector(x))
+            self.index.add(self._dict_to_vector(stored))
 
     def search(self, item: dict[str, float], n_neighbors: int) -> float:
         """
@@ -125,8 +128,11 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
         x = self._dict_to_vector(item)
 
         # Search for nearest neighbors
-        distances, _ = self.index.search(x, k=min(n_neighbors, self.index.ntotal))
-        return float(np.mean(distances[0]))
+        distances_sq, _ = self.index.search(x, k=min(n_neighbors, self.index.ntotal))
+        # IndexFlatL2 returns squared L2 distances, while this public API promises
+        # the mean distance.
+        distances = np.sqrt(np.maximum(distances_sq[0], 0.0))
+        return float(np.mean(distances))
 
     def _rebuild_index(self) -> None:
         """

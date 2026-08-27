@@ -89,6 +89,23 @@ class TestKNN(unittest.TestCase):
         self.assertIsInstance(score, float)
         self.assertGreaterEqual(score, 0.0)
 
+    def test_faiss_engine_returns_mean_l2_distance(self):
+        engine = FaissSimilaritySearchEngine(window_size=4, warm_up=2)
+        engine.append({"x": 0.0})
+        engine.append({"x": 3.0})
+
+        # IndexFlatL2 reports squared distances [0, 9]; the public engine
+        # contract is the mean Euclidean distance [0, 3].
+        self.assertAlmostEqual(engine.search({"x": 0.0}, n_neighbors=2), 1.5)
+
+    def test_faiss_engine_owns_window_samples(self):
+        engine = FaissSimilaritySearchEngine(window_size=2, warm_up=1)
+        point = {"x": 1.0}
+        engine.append(point)
+        point["x"] = 99.0
+
+        self.assertEqual(engine.window[0]["x"], 1.0)
+
     def test_with_insufficient_data(self):
         """Test behavior when there's insufficient data for nearest neighbors."""
         engine = FaissSimilaritySearchEngine(window_size=100, warm_up=10)
