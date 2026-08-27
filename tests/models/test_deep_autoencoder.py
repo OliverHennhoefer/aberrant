@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import random
+import threading
 import unittest
+from unittest.mock import patch
+
+import numpy as np
 
 try:
     import torch
@@ -29,6 +34,62 @@ class TestAutoencoder(unittest.TestCase):
         criterion = nn.MSELoss()
         return Autoencoder(model=architecture, optimizer=optimizer, criterion=criterion)
 
+    def test_architecture_initialization_does_not_mutate_global_rng_state(self):
+        for seed in (None, 42):
+            with self.subTest(seed=seed):
+                python_state = random.getstate()
+                numpy_state = np.random.get_state()
+                torch_state = torch.random.get_rng_state().clone()
+
+                first = VanillaAutoencoder(input_size=3, seed=seed)
+
+                self.assertEqual(random.getstate(), python_state)
+                current_numpy_state = np.random.get_state()
+                self.assertEqual(current_numpy_state[0], numpy_state[0])
+                np.testing.assert_array_equal(current_numpy_state[1], numpy_state[1])
+                self.assertEqual(current_numpy_state[2:], numpy_state[2:])
+                self.assertTrue(torch.equal(torch.random.get_rng_state(), torch_state))
+
+                if seed is not None:
+                    second = VanillaAutoencoder(input_size=3, seed=seed)
+                    for first_parameter, second_parameter in zip(
+                        first.parameters(), second.parameters(), strict=True
+                    ):
+                        self.assertTrue(torch.equal(first_parameter, second_parameter))
+
+    def test_initialization_generator_is_isolated_from_other_threads(self) -> None:
+        torch.manual_seed(12345)
+        expected_draw = torch.rand(32)
+        expected_state = torch.random.get_rng_state().clone()
+        torch.manual_seed(12345)
+
+        initialization_entered = threading.Event()
+        worker_finished = threading.Event()
+        observed: list[torch.Tensor] = []
+        original_init = nn.init.kaiming_uniform_
+
+        def blocking_init(tensor, *args, **kwargs):
+            if not initialization_entered.is_set():
+                initialization_entered.set()
+                self.assertTrue(worker_finished.wait(timeout=5.0))
+            return original_init(tensor, *args, **kwargs)
+
+        def draw_from_global_generator() -> None:
+            self.assertTrue(initialization_entered.wait(timeout=5.0))
+            observed.append(torch.rand(32))
+            worker_finished.set()
+
+        worker = threading.Thread(target=draw_from_global_generator)
+        with patch("torch.nn.init.kaiming_uniform_", side_effect=blocking_init):
+            worker.start()
+            VanillaAutoencoder(input_size=3, seed=42)
+        worker.join(timeout=5.0)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(observed), 1)
+        self.assertTrue(torch.equal(observed[0], expected_draw))
+        self.assertTrue(torch.equal(torch.random.get_rng_state(), expected_state))
+
     def setUp(self):
         """Set up test fixtures."""
         super().setUp()
@@ -47,7 +108,7 @@ class TestAutoencoder(unittest.TestCase):
         self.assertEqual(model.model.input_size, 5)
         self.assertIsInstance(model.optimizer, optim.SGD)
         self.assertIsInstance(model.criterion, nn.MSELoss)
-        self.assertIsNone(model._feature_order)  # Should be None initially
+        self.assertIsNone(model._schema.names)
 
     def test_feature_order_consistency(self):
         """Test that feature order is established and maintained."""
@@ -59,7 +120,7 @@ class TestAutoencoder(unittest.TestCase):
 
         # Feature order should be alphabetical
         expected_order = ["a", "b", "c"]
-        self.assertEqual(model._feature_order, expected_order)
+        self.assertEqual(model._schema.names, tuple(expected_order))
 
         # Subsequent data points should use same order
         second_point = {"b": 5.0, "c": 6.0, "a": 4.0}
@@ -76,8 +137,16 @@ class TestAutoencoder(unittest.TestCase):
             model.learn_one({"a": 1.0, "b": 2.0})
 
         model.learn_one({"a": 1.0, "b": 2.0, "c": 3.0})
-        with self.assertRaisesRegex(ValueError, "Input features must be"):
+        with self.assertRaisesRegex(ValueError, "Inconsistent feature keys"):
             model.score_one({"a": 1.0, "b": 2.0, "d": 3.0})
+
+    def test_rejects_non_finite_input_before_initializing_schema(self):
+        model = self.create_model()
+
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            model.learn_one({"a": 1.0, "b": float("nan"), "c": 3.0})
+
+        self.assertIsNone(model._schema.names)
 
     def test_basic_learning_and_scoring(self):
         """Test basic learning and scoring functionality."""

@@ -1,9 +1,8 @@
 """Neural network architecture base class for deep learning models."""
 
 import abc
-import random
+import secrets
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -55,21 +54,14 @@ class Architecture(abc.ABC, nn.Module):
         raise NotImplementedError
 
     @staticmethod
-    def set_seed(seed: int) -> None:
-        """
-        Set random seeds for reproducibility.
-
-        Args:
-            seed: Random seed value.
-        """
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed(seed)
-            torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    def make_torch_generator(
+        seed: int | None,
+        device: torch.device | str = "cpu",
+    ) -> torch.Generator:
+        """Create an independently seeded, model-owned generator."""
+        generator = torch.Generator(device=device)
+        generator.manual_seed(seed if seed is not None else secrets.randbits(63))
+        return generator
 
     def __repr__(self) -> str:
         """Return a string representation of the architecture."""
