@@ -1,270 +1,192 @@
-"""Dataset streaming utilities for efficient data iteration.
+"""Typed NPZ dataset streaming utilities."""
 
-This module provides streaming interfaces for different data formats used in
-anomaly detection datasets, with a focus on memory efficiency and compatibility.
-"""
+from __future__ import annotations
 
-import os
 from collections.abc import Iterator
-from typing import Any
+from pathlib import Path
+from types import TracebackType
+from typing import Protocol, TypeAlias
 
 import numpy as np
 from tqdm import tqdm
 
-from .registry import Dataset, DatasetInfo
+from aberrant.stream.dataset.registry import DatasetInfo
+
+Sample: TypeAlias = tuple[dict[str, float], object]
+
+
+class DatasetStream(Protocol):
+    """Common interface for dataset sample streams."""
+
+    def stream(self) -> Iterator[Sample]:
+        """Yield individual samples."""
+        ...
+
+    def get_metadata(self) -> DatasetInfo | None:
+        """Return registered dataset metadata when available."""
+        ...
 
 
 class NpzStreamer:
-    """Memory-efficient streaming reader for NPZ files with configurable data handling.
-
-    This class provides efficient row-by-row iteration over NumPy compressed (.npz) files
-    while maintaining low memory usage. It supports flexible label handling and automatic
-    type conversion for downstream compatibility.
-
-    Args:
-        file_path: Path to the NPZ file to stream
-        dataset_info: Optional DatasetInfo for metadata (enables progress bars)
-        feature_prefix: Prefix for feature column names (default: "feature_")
-        label_column: Name of the label array in NPZ file (default: "y")
-        feature_column: Name of the feature array in NPZ file (default: "X")
-        sanitize_floats: Whether to convert all values to Python floats (default: True)
-
-    Example:
-        # Stream from NPZ file with progress bar
-        info = get_dataset_info(Dataset.FRAUD)
-        with NpzStreamer("/path/to/fraud.npz", info) as streamer:
-            for features, label in streamer:
-                print(f"Features: {features}, Label: {label}")
-
-        # Stream without metadata
-        with NpzStreamer("/path/to/data.npz") as streamer:
-            for features, label in streamer:
-                process_data(features, label)
-    """
+    """Row-wise iterator over a registered NPZ dataset artifact."""
 
     def __init__(
         self,
-        file_path: str,
+        file_path: str | Path,
         dataset_info: DatasetInfo | None = None,
+        *,
         feature_prefix: str = "feature_",
         label_column: str = "y",
         feature_column: str = "X",
-        sanitize_floats: bool = True,
         show_progress: bool = False,
     ) -> None:
-        self.file_path = file_path
+        if not feature_prefix:
+            raise ValueError("feature_prefix must be non-empty")
+        if not label_column:
+            raise ValueError("label_column must be non-empty")
+        if not feature_column:
+            raise ValueError("feature_column must be non-empty")
+        self.file_path = Path(file_path)
         self.dataset_info = dataset_info
         self.feature_prefix = feature_prefix
         self.label_column = label_column
         self.feature_column = feature_column
-        self.sanitize_floats = sanitize_floats
         self.show_progress = show_progress
-        self.npz_file: np.lib.npyio.NpzFile | None = None
+        self._archive: np.lib.npyio.NpzFile | None = None
 
-    def __enter__(self) -> "NpzStreamer":
+    def __enter__(self) -> NpzStreamer:
+        if not self.file_path.exists():
+            raise FileNotFoundError(f"NPZ file not found: {self.file_path}")
+        archive: np.lib.npyio.NpzFile | None = None
         try:
-            if not os.path.exists(self.file_path):
-                raise FileNotFoundError(f"NPZ file not found: {self.file_path}")
-
-            self.npz_file = np.load(self.file_path)
-
-            # Validate required arrays exist
-            if self.feature_column not in self.npz_file:
+            archive = np.load(self.file_path)
+            if self.feature_column not in archive:
                 raise KeyError(
                     f"Feature array '{self.feature_column}' not found in NPZ file"
                 )
-            if self.label_column not in self.npz_file:
+            if self.label_column not in archive:
                 raise KeyError(
                     f"Label array '{self.label_column}' not found in NPZ file"
                 )
-
+            self._archive = archive
             return self
+        except Exception:
+            if archive is not None:
+                archive.close()
+            raise
 
-        except Exception as e:
-            if self.npz_file:
-                self.npz_file.close()
-                self.npz_file = None
-            raise RuntimeError(f"Failed to open NPZ file: {e}") from e
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self._archive is not None:
+            self._archive.close()
+            self._archive = None
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        if self.npz_file:
-            self.npz_file.close()
-            self.npz_file = None
+    def __iter__(self) -> Iterator[Sample]:
+        archive = self._archive
+        if archive is None:
+            raise RuntimeError("NPZ file is not open; use stream() or a with block")
 
-    def __iter__(self) -> Iterator[tuple[dict[str, float], Any]]:
-        if self.npz_file is None:
-            raise RuntimeError("NPZ file not opened. Use with statement to open it.")
-
-        # Load feature and label arrays
-        features_array = self.npz_file[self.feature_column]
-        labels_array = self.npz_file[self.label_column]
-
-        # Validate array shapes
+        features_array = archive[self.feature_column]
+        labels_array = archive[self.label_column]
+        if features_array.ndim != 2:
+            raise ValueError("Feature array must be two-dimensional")
         if features_array.shape[0] != labels_array.shape[0]:
             raise ValueError(
-                f"Feature and label arrays have different lengths: "
+                "Feature and label arrays have different lengths: "
                 f"{features_array.shape[0]} vs {labels_array.shape[0]}"
             )
 
         n_samples, n_features = features_array.shape
-
-        # Set up progress bar if dataset info is available
-        progress_desc = "Loading data"
-        if self.dataset_info:
-            progress_desc = f"Loading {self.dataset_info.name}"
-
-        progress_bar: tqdm | None = None
-        if self.show_progress:
-            progress_bar = tqdm(total=n_samples, desc=progress_desc, unit="sample")
-
+        feature_names = [f"{self.feature_prefix}{index}" for index in range(n_features)]
+        description = (
+            f"Loading {self.dataset_info.name}"
+            if self.dataset_info is not None
+            else "Loading data"
+        )
+        progress = (
+            tqdm(total=n_samples, desc=description, unit="sample")
+            if self.show_progress
+            else None
+        )
         try:
-            # Generate feature column names
-            feature_names = [f"{self.feature_prefix}{i}" for i in range(n_features)]
-
-            # Stream data row by row
-            for i in range(n_samples):
-                # Extract feature vector and label
-                feature_vector = features_array[i]
-                label = labels_array[i]
-
-                # Create feature dictionary
-                features_dict = dict(zip(feature_names, feature_vector, strict=False))
-
-                # Apply float sanitization if enabled
-                if self.sanitize_floats:
-                    features_dict = {k: float(v) for k, v in features_dict.items()}
-                    # Convert label to appropriate Python type
-                    if isinstance(label, np.integer):
-                        label = int(label)
-                    elif isinstance(label, np.floating):
-                        label = float(label)
-
-                yield features_dict, label
-                if progress_bar is not None:
-                    progress_bar.update(1)
-
+            for feature_vector, raw_label in zip(
+                features_array,
+                labels_array,
+                strict=True,
+            ):
+                features = {
+                    name: float(value)
+                    for name, value in zip(
+                        feature_names,
+                        feature_vector,
+                        strict=True,
+                    )
+                }
+                label: object = (
+                    raw_label.item()
+                    if isinstance(raw_label, np.generic)
+                    else raw_label
+                )
+                yield features, label
+                if progress is not None:
+                    progress.update(1)
         finally:
-            if progress_bar is not None:
-                progress_bar.close()
+            if progress is not None:
+                progress.close()
 
+    def stream(self) -> Iterator[Sample]:
+        """Open the artifact and yield samples row by row."""
+        with self:
+            yield from self
 
-class DatasetStreamer:
-    """High-level dataset streaming interface that abstracts file formats.
-
-    This class provides a unified interface for streaming different dataset formats
-    and handles automatic format detection and streaming optimization.
-
-    Args:
-        dataset: Dataset enum value
-        data_dir: Directory containing dataset files
-        dataset_info: DatasetInfo object for metadata
-
-    Example:
-        info = get_dataset_info(Dataset.FRAUD)
-        streamer = DatasetStreamer(Dataset.FRAUD, "/path/to/data", info)
-
-        for features, label in streamer.stream():
-            process_data(features, label)
-    """
-
-    def __init__(
-        self,
-        dataset: Dataset,
-        data_dir: str,
-        dataset_info: DatasetInfo,
-        **kwargs: Any,
-    ) -> None:
-        self.dataset = dataset
-        self.data_dir = data_dir
-        self.dataset_info = dataset_info
-        self.kwargs = kwargs
-
-        # Determine file path and format
-        self.file_path = os.path.join(data_dir, f"{dataset_info.filename}.npz")
-
-        if not os.path.exists(self.file_path):
-            raise FileNotFoundError(
-                f"Dataset file not found: {self.file_path}. "
-                f"Please ensure the dataset is downloaded."
-            )
-
-    def stream(self) -> Iterator[tuple[dict[str, float], Any]]:
-        """Stream the dataset data.
-
-        Yields:
-            Tuple of (features_dict, label) for each sample
-        """
-        with NpzStreamer(self.file_path, self.dataset_info, **self.kwargs) as streamer:
-            yield from streamer
-
-    def get_metadata(self) -> DatasetInfo:
-        """Get dataset metadata.
-
-        Returns:
-            DatasetInfo object with dataset metadata
-        """
+    def get_metadata(self) -> DatasetInfo | None:
+        """Return registered metadata when supplied by the loader."""
         return self.dataset_info
 
     def __repr__(self) -> str:
+        if self.dataset_info is None:
+            return f"NpzStreamer(file_path={str(self.file_path)!r})"
         return (
-            f"DatasetStreamer(dataset={self.dataset}, "
+            f"NpzStreamer(file_path={str(self.file_path)!r}, "
+            f"dataset={self.dataset_info.name!r}, "
             f"n_samples={self.dataset_info.n_samples}, "
-            f"n_features={self.dataset_info.n_features}, "
-            f"anomaly_rate={self.dataset_info.anomaly_rate:.3f})"
+            f"n_features={self.dataset_info.n_features})"
         )
 
 
 class BatchStreamer:
-    """Batch streaming wrapper for efficient processing of large datasets.
+    """Batch samples from any typed dataset stream."""
 
-    This class wraps any dataset streamer and provides batch iteration for
-    more efficient processing of large datasets.
-
-    Args:
-        base_streamer: Base streamer to wrap
-        batch_size: Number of samples per batch (default: 1000)
-
-    Example:
-        base_streamer = DatasetStreamer(Dataset.FRAUD, data_dir, info)
-        batch_streamer = BatchStreamer(base_streamer, batch_size=5000)
-
-        for feature_batch, label_batch in batch_streamer.stream():
-            # feature_batch is a list of feature dicts
-            # label_batch is a list of labels
-            process_batch(feature_batch, label_batch)
-    """
-
-    def __init__(self, base_streamer: DatasetStreamer, batch_size: int = 1000) -> None:
+    def __init__(self, base_streamer: DatasetStream, batch_size: int = 1000) -> None:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
         self.base_streamer = base_streamer
         self.batch_size = batch_size
 
-    def stream(self) -> Iterator[tuple[list[dict[str, float]], list[Any]]]:
-        """Stream data in batches.
-
-        Yields:
-            Tuple of (feature_batch, label_batch) where each batch contains
-            up to batch_size samples
-        """
-        feature_batch = []
-        label_batch = []
-
+    def stream(self) -> Iterator[tuple[list[dict[str, float]], list[object]]]:
+        """Yield feature and label batches."""
+        feature_batch: list[dict[str, float]] = []
+        label_batch: list[object] = []
         for features, label in self.base_streamer.stream():
             feature_batch.append(features)
             label_batch.append(label)
-
-            if len(feature_batch) >= self.batch_size:
+            if len(feature_batch) == self.batch_size:
                 yield feature_batch, label_batch
                 feature_batch = []
                 label_batch = []
-
-        # Yield remaining samples if any
         if feature_batch:
             yield feature_batch, label_batch
 
-    def get_metadata(self) -> DatasetInfo:
-        """Get dataset metadata from base streamer.
-
-        Returns:
-            DatasetInfo object with dataset metadata
-        """
+    def get_metadata(self) -> DatasetInfo | None:
+        """Return metadata from the underlying stream."""
         return self.base_streamer.get_metadata()
+
+    def __repr__(self) -> str:
+        return (
+            f"BatchStreamer(base_streamer={self.base_streamer!r}, "
+            f"batch_size={self.batch_size})"
+        )

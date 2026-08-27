@@ -6,10 +6,10 @@ Public streaming dataset APIs are re-exported from ``aberrant.stream.dataset``.
 from aberrant.stream.dataset import (
     DATASET_REGISTRY,
     BatchStreamer,
+    CacheInfo,
     Dataset,
     DatasetInfo,
     DatasetManager,
-    DatasetStreamer,
     NpzStreamer,
     clear_cache,
     download,
@@ -26,11 +26,11 @@ from aberrant.stream.dataset import (
 
 __all__ = [
     "BatchStreamer",
+    "CacheInfo",
     "DATASET_REGISTRY",
     "Dataset",
     "DatasetInfo",
     "DatasetManager",
-    "DatasetStreamer",
     "NpzStreamer",
     "clear_cache",
     "download",

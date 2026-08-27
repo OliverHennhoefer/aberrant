@@ -4,11 +4,13 @@ This module provides a centralized registry of available datasets with rich meta
 following the design patterns established in the anomaly detection research community.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
+from types import MappingProxyType
 
 
-@dataclass
+@dataclass(frozen=True)
 class DatasetInfo:
     """Metadata for an anomaly detection dataset.
 
@@ -43,7 +45,7 @@ class Dataset(Enum):
     detection tasks with normal and anomalous samples.
 
     Usage:
-        from aberrant.dataset import load, Dataset
+        from aberrant.stream.dataset import Dataset, load
         dataset = load(Dataset.FRAUD)
         for features, label in dataset.stream():
             # process data
@@ -83,7 +85,7 @@ class Dataset(Enum):
 
 
 # Central registry of dataset metadata
-DATASET_REGISTRY: dict[Dataset, DatasetInfo] = {
+_DATASET_REGISTRY: dict[Dataset, DatasetInfo] = {
     Dataset.FRAUD: DatasetInfo(
         name="Credit Card Fraud Detection",
         description="European credit card fraud dataset with anonymized features",
@@ -363,6 +365,10 @@ DATASET_REGISTRY: dict[Dataset, DatasetInfo] = {
         sha256="5824ec854465f2763b4bfe3da1ae9f25ed5433b5c6e265d42e37da4f82a58679",
     ),
 }
+
+# Public read-only view. DatasetInfo values are frozen as well, so callers
+# cannot mutate trusted checksums or other process-wide registry metadata.
+DATASET_REGISTRY: Mapping[Dataset, DatasetInfo] = MappingProxyType(_DATASET_REGISTRY)
 
 
 def get_dataset_info(dataset: Dataset) -> DatasetInfo:

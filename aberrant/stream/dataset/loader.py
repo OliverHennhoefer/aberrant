@@ -1,468 +1,209 @@
-"""Dataset loading and management system with remote download capabilities.
+"""Dataset orchestration over typed cache and download components."""
 
-This module provides automated dataset downloading, caching, and management
-for anomaly detection benchmarks hosted on GitHub releases.
-"""
+from __future__ import annotations
 
-import hashlib
 import hmac
-import json
 import logging
-import os
-import shutil
-import time
-import urllib.request
-from http.client import IncompleteRead, RemoteDisconnected
 from pathlib import Path
-from typing import Any, cast
-from urllib.error import URLError
+from tempfile import NamedTemporaryFile
 
-import numpy as np
-from tqdm import tqdm
-
-from .registry import DATASET_REGISTRY, Dataset, get_dataset_info
-from .streamers import DatasetStreamer
+from aberrant.stream.dataset.cache import CacheEntry, DatasetCacheStore
+from aberrant.stream.dataset.download import (
+    DatasetArtifactValidator,
+    DownloadBackend,
+    UrlLibDownloadBackend,
+)
+from aberrant.stream.dataset.registry import (
+    DATASET_REGISTRY,
+    Dataset,
+    get_dataset_info,
+)
+from aberrant.stream.dataset.streamers import NpzStreamer
 
 
 class DatasetManager:
-    """Manages dataset downloading, caching, and loading.
-
-    This class handles automatic dataset downloads from GitHub releases,
-    local caching with version management, and provides a unified interface
-    for dataset access.
-
-    Args:
-        cache_dir: Directory for local dataset cache (default: ~/.aberrant/datasets)
-        github_repo: GitHub repository in format 'owner/repo' (default: ABERRANT repo)
-        release_tag: GitHub release tag to download from (default: 'v0.1.0-datasets')
-
-    Example:
-        manager = DatasetManager()
-        dataset = manager.load(Dataset.FRAUD)
-
-        for features, label in dataset.stream():
-            process_data(features, label)
-    """
+    """Coordinate registered dataset downloads, validation, caching, and streams."""
 
     def __init__(
         self,
-        cache_dir: str | None = None,
+        cache_dir: str | Path | None = None,
         github_repo: str = "OliverHennhoefer/nonconform",
         release_tag: str = "v0.9.17-datasets",
         download_retries: int = 3,
         download_timeout: float = 30.0,
         retry_backoff_seconds: float = 1.0,
+        cache_lock_timeout: float = 60.0,
         show_progress: bool = False,
         logger: logging.Logger | None = None,
+        download_backend: DownloadBackend | None = None,
+        validator: DatasetArtifactValidator | None = None,
     ) -> None:
         self.logger = logger or logging.getLogger(__name__)
         self.github_repo = github_repo
         self.release_tag = release_tag
-        self.download_retries = max(1, int(download_retries))
-        self.download_timeout = float(download_timeout)
-        self.retry_backoff_seconds = max(0.0, float(retry_backoff_seconds))
-        self.show_progress = show_progress
+        resolved_cache = (
+            Path.home() / ".aberrant" / "datasets"
+            if cache_dir is None
+            else Path(cache_dir)
+        )
+        self.cache = DatasetCacheStore(
+            resolved_cache,
+            lock_timeout=cache_lock_timeout,
+        )
+        self.download_backend = download_backend or UrlLibDownloadBackend(
+            retries=download_retries,
+            timeout=download_timeout,
+            backoff_seconds=retry_backoff_seconds,
+            show_progress=show_progress,
+            logger=self.logger,
+        )
+        self.validator = validator or DatasetArtifactValidator()
 
-        # Set up cache directory
-        if cache_dir is None:
-            cache_dir = os.path.join(Path.home(), ".aberrant", "datasets")
+    @property
+    def cache_dir(self) -> Path:
+        """Return the configured cache directory."""
+        return self.cache.cache_dir
 
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Cache metadata
-        self.metadata_file = self.cache_dir / "metadata.json"
-        self.metadata = self._load_metadata()
-
-    def _load_metadata(self) -> dict[str, Any]:
-        """Load cache metadata from disk."""
-        if self.metadata_file.exists():
-            try:
-                with open(self.metadata_file, encoding="utf-8") as f:
-                    return cast(dict[str, Any], json.load(f))
-            except (OSError, json.JSONDecodeError):
-                pass
-        return {"version": "1.0", "datasets": {}}
-
-    def _save_metadata(self) -> None:
-        """Save cache metadata to disk."""
-        try:
-            with open(self.metadata_file, "w", encoding="utf-8") as f:
-                json.dump(self.metadata, f, indent=2)
-        except OSError as e:
-            self.logger.warning("Could not save cache metadata: %s", e)
-
-    def _get_dataset_url(self, dataset: Dataset) -> str:
-        """Get GitHub release download URL for a dataset."""
+    def _url(self, dataset: Dataset) -> str:
         info = get_dataset_info(dataset)
-        filename = f"{info.filename}.npz"
         return (
             f"https://github.com/{self.github_repo}/releases/download/"
-            f"{self.release_tag}/{filename}"
+            f"{self.release_tag}/{info.filename}.npz"
         )
 
-    def _get_cache_path(self, dataset: Dataset) -> Path:
-        """Get local cache path for a dataset."""
-        info = get_dataset_info(dataset)
-        return self.cache_dir / f"{info.filename}.npz"
+    def _path(self, dataset: Dataset) -> Path:
+        return self.cache.path(get_dataset_info(dataset).filename)
 
-    def _calculate_file_hash(self, file_path: Path) -> str:
-        """Calculate SHA256 hash of a file."""
-        sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(chunk)
-        return sha256_hash.hexdigest()
-
-    def _download_with_progress(self, url: str, dest_path: Path) -> None:
-        """Download a file with progress bar."""
-        last_error: Exception | None = None
-
-        for attempt in range(1, self.download_retries + 1):
-            try:
-                with (
-                    urllib.request.urlopen(
-                        url, timeout=self.download_timeout
-                    ) as response,
-                    open(dest_path, "wb") as f,
-                ):
-                    pbar: tqdm | None = None
-                    try:
-                        if self.show_progress:
-                            pbar = tqdm(
-                                total=int(response.headers.get("Content-Length", 0)),
-                                unit="B",
-                                unit_scale=True,
-                                desc=f"Downloading {dest_path.name}",
-                            )
-                        while True:
-                            chunk = response.read(8192)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            if pbar is not None:
-                                pbar.update(len(chunk))
-                    finally:
-                        if pbar is not None:
-                            pbar.close()
-                return
-            except (
-                URLError,
-                TimeoutError,
-                RemoteDisconnected,
-                ConnectionResetError,
-                IncompleteRead,
-            ) as e:
-                last_error = e
-                if dest_path.exists():
-                    dest_path.unlink()
-                if attempt < self.download_retries:
-                    wait_seconds = self.retry_backoff_seconds * (2 ** (attempt - 1))
-                    self.logger.warning(
-                        "Download attempt %s/%s failed: %s. Retrying in %.1fs...",
-                        attempt,
-                        self.download_retries,
-                        e,
-                        wait_seconds,
-                    )
-                    time.sleep(wait_seconds)
-                else:
-                    break
-
-        raise RuntimeError(
-            f"Failed to download dataset after {self.download_retries} attempts: "
-            f"{last_error}"
-        ) from last_error
-
-    def _is_dataset_cached(self, dataset: Dataset) -> bool:
-        """Check if dataset is cached locally."""
-        cache_path = self._get_cache_path(dataset)
-        return cache_path.exists()
-
-    def _validate_cached_dataset(self, dataset: Dataset) -> bool:
-        """Validate cached dataset integrity."""
-        cache_path = self._get_cache_path(dataset)
-        if not cache_path.exists():
+    def _validate_cached(self, dataset: Dataset) -> bool:
+        path = self._path(dataset)
+        entry = self.cache.read().datasets.get(dataset.value)
+        if entry is None or not path.exists():
             return False
-
-        return (
-            self._validate_cached_dataset_at_path(dataset=dataset, path=cache_path)
-            is not None
-        )
-
-    def _verify_checksum(
-        self,
-        dataset: Dataset,
-        path: Path,
-        verify_metadata_hash: bool = True,
-    ) -> str | None:
-        """Verify dataset file checksum and return the hash on success."""
-        actual_hash = self._calculate_file_hash(path)
-        info = get_dataset_info(dataset)
-        if not hmac.compare_digest(actual_hash, info.sha256):
-            self.logger.warning(
-                "Checksum mismatch for %s. Expected trusted hash %s, got %s.",
-                dataset.value,
-                info.sha256,
-                actual_hash,
-            )
-            return None
-
-        if verify_metadata_hash:
-            datasets_meta = self.metadata.get("datasets", {})
-            metadata_entry = (
-                datasets_meta.get(dataset.value)
-                if isinstance(datasets_meta, dict)
-                else None
-            )
-            if isinstance(metadata_entry, dict):
-                cached_hash = metadata_entry.get("hash")
-                if isinstance(cached_hash, str) and not hmac.compare_digest(
-                    actual_hash, cached_hash
-                ):
-                    self.logger.warning(
-                        "Cache metadata hash mismatch for %s. Metadata hash %s differs from file hash %s.",
-                        dataset.value,
-                        cached_hash,
-                        actual_hash,
-                    )
-                    return None
-
-        return actual_hash
+        if entry.release_tag != self.release_tag or entry.size != path.stat().st_size:
+            return False
+        try:
+            actual_hash = self.validator.validate(path, get_dataset_info(dataset))
+        except (OSError, ValueError):
+            return False
+        return hmac.compare_digest(actual_hash, entry.sha256)
 
     def download(self, dataset: Dataset, force: bool = False) -> Path:
-        """Download a dataset to local cache.
-
-        Args:
-            dataset: Dataset to download
-            force: Force re-download even if cached (default: False)
-
-        Returns:
-            Path to cached dataset file
-
-        Raises:
-            RuntimeError: If download fails
-            KeyError: If dataset not found in registry
-        """
+        """Download, validate, and atomically publish one registered dataset."""
         if dataset not in DATASET_REGISTRY:
             raise KeyError(f"Dataset {dataset} not found in registry")
+        destination = self._path(dataset)
+        if not force and self._validate_cached(dataset):
+            return destination
 
-        cache_path = self._get_cache_path(dataset)
-
-        # Check if already cached and valid
-        if not force and self._is_dataset_cached(dataset):
-            if self._validate_cached_dataset(dataset):
-                self.logger.info(
-                    "Dataset %s already cached at %s", dataset.value, cache_path
-                )
-                return cache_path
-            else:
-                self.logger.warning(
-                    "Cached dataset %s is corrupted or failed integrity checks, re-downloading.",
-                    dataset.value,
-                )
-
-        # Download dataset
-        url = self._get_dataset_url(dataset)
-        temp_path = cache_path.with_suffix(".tmp")
-
+        temporary_path: Path | None = None
         try:
-            self.logger.info("Downloading %s from %s", dataset.value, url)
-            self._download_with_progress(url, temp_path)
+            with NamedTemporaryFile(
+                dir=self.cache_dir,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
 
-            # Validate downloaded file
-            verified_hash = self._validate_cached_dataset_at_path(
-                dataset=dataset,
-                path=temp_path,
-                verify_metadata_hash=False,
+            self.download_backend.download(self._url(dataset), temporary_path)
+            digest = self.validator.validate(
+                temporary_path,
+                get_dataset_info(dataset),
             )
-            if verified_hash is None:
-                raise RuntimeError("Downloaded dataset failed validation")
-
-            # Move to final location
-            if cache_path.exists():
-                cache_path.unlink()
-            temp_path.rename(cache_path)
-
-            # Update metadata
-            self.metadata["datasets"][dataset.value] = {
-                "downloaded": True,
-                "hash": verified_hash,
-                "size": cache_path.stat().st_size,
-                "release_tag": self.release_tag,
-            }
-            self._save_metadata()
-
-            self.logger.info(
-                "Successfully downloaded %s to %s", dataset.value, cache_path
+            entry = CacheEntry(
+                sha256=digest,
+                size=temporary_path.stat().st_size,
+                release_tag=self.release_tag,
             )
-            return cache_path
-
-        except Exception as e:
-            # Clean up temporary file
-            if temp_path.exists():
-                temp_path.unlink()
-            raise RuntimeError(
-                f"Failed to download dataset {dataset.value}: {e}"
-            ) from e
-
-    def _validate_cached_dataset_at_path(
-        self,
-        dataset: Dataset,
-        path: Path,
-        verify_metadata_hash: bool = True,
-    ) -> str | None:
-        """Validate dataset at specific path and return verified hash on success."""
-        try:
-            with np.load(path) as npz_file:
-                if "X" not in npz_file or "y" not in npz_file:
-                    return None
-            return self._verify_checksum(
-                dataset,
-                path,
-                verify_metadata_hash=verify_metadata_hash,
+            self.cache.publish(
+                dataset_name=dataset.value,
+                temporary_path=temporary_path,
+                destination=destination,
+                entry=entry,
             )
-        except Exception:
-            return None
+            temporary_path = None
+            return destination
+        except Exception as exc:
+            raise RuntimeError(f"Failed to download dataset {dataset.value}: {exc}") from exc
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
     def load(
-        self, dataset: Dataset, auto_download: bool = True, **kwargs: Any
-    ) -> DatasetStreamer:
-        """Load a dataset for streaming.
-
-        Args:
-            dataset: Dataset to load
-            auto_download: Automatically download if not cached (default: True)
-            **kwargs: Additional arguments passed to DatasetStreamer
-
-        Returns:
-            DatasetStreamer instance for the requested dataset
-
-        Raises:
-            FileNotFoundError: If dataset not cached and auto_download is False
-            RuntimeError: If download fails
-            KeyError: If dataset not found in registry
-        """
+        self,
+        dataset: Dataset,
+        auto_download: bool = True,
+        *,
+        feature_prefix: str = "feature_",
+        label_column: str = "y",
+        feature_column: str = "X",
+        show_progress: bool = False,
+    ) -> NpzStreamer:
+        """Return a typed NPZ stream for one validated cached dataset."""
         if dataset not in DATASET_REGISTRY:
             raise KeyError(f"Dataset {dataset} not found in registry")
-
-        # Check if dataset is cached
-        if not self._is_dataset_cached(dataset) or not self._validate_cached_dataset(
-            dataset
-        ):
-            if auto_download:
-                self.download(dataset)
-            else:
+        if not self._validate_cached(dataset):
+            if not auto_download:
                 raise FileNotFoundError(
-                    f"Dataset {dataset.value} not found in cache. "
-                    f"Set auto_download=True or call download() first."
+                    f"Dataset {dataset.value} is not present in the validated cache"
                 )
+            self.download(dataset)
 
-        # Create and return streamer
-        info = get_dataset_info(dataset)
-        return DatasetStreamer(
-            dataset=dataset, data_dir=str(self.cache_dir), dataset_info=info, **kwargs
+        return NpzStreamer(
+            self._path(dataset),
+            get_dataset_info(dataset),
+            feature_prefix=feature_prefix,
+            label_column=label_column,
+            feature_column=feature_column,
+            show_progress=show_progress,
         )
 
-    def list_cached(self) -> dict[str, dict]:
-        """List all cached datasets with metadata.
+    def list_cached(self) -> dict[str, CacheEntry]:
+        """Return valid metadata entries for artifacts that exist on disk."""
+        snapshot = self.cache.read()
+        return {
+            dataset.value: snapshot.datasets[dataset.value]
+            for dataset in DATASET_REGISTRY
+            if dataset.value in snapshot.datasets and self._path(dataset).exists()
+        }
 
-        Returns:
-            Dictionary mapping dataset names to cache metadata
-        """
-        cached = {}
-        for dataset_name, metadata in self.metadata.get("datasets", {}).items():
-            if metadata.get("downloaded", False):
-                cached[dataset_name] = metadata
-        return cached
+    def _artifact_paths(self) -> dict[str, Path]:
+        """Return the exact registered artifact paths owned by this manager."""
+        return {
+            dataset.value: self._path(dataset)
+            for dataset in DATASET_REGISTRY
+        }
 
     def clear_cache(self, dataset: Dataset | None = None) -> None:
-        """Clear dataset cache.
-
-        Args:
-            dataset: Specific dataset to remove from cache, or None to clear all
-        """
+        """Remove one registered artifact or all registered artifacts."""
         if dataset is not None:
-            # Clear specific dataset
-            cache_path = self._get_cache_path(dataset)
-            if cache_path.exists():
-                cache_path.unlink()
-                self.logger.info("Removed %s from cache", dataset.value)
-
-            # Update metadata
-            if dataset.value in self.metadata.get("datasets", {}):
-                del self.metadata["datasets"][dataset.value]
-                self._save_metadata()
-        else:
-            # Clear entire cache
-            if self.cache_dir.exists():
-                shutil.rmtree(self.cache_dir)
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-            # Reset metadata
-            self.metadata = {"version": "1.0", "datasets": {}}
-            self._save_metadata()
-            self.logger.info("Cleared all dataset cache")
+            self.cache.remove(dataset.value, self._path(dataset))
+            return
+        self.cache.clear(self._artifact_paths())
 
     def get_cache_size(self) -> int:
-        """Get total size of dataset cache in bytes.
-
-        Returns:
-            Total cache size in bytes
-        """
-        total_size = 0
-        if self.cache_dir.exists():
-            for file_path in self.cache_dir.iterdir():
-                if file_path.is_file() and file_path.suffix == ".npz":
-                    total_size += file_path.stat().st_size
-        return total_size
+        """Return total cached NPZ bytes."""
+        return self.cache.size(self._artifact_paths())
 
     def __repr__(self) -> str:
-        cache_size_mb = self.get_cache_size() / (1024 * 1024)
-        cached_count = len(self.list_cached())
         return (
-            f"DatasetManager(cache_dir='{self.cache_dir}', "
-            f"cached_datasets={cached_count}, "
-            f"cache_size={cache_size_mb:.1f}MB)"
+            f"DatasetManager(cache_dir={str(self.cache_dir)!r}, "
+            f"cached_datasets={len(self.list_cached())}, "
+            f"cache_size={self.get_cache_size() / (1024 * 1024):.1f}MB)"
         )
 
 
-class _DefaultManagerHolder:
-    """Internal singleton holder for default DatasetManager.
-
-    This class encapsulates the singleton pattern for the default DatasetManager
-    instance, eliminating the need for global statements while maintaining
-    the same public API.
-    """
-
-    _instance: DatasetManager | None = None
-
-    @classmethod
-    def get(cls) -> DatasetManager:
-        """Get or create the default DatasetManager instance."""
-        if cls._instance is None:
-            cls._instance = DatasetManager()
-        return cls._instance
-
-    @classmethod
-    def set_cache_dir(cls, cache_dir: str) -> None:
-        """Set the cache directory by creating a new DatasetManager instance."""
-        cls._instance = DatasetManager(cache_dir=cache_dir)
+class _DefaultManager:
+    instance: DatasetManager | None = None
 
 
 def get_default_manager() -> DatasetManager:
-    """Get the default global DatasetManager instance.
-
-    Returns:
-        Global DatasetManager instance
-    """
-    return _DefaultManagerHolder.get()
+    """Return the process-local default manager."""
+    if _DefaultManager.instance is None:
+        _DefaultManager.instance = DatasetManager()
+    return _DefaultManager.instance
 
 
-def set_cache_dir(cache_dir: str) -> None:
-    """Set the global cache directory for datasets.
-
-    Args:
-        cache_dir: Path to cache directory
-    """
-    _DefaultManagerHolder.set_cache_dir(cache_dir)
+def set_cache_dir(cache_dir: str | Path) -> None:
+    """Replace the default manager with one using ``cache_dir``."""
+    _DefaultManager.instance = DatasetManager(cache_dir=cache_dir)
