@@ -141,7 +141,8 @@ class TestISCONNA(unittest.TestCase):
                 {"src": 1.0, "dst": float(timestamp + 10), "t": float(timestamp)}
             )
 
-        bucket, src, dst = model._prepare_sample({"src": 1.0, "dst": 99.0, "t": 8.0})
+        event = model._boundary.preview({"src": 1.0, "dst": 99.0, "t": 8.0})
+        bucket, src, dst = event.bucket, event.source, event.destination
         edge = model._preview_group(
             model._edge,
             model._indices(src, dst),

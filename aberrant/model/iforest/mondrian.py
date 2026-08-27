@@ -7,6 +7,7 @@ import math
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 
 def _average_path_length(n: int) -> float:
@@ -65,6 +66,8 @@ class MondrianNode:
             self.min = x_values.copy()
             self.max = x_values.copy()
         else:
+            if self.min is None or self.max is None:
+                raise RuntimeError("Non-empty node has incomplete bounds")
             np.minimum(self.min, x_values, out=self.min)
             np.maximum(self.max, x_values, out=self.max)
         self.count += 1
@@ -313,40 +316,31 @@ class MondrianIsolationForest(BaseModel):
         self.rng = np.random.default_rng(seed)
         self.trees: list[MondrianTree] = []
         self.n_samples = 0
-        self._feature_order: list[str] | None = None
-        self._feature_to_index: dict[str, int] | None = None
-        self._feature_count: int = 0
-        self._feature_vector: np.ndarray | None = None
+        self._schema = FeatureSchema()
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update all trees with one feature dictionary."""
-        self._validate_input(x)
-        if self._feature_order is None:
-            self._initialize_features(x)
-
-        if self._feature_order is None:
-            raise RuntimeError("Feature initialization failed")
-
-        global_features = self._dict_to_vector(x)
+        prepared = self._schema.preview(x)
+        if not self._schema.is_established:
+            self._initialize_features(len(prepared.names))
 
         for tree in self.trees:
-            tree.learn_one_from_global(global_features)
+            tree.learn_one_from_global(prepared.values)
 
         self.n_samples += 1
+        self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute normalized anomaly score in [0, 1]."""
-        self._validate_input(x)
-        if self._feature_order is None or self.n_samples <= 1:
+        prepared = self._schema.preview(x)
+        if not self._schema.is_established or self.n_samples <= 1:
             return 0.0
         if not self.trees:
             return 0.0
 
-        global_features = self._dict_to_vector(x)
-
         path_length_sum = 0.0
         for tree in self.trees:
-            path_length_sum += tree.score_one_from_global(global_features)
+            path_length_sum += tree.score_one_from_global(prepared.values)
         avg_path_length = path_length_sum / len(self.trees)
         c_factor = self._compute_c_factor()
         if c_factor <= 0.0:
@@ -355,74 +349,24 @@ class MondrianIsolationForest(BaseModel):
         score = 2.0 ** (-avg_path_length / c_factor)
         return float(np.clip(score, 0.0, 1.0))
 
-    def _initialize_features(self, x: dict[str, float]) -> None:
-        """Initialize feature order and create all trees."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        self._feature_order = sorted(x.keys())
-        self._feature_count = len(self._feature_order)
-        self.subspace_size = min(self.subspace_size, self._feature_count)
-        self._feature_to_index = {
-            feature: idx for idx, feature in enumerate(self._feature_order)
-        }
-        self._feature_vector = np.empty(self._feature_count, dtype=np.float64)
+    def _initialize_features(self, feature_count: int) -> None:
+        """Create all trees for a validated feature width."""
+        self.subspace_size = min(self.subspace_size, feature_count)
         self.trees = []
 
         max_seed = np.iinfo(np.int64).max
         for _ in range(self.n_estimators):
             selected_indices = np.asarray(
                 self.rng.choice(
-                    self._feature_count, size=self.subspace_size, replace=False
+                    feature_count,
+                    size=self.subspace_size,
+                    replace=False,
                 ),
                 dtype=np.int64,
             )
             tree_seed = int(self.rng.integers(0, max_seed))
             tree_rng = np.random.default_rng(tree_seed)
             self.trees.append(MondrianTree(selected_indices, self.lambda_, tree_rng))
-
-    def _validate_input(self, x: dict[str, float]) -> None:
-        """Validate one-sample dictionary input."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        feature_to_index = self._feature_to_index
-        if feature_to_index is not None and len(x) != self._feature_count:
-            expected_keys = ", ".join(self._feature_order or [])
-            received_keys = ", ".join(sorted(x.keys()))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected_keys}], received [{received_keys}]."
-            )
-
-        has_bad_key = False
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-            if feature_to_index is not None and key not in feature_to_index:
-                has_bad_key = True
-
-        if has_bad_key:
-            expected_keys = ", ".join(self._feature_order)
-            received_keys = ", ".join(sorted(x.keys()))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected_keys}], received [{received_keys}]."
-            )
-
-    def _dict_to_vector(self, x: dict[str, float]) -> np.ndarray:
-        """Convert feature dictionary to stable-order vector without reallocating."""
-        if self._feature_order is None or self._feature_vector is None:
-            raise RuntimeError("Feature initialization failed")
-
-        buffer = self._feature_vector
-        for idx, feature in enumerate(self._feature_order):
-            buffer[idx] = float(x[feature])
-        return buffer
 
     def _compute_c_factor(self) -> float:
         """Compute forest-level isolation normalization term."""
@@ -435,7 +379,3 @@ class MondrianIsolationForest(BaseModel):
             f"subspace_size={self.subspace_size}, "
             f"lambda_={self.lambda_}, seed={self.seed})"
         )
-
-
-# Backward-compatible alias for the historical paper-derived public name.
-MondrianForest = MondrianIsolationForest

@@ -7,6 +7,7 @@ from typing import cast
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import NumericEventBoundary
 
 
 class StreamingLODA(BaseModel):
@@ -80,7 +81,7 @@ class StreamingLODA(BaseModel):
     def _reset_state(self) -> None:
         self._rng = np.random.default_rng(self.seed)
 
-        self._feature_order: tuple[str, ...] | None = None
+        self._boundary = NumericEventBoundary(time_key=self.time_key)
         self._projection_matrix: np.ndarray | None = None
         self._bin_edges: np.ndarray | None = None
         self._bin_counts: np.ndarray | None = None
@@ -88,8 +89,6 @@ class StreamingLODA(BaseModel):
         self._warmup_buffer: list[np.ndarray] = []
         self._ready = False
 
-        self._arrival_index = 0
-        self._max_learned_time = float("-inf")
         self._samples_seen = 0
 
     def reset(self) -> None:
@@ -100,99 +99,6 @@ class StreamingLODA(BaseModel):
     def n_samples_seen(self) -> int:
         """Number of samples processed with ``learn_one``."""
         return self._samples_seen
-
-    def _coerce_time(self, value: float) -> float:
-        if not isinstance(value, int | float | np.number):
-            raise ValueError("Timestamp value must be numeric")
-        as_float = float(value)
-        if not np.isfinite(as_float):
-            raise ValueError("Timestamp value must be finite")
-        return as_float
-
-    def _split_input(self, x: dict[str, float]) -> tuple[float, dict[str, float]]:
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-        if self.time_key is None:
-            current_time = float(self._arrival_index + 1)
-            features = x
-        else:
-            if self.time_key not in x:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            current_time = self._coerce_time(x[self.time_key])
-            features = {key: value for key, value in x.items() if key != self.time_key}
-
-        if not features:
-            raise ValueError("Input must contain at least one non-time feature")
-
-        if current_time < self._max_learned_time:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {current_time}, "
-                f"current {self._max_learned_time}"
-            )
-
-        return current_time, features
-
-    def _set_or_validate_feature_order(
-        self,
-        features: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> tuple[str, ...] | None:
-        if self._feature_order is None:
-            if not mutate_schema:
-                return None
-            inferred = tuple(sorted(features.keys()))
-            self._feature_order = inferred
-            return inferred
-
-        received = set(features.keys())
-        expected = set(self._feature_order)
-        if received != expected:
-            expected_keys = ", ".join(self._feature_order)
-            received_keys = ", ".join(sorted(features.keys()))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected_keys}], received [{received_keys}]."
-            )
-        return self._feature_order
-
-    def _vectorize(
-        self,
-        features: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> np.ndarray | None:
-        feature_order = self._set_or_validate_feature_order(
-            features,
-            mutate_schema=mutate_schema,
-        )
-        if feature_order is None:
-            return None
-
-        return np.fromiter(
-            (float(features[name]) for name in feature_order),
-            dtype=np.float64,
-            count=len(feature_order),
-        )
-
-    def _prepare_input(
-        self,
-        x: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> tuple[float, np.ndarray | None]:
-        current_time, features = self._split_input(x)
-        vector = self._vectorize(features, mutate_schema=mutate_schema)
-        return current_time, vector
 
     def _initialize_projection_matrix(self, n_features: int) -> None:
         if self._projection_matrix is not None:
@@ -322,9 +228,8 @@ class StreamingLODA(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""
-        current_time, vector = self._prepare_input(x, mutate_schema=True)
-        if vector is None:
-            return
+        event = self._boundary.preview(x)
+        vector = event.features.values
 
         self._initialize_projection_matrix(n_features=vector.shape[0])
         projected = self._project(vector)
@@ -337,17 +242,15 @@ class StreamingLODA(BaseModel):
                 self._fit_histograms_from_buffer()
 
         self._samples_seen += 1
-        self._max_learned_time = current_time
-        if self.time_key is None:
-            self._arrival_index += 1
+        self._boundary.commit(event)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score for one sample."""
-        _current_time, vector = self._prepare_input(x, mutate_schema=False)
-        if vector is None or not self._ready:
+        event = self._boundary.preview(x)
+        if not self._boundary.schema.is_established or not self._ready:
             return 0.0
 
-        projected = self._project(vector)
+        projected = self._project(event.features.values)
         return self._score_projected(projected)
 
     def predict_one(self, x: dict[str, float]) -> int:
@@ -364,7 +267,3 @@ class StreamingLODA(BaseModel):
             f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
             f"samples_seen={self._samples_seen}, ready={self._ready})"
         )
-
-
-# Backward-compatible alias for the historical paper-derived public name.
-LODA = StreamingLODA

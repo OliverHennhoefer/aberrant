@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import copy
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 
 @dataclass
@@ -38,8 +39,8 @@ class _RCFBranch:
     cut_dim: int
     cut_value: float
     parent: _RCFBranch | None = None
-    bbox_min: np.ndarray | None = None
-    bbox_max: np.ndarray | None = None
+    bbox_min: np.ndarray = field(init=False)
+    bbox_max: np.ndarray = field(init=False)
     size: int = 0
 
     def recompute(self) -> None:
@@ -346,7 +347,7 @@ class RandomCutForest(BaseModel):
 
     def _reset_state(self) -> None:
         """Initialize or clear learned state."""
-        self._feature_order: tuple[str, ...] | None = None
+        self._schema = FeatureSchema()
         self._history: deque[np.ndarray] = deque(maxlen=self.shingle_size)
         self._id_window: deque[int] = deque()
         self._next_point_id: int = 0
@@ -365,12 +366,13 @@ class RandomCutForest(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update forest state with one sample."""
-        self._validate_input(x)
-        vector = self._dict_to_vector(x)
+        prepared = self._schema.preview(x)
+        vector = prepared.values.copy()
         self._history.append(vector)
 
         shingle = self._current_shingle()
         if shingle is None:
+            self._schema.commit(prepared)
             return
 
         if len(self._id_window) >= self.sample_size:
@@ -387,15 +389,15 @@ class RandomCutForest(BaseModel):
 
         self._inserted_shingles += 1
         self._ready = self._inserted_shingles >= self.warmup_samples
+        self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score for one sample."""
-        self._validate_input(x)
+        prepared = self._schema.preview(x)
         if not self._ready or not self._id_window:
             return 0.0
 
-        vector = self._dict_to_vector(x)
-        query = self._score_shingle(vector)
+        query = self._score_shingle(prepared.values)
         if query is None:
             return 0.0
 
@@ -406,50 +408,13 @@ class RandomCutForest(BaseModel):
         bounded = 1.0 - float(np.exp(-raw / self.score_scale))
         return float(np.clip(bounded, 0.0, 1.0))
 
-    def _validate_input(self, x: dict[str, float]) -> None:
-        """Validate one-sample dictionary input."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-    def _dict_to_vector(self, x: dict[str, float]) -> np.ndarray:
-        """Convert feature dictionary to a stable-order float vector."""
-        if self._feature_order is None:
-            self._feature_order = tuple(sorted(x.keys()))
-        else:
-            expected = set(self._feature_order)
-            received = set(x.keys())
-            if expected != received:
-                expected_keys = ", ".join(self._feature_order)
-                received_keys = ", ".join(sorted(x.keys()))
-                raise ValueError(
-                    "Inconsistent feature keys. "
-                    f"Expected [{expected_keys}], received [{received_keys}]."
-                )
-
-        if self._feature_order is None:
-            raise RuntimeError("Feature order initialization failed")
-
-        return np.fromiter(
-            (float(x[f]) for f in self._feature_order),
-            dtype=np.float64,
-            count=len(self._feature_order),
-        )
-
     def _current_shingle(self) -> np.ndarray | None:
         """Return current learn shingle from history."""
         if len(self._history) < self.shingle_size:
             return None
         if self.shingle_size == 1:
-            return self._history[-1].copy()
-        return np.concatenate(list(self._history))
+            return np.asarray(self._history[-1].copy(), dtype=np.float64)
+        return np.asarray(np.concatenate(list(self._history)), dtype=np.float64)
 
     def _score_shingle(self, vector: np.ndarray) -> np.ndarray | None:
         """Build score shingle without mutating state."""
@@ -461,7 +426,7 @@ class RandomCutForest(BaseModel):
             return None
 
         history = list(self._history)[-required_history:]
-        return np.concatenate([*history, vector])
+        return np.asarray(np.concatenate([*history, vector]), dtype=np.float64)
 
     def __repr__(self) -> str:
         return (

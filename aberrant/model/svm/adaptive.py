@@ -3,6 +3,7 @@ from collections import deque
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema, PreparedFeatures
 
 
 class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
@@ -66,7 +67,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self.data_buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
         self.n_samples: int = 0
 
-        self.feature_order: tuple[str, ...] | None = None
+        self._schema = FeatureSchema()
         self.feature_stats: dict[str, tuple[float, float]] = {}
         self._feature_mean: np.ndarray | None = None
         self._feature_m2: np.ndarray | None = None
@@ -74,31 +75,21 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
 
         self.rng = np.random.default_rng(seed)
 
-    def _get_raw_feature_vector(self, x: dict[str, float]) -> np.ndarray:
-        """Convert a feature dictionary to a stable-order raw vector."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        if self.feature_order is None:
-            self.feature_order = tuple(sorted(x.keys()))
-            n_features = len(self.feature_order)
+    def _prepare_raw_features(self, x: dict[str, float]) -> PreparedFeatures:
+        """Validate and vectorize a raw feature dictionary without committing it."""
+        prepared = self._schema.preview(x)
+        if not self._schema.is_established:
+            n_features = len(prepared.names)
             self._feature_mean = np.zeros(n_features, dtype=np.float64)
             self._feature_m2 = np.zeros(n_features, dtype=np.float64)
-            self.feature_stats = dict.fromkeys(self.feature_order, (0.0, 1.0))
+            self.feature_stats = dict.fromkeys(prepared.names, (0.0, 1.0))
+        return prepared
 
-        if tuple(sorted(x.keys())) != self.feature_order:
-            raise ValueError("Inconsistent feature keys")
-
-        vector = np.fromiter(
-            (float(x[feature]) for feature in self.feature_order),
-            dtype=np.float64,
-            count=len(self.feature_order),
-        )
-        if not np.all(np.isfinite(vector)):
-            raise ValueError("All feature values must be finite")
-        return vector
-
-    def _update_feature_stats(self, x: np.ndarray) -> None:
+    def _update_feature_stats(
+        self,
+        x: np.ndarray,
+        names: tuple[str, ...],
+    ) -> None:
         """Update population mean/variance with a valid Welford accumulator."""
         if self._feature_mean is None or self._feature_m2 is None:
             raise RuntimeError("Feature statistics are not initialized")
@@ -111,11 +102,9 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self._feature_m2 += delta * delta2
 
         std = self._feature_std()
-        if self.feature_order is None:
-            raise RuntimeError("Feature order is not initialized")
         self.feature_stats = {
             feature: (float(self._feature_mean[index]), float(std[index]))
-            for index, feature in enumerate(self.feature_order)
+            for index, feature in enumerate(names)
         }
 
     def _feature_std(self) -> np.ndarray:
@@ -133,7 +122,10 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         """Standardize a raw vector using the current running statistics."""
         if self._feature_mean is None:
             raise RuntimeError("Feature statistics are not initialized")
-        return (x - self._feature_mean) / self._feature_std()
+        return np.asarray(
+            (x - self._feature_mean) / self._feature_std(),
+            dtype=np.float64,
+        )
 
     def _rbf_kernel(self, x1: np.ndarray, x2: np.ndarray) -> float:
         """Compute the RBF kernel after consistently standardizing raw vectors."""
@@ -251,8 +243,9 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Incrementally learn from one sample."""
-        raw_vector = self._get_raw_feature_vector(x)
-        self._update_feature_stats(raw_vector)
+        prepared = self._prepare_raw_features(x)
+        raw_vector = prepared.values
+        self._update_feature_stats(raw_vector, prepared.names)
         self.n_samples += 1
         self.data_buffer.append(raw_vector.copy())
 
@@ -264,6 +257,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
 
         if not self.support_vectors:
             self._manage_support_vectors(raw_vector, 1.0 / (self.nu * 10.0))
+            self._schema.commit(prepared)
             return
 
         decision_value = self._decision_function(raw_vector)
@@ -272,23 +266,24 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
             self._manage_support_vectors(raw_vector, alpha_new)
 
         self._adapt_gamma()
+        self._schema.commit(prepared)
 
     def predict_one(self, x: dict[str, float]) -> int:
         """Predict normal (1) or anomalous (-1)."""
+        prepared = self._schema.preview(x)
         if not self.support_vectors:
             return 1
 
-        raw_vector = self._get_raw_feature_vector(x)
-        decision_value = self._decision_function(raw_vector)
+        decision_value = self._decision_function(prepared.values)
         return 1 if decision_value >= -self.tolerance else -1
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score (higher means more anomalous)."""
+        prepared = self._schema.preview(x)
         if not self.support_vectors:
             return 0.0
 
-        raw_vector = self._get_raw_feature_vector(x)
-        return -self._decision_function(raw_vector)
+        return -self._decision_function(prepared.values)
 
     def get_model_info(self) -> dict[str, object]:
         """Return current model diagnostics."""

@@ -3,6 +3,7 @@ from collections import deque
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 
 class IncrementalOneClassSVM:
@@ -12,34 +13,38 @@ class IncrementalOneClassSVM:
 
     def __init__(
         self, learning_rate: float = 0.01, nu: float = 0.5, lambda_reg: float = 0.01
-    ):
-        self.w = None  # Weight vector
+    ) -> None:
+        self.w: np.ndarray | None = None  # Weight vector
         self.rho = 0.0  # Bias term
         self.learning_rate = learning_rate
         self.nu = nu  # Anomaly rate parameter
         self.lambda_reg = lambda_reg  # Regularization parameter
 
     def learn_one(self, x_vec: np.ndarray) -> None:
-        if self.w is None:
-            self.w = np.zeros_like(x_vec)
+        weights = self.w
+        if weights is None:
+            weights = np.zeros_like(x_vec)
+            self.w = weights
 
-        decision = np.dot(self.w, x_vec)
+        decision = float(np.dot(weights, x_vec))
         loss = max(0, self.rho - decision)
 
         # Gradient updates with regularization
         if loss > 0:
             # w update: gradient = -x_vec + lambda_reg * w
-            self.w += self.learning_rate * (x_vec - self.lambda_reg * self.w)
+            weights += self.learning_rate * (x_vec - self.lambda_reg * weights)
             # rho update: gradient = (nu - 1)
             self.rho += self.learning_rate * (self.nu - 1)
         else:
             # Only apply regularization to w
-            self.w -= self.learning_rate * self.lambda_reg * self.w
+            weights -= self.learning_rate * self.lambda_reg * weights
             # rho update: gradient = nu
             self.rho += self.learning_rate * self.nu
 
     def score_one(self, x_vec: np.ndarray) -> float:
-        return self.rho - np.dot(self.w, x_vec) if self.w is not None else 0.0
+        if self.w is None:
+            return 0.0
+        return self.rho - float(np.dot(self.w, x_vec))
 
 
 class GraphGatedOneClassSVM(BaseModel):
@@ -58,7 +63,7 @@ class GraphGatedOneClassSVM(BaseModel):
         learning_rate: float = 0.01,
         nu: float = 0.5,
         lambda_reg: float = 0.01,
-    ):
+    ) -> None:
         # Set default graph if None provided
         if graph is None:
             graph = {0: [1], 1: [2], 2: []}
@@ -76,7 +81,7 @@ class GraphGatedOneClassSVM(BaseModel):
         self.learning_rate = learning_rate
         self.nu = nu
         self.lambda_reg = lambda_reg
-        self.feature_order = None  # Tuple for fast comparisons
+        self._schema = FeatureSchema()
 
         # Initialize SVMs for all nodes
         self.svms = {
@@ -93,19 +98,10 @@ class GraphGatedOneClassSVM(BaseModel):
         if not self.root_nodes and all_nodes:
             self.root_nodes = [min(all_nodes)]
 
-    def _get_feature_vector(self, x: dict[str, float]) -> np.ndarray:
-        """Efficient feature vector conversion with tuple-based order tracking."""
-        if self.feature_order is None:
-            self.feature_order = tuple(sorted(x.keys()))
-
-        if tuple(sorted(x.keys())) != self.feature_order:
-            raise ValueError("Inconsistent feature keys")
-
-        return np.fromiter((x[k] for k in self.feature_order), dtype=np.float64)
-
     def learn_one(self, x: dict[str, float]) -> None:
-        x_vec = self._get_feature_vector(x)
-        visited = set()
+        prepared = self._schema.preview(x)
+        x_vec = prepared.values
+        visited: set[int] = set()
         # Use deque for efficient BFS
         queue = deque(self.root_nodes)
 
@@ -122,14 +118,16 @@ class GraphGatedOneClassSVM(BaseModel):
             if score > self.threshold:
                 # Add neighbors to queue
                 queue.extend(self.graph[node])
+        self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
-        if self.feature_order is None:
+        prepared = self._schema.preview(x)
+        if not self._schema.is_established:
             return 0.0
 
-        x_vec = self._get_feature_vector(x)
+        x_vec = prepared.values
         max_score = -np.inf
-        visited = set()
+        visited: set[int] = set()
         queue = deque(self.root_nodes)
 
         while queue:
@@ -144,8 +142,4 @@ class GraphGatedOneClassSVM(BaseModel):
             if score > self.threshold:
                 queue.extend(self.graph[node])
 
-        return max(max_score, 0.0)  # Ensure non-negative minimum
-
-
-# Backward-compatible alias for the historical, misleading public name.
-GADGETSVM = GraphGatedOneClassSVM
+        return float(max(max_score, 0.0))  # Ensure non-negative minimum

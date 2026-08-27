@@ -154,7 +154,7 @@ class TestMondrianForest(unittest.TestCase):
         self.assertIsNone(forest.seed)
         self.assertEqual(forest.n_samples, 0)
         self.assertEqual(len(forest.trees), 0)
-        self.assertIsNone(forest._feature_order)
+        self.assertIsNone(forest._schema.names)
 
     def test_initialization_validation(self):
         """Invalid constructor parameters should fail fast."""
@@ -172,7 +172,7 @@ class TestMondrianForest(unittest.TestCase):
 
         forest.learn_one(first_point)
 
-        self.assertEqual(forest._feature_order, ["a", "b", "c"])
+        self.assertEqual(forest._schema.names, ("a", "b", "c"))
         self.assertEqual(len(forest.trees), 5)
         self.assertEqual(forest.n_samples, 1)
         self.assertTrue(all(tree.n_samples == 1 for tree in forest.trees))

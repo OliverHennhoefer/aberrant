@@ -8,6 +8,7 @@ from collections.abc import Callable
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import EdgeEventBoundary
 
 _MatrixValue = Callable[[int, int], float]
 
@@ -180,25 +181,6 @@ class AnoEdgeL(BaseModel):
     """
 
     @staticmethod
-    def _validate_keys(
-        source_key: str,
-        destination_key: str,
-        time_key: str | None,
-    ) -> None:
-        if not isinstance(source_key, str) or not source_key:
-            raise ValueError("source_key must be a non-empty string")
-        if not isinstance(destination_key, str) or not destination_key:
-            raise ValueError("destination_key must be a non-empty string")
-        if source_key == destination_key:
-            raise ValueError("source_key and destination_key must be different")
-        if time_key is not None and (not isinstance(time_key, str) or not time_key):
-            raise ValueError("time_key must be a non-empty string or None")
-        if time_key is not None and time_key in (source_key, destination_key):
-            raise ValueError(
-                "time_key must be different from source_key and destination_key"
-            )
-
-    @staticmethod
     def _validate_parameters(
         *,
         count_min_rows: int,
@@ -250,7 +232,6 @@ class AnoEdgeL(BaseModel):
         predict_threshold: float = 0.5,
         seed: int | None = None,
     ) -> None:
-        self._validate_keys(source_key, destination_key, time_key)
         self._validate_parameters(
             count_min_rows=count_min_rows,
             count_min_cols=count_min_cols,
@@ -278,6 +259,11 @@ class AnoEdgeL(BaseModel):
         self._reset_state()
 
     def _reset_state(self) -> None:
+        self._boundary = EdgeEventBoundary(
+            source_key=self.source_key,
+            destination_key=self.destination_key,
+            time_key=self.time_key,
+        )
         self._rng = np.random.default_rng(self.seed)
         hash_modulus = max(self.count_min_rows, self.count_min_cols)
         self._hash_a = self._rng.integers(
@@ -304,7 +290,6 @@ class AnoEdgeL(BaseModel):
             for _ in range(self.num_hashes)
         ]
         self._current_bucket: int | None = None
-        self._arrival_index = 0
         self._samples_seen = 0
 
     def reset(self) -> None:
@@ -315,43 +300,6 @@ class AnoEdgeL(BaseModel):
     def n_samples_seen(self) -> int:
         """Number of observed samples processed via learn_one."""
         return self._samples_seen
-
-    @staticmethod
-    def _coerce_integer(value: float, key: str) -> int:
-        if not isinstance(value, int | float | np.number):
-            raise ValueError(f"Feature '{key}' must be numeric")
-        as_float = float(value)
-        if not np.isfinite(as_float):
-            raise ValueError(f"Feature '{key}' must be finite")
-        as_int = int(round(as_float))
-        if not np.isclose(as_float, float(as_int), rtol=0.0, atol=1e-9):
-            raise ValueError(f"Feature '{key}' must be integer-like")
-        return as_int
-
-    def _prepare_sample(self, x: dict[str, float]) -> tuple[int, int, int]:
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-        if self.source_key not in x:
-            raise ValueError(f"Missing source_key '{self.source_key}' in input sample")
-        if self.destination_key not in x:
-            raise ValueError(
-                f"Missing destination_key '{self.destination_key}' in input sample"
-            )
-
-        src = self._coerce_integer(x[self.source_key], self.source_key)
-        dst = self._coerce_integer(x[self.destination_key], self.destination_key)
-        if self.time_key is None:
-            bucket = self._arrival_index + 1
-        else:
-            if self.time_key not in x:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            bucket = self._coerce_integer(x[self.time_key], self.time_key)
-
-        if self._current_bucket is not None and bucket < self._current_bucket:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
-            )
-        return bucket, src, dst
 
     def _hash(self, value: int, plane: int, size: int) -> int:
         return (value * int(self._hash_a[plane]) + int(self._hash_b[plane])) % size
@@ -422,18 +370,19 @@ class AnoEdgeL(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Insert an edge and update the local dense-submatrix states."""
-        bucket, src, dst = self._prepare_sample(x)
+        event = self._boundary.preview(x)
+        bucket, src, dst = event.bucket, event.source, event.destination
         self._rollover_for_learning(bucket)
         for plane, row, col in self._hashed_cells(src, dst):
             self._update_plane(plane, row, col)
 
         self._samples_seen += 1
-        if self.time_key is None:
-            self._arrival_index += 1
+        self._boundary.commit(event)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Preview the candidate-inclusive AnoEdge-L score without mutation."""
-        bucket, src, dst = self._prepare_sample(x)
+        event = self._boundary.preview(x)
+        bucket, src, dst = event.bucket, event.source, event.destination
         if self._samples_seen < self.warm_up_samples:
             return 0.0
 

@@ -38,6 +38,16 @@ class TestMovingCovariance(unittest.TestCase):
         with self.assertRaises(ValueError):
             model.learn_one({"x": 1.0, "z": 2.0})
 
+    def test_rejects_duplicate_keys_and_invalid_points_atomically(self):
+        with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
+            MovingCovariance(window_size=3, keys=["x", "x"])
+
+        model = MovingCovariance(window_size=3)
+        with self.assertRaisesRegex(ValueError, "must be numeric"):
+            model.learn_one({"x": 1.0, "y": "bad"})  # type: ignore[dict-item]
+        self.assertIsNone(model._schema.names)
+        self.assertEqual(model.window, {})
+
     def test_learn_one_with_multiple_points(self):
         model = MovingCovariance(window_size=3)
         points = [{"x": float(i), "y": float(i) + 1} for i in range(5)]
@@ -170,6 +180,9 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
         with self.assertRaises(ValueError):
             MovingMahalanobisDistance(window_size=-1)
 
+        with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
+            MovingMahalanobisDistance(window_size=3, keys=["x", "x"])
+
     def test_learn_one(self):
         mmd = MovingMahalanobisDistance(window_size=3)
 
@@ -181,9 +194,10 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
         mmd.learn_one({"feature1": 3.0, "feature2": 4.0})
         self.assertEqual(len(mmd.window), 2)
 
-        # Test handling of non-numeric data#
-        mmd.learn_one({"feature1": "a", "feature2": 5.0})  # type: ignore
-        self.assertEqual(len(mmd.window), 2)  # The invalid entry should not be added
+        # Invalid observations are rejected atomically instead of being ignored.
+        with self.assertRaises(ValueError):
+            mmd.learn_one({"feature1": "a", "feature2": 5.0})  # type: ignore[arg-type]
+        self.assertEqual(len(mmd.window), 2)
 
     def test_score_one_insufficient_data_points(self):
         mmd = MovingMahalanobisDistance(window_size=2)

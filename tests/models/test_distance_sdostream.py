@@ -179,7 +179,7 @@ class TestSDOStream(unittest.TestCase):
         model.reset()
 
         self.assertEqual(model.n_observers, 0)
-        self.assertIsNone(model._feature_order)
+        self.assertIsNone(model._boundary.schema.names)
         self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
 
     def test_repr_contains_key_config(self) -> None:

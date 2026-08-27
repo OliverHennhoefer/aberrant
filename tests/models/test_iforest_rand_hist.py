@@ -224,7 +224,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
             model.learn_one(point)
 
         query = {"x": 1.5, "y": 2.0}
-        point = model._vectorize(query)
+        point = model._schema.preview(query).values
         preview_trees = copy.deepcopy(model._trees)
         for tree in preview_trees:
             tree.insert(point)
@@ -259,7 +259,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
             )
 
         query = {"x": 2.5, "y": 7.5}
-        point = model._vectorize(query)
+        point = model._schema.preview(query).values
         candidate_size = model._forest_size + 1
         expected = 0.0
         for learned_tree in model._trees:

@@ -9,14 +9,30 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import (
+    MonotonicClock,
+    PreparedTimestamp,
+    coerce_finite_number,
+)
 
 
-@dataclass
+@dataclass(slots=True)
 class _GraphState:
     """Mutable per-graph state."""
 
     sketch: np.ndarray
     tail: deque[bytes]
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedGraphEvent:
+    """Validated graph event awaiting a clock commit."""
+
+    timestamp: PreparedTimestamp
+    graph_id: float
+    source: float
+    destination: float
+    edge_type: float | None
 
 
 class SignedGraphSketchDetector(BaseModel):
@@ -155,7 +171,6 @@ class SignedGraphSketchDetector(BaseModel):
             predict_threshold=predict_threshold,
             eps=eps,
         )
-
         self.sketch_dim = sketch_dim
         self.shingle_size = shingle_size
         self.num_clusters = num_clusters
@@ -189,8 +204,7 @@ class SignedGraphSketchDetector(BaseModel):
         self._cluster_counts = np.zeros(self.num_clusters, dtype=np.float64)
         self._initialized_clusters = 0
 
-        self._current_bucket: int | None = None
-        self._arrival_index = 0
+        self._clock = MonotonicClock(integer_like=True)
         self._samples_seen = 0
 
     def reset(self) -> None:
@@ -202,26 +216,10 @@ class SignedGraphSketchDetector(BaseModel):
         """Number of samples processed via ``learn_one``."""
         return self._samples_seen
 
-    def _coerce_numeric(self, value: float, key: str) -> float:
-        if not isinstance(value, int | float | np.number):
-            raise ValueError(f"Feature '{key}' must be numeric")
-        as_float = float(value)
-        if not np.isfinite(as_float):
-            raise ValueError(f"Feature '{key}' must be finite")
-        return as_float
-
-    def _coerce_bucket(self, value: float) -> int:
-        key = self.time_key if self.time_key is not None else "t"
-        as_float = self._coerce_numeric(value, key)
-        as_int = int(round(as_float))
-        if not np.isclose(as_float, float(as_int), rtol=0.0, atol=1e-9):
-            raise ValueError("Timestamp must be integer-like")
-        return as_int
-
     def _prepare_sample(
         self,
         x: dict[str, float],
-    ) -> tuple[int, float, float, float, float | None]:
+    ) -> _PreparedGraphEvent:
         if not x:
             raise ValueError("Input dictionary cannot be empty")
 
@@ -238,31 +236,41 @@ class SignedGraphSketchDetector(BaseModel):
                 f"Missing edge_type_key '{self.edge_type_key}' in input sample"
             )
 
-        graph_id = self._coerce_numeric(x[self.graph_key], self.graph_key)
-        src = self._coerce_numeric(x[self.source_key], self.source_key)
-        dst = self._coerce_numeric(x[self.destination_key], self.destination_key)
+        graph_id = coerce_finite_number(
+            x[self.graph_key],
+            label=f"Feature '{self.graph_key}'",
+        )
+        source = coerce_finite_number(
+            x[self.source_key],
+            label=f"Feature '{self.source_key}'",
+        )
+        destination = coerce_finite_number(
+            x[self.destination_key],
+            label=f"Feature '{self.destination_key}'",
+        )
         edge_type: float | None = None
         if self.edge_type_key is not None:
-            edge_type = self._coerce_numeric(x[self.edge_type_key], self.edge_type_key)
+            edge_type = coerce_finite_number(
+                x[self.edge_type_key],
+                label=f"Feature '{self.edge_type_key}'",
+            )
 
         if self.time_key is None:
-            bucket = self._arrival_index + 1
+            timestamp = self._clock.preview(implicit=True)
         else:
             if self.time_key not in x:
                 raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            bucket = self._coerce_bucket(x[self.time_key])
-
-        if self._current_bucket is not None and bucket < self._current_bucket:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {bucket}, current {self._current_bucket}"
+            timestamp = self._clock.preview(
+                x[self.time_key],
+                implicit=False,
             )
-        return bucket, graph_id, src, dst, edge_type
-
-    def _rollover_if_needed(self, bucket: int) -> None:
-        if self._current_bucket is None:
-            self._current_bucket = bucket
-            return
-        self._current_bucket = bucket
+        return _PreparedGraphEvent(
+            timestamp=timestamp,
+            graph_id=graph_id,
+            source=source,
+            destination=destination,
+            edge_type=edge_type,
+        )
 
     def _edge_token(self, src: float, dst: float, edge_type: float | None) -> bytes:
         payload = bytearray()
@@ -400,35 +408,33 @@ class SignedGraphSketchDetector(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one edge event."""
-        bucket, graph_id, src, dst, edge_type = self._prepare_sample(x)
-        self._rollover_if_needed(bucket)
+        event = self._prepare_sample(x)
 
-        state = self._get_graph_state(graph_id, create=True)
+        state = self._get_graph_state(event.graph_id, create=True)
         if state is None:
-            return
+            raise RuntimeError("Graph state creation failed")
 
-        token = self._edge_token(src, dst, edge_type)
+        token = self._edge_token(event.source, event.destination, event.edge_type)
         shingle = self._candidate_shingle(state.tail, token)
         self._apply_shingle_update(state.sketch, shingle)
         if self.shingle_size > 1:
             state.tail.append(token)
 
         self._update_clusters(state.sketch)
-        self._touch_graph(graph_id)
+        self._touch_graph(event.graph_id)
         self._evict_graphs_if_needed()
 
         self._samples_seen += 1
-        if self.time_key is None:
-            self._arrival_index += 1
+        self._clock.commit(event.timestamp)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score for one edge event without mutating state."""
-        _bucket, graph_id, src, dst, edge_type = self._prepare_sample(x)
+        event = self._prepare_sample(x)
 
         if not self._is_warm():
             return 0.0
 
-        state = self._get_graph_state(graph_id, create=False)
+        state = self._get_graph_state(event.graph_id, create=False)
         if state is None:
             candidate_sketch = np.zeros(self.sketch_dim, dtype=np.float64)
             tail: deque[bytes] = deque()
@@ -436,7 +442,7 @@ class SignedGraphSketchDetector(BaseModel):
             candidate_sketch = state.sketch.copy()
             tail = state.tail
 
-        token = self._edge_token(src, dst, edge_type)
+        token = self._edge_token(event.source, event.destination, event.edge_type)
         shingle = self._candidate_shingle(tail, token)
         novelty = 0.0
         if shingle is not None:
@@ -474,7 +480,3 @@ class SignedGraphSketchDetector(BaseModel):
             f"samples_seen={self._samples_seen}, active_graphs={len(self._graph_states)}, "
             f"initialized_clusters={self._initialized_clusters})"
         )
-
-
-# Backward-compatible alias for the historical paper-derived public name.
-StreamSpot = SignedGraphSketchDetector

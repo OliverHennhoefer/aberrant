@@ -267,7 +267,7 @@ class TestHalfSpaceTrees(unittest.TestCase):
         """Test that feature names are sorted consistently."""
         hst = HalfSpaceTrees()
         hst.learn_one({"z": 0.1, "a": 0.2, "m": 0.3})
-        self.assertEqual(hst.feature_names, ["a", "m", "z"])
+        self.assertEqual(hst._schema.names, ("a", "m", "z"))
 
     def test_repr(self):
         """Test string representation."""

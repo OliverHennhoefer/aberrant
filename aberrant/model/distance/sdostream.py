@@ -7,6 +7,7 @@ from typing import Literal
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import NumericEventBoundary
 
 
 class SDOStream(BaseModel):
@@ -90,7 +91,7 @@ class SDOStream(BaseModel):
     def _reset_state(self) -> None:
         self._rng = np.random.default_rng(self.seed)
 
-        self._feature_order: tuple[str, ...] | None = None
+        self._boundary = NumericEventBoundary(time_key=self.time_key)
         self._observers: np.ndarray | None = None
         self._observations: np.ndarray | None = None
         self._time_added: np.ndarray | None = None
@@ -100,7 +101,6 @@ class SDOStream(BaseModel):
         self._sample_index = 0
         self._last_added_index = -1
         self._last_added_time = 0.0
-        self._max_learned_time = float("-inf")
 
     def reset(self) -> None:
         """Reset learned state while keeping hyperparameters."""
@@ -110,95 +110,6 @@ class SDOStream(BaseModel):
     def n_observers(self) -> int:
         """Number of observers currently maintained by the model."""
         return self._n_observers
-
-    def _coerce_time(self, value: float) -> float:
-        if not isinstance(value, int | float | np.number):
-            raise ValueError("Timestamp value must be numeric")
-
-        as_float = float(value)
-        if not np.isfinite(as_float):
-            raise ValueError("Timestamp value must be finite")
-        return as_float
-
-    def _split_input(self, x: dict[str, float]) -> tuple[float, dict[str, float]]:
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-        if self.time_key is None:
-            current_time = float(self._sample_index + 1)
-            features = x
-        else:
-            if self.time_key not in x:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            current_time = self._coerce_time(x[self.time_key])
-            features = {k: v for k, v in x.items() if k != self.time_key}
-
-        if not features:
-            raise ValueError("Input must contain at least one non-time feature")
-
-        if current_time < self._max_learned_time:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {current_time}, "
-                f"current {self._max_learned_time}"
-            )
-        return current_time, features
-
-    def _set_or_validate_feature_order(
-        self,
-        features: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> tuple[str, ...]:
-        if self._feature_order is None:
-            inferred = tuple(sorted(features.keys()))
-            if mutate_schema:
-                self._feature_order = inferred
-            return inferred
-
-        received = set(features.keys())
-        expected = set(self._feature_order)
-        if received != expected:
-            expected_keys = ", ".join(self._feature_order)
-            received_keys = ", ".join(sorted(features.keys()))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected_keys}], received [{received_keys}]."
-            )
-        return self._feature_order
-
-    def _vectorize(
-        self,
-        features: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> np.ndarray:
-        feature_order = self._set_or_validate_feature_order(
-            features,
-            mutate_schema=mutate_schema,
-        )
-        return np.fromiter(
-            (float(features[name]) for name in feature_order),
-            dtype=np.float64,
-            count=len(feature_order),
-        )
-
-    def _prepare_input(
-        self,
-        x: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> tuple[float, np.ndarray]:
-        current_time, features = self._split_input(x)
-        vector = self._vectorize(features, mutate_schema=mutate_schema)
-        return current_time, vector
 
     def _ensure_state_arrays(self, n_features: int) -> None:
         if self._observers is not None:
@@ -232,14 +143,17 @@ class SDOStream(BaseModel):
         abs_diff = np.abs(diff)
 
         if self.distance == "euclidean":
-            return np.sqrt(np.sum(diff * diff, axis=1))
+            return np.asarray(np.sqrt(np.sum(diff * diff, axis=1)), dtype=np.float64)
         if self.distance == "manhattan":
-            return np.sum(abs_diff, axis=1)
+            return np.asarray(np.sum(abs_diff, axis=1), dtype=np.float64)
         if self.distance == "chebyshev":
-            return np.max(abs_diff, axis=1)
+            return np.asarray(np.max(abs_diff, axis=1), dtype=np.float64)
 
         # Minkowski distance.
-        return np.sum(abs_diff**self.minkowski_p, axis=1) ** (1.0 / self.minkowski_p)
+        return np.asarray(
+            np.sum(abs_diff**self.minkowski_p, axis=1) ** (1.0 / self.minkowski_p),
+            dtype=np.float64,
+        )
 
     def _insert_observer(self, vector: np.ndarray, current_time: float) -> None:
         if (
@@ -314,9 +228,8 @@ class SDOStream(BaseModel):
         age_normalized = decayed / age
         return int(np.argmin(age_normalized))
 
-    def _advance(self, current_time: float) -> None:
+    def _advance(self) -> None:
         self._sample_index += 1
-        self._max_learned_time = current_time
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -325,14 +238,17 @@ class SDOStream(BaseModel):
         Args:
             x: Input feature dictionary.
         """
-        current_time, vector = self._prepare_input(x, mutate_schema=True)
+        event = self._boundary.preview(x)
+        current_time = event.timestamp.value
+        vector = event.features.values
         self._ensure_state_arrays(n_features=vector.shape[0])
 
         if self._n_observers == 0:
             self._insert_observer(vector, current_time)
             self._last_added_index = self._sample_index
             self._last_added_time = current_time
-            self._advance(current_time)
+            self._advance()
+            self._boundary.commit(event)
             return
 
         if (
@@ -381,7 +297,8 @@ class SDOStream(BaseModel):
             self._last_added_index = current_index
             self._last_added_time = current_time
 
-        self._advance(current_time)
+        self._advance()
+        self._boundary.commit(event)
 
     def score_one(self, x: dict[str, float]) -> float:
         """
@@ -393,7 +310,9 @@ class SDOStream(BaseModel):
         Returns:
             Continuous non-negative anomaly score.
         """
-        current_time, vector = self._prepare_input(x, mutate_schema=False)
+        event = self._boundary.preview(x)
+        current_time = event.timestamp.value
+        vector = event.features.values
 
         if self._n_observers < self.warm_up_observers:
             return 0.0

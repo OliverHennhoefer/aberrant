@@ -7,6 +7,7 @@ import math
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import NumericEventBoundary
 
 _HASH_MODULUS = np.int64(2_147_483_647)  # Large Mersenne prime.
 
@@ -79,7 +80,7 @@ class StreamingRSHash(BaseModel):
     def _reset_state(self) -> None:
         self._rng = np.random.default_rng(self.seed)
 
-        self._feature_order: tuple[str, ...] | None = None
+        self._boundary = NumericEventBoundary(time_key=self.time_key)
         self._subspace_indices: np.ndarray | None = None
         self._subspace_shifts: np.ndarray | None = None
         self._hash_a: np.ndarray | None = None
@@ -91,10 +92,8 @@ class StreamingRSHash(BaseModel):
         self._n_stats: int = 0
 
         self._samples_seen: int = 0
-        self._arrival_index: int = 0
         self._scale: float = 1.0
         self._last_learned_time: float | None = None
-        self._max_learned_time: float = float("-inf")
 
     def reset(self) -> None:
         """Reset learned state while keeping hyperparameters."""
@@ -104,100 +103,6 @@ class StreamingRSHash(BaseModel):
     def n_samples_seen(self) -> int:
         """Number of samples processed with learn_one."""
         return self._samples_seen
-
-    def _coerce_time(self, value: float) -> float:
-        if not isinstance(value, int | float | np.number):
-            raise ValueError("Timestamp value must be numeric")
-
-        as_float = float(value)
-        if not np.isfinite(as_float):
-            raise ValueError("Timestamp value must be finite")
-        return as_float
-
-    def _split_input(self, x: dict[str, float]) -> tuple[float, dict[str, float]]:
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-        if self.time_key is None:
-            current_time = float(self._arrival_index + 1)
-            features = x
-        else:
-            if self.time_key not in x:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
-            current_time = self._coerce_time(x[self.time_key])
-            features = {k: v for k, v in x.items() if k != self.time_key}
-
-        if not features:
-            raise ValueError("Input must contain at least one non-time feature")
-
-        if current_time < self._max_learned_time:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {current_time}, "
-                f"current {self._max_learned_time}"
-            )
-
-        return current_time, features
-
-    def _set_or_validate_feature_order(
-        self,
-        features: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> tuple[str, ...] | None:
-        if self._feature_order is None:
-            if not mutate_schema:
-                return None
-            inferred = tuple(sorted(features.keys()))
-            self._feature_order = inferred
-            return inferred
-
-        received = set(features.keys())
-        expected = set(self._feature_order)
-        if received != expected:
-            expected_keys = ", ".join(self._feature_order)
-            received_keys = ", ".join(sorted(features.keys()))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected_keys}], received [{received_keys}]."
-            )
-        return self._feature_order
-
-    def _vectorize(
-        self,
-        features: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> np.ndarray | None:
-        feature_order = self._set_or_validate_feature_order(
-            features,
-            mutate_schema=mutate_schema,
-        )
-        if feature_order is None:
-            return None
-
-        return np.fromiter(
-            (float(features[name]) for name in feature_order),
-            dtype=np.float64,
-            count=len(feature_order),
-        )
-
-    def _prepare_input(
-        self,
-        x: dict[str, float],
-        *,
-        mutate_schema: bool,
-    ) -> tuple[float, np.ndarray | None]:
-        current_time, features = self._split_input(x)
-        vector = self._vectorize(features, mutate_schema=mutate_schema)
-        return current_time, vector
 
     def _initialize_hash_state(self, n_features: int) -> None:
         if self._counts is not None:
@@ -250,13 +155,13 @@ class StreamingRSHash(BaseModel):
 
     def _normalize(self, vector: np.ndarray) -> np.ndarray:
         if self._mean is None:
-            return vector.copy()
+            return np.asarray(vector.copy(), dtype=np.float64)
         if self._n_stats < 2 or self._m2 is None:
-            return vector - self._mean
+            return np.asarray(vector - self._mean, dtype=np.float64)
 
         variance = self._m2 / float(self._n_stats - 1)
         std = np.sqrt(np.clip(variance, self._std_floor**2, None))
-        return (vector - self._mean) / std
+        return np.asarray((vector - self._mean) / std, dtype=np.float64)
 
     def _update_running_stats(self, vector: np.ndarray) -> None:
         if self._mean is None or self._m2 is None:
@@ -367,9 +272,9 @@ class StreamingRSHash(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""
-        current_time, vector = self._prepare_input(x, mutate_schema=True)
-        if vector is None:
-            return
+        event = self._boundary.preview(x)
+        current_time = event.timestamp.value
+        vector = event.features.values
 
         self._initialize_hash_state(n_features=vector.shape[0])
         self._apply_decay(current_time)
@@ -391,18 +296,18 @@ class StreamingRSHash(BaseModel):
         self._update_running_stats(vector)
 
         self._samples_seen += 1
-        self._max_learned_time = current_time
-        if self.time_key is None:
-            self._arrival_index += 1
+        self._boundary.commit(event)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score for one sample."""
-        current_time, vector = self._prepare_input(x, mutate_schema=False)
-        if vector is None or self._counts is None:
+        event = self._boundary.preview(x)
+        if not self._boundary.schema.is_established or self._counts is None:
             return 0.0
         if self._samples_seen < self.warm_up_samples:
             return 0.0
 
+        current_time = event.timestamp.value
+        vector = event.features.values
         normalized = self._normalize(vector)
         buckets = self._bucket_indices(normalized)
         query_scale = self._query_scale(current_time)
@@ -417,7 +322,3 @@ class StreamingRSHash(BaseModel):
             f"warm_up_samples={self.warm_up_samples}, time_key={self.time_key!r}, "
             f"seed={self.seed}, samples_seen={self._samples_seen})"
         )
-
-
-# Backward-compatible alias for the historical paper-derived public name.
-RSHash = StreamingRSHash

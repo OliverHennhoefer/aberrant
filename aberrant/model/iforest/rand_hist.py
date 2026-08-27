@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 _OPEN_UNIT_LOW = float(np.nextafter(0.0, 1.0))
 
@@ -56,7 +57,7 @@ def _kurtosis_weights(moments: np.ndarray) -> np.ndarray:
         out=np.zeros_like(m2),
         where=(m2 != 0.0) & (m4 != 0.0),
     )
-    return np.log1p(np.maximum(kurtosis, 0.0))
+    return np.asarray(np.log1p(np.maximum(kurtosis, 0.0)), dtype=np.float64)
 
 
 @dataclass
@@ -243,7 +244,7 @@ class _RandomHistogramTree:
             return self._build_node(points, depth=node.depth, node_id=node.node_id)
 
         node.moments = updated_moments
-        if point[node.split_feature] <= node.split_value:  # type: ignore[index,operator]
+        if point[node.split_feature] <= node.split_value:
             if node.left is None:
                 raise RuntimeError("Split node has no left child")
             node.left = self._insert_node(node.left, point)
@@ -365,7 +366,7 @@ class StreamRandomHistogramForest(BaseModel):
         self.max_depth = max_depth
         self.window_size = window_size
         self.seed = seed
-        self.feature_names: list[str] | None = None
+        self._schema = FeatureSchema()
 
         self._tree_seed_sequences = np.random.SeedSequence(seed).spawn(n_estimators)
         self._initial_window: list[np.ndarray] = []
@@ -373,48 +374,15 @@ class StreamRandomHistogramForest(BaseModel):
         self._trees: list[_RandomHistogramTree] = []
         self._forest_size = 0
 
-    def _set_or_validate_schema(
-        self, x: dict[str, float], *, allow_initialize: bool
-    ) -> None:
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-        if self.feature_names is None:
-            if allow_initialize:
-                self.feature_names = sorted(x)
-            return
-        if set(x) != set(self.feature_names):
-            expected = ", ".join(self.feature_names)
-            received = ", ".join(sorted(x))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected}], received [{received}]."
-            )
-
-    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
-        if self.feature_names is None:
-            raise RuntimeError("Feature schema is not initialized")
-        return np.fromiter(
-            (float(x[feature]) for feature in self.feature_names),
-            dtype=np.float64,
-            count=len(self.feature_names),
-        )
-
     def _build_forest(self, points: list[np.ndarray]) -> None:
-        if self.feature_names is None:
+        names = self._schema.names
+        if names is None:
             raise RuntimeError("Forest schema is not initialized")
         self._trees = []
         for tree_index in range(self.n_estimators):
             tree = _RandomHistogramTree(
                 self.max_depth,
-                len(self.feature_names),
+                len(names),
                 self._tree_seed_sequences[tree_index],
             )
             tree.build(points)
@@ -423,14 +391,15 @@ class StreamRandomHistogramForest(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Insert one sample and replace the forest at window boundaries."""
-        self._set_or_validate_schema(x, allow_initialize=True)
-        point = self._vectorize(x)
+        prepared = self._schema.preview(x)
+        point = prepared.values.copy()
 
         if not self._trees:
             self._initial_window.append(point)
             if len(self._initial_window) == self.window_size:
                 self._build_forest(self._initial_window)
                 self._initial_window = []
+            self._schema.commit(prepared)
             return
 
         for tree in self._trees:
@@ -440,13 +409,14 @@ class StreamRandomHistogramForest(BaseModel):
         if len(self._current_window) == self.window_size:
             self._build_forest(self._current_window)
             self._current_window = []
+        self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Return the candidate-inclusive STREamRHF leaf-mass score."""
-        self._set_or_validate_schema(x, allow_initialize=False)
+        prepared = self._schema.preview(x)
         if not self._trees:
             return 0.0
-        point = self._vectorize(x)
+        point = prepared.values
         candidate_size = self._forest_size + 1
 
         score = 0.0

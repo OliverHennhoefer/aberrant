@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 
 @dataclass
@@ -120,14 +121,13 @@ class HalfSpaceTrees(BaseModel):
 
     def _reset_state(self) -> None:
         """Initialize or reset internal state."""
-        self.feature_names: list[str] | None = None
+        self._schema = FeatureSchema()
         self._n_features: int = 0
         self._trees: list[HSTNode | HSTLeaf] = []
         self._workspaces: list[tuple[np.ndarray, np.ndarray]] = []
         self._samples_in_window: int = 0
         self._reference_window_size: int = 0
         self._initialized: bool = False
-        self._x_array: np.ndarray = np.empty(0)
 
     def _build_tree(
         self,
@@ -178,34 +178,6 @@ class HalfSpaceTrees(BaseModel):
         self._workspaces = workspaces
         self._initialized = True
 
-    def _validate_schema(self, x: dict[str, float]) -> None:
-        """Set the first feature schema or reject any later schema change."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        if self.feature_names is None:
-            self.feature_names = sorted(x.keys())
-            self._n_features = len(self.feature_names)
-            self._x_array = np.zeros(self._n_features)
-            return
-
-        if set(x) != set(self.feature_names):
-            expected = ", ".join(self.feature_names)
-            received = ", ".join(sorted(x))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected}], received [{received}]."
-            )
-
-    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
-        """Validate and convert a sample using the established feature order."""
-        self._validate_schema(x)
-        if self.feature_names is None:
-            raise RuntimeError("Feature schema is not initialized")
-        for index, feature in enumerate(self.feature_names):
-            self._x_array[index] = x[feature]
-        return self._x_array
-
     def learn_one(self, x: dict[str, float]) -> None:
         """
         Update the model with a new observation.
@@ -217,7 +189,9 @@ class HalfSpaceTrees(BaseModel):
             x: Feature dictionary with string keys and float values.
                 Values should be in [0, 1] range for best results.
         """
-        x_array = self._vectorize(x)
+        prepared = self._schema.preview(x)
+        if not self._schema.is_established:
+            self._n_features = len(prepared.names)
 
         # Build trees on first sample
         if not self._initialized:
@@ -225,7 +199,7 @@ class HalfSpaceTrees(BaseModel):
 
         # Update mass in each tree
         for tree in self._trees:
-            self._update_mass(tree, x_array)
+            self._update_mass(tree, prepared.values)
 
         self._samples_in_window += 1
 
@@ -233,6 +207,7 @@ class HalfSpaceTrees(BaseModel):
             self._reference_window_size = self._samples_in_window
             self._reset_masses()
             self._samples_in_window = 0
+        self._schema.commit(prepared)
 
     def _update_mass(self, node: HSTNode | HSTLeaf, x: np.ndarray) -> None:
         """
@@ -272,14 +247,17 @@ class HalfSpaceTrees(BaseModel):
         Returns:
             Anomaly score in [0, 1]. Higher = more anomalous.
         """
+        prepared = self._schema.preview(x)
         if not self._initialized or self._reference_window_size == 0:
             return 0.0
 
-        x_array = self._vectorize(x)
-
         total_score = 0.0
         for tree in self._trees:
-            total_score += self._compute_tree_score(tree, x_array, depth=0)
+            total_score += self._compute_tree_score(
+                tree,
+                prepared.values,
+                depth=0,
+            )
 
         max_score = self.n_trees * self._reference_window_size * (2**self.height)
         if max_score <= 0:
@@ -301,7 +279,7 @@ class HalfSpaceTrees(BaseModel):
             Weighted mass contribution.
         """
         if isinstance(node, HSTLeaf) or node.r_mass <= 0.1 * self.window_size:
-            return node.r_mass * (2**depth)
+            return float(node.r_mass * (2**depth))
 
         if x[node.feature] < node.threshold:
             return self._compute_tree_score(node.left, x, depth + 1)

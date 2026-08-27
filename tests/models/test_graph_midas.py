@@ -125,7 +125,8 @@ class TestMIDAS(unittest.TestCase):
             for _ in range(timestamp):
                 model.learn_one({"src": 1.0, "dst": 2.0, "t": float(timestamp)})
 
-        bucket, src, dst = model._prepare_sample({"src": 1.0, "dst": 9.0, "t": 8.0})
+        event = model._boundary.preview({"src": 1.0, "dst": 9.0, "t": 8.0})
+        bucket, src, dst = event.bucket, event.source, event.destination
         rollover = bucket > model._current_bucket  # type: ignore[operator]
         time_index = model._time_index(bucket)
         edge = model._candidate_score(

@@ -6,6 +6,7 @@ from typing import Literal
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 
 class LocalOutlierFactor(BaseModel):
@@ -76,7 +77,7 @@ class LocalOutlierFactor(BaseModel):
 
     def _reset_state(self) -> None:
         """Initialize or reset internal state."""
-        self.feature_names: list[str] | None = None
+        self._schema = FeatureSchema()
         self._points: deque[np.ndarray] = deque(maxlen=self.window_size)
 
     @property
@@ -91,17 +92,9 @@ class LocalOutlierFactor(BaseModel):
         Args:
             x: Feature dictionary with string keys and float values.
         """
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        # Initialize feature names on first sample
-        if self.feature_names is None:
-            self.feature_names = sorted(x.keys())
-
-        # Convert to numpy array
-        point = np.array([x[f] for f in self.feature_names], dtype=np.float64)
-
-        self._points.append(point)
+        prepared = self._schema.preview(x)
+        self._points.append(prepared.values.copy())
+        self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
         """
@@ -118,15 +111,15 @@ class LocalOutlierFactor(BaseModel):
         Returns:
             LOF score. Higher values indicate more anomalous points.
         """
+        prepared = self._schema.preview(x)
+
         # Need at least k+1 points to compute LOF
         if len(self._points) <= self.k:
             return 0.0
-
-        if self.feature_names is None:
+        if not self._schema.is_established:
             return 0.0
 
-        # Convert query point to numpy array
-        query = np.array([x[f] for f in self.feature_names], dtype=np.float64)
+        query = prepared.values
 
         # Compute distances to all points in window
         distances = self._compute_distances(query)
@@ -176,7 +169,7 @@ class LocalOutlierFactor(BaseModel):
         else:  # manhattan
             distances = np.sum(np.abs(points_array - point), axis=1)
 
-        return distances
+        return np.asarray(distances, dtype=np.float64)
 
     def _get_k_neighbors(
         self, distances: np.ndarray, exclude_index: int | None = None
@@ -198,7 +191,7 @@ class LocalOutlierFactor(BaseModel):
         k_neighbors = self._get_k_neighbors(distances, exclude_index=idx)
         if len(k_neighbors) < self.k:
             return float("inf")
-        return distances[k_neighbors[-1]]
+        return float(distances[k_neighbors[-1]])
 
     def _compute_reach_dist(
         self, point: np.ndarray, neighbor_idx: int, dist: float

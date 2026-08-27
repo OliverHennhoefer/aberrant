@@ -4,7 +4,10 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.svm.gadget import GADGETSVM, IncrementalOneClassSVM
+from aberrant.model.svm.gadget import (
+    GraphGatedOneClassSVM,
+    IncrementalOneClassSVM,
+)
 from tests.utils import DataGenerator, TestAssertions
 
 
@@ -98,11 +101,13 @@ class TestIncrementalOneClassSVM(unittest.TestCase):
 class TestGADGETSVM(unittest.TestCase):
     """Test suite for GADGET SVM model."""
 
-    def create_model(self) -> GADGETSVM:
+    def create_model(self) -> GraphGatedOneClassSVM:
         """Create GADGET SVM instance for testing."""
         # Simple linear graph: 0 -> 1 -> 2
         graph = {0: [1], 1: [2], 2: []}
-        return GADGETSVM(graph=graph, threshold=0.1, learning_rate=0.01)
+        return GraphGatedOneClassSVM(
+            graph=graph, threshold=0.1, learning_rate=0.01
+        )
 
     def setUp(self):
         """Set up test fixtures."""
@@ -111,7 +116,7 @@ class TestGADGETSVM(unittest.TestCase):
 
     def test_initialization_with_default_graph(self):
         """Test GADGET SVM initialization with default graph."""
-        model = GADGETSVM()
+        model = GraphGatedOneClassSVM()
 
         # Should create default graph
         expected_graph = {0: [1], 1: [2], 2: []}
@@ -130,7 +135,7 @@ class TestGADGETSVM(unittest.TestCase):
         # More complex graph: multiple roots and branches
         graph = {0: [2, 3], 1: [3, 4], 2: [], 3: [5], 4: [], 5: []}
 
-        model = GADGETSVM(graph=graph)
+        model = GraphGatedOneClassSVM(graph=graph)
 
         self.assertEqual(model.graph, graph)
 
@@ -143,7 +148,7 @@ class TestGADGETSVM(unittest.TestCase):
 
     def test_feature_order_consistency(self):
         """Test that feature order is established and maintained."""
-        model = GADGETSVM()
+        model = GraphGatedOneClassSVM()
 
         # First data point establishes feature order
         first_point = {"c": 3.0, "a": 1.0, "b": 2.0}
@@ -151,7 +156,7 @@ class TestGADGETSVM(unittest.TestCase):
 
         # Feature order should be alphabetical (tuple for fast comparison)
         expected_order = ("a", "b", "c")
-        self.assertEqual(model.feature_order, expected_order)
+        self.assertEqual(model._schema.names, expected_order)
 
         # Subsequent data with same keys should work
         model.learn_one({"b": 5.0, "c": 6.0, "a": 4.0})
@@ -162,7 +167,7 @@ class TestGADGETSVM(unittest.TestCase):
 
     def test_inconsistent_features_raise_error(self):
         """Test that inconsistent features raise ValueError."""
-        model = GADGETSVM()
+        model = GraphGatedOneClassSVM()
 
         # Establish feature order
         model.learn_one({"a": 1.0, "b": 2.0})
@@ -177,7 +182,9 @@ class TestGADGETSVM(unittest.TestCase):
         """Test that graph traversal respects threshold parameter."""
         # Create graph where high threshold prevents deep traversal
         graph = {0: [1], 1: [2], 2: [3], 3: []}
-        model = GADGETSVM(graph=graph, threshold=999.0)  # Very high threshold
+        model = GraphGatedOneClassSVM(
+            graph=graph, threshold=999.0
+        )  # Very high threshold
 
         # Train on data
         training_data = self.data_generator.generate_streaming_data(n=50, n_features=2)
@@ -196,7 +203,7 @@ class TestGADGETSVM(unittest.TestCase):
         # Graph with two separate components
         graph = {0: [2], 1: [3], 2: [], 3: []}
 
-        model = GADGETSVM(graph=graph)
+        model = GraphGatedOneClassSVM(graph=graph)
 
         # Should identify both 0 and 1 as roots
         self.assertCountEqual(model.root_nodes, [0, 1])
@@ -214,7 +221,7 @@ class TestGADGETSVM(unittest.TestCase):
 
     def test_score_before_learning(self):
         """Test that scoring before learning returns 0.0."""
-        model = GADGETSVM()
+        model = GraphGatedOneClassSVM()
 
         score = model.score_one({"feature": 1.0})
         self.assertEqual(score, 0.0)
@@ -229,7 +236,7 @@ class TestGADGETSVM(unittest.TestCase):
             with self.subTest(threshold=threshold):
                 # Create separate graph for each test to avoid interference
                 graph = {0: [1], 1: [2], 2: []}
-                model = GADGETSVM(graph=graph, threshold=threshold)
+                model = GraphGatedOneClassSVM(graph=graph, threshold=threshold)
 
                 # Train
                 for point in training_data:
@@ -251,7 +258,7 @@ class TestGADGETSVM(unittest.TestCase):
         models = []
         for lr in learning_rates:
             graph = {0: [1], 1: []}  # Simple graph
-            model = GADGETSVM(graph=graph, learning_rate=lr)
+            model = GraphGatedOneClassSVM(graph=graph, learning_rate=lr)
             models.append(model)
 
         # Train all models on same data
@@ -279,7 +286,7 @@ class TestGADGETSVM(unittest.TestCase):
             4: [],  # End
         }
 
-        model = GADGETSVM(graph=graph, threshold=0.1)
+        model = GraphGatedOneClassSVM(graph=graph, threshold=0.1)
 
         # Should handle complex traversal
         data = self.data_generator.generate_streaming_data(n=80, n_features=3)
@@ -301,7 +308,7 @@ class TestGADGETSVM(unittest.TestCase):
 
     def test_edge_cases(self):
         """Test edge cases and boundary conditions."""
-        model = GADGETSVM()
+        model = GraphGatedOneClassSVM()
 
         # Test with zero values
         zero_point = {"a": 0.0, "b": 0.0}
@@ -331,7 +338,7 @@ class TestGADGETSVMSpecialCases(unittest.TestCase):
     def test_single_node_graph(self):
         """Test GADGET SVM with single node graph."""
         graph = {0: []}
-        model = GADGETSVM(graph=graph)
+        model = GraphGatedOneClassSVM(graph=graph)
 
         self.assertEqual(model.root_nodes, [0])
         self.assertEqual(len(model.svms), 1)
@@ -346,7 +353,7 @@ class TestGADGETSVMSpecialCases(unittest.TestCase):
     def test_empty_graph(self):
         """Test GADGET SVM with empty graph."""
         graph = {}
-        model = GADGETSVM(graph=graph)
+        model = GraphGatedOneClassSVM(graph=graph)
 
         # Should handle empty graph gracefully
         self.assertEqual(len(model.svms), 0)
@@ -360,7 +367,7 @@ class TestGADGETSVMSpecialCases(unittest.TestCase):
         """Test graph that has nodes mentioned only in neighbor lists."""
         graph = {0: [1, 2]}  # Nodes 1 and 2 are not keys but are neighbors
 
-        model = GADGETSVM(graph=graph)
+        model = GraphGatedOneClassSVM(graph=graph)
 
         # Should create entries for all nodes
         expected_graph = {0: [1, 2], 1: [], 2: []}

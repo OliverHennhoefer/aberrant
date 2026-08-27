@@ -68,7 +68,7 @@ class TestKitNET(unittest.TestCase):
         score = model.score_one({"x": 1.0, "y": 2.0})
 
         self.assertEqual(score, 0.0)
-        self.assertIsNone(model._feature_order)
+        self.assertIsNone(model._schema.names)
         self.assertEqual(model.phase, "feature_map_warmup")
 
     def test_phase_transitions(self) -> None:
@@ -185,10 +185,10 @@ class TestKitNET(unittest.TestCase):
         model = self.create_model()
         for i in range(40):
             model.learn_one({"x": float(i), "y": float(i + 1)})
-        self.assertIsNotNone(model._feature_order)
+        self.assertIsNotNone(model._schema.names)
 
         model.reset()
-        self.assertIsNone(model._feature_order)
+        self.assertIsNone(model._schema.names)
         self.assertEqual(model.phase, "feature_map_warmup")
         self.assertFalse(model.is_ready)
         self.assertEqual(model.score_one({"x": 0.0, "y": 1.0}), 0.0)

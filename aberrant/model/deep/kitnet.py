@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import FeatureSchema
 
 _PHASE_FEATURE_MAP = "feature_map_warmup"
 _PHASE_DETECTOR = "detector_warmup"
@@ -145,7 +146,7 @@ class OnlineAutoencoderEnsemble(BaseModel):
     def _reset_state(self) -> None:
         """Reset learned state while preserving hyperparameters."""
         self.rng = np.random.default_rng(self.seed)
-        self._feature_order: tuple[str, ...] | None = None
+        self._schema = FeatureSchema()
         self._phase = _PHASE_FEATURE_MAP
 
         self._samples_seen = 0
@@ -173,61 +174,6 @@ class OnlineAutoencoderEnsemble(BaseModel):
     def is_ready(self) -> bool:
         """Whether the model is ready to produce non-zero anomaly scores."""
         return self._phase == _PHASE_READY
-
-    def _validate_input(self, x: dict[str, float]) -> None:
-        """Validate one-sample input."""
-        if not x:
-            raise ValueError("Input dictionary cannot be empty")
-
-        for key, value in x.items():
-            if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            if not isinstance(value, int | float | np.number):
-                raise ValueError(f"Feature '{key}' is not numeric")
-            if not np.isfinite(float(value)):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-    def _set_or_validate_feature_order(
-        self, x: dict[str, float], allow_initialize: bool
-    ) -> bool:
-        """Set feature order if needed and allowed, else validate key consistency."""
-        if self._feature_order is None:
-            if not allow_initialize:
-                return False
-            self._feature_order = tuple(sorted(x.keys()))
-            return True
-
-        expected = set(self._feature_order)
-        received = set(x.keys())
-        if expected != received:
-            expected_keys = ", ".join(self._feature_order)
-            received_keys = ", ".join(sorted(x.keys()))
-            raise ValueError(
-                "Inconsistent feature keys. "
-                f"Expected [{expected_keys}], received [{received_keys}]."
-            )
-        return True
-
-    def _vectorize(
-        self, x: dict[str, float], allow_initialize_feature_order: bool
-    ) -> np.ndarray | None:
-        """
-        Convert one sample to a stable-order vector.
-
-        Returns ``None`` when vectorization is not possible without mutating
-        state (e.g. score before any learn call).
-        """
-        ready = self._set_or_validate_feature_order(
-            x, allow_initialize=allow_initialize_feature_order
-        )
-        if not ready or self._feature_order is None:
-            return None
-
-        return np.fromiter(
-            (float(x[feature]) for feature in self._feature_order),
-            dtype=np.float64,
-            count=len(self._feature_order),
-        )
 
     def _update_feature_statistics(self, x_vec: np.ndarray) -> None:
         """Accumulate first/second moments for online correlation estimates."""
@@ -363,12 +309,8 @@ class OnlineAutoencoderEnsemble(BaseModel):
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update model state with a single sample."""
-        self._validate_input(x)
-        x_vec = self._vectorize(x, allow_initialize_feature_order=True)
-        if x_vec is None:
-            return
-
-        self._samples_seen += 1
+        prepared = self._schema.preview(x)
+        x_vec = prepared.values
 
         if self._phase == _PHASE_FEATURE_MAP:
             self._update_feature_statistics(x_vec)
@@ -381,28 +323,23 @@ class OnlineAutoencoderEnsemble(BaseModel):
                     self._phase = _PHASE_READY
                 else:
                     self._phase = _PHASE_DETECTOR
-            return
-
-        if self._phase == _PHASE_DETECTOR:
+        elif self._phase == _PHASE_DETECTOR:
             self._train_detector(x_vec)
             self._detector_samples += 1
             if self._detector_samples >= self.ad_grace:
                 self._phase = _PHASE_READY
-            return
-
-        if self._phase == _PHASE_READY and self.adaptive_after_warmup:
+        elif self._phase == _PHASE_READY and self.adaptive_after_warmup:
             self._train_detector(x_vec)
+
+        self._samples_seen += 1
+        self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score for a sample without mutating model state."""
-        self._validate_input(x)
-        x_vec = self._vectorize(x, allow_initialize_feature_order=False)
+        prepared = self._schema.preview(x)
         if self._phase != _PHASE_READY:
             return 0.0
-
-        if x_vec is None:
-            return 0.0
-        return float(max(0.0, self._score_detector(x_vec)))
+        return float(max(0.0, self._score_detector(prepared.values)))
 
     def __repr__(self) -> str:
         return (
@@ -412,7 +349,3 @@ class OnlineAutoencoderEnsemble(BaseModel):
             f"adaptive_after_warmup={self.adaptive_after_warmup}, phase='{self._phase}', "
             f"feature_groups={len(self._feature_groups)})"
         )
-
-
-# Backward-compatible alias for the historical paper-derived public name.
-KitNET = OnlineAutoencoderEnsemble

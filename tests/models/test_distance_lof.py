@@ -137,7 +137,7 @@ class TestLocalOutlierFactor(unittest.TestCase):
         """Test that feature names are sorted consistently."""
         lof = LocalOutlierFactor()
         lof.learn_one({"z": 1.0, "a": 2.0, "m": 3.0})
-        self.assertEqual(lof.feature_names, ["a", "m", "z"])
+        self.assertEqual(lof._schema.names, ("a", "m", "z"))
 
     def test_duplicate_points_do_not_produce_nan(self):
         """Test duplicate neighborhoods produce finite/non-NaN LOF."""
