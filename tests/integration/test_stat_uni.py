@@ -4,7 +4,7 @@ import unittest
 
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.stat.uni import MovingAverage, MovingMedian, MovingVariance
+from aberrant.model.stat import MovingAverage, MovingMedian, MovingVariance
 from aberrant.stream.dataset import Dataset, load
 from tests.integration._settings import MAX_TEST_STANDARD, WARMUP_SAMPLES
 

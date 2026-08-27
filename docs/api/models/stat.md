@@ -6,4 +6,4 @@ Public objects from `aberrant.model.stat`:
 - Multivariate models:
   - `MovingCovariance`
   - `MovingCorrelationCoefficient`
-  - `MovingMahalanobisDistance`
+  - `MovingMahalanobisDistance` (returns squared Mahalanobis distance)

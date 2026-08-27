@@ -4,7 +4,7 @@ from collections import deque
 import numpy as np
 from scipy.stats import kurtosis, skew
 
-from aberrant.model.stat.uni import (
+from aberrant.model.stat import (
     MovingAverage,
     MovingAverageAbsoluteDeviation,
     MovingGeometricAverage,
@@ -214,6 +214,9 @@ class TestMovingGeometricAverage(unittest.TestCase):
 
 
 class TestMovingMedian(unittest.TestCase):
+    def test_repr_reports_configured_window_size_before_warmup(self):
+        self.assertIn("window_size=5", repr(MovingMedian(5)))
+
     def test_initialization_invalid(self):
         # Testing if ValueError is raised for non-positive window size
         with self.assertRaises(ValueError):
@@ -391,8 +394,22 @@ class TestUnivariateFeatureSchema(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     model.learn_one({"unexpected": 2.0})
 
+    def test_invalid_values_are_rejected_before_feature_or_window_commit(self):
+        model = MovingAverage(3)
+
+        with self.assertRaisesRegex(ValueError, "must be numeric"):
+            model.learn_one({"value": "bad"})  # type: ignore[arg-type]
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            model.learn_one({"value": float("nan")})
+
+        self.assertIsNone(model.feature_name)
+        self.assertEqual(list(model.window), [])
+
 
 class TestMovingVariance(unittest.TestCase):
+    def test_repr_reports_configured_window_size_before_warmup(self):
+        self.assertIn("window_size=5", repr(MovingVariance(5)))
+
     def test_initialization_with_valid_size(self):
         mv = MovingVariance(window_size=5)
         self.assertEqual(len(mv.window), 0)
