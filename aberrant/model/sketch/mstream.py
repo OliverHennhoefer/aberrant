@@ -66,6 +66,23 @@ class MStream(BaseModel):
     Names in ``categorical_features`` must contain integer-like values. Scoring
     previews rollover, normalization, and insertion without mutating state.
 
+    Args:
+        rows: Number of independent hash rows for categorical attributes and
+            complete-record counts.
+        buckets: Number of counters per numeric histogram or hash row.
+        alpha: Factor in ``(0, 1]`` applied once to current-bucket counts when
+            an observed time bucket advances.
+        time_key: Input field containing a non-decreasing integer-like time
+            bucket. ``None`` assigns a new one-based bucket to every learned
+            arrival. The field is excluded from modeled features.
+        categorical_features: Feature names treated as integer-like categorical
+            identifiers. Every other feature is numeric and must be greater
+            than ``-1`` for the logarithmic transform.
+        warm_up_buckets: Required integer bucket-index distance from the first
+            learned bucket before scoring begins. With explicit time, skipped
+            bucket numbers contribute to this distance.
+        seed: Seed for model-local categorical and record hash generation.
+
     References:
         Bhatia, S., Jain, A., Li, P., Kumar, R., & Hooi, B. (2021). MStream:
         Fast Anomaly Detection in Multi-Aspect Streams.

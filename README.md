@@ -56,7 +56,8 @@ behind a batch-estimator abstraction.
 
 ## Installation
 
-ABERRANT supports Python 3.10, 3.11, and 3.12.
+ABERRANT requires Python 3.10 or newer and is continuously tested on CPython
+3.10, 3.11, and 3.12.
 
 ```bash
 pip install aberrant
@@ -130,14 +131,14 @@ only according to the selected model's documented semantics.
 
 | Goal | Start with |
 | --- | --- |
-| General multivariate detection | [`OnlineIsolationForest` or another isolation-forest variant](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#isolation-forest-family) |
-| Local-neighborhood or density anomalies | [`LocalOutlierFactor`, `KNN`, `SDOStream`, or a cell-based detector](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#distance-family) |
-| Compact projection or frequency sketches | [`StreamingLODA`, `MStream`, or `StreamingRSHash`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#sketch-family) |
-| Anomalous edges and graph evolution | [`AnoEdgeL`, `ISCONNA`, `MIDAS`, or `SignedGraphSketchDetector`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#graph-family) |
-| Discords in a scalar time series | [`XLagDAMP`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-family) |
-| Interpretable rolling statistics | [Univariate and multivariate moving statistics](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#statistical-family) |
-| Adaptive margin-based detection | [Online SVM models](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#svm-family) |
-| Learned reconstruction error | [`OnlineAutoencoderEnsemble` or the optional PyTorch `Autoencoder`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#deep-family) |
+| General multivariate detection | [`OnlineIsolationForest` or another isolation-forest variant](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#isolation-forests) |
+| Local-neighborhood or density anomalies | [`LocalOutlierFactor`, `KNN`, `SDOStream`, or a cell-based detector](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#distance-and-neighborhood-detectors) |
+| Compact projection or frequency sketches | [`StreamingLODA`, `MStream`, or `StreamingRSHash`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#sketch-detectors) |
+| Anomalous edges and graph evolution | [`AnoEdgeL`, `ISCONNA`, `MIDAS`, or `SignedGraphSketchDetector`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#graph-stream-detectors) |
+| Discords in a scalar time series | [`XLagDAMP`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-discord-detection) |
+| Interpretable rolling statistics | [Univariate and multivariate moving statistics](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#statistical-detectors) |
+| Adaptive margin-based detection | [Online SVM models](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#svm-detectors) |
+| Learned reconstruction error | [`OnlineAutoencoderEnsemble` or the optional PyTorch `Autoencoder`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#reconstruction-detectors) |
 | Detecting distribution drift | [`ADWIN`, `KSWIN`, or `PageHinkley`](https://oliverhennhoefer.github.io/aberrant/api/drift/) |
 | Turning a score into an alert signal | [`QuantileThreshold` or `ThresholdModel`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#core-utility-models) |
 
@@ -189,13 +190,18 @@ The dataset API downloads, validates, and caches registered benchmark data,
 then exposes it as feature dictionaries and evaluation labels:
 
 ```python
+from itertools import islice
+
+from aberrant.model.iforest import OnlineIsolationForest
 from aberrant.stream.dataset import Dataset, load
 
 dataset = load(Dataset.SHUTTLE)
+detector = OnlineIsolationForest(num_trees=25, window_size=512, seed=42)
 
-for event, label in dataset.stream():
+for event, label in islice(dataset.stream(), 100):
     score = detector.score_one(event)
     detector.learn_one(event)
+    print(f"label={label!r}, anomaly_score={score:.3f}")
 ```
 
 Labels are provided for evaluation; unsupervised detectors learn only from the
@@ -206,7 +212,8 @@ the [streaming guide](https://oliverhennhoefer.github.io/aberrant/user_guide/str
 
 > [!IMPORTANT]
 > For an honest prequential evaluation, call `score_one(event)` before
-> `learn_one(event)`. Scoring does not update pipeline state. During
+> `learn_one(event)`. Scoring does not call any component's `learn_one` or
+> incorporate the candidate into learned reference state. During
 > `Pipeline.learn_one`, each transformer first learns the event and then passes
 > its post-update transform to the next stage. Score scales and warm-up behavior
 > are model-specific, so a single numeric threshold is not portable across

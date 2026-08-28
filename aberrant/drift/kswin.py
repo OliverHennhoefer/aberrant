@@ -28,17 +28,23 @@ class KSWIN(BaseDriftDetector):
             less than window_size / 2. Default is 30.
         seed: Random seed for reproducibility. Default is None.
 
-    Example:
-        >>> detector = KSWIN(alpha=0.005)
-        >>> for value in data_stream:
-        ...     detector.update(value)
-        ...     if detector.drift_detected:
-        ...         print("Drift detected!")
+    Examples:
+        ```python
+        from aberrant.drift import KSWIN
+
+        detector = KSWIN(alpha=0.005)
+        drift_points = []
+        for index, value in enumerate([0.0] * 100 + [1.0] * 100):
+            detector.update(value)
+            if detector.drift_detected:
+                drift_points.append(index)
+        ```
 
     References:
         Raab, C., Heusinger, M., & Schleif, F. M. (2020). Reactive Soft
         Prototype Computing for Concept Drift Streams.
         Neurocomputing, 416, 340-351.
+        https://doi.org/10.1016/j.neucom.2019.11.111
     """
 
     def __init__(

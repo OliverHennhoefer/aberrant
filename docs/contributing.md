@@ -1,10 +1,9 @@
 # Contributing
 
-The canonical contribution guide is in the repository root at `CONTRIBUTING.md`.
+The canonical, versioned instructions are in
+[`CONTRIBUTING.md`](https://github.com/OliverHennhoefer/aberrant/blob/main/CONTRIBUTING.md).
+They cover environment setup, local Git hooks, linting, typing, tests, builds,
+optional-dependency policy, and pull-request expectations.
 
-It covers:
-
-- local setup
-- coding standards
-- test and lint commands
-- pull request checklist
+Keeping one canonical guide avoids a stale second copy in the generated site.
+Use the link above for the commands that apply to the current branch.

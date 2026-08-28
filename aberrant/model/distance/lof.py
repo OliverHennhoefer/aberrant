@@ -21,11 +21,10 @@ class LocalOutlierFactor(BaseModel):
     computes LOF scores on demand.
 
     Note:
-        Time Complexity: ``score_one`` has O(k × n) complexity where n is the
-        window size, as it computes distances for each of k neighbors. For
-        high-throughput scenarios with large windows, consider using smaller
-        k values or reducing window_size. River's ILOF uses incremental
-        updates for better amortized performance.
+        Scoring recomputes the query neighborhood and the neighborhoods of its
+        selected neighbors from the current window. Consequently, scoring cost
+        grows quickly with ``k`` and ``window_size``; bound both for
+        latency-sensitive streams.
 
     Args:
         k: Number of neighbors to use for density estimation. Default is 10.
@@ -34,13 +33,24 @@ class LocalOutlierFactor(BaseModel):
         distance: Distance metric to use. Either "euclidean" or "manhattan".
             Default is "euclidean".
 
-    Example:
-        >>> lof = LocalOutlierFactor(k=5, window_size=500)
-        >>> for point in data_stream:
-        ...     score = lof.score_one(point)
-        ...     lof.learn_one(point)
-        ...     if score > 1.5:  # LOF > 1 indicates outlier
-        ...         print("Anomaly detected!")
+    Examples:
+        ```python
+        from aberrant.model.distance import LocalOutlierFactor
+
+        stream = [
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.1, "y": 0.0},
+            {"x": 0.0, "y": 0.1},
+            {"x": 3.0, "y": 3.0},
+        ]
+        lof = LocalOutlierFactor(k=2, window_size=20)
+        scores = []
+        for point in stream:
+            score = lof.score_one(point)
+            scores.append(score)
+            lof.learn_one(point)
+        assert len(scores) == len(stream)
+        ```
 
     References:
         Breunig, M. M., Kriegel, H. P., Ng, R. T., & Sander, J. (2000).

@@ -7,8 +7,10 @@ class BaseSimilaritySearchEngine(abc.ABC):
     """
     Abstract base class for similarity search engines.
 
-    This class defines the interface for similarity search engines that can store
-    data points and find similar neighbors for query points.
+    This class defines the interface for engines that store observations and
+    reduce a nearest-neighbor query to one scalar. The interface does not impose
+    whether that scalar is a distance, dissimilarity, or similarity; callers must
+    follow the concrete engine's contract.
 
     Subclasses must implement the `append` and `search` methods.
     """
@@ -20,7 +22,7 @@ class BaseSimilaritySearchEngine(abc.ABC):
 
         Args:
             x: A dictionary representing a single data point. The keys are feature names,
-               and the values are the corresponding feature values.
+                and the values are the corresponding feature values.
         """
         pass
 
@@ -34,8 +36,7 @@ class BaseSimilaritySearchEngine(abc.ABC):
             n_neighbors: The number of nearest neighbors to find.
 
         Returns:
-            A similarity or distance score based on the nearest neighbors.
-            Should return a consistent numeric value (e.g., 0.0 if insufficient data).
+            The engine-specific scalar summary of the nearest-neighbor query.
         """
         pass
 

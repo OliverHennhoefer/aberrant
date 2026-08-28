@@ -24,6 +24,24 @@ class SDOStream(BaseModel):
     - State is bounded by ``k`` and independent of stream length.
     - Feature schema is fixed after the first ``learn_one`` call.
 
+    Args:
+        k: Maximum number of observers retained.
+        T: Positive fading time scale and observer-sampling time scale.
+        qv: Activity quantile below which observers are excluded, in
+            ``[0, 1)``.
+        x_neighbors: Number of nearest active observers whose distances enter
+            the median score. It cannot exceed ``k``.
+        distance: Distance metric: ``"euclidean"``, ``"manhattan"``,
+            ``"chebyshev"``, or ``"minkowski"``.
+        minkowski_p: Positive order used only for Minkowski distance.
+        time_key: Event-time field to exclude from the feature vector. ``None``
+            uses one-based arrival order; explicit times must be finite and
+            non-decreasing.
+        warm_up_observers: Observer count required before scoring. ``None``
+            resolves to at least ``x_neighbors`` and at least two, capped at
+            ``k``.
+        seed: Seed for the model-local observer-sampling generator.
+
     References:
         Hartl, A., Iglesias Vazquez, F., & Zseby, T. (2020). SDOstream:
         Low-Density Models for Streaming Outlier Detection.

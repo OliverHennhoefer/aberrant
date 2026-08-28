@@ -341,6 +341,14 @@ class StreamRandomHistogramForest(BaseModel):
     ``score_one`` previews insertion along the affected tree paths so it
     reproduces the candidate-inclusive score without mutating learned state.
 
+    Args:
+        n_estimators: Number of independently seeded random histogram trees.
+        max_depth: Maximum tree depth.
+        window_size: Number of samples in the initial reference window and in
+            each subsequent replacement window. It must exceed one.
+        seed: Root seed from which independent per-tree random streams are
+            derived.
+
     References:
         Nesic, S., et al. (2022). STREamRHF: Tree-Based Unsupervised Anomaly
         Detection for Data Streams.

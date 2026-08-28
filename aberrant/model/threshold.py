@@ -20,24 +20,25 @@ class ThresholdModel(BaseModel):
     Note:
         At least one of ceiling or floor must be provided.
 
-    Example:
-        >>> # One-sided threshold (ceiling only)
-        >>> model = ThresholdModel(ceiling=10.0)
-        >>> model.score_one({"temp": 15.0})  # Returns 1.0 (violation)
-        >>> model.score_one({"temp": 5.0})   # Returns 0.0 (normal)
+    Examples:
+        ```python
+        from aberrant.model import ThresholdModel
 
-        >>> # Two-sided corridor
-        >>> model = ThresholdModel(ceiling=100.0, floor=0.0)
-        >>> model.score_one({"temp": 50.0})   # Returns 0.0 (within corridor)
-        >>> model.score_one({"temp": -5.0})   # Returns 1.0 (below floor)
+        ceiling_only = ThresholdModel(ceiling=10.0)
+        assert ceiling_only.score_one({"temp": 15.0}) == 1.0
+        assert ceiling_only.score_one({"temp": 5.0}) == 0.0
 
-        >>> # Per-feature thresholds
-        >>> model = ThresholdModel(
-        ...     ceiling={"temp": 100.0, "pressure": 50.0},
-        ...     floor={"temp": 0.0, "pressure": 10.0}
-        ... )
-        >>> model.score_one({"temp": 50.0, "pressure": 30.0})  # Returns 0.0
-        >>> model.score_one({"temp": 150.0, "pressure": 30.0}) # Returns 1.0
+        corridor = ThresholdModel(ceiling=100.0, floor=0.0)
+        assert corridor.score_one({"temp": 50.0}) == 0.0
+        assert corridor.score_one({"temp": -5.0}) == 1.0
+
+        per_feature = ThresholdModel(
+            ceiling={"temp": 100.0, "pressure": 50.0},
+            floor={"temp": 0.0, "pressure": 10.0},
+        )
+        assert per_feature.score_one({"temp": 50.0, "pressure": 30.0}) == 0.0
+        assert per_feature.score_one({"temp": 150.0, "pressure": 30.0}) == 1.0
+        ```
     """
 
     def __init__(

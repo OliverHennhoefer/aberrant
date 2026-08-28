@@ -23,10 +23,14 @@ class IncrementalPCA(BaseTransformer):
         tol: Tolerance for considering residual significance.
         forgetting_factor: Weight for new values (0 < f < 1). If None, uses 1/t.
 
-    Example:
-        >>> pca = IncrementalPCA(n_components=2)
-        >>> pca.learn_one({"x": 1.0, "y": 2.0, "z": 3.0})
-        >>> transformed = pca.transform_one({"x": 1.5, "y": 2.5, "z": 3.5})
+    Examples:
+        ```python
+        from aberrant.transform.projection import IncrementalPCA
+
+        pca = IncrementalPCA(n_components=2)
+        pca.learn_one({"x": 1.0, "y": 2.0, "z": 3.0})
+        transformed = pca.transform_one({"x": 1.5, "y": 2.5, "z": 3.5})
+        ```
     """
 
     def __init__(

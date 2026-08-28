@@ -27,6 +27,23 @@ class StreamingRSHash(BaseModel):
     - Memory usage is bounded by ``components_num * hash_num * bins``.
     - Feature schema is fixed after the first ``learn_one`` call.
 
+    Args:
+        components_num: Number of independently sampled feature subspaces.
+        hash_num: Number of independent hash tables per subspace.
+        bins: Number of counters in every hash table.
+        subspace_size: Features sampled without replacement per component.
+            ``None`` uses ``ceil(sqrt(n_features))``; an explicit value cannot
+            exceed the established feature count.
+        bin_width: Positive quantization width in online-standardized feature
+            coordinates.
+        decay: Non-negative exponential fading rate. Counts are scaled by
+            ``exp(-decay * elapsed_time)``.
+        warm_up_samples: Number of learned samples required before scoring.
+        time_key: Event-time field to exclude from the feature vector. ``None``
+            uses one-based arrival order; explicit times must be finite and
+            non-decreasing.
+        seed: Seed for model-local subspace, shift, and hash generation.
+
     References:
         Sathe, S., & Aggarwal, C. C. (2016). Subspace Outlier Detection in
         Linear Time with Randomized Hashing. IEEE ICDM.

@@ -27,6 +27,24 @@ class StreamingLODA(BaseModel):
     - Memory is bounded by fixed-size projection and histogram state.
     - Feature schema is fixed after the first ``learn_one`` call.
 
+    Args:
+        n_projections: Number of random one-dimensional projections and
+            histograms.
+        n_bins: Fixed number of equal-width bins fitted per projection.
+        sparsity: Fraction of input features active in each projection, in
+            ``(0, 1]``. ``None`` uses ``min(1, 1 / sqrt(n_features))``.
+        warm_up_samples: Number of projected learned samples used to fit the
+            fixed histogram edges and initial counts.
+        decay: Factor in ``(0, 1]`` applied to all histogram counts before each
+            post-warm-up learned insertion.
+        time_key: Event-time field to exclude from the feature vector. ``None``
+            uses one-based arrival order; explicit times must be finite and
+            non-decreasing. Time deltas do not alter ``decay``.
+        pseudocount: Positive additive smoothing count for each bin.
+        predict_threshold: Non-negative score boundary used by ``predict_one``.
+        seed: Seed for model-local sparse projection generation.
+        eps: Positive numerical floor for bin widths and log-density scoring.
+
     References:
         Pevny, T. (2016). Loda: Lightweight on-line detector of anomalies.
         Machine Learning, 102, 275-304.

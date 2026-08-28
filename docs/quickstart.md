@@ -1,59 +1,119 @@
 # Quickstart
 
-This page shows a complete streaming loop with a model and a dataset stream.
+This page starts with an offline, base-install example. It makes the event
+lifecycle, warm-up policy, and score ordering explicit rather than hiding them
+inside a helper.
 
-## 1. Build a model
+## Score, then learn
+
+At event *t*, prequential (test-then-train) processing uses the state learned
+through event *t - 1*:
+
+1. Construct the event mapping.
+2. Call `score_one(event)` without learning the candidate.
+3. Record or act on that score.
+4. Call `learn_one(event)` to update state for the next event.
+
+The first 64 observations below are an application-defined warm-up and are not
+included in the ranked results.
 
 ```python
+import numpy as np
+
 from aberrant.model.iforest import OnlineIsolationForest
+from aberrant.transform.preprocessing import StandardScaler
 
-model = OnlineIsolationForest(
-    num_trees=50,
+rng = np.random.default_rng(7)
+normal = rng.normal(loc=0.0, scale=1.0, size=(400, 2))
+anomalies = rng.normal(loc=5.0, scale=0.5, size=(16, 2))
+stream = np.vstack([normal, anomalies])
+
+detector = StandardScaler() | OnlineIsolationForest(
+    num_trees=25,
     max_leaf_samples=32,
-    window_size=512,
+    window_size=256,
+    seed=7,
 )
+
+warm_up = 64
+scores: list[tuple[int, float]] = []
+
+for index, values in enumerate(stream):
+    event = {"x": float(values[0]), "y": float(values[1])}
+
+    if index >= warm_up:
+        scores.append((index, detector.score_one(event)))
+
+    detector.learn_one(event)
+
+for index, score in sorted(scores, key=lambda item: item[1], reverse=True)[:8]:
+    print(f"event={index}, anomaly_score={score:.3f}")
 ```
 
-## 2. Load a stream
+The `StandardScaler` learns the event before producing the value used by
+`OnlineIsolationForest.learn_one`. Scoring does not call either component's
+learning method and uses scaler state from prior learned events. See
+[Pipelines](user_guide/pipelines.md) for the complete ordering contract.
+
+## Convert scores into a decision signal
+
+An anomaly score is evidence, not a universal probability. A threshold is an
+application policy that must be calibrated on the selected detector's score
+distribution.
+
+`QuantileThreshold` maintains a sliding score window. Call its `score_one`
+before `learn_one` so the candidate score is compared with prior scores only:
 
 ```python
-from aberrant.stream.dataset import Dataset, load
+from aberrant.model import QuantileThreshold
 
-dataset = load(Dataset.SHUTTLE)
+score_stream = [0.10, 0.12, 0.09, 0.15, 0.11, 0.13, 0.92, 0.14]
+threshold = QuantileThreshold(quantile=0.8, window_size=5)
+
+for score in score_stream:
+    threshold_input = {"score": score}
+    thresholded_score = threshold.score_one(threshold_input)
+    is_anomaly = thresholded_score == 1.0
+    threshold.learn_one(threshold_input)
+    print(
+        f"score={score:.2f}, "
+        f"thresholded_score={thresholded_score:.2f}, "
+        f"anomaly={is_anomaly}"
+    )
 ```
 
-## 3. Online train + score
+During its initial window, `QuantileThreshold.score_one` returns `0.0`. Once
+ready, it returns `1.0` at or above the learned quantile and a normalized value
+below `1.0` otherwise. It is not a calibrated anomaly probability.
 
-```python
-from sklearn.metrics import average_precision_score
+## Continue from here
 
-labels, scores = [], []
+<div class="grid cards" markdown>
 
-for i, (x, y) in enumerate(dataset.stream()):
-    # Warm up on normal points only.
-    if i < 2000:
-        if y == 0:
-            model.learn_one(x)
-        continue
+-   **Select a model**
 
-    score = model.score_one(x)
-    model.learn_one(x)
-    labels.append(y)
-    scores.append(score)
+    Compare score scales, state bounds, warm-up rules, and input contracts.
 
-print("PR-AUC:", average_precision_score(labels, scores))
-```
+    [Models](user_guide/models.md)
 
-## 4. Add thresholding
+-   **Evaluate honestly**
 
-`OnlineIsolationForest` returns scores in `[0, 1]`. You can add a threshold model:
+    Compute average precision and ROC AUC without training on the event being
+    evaluated.
 
-```python
-from aberrant.model import ThresholdModel
+    [Evaluation](user_guide/evaluation.md)
 
-threshold = ThresholdModel(ceiling={"score": 0.8})
+-   **Use benchmark streams**
 
-for x in stream_of_points:
-    score = model.score_one(x)
-    is_anomaly = threshold.score_one({"score": score}) == 1.0
-```
+    Download, validate, cache, and batch registered NPZ datasets.
+
+    [Streaming datasets](user_guide/streaming.md)
+
+-   **Monitor change**
+
+    Feed a scalar signal into ADWIN, KSWIN, or Page-Hinkley and own the response
+    policy explicitly.
+
+    [Drift detection](user_guide/drift.md)
+
+</div>

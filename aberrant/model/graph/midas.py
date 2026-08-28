@@ -94,6 +94,26 @@ class MIDAS(BaseModel):
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by fixed-size sketches.
 
+    Args:
+        source_key: Input field containing the integer-like source identifier.
+        destination_key: Input field containing the integer-like destination
+            identifier.
+        time_key: Input field containing a non-decreasing integer-like time
+            bucket. ``None`` assigns a new one-based bucket to every learned
+            arrival.
+        count_min_rows: Number of independently hashed rows in each count-min
+            sketch.
+        count_min_cols: Number of counters per sketch row.
+        time_decay_factor: Factor in ``(0, 1]`` applied to current edge and
+            endpoint sketches at bucket changes in relational mode. NormalCore
+            clears its current edge sketch instead.
+        warm_up_samples: Number of learned edges before scoring begins.
+        use_relational: Use MIDAS-R endpoint sketches and decayed current
+            counts. ``False`` selects the edge-only NormalCore.
+        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
+            statistic.
+        seed: Seed for model-local sketch hash generation.
+
     References:
         Bhatia, S., Hooi, B., Yoon, M., Shin, K., & Faloutsos, C. (2020).
         MIDAS: Microcluster-Based Detector of Anomalies in Edge Streams.

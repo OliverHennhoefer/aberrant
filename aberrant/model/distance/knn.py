@@ -3,57 +3,43 @@ from aberrant.base.similarity import BaseSimilaritySearchEngine
 
 
 class KNN(BaseModel):
-    """
-    K-Nearest Neighbors (KNN) model for similarity-based machine learning.
+    """Nearest-neighbor anomaly scorer backed by a search engine.
 
-    This class implements a KNN algorithm that relies on a similarity search engine
-    to find the nearest neighbors of a given data point. It inherits from `BaseModel`
-    and is designed to work with feature vectors represented as dictionaries.
+    ``learn_one`` appends the observation to the supplied engine. ``score_one``
+    returns exactly the scalar produced by ``engine.search(x, n_neighbors=k)``;
+    its range and orientation therefore belong to the engine's contract. With
+    :class:`~aberrant.utils.similar.faiss_engine.FaissSimilaritySearchEngine`,
+    the score is the mean Euclidean distance to the ``k`` nearest retained
+    observations, and higher values are more anomalous.
 
-    Attributes:
-        k (int): The number of nearest neighbors to consider.
-        engine (BaseSimilaritySearchEngine): The similarity search engine used to find neighbors.
+    Args:
+        k: Number of neighbors requested for each score. Must be positive.
+        similarity_engine: Mutable search engine that owns the reference window.
     """
 
     def __init__(self, k: int, similarity_engine: BaseSimilaritySearchEngine) -> None:
-        """
-        Initializes the KNN model with the specified number of neighbors and similarity engine.
-
-        Args:
-            k (int): The number of nearest neighbors to consider. Must be positive.
-            similarity_engine (BaseSimilaritySearchEngine): An instance of a similarity search engine
-                that will be used to compute nearest neighbors.
-
-        Raises:
-            ValueError: If k is not a positive integer.
-        """
+        """Initialize a nearest-neighbor scorer."""
         if k <= 0:
             raise ValueError("k must be a positive integer")
         self.k: int = k
         self.engine: BaseSimilaritySearchEngine = similarity_engine
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """
-        Adds a new data point to the model for future similarity searches.
+        """Append one observation to the search engine.
 
         Args:
-            x (Dict[str, float]): A dictionary representing a data point, where keys are feature names
-                and values are feature values.
+            x: Feature mapping to retain for subsequent queries.
         """
         self.engine.append(x)
 
     def score_one(self, x: dict[str, float]) -> float:
-        """
-        Computes a score for the given data point based on its nearest neighbors.
+        """Query the engine for a ``k``-neighbor scalar.
 
         Args:
-            x (Dict[str, float]): A dictionary representing a data point, where keys are feature names
-                and values are feature values.
+            x: Feature mapping to query without appending it.
 
         Returns:
-            float: A score representing the similarity of the data point to its nearest neighbors.
-                The exact interpretation of the score (distance, similarity, etc.) depends on the
-                underlying similarity engine implementation.
+            The value returned by the configured engine.
         """
         return self.engine.search(x, n_neighbors=self.k)
 

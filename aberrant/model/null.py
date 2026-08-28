@@ -11,11 +11,15 @@ class NullModel(BaseModel):
     indicating no anomalies are detected. It's useful as a baseline for
     comparing other anomaly detection models.
 
-    Example:
-        >>> model = NullModel()
-        >>> score = model.score_one({"feature1": 1.0, "feature2": 2.0})
-        >>> model.learn_one({"feature1": 1.0, "feature2": 2.0})
-        >>> print(score)  # Always 0.0
+    Examples:
+        ```python
+        from aberrant.model import NullModel
+
+        model = NullModel()
+        score = model.score_one({"feature1": 1.0, "feature2": 2.0})
+        model.learn_one({"feature1": 1.0, "feature2": 2.0})
+        assert score == 0.0
+        ```
     """
 
     def __init__(self) -> None:

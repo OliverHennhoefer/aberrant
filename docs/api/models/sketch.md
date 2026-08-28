@@ -1,20 +1,10 @@
-# Sketch Models
+# Sketch Models API
 
-Public objects from `aberrant.model.sketch`:
+These classes use bounded streaming adaptations. Their method names do not
+claim procedure- or score-parity with the corresponding batch/window papers.
 
-- `MStream`
-- `StreamingLODA`
-- `StreamingRSHash`
+::: aberrant.model.sketch.MStream
 
-`StreamingLODA` is a bounded-memory random-projection histogram detector.
+::: aberrant.model.sketch.StreamingLODA
 
-`MStream` is a bounded-memory streaming detector based on fixed-size sketches.
-
-`StreamingRSHash` is a bounded-memory randomized subspace hashing detector.
-
-These are bounded streaming adaptations and do not imply paper-procedure or
-score parity.
-
-Notes:
-- Supports optional explicit timestamp handling via `time_key`.
-- Returns continuous non-negative anomaly scores.
+::: aberrant.model.sketch.StreamingRSHash

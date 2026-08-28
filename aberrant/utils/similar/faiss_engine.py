@@ -17,15 +17,22 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when optional extra 
 
 
 class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
-    """
-    FAISS-based similarity search engine for efficient nearest neighbor search.
+    """Sliding-window exact Euclidean nearest-neighbor engine.
 
-    Uses a sliding window of data points and incrementally updates the FAISS index
-    for efficient similarity search operations.
+    Observations are stored in a bounded FIFO window and indexed with FAISS
+    ``IndexFlatL2``. Although FAISS reports squared L2 distances, ``search``
+    converts them to Euclidean distances and returns their arithmetic mean.
+    Feature names are sorted when the first observation is appended and must
+    then remain identical. The engine returns ``0.0`` until ``warm_up``
+    observations have been retained.
 
     Args:
         window_size: Maximum number of data points to keep in the sliding window.
         warm_up: Minimum number of data points required before search can be performed.
+
+    Note:
+        Requires the ``faiss`` optional dependency group: install
+        ``aberrant[faiss]``.
     """
 
     def __init__(self, window_size: int, warm_up: int) -> None:
@@ -97,10 +104,12 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
             n_neighbors: Number of nearest neighbors to find.
 
         Returns:
-            Mean distance to the k nearest neighbors, or 0.0 if not enough data.
+            Mean Euclidean distance to the requested nearest neighbors, or
+            ``0.0`` before warm-up completes.
 
         Raises:
-            ValueError: If n_neighbors is not positive or exceeds available data points.
+            ValueError: If ``n_neighbors`` is not positive, exceeds the number
+                of retained observations, or the feature schema differs.
         """
         if n_neighbors <= 0:
             raise ValueError("n_neighbors must be positive")

@@ -36,6 +36,23 @@ class CellNeighborhoodDetector(BaseModel):
     - Feature schema is fixed after the first ``learn_one`` call.
     - Distance metric is Euclidean.
 
+    Args:
+        k: Neighbor count at which the scarcity score reaches zero.
+        radius: Positive Euclidean neighborhood radius and grid-cell width.
+        window_size: Maximum number of learned points retained. It must exceed
+            ``k``.
+        slide_size: Number of learned events per bookkeeping slide.
+        subspace_dim: Number of randomly selected features used by the
+            cell-level pruning index. ``None`` selects half of the established
+            feature count, rounded up.
+        time_key: Event-time field to exclude from the feature vector. ``None``
+            uses one-based arrival order; explicit times must be finite and
+            non-decreasing.
+        warm_up_slides: Complete slides required before non-zero scoring.
+        predict_threshold: Score boundary used by ``predict_one``.
+        seed: Seed for the model-local subspace generator.
+        eps: Positive numerical floor used in bound calculations.
+
     References:
         Yoon, S., Lee, J.-G., & Lee, B. S. (2019). NETS: Extremely Fast
         Outlier Detection from a Data Stream via Set-Based Processing.

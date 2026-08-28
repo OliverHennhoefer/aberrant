@@ -45,6 +45,7 @@ dev = [
 ]
 docs = [
     "zensical>=0.0.45,<0.1.0",
+    "mkdocstrings-python>=2.0.7,<3.0.0",
     "pygments>=2.20.0",
 ]
 security = ["pip-audit==2.9.0"]
@@ -64,6 +65,7 @@ all = [
     "mypy>=1.13.0,<3.0.0",
     "zensical>=0.0.45,<0.1.0",
     # Keep docs stack aligned with the `docs` extra above.
+    "mkdocstrings-python>=2.0.7,<3.0.0",
     "pygments>=2.20.0",
     "scikit-learn>=1.6.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",

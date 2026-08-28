@@ -6,7 +6,7 @@ from aberrant.stream.dataset import Dataset, load
 model = OnlineIsolationForest(
     num_trees=20,
     max_leaf_samples=32,
-    type="adaptive",
+    tree_type="adaptive",
     subsample=1.0,
     window_size=512,
     branching_factor=2,
@@ -28,5 +28,5 @@ for i, (x, y) in enumerate(dataset.stream()):
     labels.append(y)
     scores.append(score)
 
-print(f"PR-AUC: {round(average_precision_score(labels, scores), 3)}")
-print(f"ROC-AUC: {round(roc_auc_score(labels, scores), 3)}")
+print(f"Average precision: {round(average_precision_score(labels, scores), 3)}")
+print(f"ROC AUC: {round(roc_auc_score(labels, scores), 3)}")

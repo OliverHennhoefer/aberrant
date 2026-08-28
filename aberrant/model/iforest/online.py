@@ -15,6 +15,28 @@ from aberrant.utils.validation import FeatureSchema, PreparedFeatures
 class OnlineIsolationForest(BaseModel):
     """Incremental isolation forest with sliding-window unlearning.
 
+    Scores are path-length isolation scores in ``[0, 1]``. Learned batches are
+    retained until ``window_size`` is exceeded, then the oldest points are
+    unlearned from the trees.
+
+    Args:
+        num_trees: Number of independently seeded online isolation trees.
+        max_leaf_samples: Base leaf population at which splitting becomes
+            eligible.
+        tree_type: ``"fixed"`` uses the base split threshold at every depth;
+            ``"adaptive"`` multiplies it by ``2**depth``.
+        subsample: Independent per-tree probability of selecting a point for a
+            tree update, in ``(0, 1]``.
+        window_size: Maximum number of learned points retained for sliding-window
+            unlearning.
+        branching_factor: Number of children created at each split. It must be
+            greater than one.
+        metric: Split geometry. Only ``"axisparallel"`` is implemented.
+        n_jobs: Tree-worker count. ``1`` is sequential, ``-1`` uses all logical
+            CPUs reported by the operating system, and a positive value requests
+            that many worker threads.
+        seed: Root seed from which independent per-tree generators are spawned.
+
     References:
         Leveni, F., Weigert Cassales, G., Pfahringer, B., Bifet, A., &
         Boracchi, G. (2024). Online Isolation Forest.
@@ -33,11 +55,7 @@ class OnlineIsolationForest(BaseModel):
         n_jobs: int = 1,
         seed: int | None = None,
     ) -> None:
-        """Initialize an Online Isolation Forest.
-
-        ``n_jobs=1`` executes sequentially; ``n_jobs=-1`` uses all available
-        logical CPUs.
-        """
+        """Initialize an Online Isolation Forest."""
         if num_trees <= 0:
             raise ValueError("num_trees must be positive")
         if max_leaf_samples <= 0:

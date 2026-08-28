@@ -28,7 +28,18 @@ class DatasetStream(Protocol):
 
 
 class NpzStreamer:
-    """Row-wise iterator over a registered NPZ dataset artifact."""
+    """Row-wise iterator over an NPZ dataset artifact.
+
+    Args:
+        file_path: Path to the NPZ archive.
+        dataset_info: Optional immutable registry metadata returned by
+            ``get_metadata`` and used in progress text.
+        feature_prefix: Prefix for zero-based generated feature names.
+        label_column: Name of the label array in the archive.
+        feature_column: Name of the two-dimensional feature array in the
+            archive.
+        show_progress: Display row-iteration progress.
+    """
 
     def __init__(
         self,
@@ -159,7 +170,13 @@ class NpzStreamer:
 
 
 class BatchStreamer:
-    """Batch samples from any typed dataset stream."""
+    """Batch samples from any typed dataset stream.
+
+    Args:
+        base_streamer: Object satisfying ``DatasetStream``.
+        batch_size: Positive maximum samples yielded per batch. The final batch
+            can be smaller.
+    """
 
     def __init__(self, base_streamer: DatasetStream, batch_size: int = 1000) -> None:
         if batch_size <= 0:

@@ -7,11 +7,12 @@ class BaseModel(abc.ABC):
     """
     Abstract base class for online anomaly detection models.
 
-    This class defines the interface that all online anomaly detection models should implement.
-    Online models process one data point at a time, updating their internal state and providing
-    anomaly scores for each data point.
+    Online models process one observation at a time. ``score_one`` evaluates an
+    observation against the model's current reference state; ``learn_one``
+    incorporates an observation into that state.
 
-    Subclasses must implement the `learn_one` and `score_one` methods.
+    Subclasses must implement ``learn_one`` and ``score_one``. Score ranges,
+    warm-up behavior, and score orientation are model-specific.
     """
 
     @abc.abstractmethod
@@ -21,7 +22,7 @@ class BaseModel(abc.ABC):
 
         Args:
             x: A dictionary representing a single data point. The keys are feature names,
-               and the values are the corresponding feature values.
+                and the values are the corresponding feature values.
         """
         raise NotImplementedError
 
@@ -32,10 +33,11 @@ class BaseModel(abc.ABC):
 
         Args:
             x: A dictionary representing a single data point. The keys are feature names,
-               and the values are the corresponding feature values.
+                and the values are the corresponding feature values.
 
         Returns:
-            The anomaly score for the data point. Higher scores indicate greater anomaly.
+            The model-specific anomaly score for the data point. Consult the
+            concrete model for its range and orientation.
         """
         raise NotImplementedError
 

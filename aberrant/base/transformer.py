@@ -11,9 +11,10 @@ class BaseTransformer(abc.ABC):
     """
     Abstract base class for online transformers.
 
-    This class defines the interface for transformers that can learn from and transform
-    data points incrementally. Transformers modify the input data while maintaining
-    the streaming nature of the processing.
+    Transformers learn and transform one feature mapping at a time. A standalone
+    transformer does not prescribe whether learning happens before or after
+    transformation; :class:`~aberrant.base.pipeline.Pipeline` deliberately uses
+    post-update transformations during ``learn_one``.
 
     Subclasses must implement the `learn_one` and `transform_one` methods.
     """
@@ -25,7 +26,7 @@ class BaseTransformer(abc.ABC):
 
         Args:
             x: A dictionary representing a single data point. The keys are feature names,
-               and the values are the corresponding feature values.
+                and the values are the corresponding feature values.
         """
         raise NotImplementedError
 

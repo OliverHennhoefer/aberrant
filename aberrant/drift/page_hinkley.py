@@ -30,16 +30,22 @@ class PageHinkley(BaseDriftDetector):
             - "down": Detect decreases in the mean
             - "both": Detect both increases and decreases (default)
 
-    Example:
-        >>> detector = PageHinkley(threshold=50.0)
-        >>> for value in data_stream:
-        ...     detector.update(value)
-        ...     if detector.drift_detected:
-        ...         print("Drift detected!")
+    Examples:
+        ```python
+        from aberrant.drift import PageHinkley
+
+        detector = PageHinkley(threshold=50.0)
+        drift_points = []
+        for index, value in enumerate([0.0] * 64 + [2.0] * 64):
+            detector.update(value)
+            if detector.drift_detected:
+                drift_points.append(index)
+        ```
 
     References:
         Page, E. S. (1954). Continuous inspection schemes.
         Biometrika, 41(1/2), 100-115.
+        https://doi.org/10.1093/biomet/41.1-2.100
     """
 
     def __init__(

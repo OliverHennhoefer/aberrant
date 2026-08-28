@@ -44,11 +44,13 @@ class Dataset(Enum):
     using the load() function. Each dataset is preprocessed for anomaly
     detection tasks with normal and anomalous samples.
 
-    Usage:
-        from aberrant.stream.dataset import Dataset, load
-        dataset = load(Dataset.FRAUD)
-        for features, label in dataset.stream():
-            # process data
+    Examples:
+        ```python
+        from aberrant.stream.dataset import Dataset, get_dataset_info
+
+        info = get_dataset_info(Dataset.FRAUD)
+        assert info.n_features == 30
+        ```
     """
 
     # Existing datasets (migrated from stream module)

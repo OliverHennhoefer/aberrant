@@ -56,5 +56,5 @@ for i in range(10_000):
     labels.append(label)
     scores.append(score)
 
-print(f"PR-AUC: {round(average_precision_score(labels, scores), 3)}")
-print(f"ROC-AUC: {round(roc_auc_score(labels, scores), 3)}")
+print(f"Average precision: {round(average_precision_score(labels, scores), 3)}")
+print(f"ROC AUC: {round(roc_auc_score(labels, scores), 3)}")

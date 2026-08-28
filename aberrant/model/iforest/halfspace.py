@@ -69,8 +69,8 @@ class HalfSpaceTrees(BaseModel):
     feature's current interval at its midpoint. Reference and latest-window
     masses are recorded at every traversed node.
 
-    IMPORTANT: This algorithm assumes features are scaled to [0, 1].
-    Use MinMaxScaler in a pipeline for best results.
+    The random work spaces are constructed for inputs in ``[0, 1]``. Scale
+    other feature ranges before passing them to this detector.
 
     Args:
         n_trees: Number of trees in the ensemble. Default is 10.
@@ -79,15 +79,25 @@ class HalfSpaceTrees(BaseModel):
             window_size samples, mass counters are reset. Default is 250.
         seed: Random seed for reproducibility. Default is None.
 
-    Example:
-        >>> from aberrant.transform.preprocessing import MinMaxScaler
-        >>> from aberrant.model.iforest import HalfSpaceTrees
-        >>> pipeline = MinMaxScaler() | HalfSpaceTrees(n_trees=25)
-        >>> for point in stream:
-        ...     score = pipeline.score_one(point)
-        ...     pipeline.learn_one(point)
-        ...     if score > 0.5:  # Threshold for anomaly
-        ...         print("Anomaly detected!")
+    Examples:
+        ```python
+        from aberrant.model.iforest import HalfSpaceTrees
+        from aberrant.transform.preprocessing import MinMaxScaler
+
+        stream = [
+            {"x": 0.0, "y": 0.1},
+            {"x": 0.2, "y": 0.1},
+            {"x": 0.1, "y": 0.3},
+        ]
+        pipeline = MinMaxScaler() | HalfSpaceTrees(n_trees=5, seed=42)
+        pipeline.learn_one(stream[0])
+        scores = []
+        for point in stream[1:]:
+            score = pipeline.score_one(point)
+            scores.append(score)
+            pipeline.learn_one(point)
+        assert len(scores) == 2
+        ```
 
     References:
         Tan, S. C., Ting, K. M., & Liu, T. F. (2011). Fast anomaly

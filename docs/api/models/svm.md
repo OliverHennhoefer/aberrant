@@ -1,9 +1,8 @@
-# SVM Models
+# SVM Models API
 
-Public objects from `aberrant.model.svm`:
+Both public classes are experimental heuristics. They do not claim equivalence
+to a published incremental One-Class SVM optimizer.
 
-- `IncrementalOneClassSVMAdaptiveKernel`
-- `GraphGatedOneClassSVM`
+::: aberrant.model.svm.IncrementalOneClassSVMAdaptiveKernel
 
-`GraphGatedOneClassSVM` is not an implementation of the unrelated published
-GADGET distributed optimization algorithm.
+::: aberrant.model.svm.GraphGatedOneClassSVM

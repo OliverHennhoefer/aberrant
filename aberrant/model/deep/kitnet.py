@@ -105,6 +105,25 @@ class OnlineAutoencoderEnsemble(BaseModel):
     - ``detector_warmup``: train ensemble and output autoencoders.
     - ``ready``: score samples; optionally keep adapting if enabled.
 
+    Args:
+        max_ae_size: Maximum number of input features assigned to one ensemble
+            autoencoder.
+        feature_map_grace: Number of learned samples used to estimate feature
+            correlations before the autoencoder ensemble is created.
+        ad_grace: Number of subsequent learned samples used to train the
+            ensemble and output autoencoder before scoring begins. A value of
+            zero trains once on the feature-map transition sample and becomes
+            ready immediately.
+        learning_rate: Positive stochastic-gradient step size used by every
+            NumPy autoencoder.
+        hidden_ratio: Hidden-layer width as a fraction of input width, in
+            ``(0, 1]``. Width is rounded up and, for inputs wider than one,
+            capped below the input width.
+        adaptive_after_warmup: Continue training on calls to ``learn_one``
+            after the model reaches the ready phase.
+        seed: Seed for model-local NumPy generators. ``None`` selects
+            nondeterministic generator initialization.
+
     References:
         Mirsky, Y., Doitshman, T., Elovici, Y., & Shabtai, A. (2018).
         Kitsune: An Ensemble of Autoencoders for Online Network Intrusion
