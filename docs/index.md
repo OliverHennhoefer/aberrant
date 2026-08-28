@@ -1,10 +1,14 @@
-<p align="center">
-  <img src="img/aberrant.png" alt="ABERRANT" width="760">
-</p>
+---
+title: Online Anomaly Detection
+hide:
+  - title
+---
 
 <p align="center">
-  <strong>Online anomaly detection, one event at a time.</strong>
+  <img src="img/aberrant.png" alt="Aberrant" width="760">
 </p>
+
+<h1 align="center">Aberrant — Online Anomaly Detection</h1>
 
 ABERRANT is a typed Python library for unsupervised anomaly detection on data
 streams. A detector evaluates one event with `score_one(event)` and updates
