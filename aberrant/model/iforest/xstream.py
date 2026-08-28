@@ -51,6 +51,24 @@ class XStream(BaseModel):
     Scores remain zero until ``init_sample_size`` projected points initialize
     the chains and one complete reference window has been observed.
 
+    Args:
+        k: Dimension of the StreamHash feature projection.
+        n_chains: Number of independently sampled half-space chains.
+        depth: Number of levels and count sketches in each chain.
+        cms_width: Number of counters in every count-min sketch row.
+        cms_num_hashes: Number of independently hashed rows per count-min
+            sketch.
+        window_size: Number of learned projected points per current/reference
+            window swap.
+        init_sample_size: Number of projected points used to establish chain
+            scales before window counting starts.
+        density: Fraction of projected coordinates updated by each input
+            feature's deterministic signed projection, in ``(0, 1]``.
+        max_feature_cache_size: Maximum cached feature-name projections, with
+            least-recently-used eviction. ``None`` disables this bound.
+        seed: Seed for chain, shift, and sketch-hash generation. Feature-name
+            projections are also derived deterministically from this seed.
+
     References:
         Manzoor, E., Lamba, H., & Akoglu, L. (2018). xStream: Outlier
         Detection in Feature-Evolving Data Streams. KDD '18.

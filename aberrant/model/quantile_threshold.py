@@ -27,22 +27,20 @@ class QuantileThreshold(BaseModel):
         score_key: Name of the score feature in the input dictionary.
             Default is "score".
 
-    Example:
-        >>> from aberrant.model.iforest import ASDIsolationForest
-        >>> model = ASDIsolationForest()
-        >>> threshold = QuantileThreshold(quantile=0.95)
-        >>> for point in stream:
-        ...     score = model.score_one(point)
-        ...     is_anomaly = threshold.score_one({"score": score}) >= 1.0
-        ...     model.learn_one(point)
-        ...     threshold.learn_one({"score": score})
-        ...     if is_anomaly:
-        ...         print("Anomaly detected!")
+    Examples:
+        ```python
+        from aberrant.model import QuantileThreshold
+
+        threshold = QuantileThreshold(quantile=0.8, window_size=10)
+        for score in range(10):
+            threshold.learn_one({"score": float(score)})
+        assert threshold.score_one({"score": 10.0}) == 1.0
+        ```
 
     Note:
-        The model expects input dictionaries with a score key (default "score").
-        The score_one method returns:
-        - 1.0 if the score exceeds the threshold (anomaly)
+        The model expects input dictionaries with a score key (default ``"score"``).
+        ``score_one`` returns:
+        - 1.0 if the score is greater than or equal to the threshold (anomaly)
         - max(score/threshold, 0.0) if below threshold (normalized, in [0, 1))
         - 0.0 during warmup (insufficient data for threshold)
     """

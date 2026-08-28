@@ -34,6 +34,22 @@ class StationaryRegionNeighborDetector(BaseModel):
     - State is bounded by ``window_size``.
     - Feature schema is fixed after the first ``learn_one`` call.
 
+    Args:
+        k: Neighbor count at which the scarcity score reaches zero.
+        radius: Positive Euclidean neighborhood radius and grid-cell width.
+        window_size: Maximum number of learned points retained. It must exceed
+            ``k``.
+        slide_size: Number of learned events between stationary-cell cache
+            refreshes.
+        skip_threshold: Maximum relative cell-occupancy change, in ``[0, 1]``,
+            for retaining a cached neighbor estimate.
+        time_key: Event-time field to exclude from the feature vector. ``None``
+            uses one-based arrival order; explicit times must be finite and
+            non-decreasing.
+        warm_up_slides: Complete slides required before non-zero scoring.
+        predict_threshold: Score boundary used by ``predict_one``.
+        eps: Positive numerical floor used in relative-change calculations.
+
     References:
         Yoon, S., Lee, J.-G., & Lee, B. S. (2020). Ultrafast Local Outlier
         Detection from a Data Stream with Stationary Region Skipping.

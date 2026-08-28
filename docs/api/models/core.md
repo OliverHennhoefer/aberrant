@@ -1,8 +1,9 @@
-# Core Models
+# Core Models API
 
-Public objects from `aberrant.model`:
+::: aberrant.model.NullModel
 
-- `NullModel`
-- `RandomModel`
-- `ThresholdModel`
-- `QuantileThreshold`
+::: aberrant.model.RandomModel
+
+::: aberrant.model.ThresholdModel
+
+::: aberrant.model.QuantileThreshold

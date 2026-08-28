@@ -39,8 +39,14 @@ for i, (x, y) in enumerate(dataset.stream()):
     baseline_pipeline.learn_one(x)
     pca_pipeline.learn_one(x)
 
-baseline_pr_auc = average_precision_score(labels, baseline_scores)
-pca_pr_auc = average_precision_score(labels, pca_scores)
+baseline_average_precision = average_precision_score(labels, baseline_scores)
+pca_average_precision = average_precision_score(labels, pca_scores)
 
-print(f"Baseline Pipeline (Scaler + KNN): PR-AUC = {round(baseline_pr_auc, 3)}")
-print(f"PCA Pipeline (Scaler + PCA + KNN): PR-AUC = {round(pca_pr_auc, 3)}")
+print(
+    "Baseline Pipeline (Scaler + KNN): "
+    f"average precision = {round(baseline_average_precision, 3)}"
+)
+print(
+    "PCA Pipeline (Scaler + PCA + KNN): "
+    f"average precision = {round(pca_average_precision, 3)}"
+)

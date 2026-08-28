@@ -22,7 +22,29 @@ from aberrant.stream.dataset.streamers import NpzStreamer
 
 
 class DatasetManager:
-    """Coordinate registered dataset downloads, validation, caching, and streams."""
+    """Coordinate registered dataset downloads, validation, caching, and streams.
+
+    Args:
+        cache_dir: Artifact-cache directory. ``None`` uses
+            ``~/.aberrant/datasets``.
+        github_repo: GitHub ``owner/repository`` containing the dataset release.
+        release_tag: Release tag used in artifact URLs and cache metadata.
+        download_retries: Transfer attempts for the default download backend.
+        download_timeout: Per-request timeout in seconds for the default
+            download backend.
+        retry_backoff_seconds: Base seconds for the default backend's
+            exponential retry backoff.
+        cache_lock_timeout: Seconds to wait for cross-process cache metadata
+            transactions.
+        show_progress: Show transfer progress in the default download backend.
+            Row-iteration progress is configured separately in ``load``.
+        logger: Logger for retries and manager diagnostics. ``None`` uses the
+            module logger.
+        download_backend: Injected transfer implementation. When supplied, the
+            default backend settings above do not configure it.
+        validator: Injected NPZ and SHA-256 validator. ``None`` uses
+            ``DatasetArtifactValidator``.
+    """
 
     def __init__(
         self,
@@ -88,7 +110,7 @@ class DatasetManager:
         return hmac.compare_digest(actual_hash, entry.sha256)
 
     def download(self, dataset: Dataset, force: bool = False) -> Path:
-        """Download, validate, and atomically publish one registered dataset."""
+        """Download, validate, and publish one registered dataset safely."""
         if dataset not in DATASET_REGISTRY:
             raise KeyError(f"Dataset {dataset} not found in registry")
         destination = self._path(dataset)

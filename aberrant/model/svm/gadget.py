@@ -54,6 +54,20 @@ class GraphGatedOneClassSVM(BaseModel):
     The graph determines which node models are updated and scored. This custom
     anomaly detector is unrelated to the published GADGET distributed
     averaging and optimization algorithm.
+
+    Traversal starts at nodes with no incoming edge. A node's outgoing edges
+    are traversed only when its local score exceeds ``threshold``. Each visited
+    node owns an incremental linear hinge-style heuristic.
+
+    Args:
+        graph: Directed adjacency mapping from integer node identifiers to
+            child-node lists. ``None`` uses the chain ``0 -> 1 -> 2``. The
+            mapping and child lists are copied.
+        threshold: Local score gate for traversing outgoing edges.
+        learning_rate: Step size used by every node model.
+        nu: Coefficient in every node model's bias update. This custom update
+            does not provide the guarantees of a solved One-Class SVM.
+        lambda_reg: Weight-decay coefficient used by every node model.
     """
 
     def __init__(

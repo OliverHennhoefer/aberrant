@@ -16,11 +16,15 @@ class RandomModel(BaseModel):
     Args:
         seed: Random seed for reproducibility.
 
-    Example:
-        >>> model = RandomModel(seed=42)
-        >>> score = model.score_one({"feature1": 1.0, "feature2": 2.0})
-        >>> model.learn_one({"feature1": 1.0, "feature2": 2.0})
-        >>> print(f"Random score: {score:.3f}")
+    Examples:
+        ```python
+        from aberrant.model import RandomModel
+
+        model = RandomModel(seed=42)
+        score = model.score_one({"feature1": 1.0, "feature2": 2.0})
+        model.learn_one({"feature1": 1.0, "feature2": 2.0})
+        assert 0.0 <= score < 1.0
+        ```
     """
 
     def __init__(self, seed: int = 1) -> None:

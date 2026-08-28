@@ -21,16 +21,20 @@ class Autoencoder(BaseModel):
         optimizer: PyTorch optimizer for training.
         criterion: Loss function for reconstruction error.
 
-    Example:
-        >>> from torch import nn, optim
-        >>> from aberrant.utils.deep.architecture import VanillaAutoencoder
-        >>>
-        >>> architecture = VanillaAutoencoder(input_size=10)
-        >>> autoencoder = Autoencoder(
-        ...     model=architecture,
-        ...     optimizer=optim.Adam(architecture.parameters()),
-        ...     criterion=nn.MSELoss()
-        ... )
+    Examples:
+        ```python
+        from torch import nn, optim
+
+        from aberrant.model.deep import Autoencoder
+        from aberrant.utils.deep.architecture import VanillaAutoencoder
+
+        architecture = VanillaAutoencoder(input_size=10)
+        autoencoder = Autoencoder(
+            model=architecture,
+            optimizer=optim.Adam(architecture.parameters()),
+            criterion=nn.MSELoss(),
+        )
+        ```
     """
 
     def __init__(

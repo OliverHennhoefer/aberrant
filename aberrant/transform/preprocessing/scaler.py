@@ -27,10 +27,14 @@ class MinMaxScaler(BaseTransformer):
     Args:
         feature_range: Target range for scaled features.
 
-    Example:
-        >>> scaler = MinMaxScaler(feature_range=(0, 1))
-        >>> scaler.learn_one({"x": 5.0, "y": 10.0})
-        >>> scaler.transform_one({"x": 3.0, "y": 8.0})
+    Examples:
+        ```python
+        from aberrant.transform.preprocessing import MinMaxScaler
+
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        scaler.learn_one({"x": 5.0, "y": 10.0})
+        transformed = scaler.transform_one({"x": 3.0, "y": 8.0})
+        ```
     """
 
     def __init__(self, feature_range: tuple[float, float] = (0, 1)) -> None:
@@ -121,10 +125,14 @@ class StandardScaler(BaseTransformer):
     Args:
         with_std: Whether to scale to unit variance.
 
-    Example:
-        >>> scaler = StandardScaler()
-        >>> scaler.learn_one({"x": 5.0, "y": 10.0})
-        >>> scaler.transform_one({"x": 3.0, "y": 8.0})
+    Examples:
+        ```python
+        from aberrant.transform.preprocessing import StandardScaler
+
+        scaler = StandardScaler()
+        scaler.learn_one({"x": 5.0, "y": 10.0})
+        transformed = scaler.transform_one({"x": 3.0, "y": 8.0})
+        ```
     """
 
     def __init__(self, with_std: bool = True) -> None:

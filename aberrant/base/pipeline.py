@@ -13,7 +13,9 @@ class Pipeline(Generic[_Terminal]):
 
     ``learn_one`` uses post-update transformations: each transformer first
     learns from its current input and then transforms that input for the next
-    stage. ``score_one`` and ``transform_one`` never update transformer state.
+    stage. ``score_one`` and ``transform_one`` call only the transformers'
+    ``transform_one`` methods; the pipeline does not invoke learning methods in
+    either path.
 
     The first component must be a transformer. The second component may be
     another transformer or a terminal model. A pipeline ending in a model
@@ -23,12 +25,18 @@ class Pipeline(Generic[_Terminal]):
         first: A transformer or a transformer-ending pipeline.
         second: A transformer or terminal anomaly model.
 
-    Example:
-        >>> scaler = MinMaxScaler()
-        >>> model = RandomModel()
-        >>> pipeline = Pipeline(scaler, model)
-        >>> pipeline.learn_one({"feature": 1.0})
-        >>> score = pipeline.score_one({"feature": 2.0})
+    Examples:
+        ```python
+        from aberrant.base import Pipeline
+        from aberrant.model import RandomModel
+        from aberrant.transform.preprocessing import MinMaxScaler
+
+        scaler = MinMaxScaler()
+        model = RandomModel()
+        pipeline = Pipeline(scaler, model)
+        pipeline.learn_one({"feature": 1.0})
+        score = pipeline.score_one({"feature": 2.0})
+        ```
     """
 
     def __init__(self, first: TransformerProtocol, second: _Terminal) -> None:
@@ -89,7 +97,7 @@ class Pipeline(Generic[_Terminal]):
         return current
 
     def score_one(self: "Pipeline[ModelProtocol]", x: FeatureMap) -> float:
-        """Score one sample without updating any pipeline component."""
+        """Score one sample without invoking a pipeline learning method."""
         if self._model is None:
             raise PipelineError("score_one requires a model-ending pipeline.")
 

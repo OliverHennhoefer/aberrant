@@ -173,6 +173,27 @@ class AnoEdgeL(BaseModel):
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by the configured higher-order sketch dimensions.
 
+    Args:
+        source_key: Input field containing the integer-like source identifier.
+        destination_key: Input field containing the integer-like destination
+            identifier.
+        time_key: Input field containing a non-decreasing integer-like time
+            bucket. ``None`` assigns a new one-based bucket to every learned
+            arrival.
+        count_min_rows: Row dimension of every higher-order sketch plane.
+        count_min_cols: Column dimension of every higher-order sketch plane.
+        num_hashes: Number of independently hashed sketch planes.
+        num_dense_submatrices: Local dense submatrices maintained per plane. It
+            cannot exceed either sketch dimension.
+        time_decay_factor: Factor in ``(0, 1]`` applied to sketches and local
+            submatrices when the time bucket advances.
+        warm_up_samples: Number of learned edges before scoring begins.
+        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
+            score.
+        predict_threshold: Boundary used by ``predict_one`` on the selected
+            raw or normalized score scale.
+        seed: Seed for model-local sketch hash generation.
+
     References:
         Bhatia, S., Wadhwa, M., Kawaguchi, K., Shah, N., Yu, P. S., &
         Hooi, B. (2023). Sketch-Based Anomaly Detection in Streaming Graphs.

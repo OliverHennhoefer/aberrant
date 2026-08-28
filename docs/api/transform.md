@@ -1,10 +1,17 @@
 # Transform API
 
-Public transformer modules:
+Transformers expose incremental learning and one-event mapping. Pipeline
+learning applies their post-update transform; direct `transform_one` calls do
+not learn.
 
-- `aberrant.transform.preprocessing`
-  - `MinMaxScaler`
-  - `StandardScaler`
-- `aberrant.transform.projection`
-  - `IncrementalPCA`
-  - `RandomProjection`
+## Preprocessing
+
+::: aberrant.transform.preprocessing.MinMaxScaler
+
+::: aberrant.transform.preprocessing.StandardScaler
+
+## Projection
+
+::: aberrant.transform.projection.IncrementalPCA
+
+::: aberrant.transform.projection.RandomProjection

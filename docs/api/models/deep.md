@@ -1,15 +1,15 @@
-# Deep Models
+# Reconstruction Models API
 
-Public objects from `aberrant.model.deep`:
+`OnlineAutoencoderEnsemble` is NumPy-backed and part of the base installation.
+`Autoencoder`, `Architecture`, and `VanillaAutoencoder` require
+`aberrant[dl]`.
 
-- `Autoencoder`
-- `OnlineAutoencoderEnsemble`
+::: aberrant.model.deep.OnlineAutoencoderEnsemble
 
-Notes:
-- `Autoencoder` requires `torch` (`aberrant[dl]`).
-- `OnlineAutoencoderEnsemble` uses an online, phased warm-up (`feature_map_warmup`,
-  `detector_warmup`, `ready`) and returns a continuous anomaly score.
-- `OnlineAutoencoderEnsemble` is inspired by KitNET but does not reproduce the
-  author's normalized denoising-autoencoder implementation.
-- Seeded PyTorch architectures initialize through model-owned generators and do
-  not replace the process-wide PyTorch RNG state.
+## Optional PyTorch model
+
+::: aberrant.model.deep.autoencoder.Autoencoder
+
+::: aberrant.base.architecture.Architecture
+
+::: aberrant.utils.deep.architecture.VanillaAutoencoder

@@ -8,29 +8,30 @@ from aberrant.base.transformer import BaseTransformer
 
 
 class RandomProjection(BaseTransformer):
+    """Sparse Achlioptas random projection for streaming feature mappings.
+
+    A fixed matrix maps the input vector to ``n_components`` output values named
+    ``component_0``, ``component_1``, and so on. Matrix entries are sampled from
+    ``{-sqrt(3/k), 0, sqrt(3/k)}``, where ``k`` is ``n_components``. Learning
+    establishes feature order but does not adapt the matrix afterward.
+
+    Args:
+        n_components: Number of projected dimensions. It cannot exceed the
+            number of input features.
+        keys: Explicit feature order. If omitted, the first learned mapping's
+            insertion order is used.
+        seed: Seed for the transformer's local NumPy generator.
+
+    References:
+        Achlioptas, D. (2003). Database-friendly random projections:
+        Johnson-Lindenstrauss with binary coins.
+        https://doi.org/10.1016/S0022-0000(03)00025-4
+    """
+
     def __init__(
         self, n_components: int, keys: list[str] | None = None, seed: int | None = None
     ) -> None:
-        """
-        Initialize the RandomProjection transformer.
-
-        Implements the binary approach for random projections using sparse random matrices.
-        This provides a computationally efficient way to reduce dimensionality while
-        approximately preserving distances (Johnson-Lindenstrauss lemma).
-
-        Reference:
-            Achlioptas D. (2003) "Database-friendly random projections:
-            Johnson-Lindenstrauss with binary coins"
-            https://doi.org/10.1016/S0022-0000(03)00025-4
-
-        Args:
-            n_components: Target number of dimensions after transformation.
-            keys: Feature names. If None, inferred from first sample.
-            seed: Random seed for reproducibility.
-
-        Raises:
-            ValueError: If n_components is greater than the number of features.
-        """
+        """Initialize the projection and, when possible, its random matrix."""
         super().__init__()
 
         if n_components < 1:
@@ -102,7 +103,8 @@ class RandomProjection(BaseTransformer):
             x: A dictionary with feature names as keys and values as data point dimensions.
 
         Raises:
-            ValueError: If n_components is greater than the number of features in x.
+            ValueError: If the input is invalid or ``n_components`` exceeds its
+                feature count.
         """
         self._validate_input(x)
         if self.feature_names is None and len(x) >= 1:
@@ -121,6 +123,8 @@ class RandomProjection(BaseTransformer):
 
         Raises:
             RuntimeError: If called before learning feature names.
+            ValueError: If values are non-numeric or non-finite, or the feature
+                schema differs from the learned schema.
         """
 
         self._validate_input(x)

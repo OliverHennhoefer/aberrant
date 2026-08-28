@@ -66,10 +66,14 @@ class MovingCovariance(BaseModel):
     Raises:
         ValueError: If window_size is not positive.
 
-    Example:
-        >>> model = MovingCovariance(window_size=10)
-        >>> model.learn_one({"x": 1.0, "y": 2.0})
-        >>> score = model.score_one({"x": 1.5, "y": 2.5})
+    Examples:
+        ```python
+        from aberrant.model.stat import MovingCovariance
+
+        model = MovingCovariance(window_size=10)
+        model.learn_one({"x": 1.0, "y": 2.0})
+        score = model.score_one({"x": 1.5, "y": 2.5})
+        ```
     """
 
     def __init__(
@@ -165,9 +169,21 @@ class MovingCovariance(BaseModel):
 
 
 class MovingCorrelationCoefficient(BaseModel):
-    """
-    A simple moving model that calculates the difference between the correlation coefficient from the window with a new value
-    to the correlation coefficient from the window of the most recent values.
+    """Score the candidate-induced change in bivariate Pearson correlation.
+
+    The detector compares the correlation of the retained two-feature window
+    with the correlation after temporarily appending the candidate. It returns
+    the absolute change by default; set ``abs_diff=False`` to preserve its sign.
+    Windows with fewer than two paired values have correlation ``0.0``.
+
+    Args:
+        window_size: Maximum number of recent paired observations to retain.
+        bias: Use population normalization when true and sample normalization
+            when false. The normalization cancels in Pearson correlation but is
+            also applied consistently to covariance and standard deviations.
+        keys: Explicit names for the two features. If omitted, the first
+            successfully learned mapping establishes a sorted schema.
+        abs_diff: Return the magnitude of the change when true.
     """
 
     def __init__(
@@ -177,14 +193,7 @@ class MovingCorrelationCoefficient(BaseModel):
         keys: list[str] | None = None,
         abs_diff: bool = True,
     ) -> None:
-        """Initialize a new instance of MovingCorrelationCoefficient.
-        Args:
-            window_size (int): The number of recent values to consider for calculating the moving correlation coefficient.
-            bias (bool): If False, applies Bessel correction (ddof=1).
-            keys (list[str]): Keys for the moving window. If None, the first keys learned are used.
-            abs_diff (bool): If True absolute is given back, else covariance(window + score) - covariance(window)
-        Raises:
-            ValueError: If window_size is not a positive integer."""
+        """Initialize the bounded bivariate window."""
         if window_size <= 0:
             raise ValueError("Window size must be a positive integer.")
         self.window_size = window_size
@@ -200,11 +209,13 @@ class MovingCorrelationCoefficient(BaseModel):
             )
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """Update the model with a single resource point.
+        """Append one validated, finite bivariate observation.
+
         Args:
-            x (Dict[str, float]): A dictionary representing a single resource point.
+            x: Mapping containing exactly the established two feature names.
+
         Raises:
-            AssertionError: If the input dictionary contains other than two key-value pairs.
+            ValueError: If values are invalid or the feature schema differs.
         """
         prepared = self._schema.preview(x)
         if not self._schema.is_established:
@@ -240,11 +251,13 @@ class MovingCorrelationCoefficient(BaseModel):
             return float(cov / (std_0 * std_1))
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Calculate and return the correlation coefficient difference of the values in the windows.
+        """Return the correlation change induced by a candidate observation.
+
         Args:
-            x (Dict): Single datapoint to be added temporarily to calculate the correlation coefficient.
+            x: Candidate with exactly the established two feature names.
+
         Returns:
-            float: The correlation coefficient difference of the values in the window. 0 if the window is empty or has less than 2 data points.
+            Absolute or signed correlation difference according to ``abs_diff``.
         """
         prepared = self._schema.preview(x)
         names = self._schema.names
@@ -263,20 +276,25 @@ class MovingCorrelationCoefficient(BaseModel):
 
 
 class MovingMahalanobisDistance(BaseModel):
-    """
-    A moving model that calculates squared Mahalanobis distance from recent values.
+    """Score squared Mahalanobis distance from a recent reference window.
+
+    The score uses the retained observations' feature mean and covariance
+    matrix. It is ``0.0`` until three observations have been learned. A small,
+    scale-aware diagonal term is added only when the covariance matrix is
+    singular.
+
+    Args:
+        window_size: Maximum number of recent observations to retain.
+        bias: Pass population normalization to NumPy covariance when true;
+            use sample normalization when false.
+        keys: Explicit feature order. If omitted, the first successfully
+            learned mapping establishes a sorted schema.
     """
 
     def __init__(
         self, window_size: int, bias: bool = True, keys: list[str] | None = None
     ) -> None:
-        """Initialize a new instance of MovingMahalanobisDistance.
-        Args:
-            window_size (int): Number of recent values used for the covariance estimate.
-            bias (bool): If False, applies Bessel correction (ddof=1).
-            keys (list[str]): Keys for the moving window. If None, the first keys learned are used.
-        Raises:
-            ValueError: If window_size is not a positive integer."""
+        """Initialize the bounded multivariate window."""
         if window_size <= 0:
             raise ValueError("Window size must be a positive integer.")
         self.window_size = window_size
@@ -285,20 +303,24 @@ class MovingMahalanobisDistance(BaseModel):
         self.bias = bias
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """Update the model with a single resource point.
+        """Append one validated, finite observation.
+
         Args:
-            x (Dict[str, float]): A dictionary representing a single resource point.
+            x: Feature mapping matching the established schema.
         """
         prepared = self._schema.preview(x)
         self.window.append(prepared.values.tolist())
         self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Calculate squared Mahalanobis distance to the window's feature mean.
+        """Calculate squared Mahalanobis distance to the window mean.
+
         Args:
-            x (Dict): Single datapoint.
+            x: Candidate feature mapping; it is not appended by this method.
+
         Returns:
-            float: Squared Mahalanobis distance, or 0 if fewer than 3 points exist.
+            Squared Mahalanobis distance, or ``0.0`` before three reference
+            observations exist.
         """
         prepared = self._schema.preview(x)
         if not self._schema.is_established or len(self.window) < 3:

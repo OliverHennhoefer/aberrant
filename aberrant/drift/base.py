@@ -16,21 +16,16 @@ def _finite_observation(x: float) -> float:
 
 
 class BaseDriftDetector(abc.ABC):
-    """
-    Abstract base class for concept drift detectors.
+    """Abstract base class for scalar stream-change detectors.
 
-    Drift detectors monitor streaming data for distribution changes.
-    Following River's design, they use `update(x: float)` with a single
-    float value, ideal for monitoring:
-    - Anomaly scores from models
-    - Prediction errors
-    - Individual feature values
-    - Any streaming metric
+    ``update`` processes one finite scalar and returns the detector, while
+    ``drift_detected`` describes the observation most recently processed. The
+    monitored scalar can be an anomaly score, prediction error, residual,
+    feature value, or another application-defined signal.
 
-    Subclasses must implement:
-    - update(x): Process a single observation
-    - drift_detected: Property indicating if drift was detected
-    - reset(): Reset detector state
+    Subclasses implement ``update``, ``drift_detected``, and ``reset``. A drift
+    flag is evidence of change in the monitored signal; it does not diagnose
+    the cause or prescribe a response for an anomaly model.
     """
 
     @abc.abstractmethod

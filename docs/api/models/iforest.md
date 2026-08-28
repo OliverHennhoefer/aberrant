@@ -1,18 +1,19 @@
-# Isolation Forest Models
+# Isolation Forest Models API
 
-Public objects from `aberrant.model.iforest`:
+The family name does not imply one score scale. See the
+[isolation score table](../../user_guide/models.md#isolation-forests) before
+thresholding outputs.
 
-- `ASDIsolationForest`
-- `HalfSpaceTrees`
-- `MondrianIsolationForest`
-- `OnlineIsolationForest`
-- `RandomCutForest`
-- `StreamRandomHistogramForest`
-- `XStream`
+::: aberrant.model.iforest.ASDIsolationForest
 
-Notes:
-- `MondrianIsolationForest(lambda_=...)` uses `lambda_` as the Mondrian lifetime
-  budget and Isolation Forest path-length scoring.
-- The original supervised Mondrian Forest paper defines no anomaly score.
-- `OnlineIsolationForest(tree_type=...)` accepts `"fixed"` or `"adaptive"`.
-  `n_jobs=1` is sequential and `n_jobs=-1` uses all available logical CPUs.
+::: aberrant.model.iforest.HalfSpaceTrees
+
+::: aberrant.model.iforest.MondrianIsolationForest
+
+::: aberrant.model.iforest.OnlineIsolationForest
+
+::: aberrant.model.iforest.RandomCutForest
+
+::: aberrant.model.iforest.StreamRandomHistogramForest
+
+::: aberrant.model.iforest.XStream

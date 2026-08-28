@@ -69,6 +69,27 @@ class ISCONNA(BaseModel):
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by a fixed sketch size.
 
+    Args:
+        source_key: Input field containing the integer-like source identifier.
+        destination_key: Input field containing the integer-like destination
+            identifier.
+        time_key: Input field containing a non-decreasing integer-like time
+            bucket. ``None`` assigns a new one-based bucket to every learned
+            arrival.
+        count_min_rows: Number of independently hashed rows in each sketch.
+        count_min_cols: Number of counters per sketch row.
+        time_decay_factor: Factor in ``(0, 1]`` applied to current pattern
+            counts during bucket transitions.
+        alpha: Non-negative exponent of the frequency G-test component.
+        beta: Non-negative exponent of the consecutive-width G-test component.
+        gamma: Non-negative exponent of the absence-gap G-test component.
+        include_endpoints: Combine edge, source, and destination components by
+            component-wise maxima. ``False`` scores only edge patterns.
+        warm_up_samples: Number of learned edges before scoring begins.
+        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
+            combined statistic.
+        seed: Seed for model-local sketch hash generation.
+
     References:
         Liu, R., Bhatia, S., & Hooi, B. (2021). Isconna: Streaming Anomaly
         Detection with Frequency and Patterns.

@@ -1,13 +1,22 @@
-# Distance Models
+# Distance and Neighborhood Models API
 
-Public objects from `aberrant.model.distance`:
+`CellNeighborhoodDetector` and
+`StationaryRegionNeighborDetector` are documented point-scoring adaptations,
+not exact reproductions of the source papers' set-level NETS and KDE/top-*n*
+STARE procedures.
 
-- `KNN`
-- `LocalOutlierFactor`
-- `CellNeighborhoodDetector`
-- `SDOStream`
-- `StationaryRegionNeighborDetector`
+::: aberrant.model.distance.KNN
 
-`CellNeighborhoodDetector` and `StationaryRegionNeighborDetector` are
-point-scoring variants; they are not exact reproductions of the papers'
-set-level NETS and KDE/top-n STARE algorithms.
+::: aberrant.model.distance.LocalOutlierFactor
+
+::: aberrant.model.distance.CellNeighborhoodDetector
+
+::: aberrant.model.distance.SDOStream
+
+::: aberrant.model.distance.StationaryRegionNeighborDetector
+
+## Optional FAISS engine
+
+This engine requires `aberrant[faiss]`.
+
+::: aberrant.utils.similar.faiss_engine.FaissSimilaritySearchEngine

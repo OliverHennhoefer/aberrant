@@ -39,7 +39,13 @@ from aberrant.stream.dataset.streamers import (
 
 @dataclass(frozen=True, slots=True)
 class CacheInfo:
-    """Typed summary of the default dataset cache."""
+    """Typed summary of the default dataset cache.
+
+    Attributes:
+        directory: Configured cache directory.
+        size_bytes: Total bytes occupied by registered cached artifacts.
+        datasets: Registry values whose artifacts are present in the cache.
+    """
 
     directory: Path
     size_bytes: int

@@ -1,32 +1,44 @@
 # API Reference
 
-This section documents the supported ABERRANT public surface.
+The API reference is generated from the shipped type annotations and
+docstrings. It is the authoritative source for constructor signatures, defaults,
+public methods, properties, return types, and model-specific caveats. Use the
+[user guide](../user_guide/index.md) for lifecycle and selection guidance.
 
-## Public modules
+## Public package surface
 
-- `aberrant.base`
-- `aberrant.drift`
-- `aberrant.model`
-- `aberrant.model.iforest`
-- `aberrant.model.distance`
-- `aberrant.model.sketch`
-- `aberrant.model.graph`
-- `aberrant.model.timeseries`
-- `aberrant.model.svm`
-- `aberrant.model.stat`
-- `aberrant.model.deep`
-- `aberrant.transform`
-- `aberrant.transform.preprocessing`
-- `aberrant.transform.projection`
-- `aberrant.stream.dataset`
+- [Base interfaces and protocols](base.md)
+- [Anomaly models](models/index.md)
+- [Transformers](transform.md)
+- [Drift detectors](drift.md)
+- [Dataset registry, cache, and streams](stream.md)
 
-## Scoring conventions
+Objects exported from the documented package `__init__.py` files are public.
+Private names beginning with `_` are implementation details. Optional
+PyTorch objects are public only through their explicitly documented import
+paths and are excluded from wildcard exports when the dependency is absent.
 
-- Binary: `ThresholdModel` and threshold wrappers.
-- Bounded `[0, 1]`: isolation-forest variants.
-- Continuous/unbounded: sketch, distance, SVM, statistical, and deep models.
+!!! note "Public does not mean frozen"
 
-## Stability policy
+    ABERRANT is pre-1.0. Public APIs are deliberate and typed, but can still
+    change between releases. Consult the changelog when upgrading.
 
-- Objects exported through package `__init__.py` files above are considered public.
-- Internal helpers and private names (`_...`) can change between releases.
+## Shared model shape
+
+Most anomaly models satisfy `ModelProtocol`:
+
+- `learn_one(x) -> None` learns one feature mapping;
+- `score_one(x) -> float` scores without learning the candidate event.
+
+That shared method shape does not standardize input fields, warm-up, memory, or
+numeric scale. In particular:
+
+- isolation-family scores are not universally bounded because
+  `RandomCutForest` defaults to raw CoDisp and
+  `StreamRandomHistogramForest` returns a raw log-mass score;
+- graph detectors default to raw scores but expose optional normalization;
+- moving statistics can return signed changes when `abs_diff=False`;
+- `RandomModel` is a generator-backed baseline rather than an anomaly model.
+
+Read the [model score contracts](../user_guide/models.md#score-contracts)
+before calibrating or comparing scores.

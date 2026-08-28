@@ -15,6 +15,22 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
     recent-data buffer are stored in raw feature coordinates. Kernel values are
     computed after applying the current running standardization to both
     operands, so all comparisons use one consistent coordinate system.
+
+    Args:
+        nu: Heuristic support-vector weight scale in ``(0, 1]``. It controls
+            the initial weight and caps weights added for negative margins; it
+            does not carry a solver-backed One-Class SVM ``nu`` guarantee.
+        initial_gamma: Initial positive RBF-kernel coefficient.
+        gamma_bounds: Positive inclusive lower and upper bounds for adaptive
+            gamma. The interval must contain ``initial_gamma``.
+        adaptation_rate: Interpolation fraction in ``(0, 1]`` toward the
+            median-distance gamma estimate at each adaptation step.
+        buffer_size: Maximum recent raw samples used to estimate gamma.
+        sv_budget: Maximum retained support vectors.
+        tolerance: Non-negative margin tolerance used for support-vector
+            insertion and ``predict_one``.
+        seed: Seed for the model-local subsampling generator used by gamma
+            estimation.
     """
 
     def __init__(

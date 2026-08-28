@@ -27,7 +27,16 @@ class DownloadBackend(Protocol):
 
 
 class UrlLibDownloadBackend:
-    """Retrying urllib transfer backend with optional progress reporting."""
+    """Retrying urllib transfer backend with optional progress reporting.
+
+    Args:
+        retries: Positive maximum number of transfer attempts.
+        timeout: Positive per-request timeout in seconds.
+        backoff_seconds: Non-negative base delay for exponential retry backoff.
+            Delay before retry ``n`` is ``backoff_seconds * 2**(n - 1)``.
+        show_progress: Display a byte progress bar when downloading.
+        logger: Logger for retry warnings. ``None`` uses the module logger.
+    """
 
     def __init__(
         self,

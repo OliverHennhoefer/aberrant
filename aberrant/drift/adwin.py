@@ -28,17 +28,23 @@ class ADWIN(BaseDriftDetector):
         grace_period: Number of samples before drift detection starts.
             Default is 10.
 
-    Example:
-        >>> detector = ADWIN(delta=0.002)
-        >>> for value in data_stream:
-        ...     detector.update(value)
-        ...     if detector.drift_detected:
-        ...         print("Drift detected!")
+    Examples:
+        ```python
+        from aberrant.drift import ADWIN
+
+        detector = ADWIN(delta=0.002)
+        drift_points = []
+        for index, value in enumerate([0.0] * 64 + [1.0] * 64):
+            detector.update(value)
+            if detector.drift_detected:
+                drift_points.append(index)
+        ```
 
     References:
         Bifet, A., & Gavalda, R. (2007). Learning from time-changing data
         with adaptive windowing. In Proceedings of the 2007 SIAM
         International Conference on Data Mining (pp. 443-448).
+        https://doi.org/10.1137/1.9781611972771.42
         Reference implementation:
         https://github.com/Waikato/moa/blob/master/moa/src/main/java/moa/classifiers/core/driftdetection/ADWIN.java
     """

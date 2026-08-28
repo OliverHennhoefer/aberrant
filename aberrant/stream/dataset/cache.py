@@ -17,7 +17,13 @@ _METADATA_VERSION = "2"
 
 @dataclass(frozen=True, slots=True)
 class CacheEntry:
-    """Immutable metadata for one cached artifact."""
+    """Immutable metadata for one cached artifact.
+
+    Attributes:
+        sha256: Verified 64-character hexadecimal SHA-256 digest.
+        size: Artifact size in bytes.
+        release_tag: Dataset release tag from which the artifact was obtained.
+    """
 
     sha256: str
     size: int
@@ -37,7 +43,12 @@ class CacheEntry:
 
 @dataclass(frozen=True, slots=True)
 class CacheMetadata:
-    """Immutable cache metadata snapshot."""
+    """Immutable cache metadata snapshot.
+
+    Attributes:
+        version: On-disk metadata schema version.
+        datasets: Read-only mapping from registry value to cache entry.
+    """
 
     version: str
     datasets: Mapping[str, CacheEntry]
@@ -51,7 +62,14 @@ def _empty_metadata() -> CacheMetadata:
 
 
 class DatasetCacheStore:
-    """Own cache paths, metadata transactions, and artifact publication."""
+    """Own cache paths, metadata transactions, and artifact publication.
+
+    Args:
+        cache_dir: Directory in which artifacts, metadata, and the process lock
+            are stored. It is created, including parents, when necessary.
+        lock_timeout: Positive seconds to wait for the cross-process metadata
+            lock before the underlying file lock raises a timeout.
+    """
 
     def __init__(self, cache_dir: Path, *, lock_timeout: float = 60.0) -> None:
         if lock_timeout <= 0.0:
@@ -158,7 +176,7 @@ class DatasetCacheStore:
         destination: Path,
         entry: CacheEntry,
     ) -> None:
-        """Publish an artifact and merge its metadata under one process lock."""
+        """Replace an artifact, then merge metadata under one process lock."""
         with self._lock:
             entries = dict(self.read().datasets)
             os.replace(temporary_path, destination)
@@ -166,7 +184,7 @@ class DatasetCacheStore:
             self._write_unlocked(entries)
 
     def remove(self, dataset_name: str, artifact_path: Path) -> None:
-        """Remove one artifact and its metadata transactionally."""
+        """Remove one artifact and its metadata under one process lock."""
         with self._lock:
             entries = dict(self.read().datasets)
             artifact_path.unlink(missing_ok=True)

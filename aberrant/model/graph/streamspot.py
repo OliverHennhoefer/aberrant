@@ -51,11 +51,34 @@ class SignedGraphSketchDetector(BaseModel):
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by ``max_graphs``, ``sketch_dim``, and ``num_clusters``.
 
+    Args:
+        graph_key: Input field identifying the graph to which an edge belongs.
+        source_key: Input field containing the finite numeric source identifier.
+        destination_key: Input field containing the finite numeric destination
+            identifier.
+        edge_type_key: Optional input field included in edge-shingle identity.
+        time_key: Input field containing a non-decreasing integer-like time
+            bucket. ``None`` uses one-based arrival order.
+        sketch_dim: Number of signed-count coordinates per graph sketch.
+        shingle_size: Number of consecutive per-graph edge tokens in a shingle.
+        num_clusters: Maximum number of online Euclidean cluster centers.
+        max_graphs: Maximum number of active per-graph sketches. Least-recently
+            learned graph state is evicted when the limit is exceeded.
+        warm_up_graphs: Number of active graph sketches required before
+            scoring. It cannot exceed ``max_graphs``.
+        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
+            distance-plus-novelty score.
+        predict_threshold: Boundary used by ``predict_one`` on the selected
+            raw or normalized score scale.
+        seed: Seed for model-local shingle hashing.
+        eps: Positive numerical floor in the bounded distance component.
+
     References:
         Manzoor, E., Milajerdi, S. M., & Akoglu, L. (2016). Fast Memory-efficient
         Anomaly Detection in Streaming Heterogeneous Graphs.
-        https://arxiv.org/abs/1607.04930
-        Original implementation: https://github.com/sbustreamspot/sbustreamspot
+        https://doi.org/10.1145/2939672.2939783
+        Preprint: https://arxiv.org/abs/1602.04844
+        Original implementation: https://github.com/sbustreamspot/sbustreamspot-core
     """
 
     @staticmethod
