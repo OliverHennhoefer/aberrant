@@ -112,7 +112,10 @@ def test_url_backend_retries_and_succeeds() -> None:
 
         with patch(
             "urllib.request.urlopen",
-            side_effect=[URLError("temporary network issue"), _FakeResponse(b"payload")],
+            side_effect=[
+                URLError("temporary network issue"),
+                _FakeResponse(b"payload"),
+            ],
         ) as mock_urlopen:
             backend.download("https://example.com/shuttle.npz", destination)
 

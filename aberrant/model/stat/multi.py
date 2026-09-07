@@ -269,9 +269,7 @@ class MovingCorrelationCoefficient(BaseModel):
         score_window_1.append(float(prepared.values[1]))
         corr_coeff_diff = self._correlation_coefficient(
             score_window_0, score_window_1
-        ) - self._correlation_coefficient(
-            self.window[names[0]], self.window[names[1]]
-        )
+        ) - self._correlation_coefficient(self.window[names[0]], self.window[names[1]])
         return abs(corr_coeff_diff) if self.abs_diff else corr_coeff_diff
 
 
@@ -280,8 +278,8 @@ class MovingMahalanobisDistance(BaseModel):
 
     The score uses the retained observations' feature mean and covariance
     matrix. It is ``0.0`` until three observations have been learned. A small,
-    scale-aware diagonal term is added only when the covariance matrix is
-    singular.
+    scale-aware diagonal term is added when the covariance matrix is singular
+    or numerically ill-conditioned.
 
     Args:
         window_size: Maximum number of recent observations to retain.
@@ -326,18 +324,43 @@ class MovingMahalanobisDistance(BaseModel):
         if not self._schema.is_established or len(self.window) < 3:
             return 0.0
         previous_points = np.array(list(self.window))
-        cov_matrix = np.atleast_2d(
-            np.cov(previous_points, rowvar=False, bias=self.bias)
-        )
-        try:
-            inv_cov_matrix = np.linalg.inv(cov_matrix)
-        except np.linalg.LinAlgError:
-            # Add scale-aware regularization to handle singular matrices.
-            regularization = 1e-6 * np.eye(cov_matrix.shape[0])
-            if np.trace(cov_matrix) > 0:
-                regularization *= np.trace(cov_matrix) / cov_matrix.shape[0]
-            inv_cov_matrix = np.linalg.inv(cov_matrix + regularization)
+        if np.all(previous_points == previous_points[0]):
+            # Preserve the absolute 1e-6 covariance floor for constant windows,
+            # where there is no observed variance to define a relative scale.
+            whitened = (prepared.values - previous_points[0]) / 1e-3
+            return float(whitened @ whitened)
 
-        feature_mean = np.mean(previous_points, axis=0)
-        diff = prepared.values - feature_mean
-        return float(diff.T @ inv_cov_matrix @ diff)
+        # Center before selecting a common scale: a large constant coordinate
+        # must not suppress the variance of smaller changing coordinates.
+        origin = previous_points[0]
+        with np.errstate(over="ignore"):
+            offsets = previous_points - origin
+        offset_factor = 1.0
+        if not np.all(np.isfinite(offsets)):
+            # Opposite finite extremes can overflow when subtracted directly.
+            offset_factor = 0.5
+            offsets = previous_points * offset_factor - origin * offset_factor
+        scale = float(np.max(np.abs(offsets)))
+        scaled_points = offsets / scale
+
+        with np.errstate(over="ignore"):
+            query_offset = prepared.values * offset_factor - origin * offset_factor
+        scaled_query = query_offset / scale
+        overflowed = np.isinf(query_offset)
+        if np.any(overflowed):
+            scaled_query[overflowed] = (
+                prepared.values[overflowed] * offset_factor / scale
+                - origin[overflowed] * offset_factor / scale
+            )
+        cov_matrix = np.atleast_2d(np.cov(scaled_points, rowvar=False, bias=self.bias))
+        eigenvalues = np.linalg.eigvalsh(cov_matrix)
+        if eigenvalues[0] <= 1e-12 * eigenvalues[-1]:
+            regularization = 1e-6 * float(np.trace(cov_matrix)) / len(cov_matrix)
+            cov_matrix += regularization * np.eye(len(cov_matrix))
+
+        # Solving through a positive-definite factor yields a squared norm,
+        # avoiding unstable explicit inverses and negative squared distances.
+        factor = np.linalg.cholesky(cov_matrix)
+        diff = scaled_query - np.mean(scaled_points, axis=0)
+        whitened = np.linalg.solve(factor, diff)
+        return float(whitened @ whitened)

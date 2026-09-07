@@ -36,8 +36,10 @@ memory policy, and score scale remain model-specific rather than being hidden
 behind a batch-estimator abstraction.
 
 > [!NOTE]
-> ABERRANT is pre-1.0 and under active development. Public APIs may change as
-> the model contracts and implementations mature.
+> ABERRANT 1.x preserves compatibility for its documented public APIs.
+> Private implementation details and exact numeric score sequences are outside
+> that guarantee. See the [compatibility policy](https://oliverhennhoefer.github.io/aberrant/api/#compatibility-policy)
+> before upgrading or relying on persisted model state.
 
 ## Why ABERRANT?
 

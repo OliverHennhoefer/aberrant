@@ -239,9 +239,7 @@ class MStream(BaseModel):
         n_record_bits = math.ceil(math.log2(self.buckets))
         record_current = np.zeros((self.rows, self.buckets), dtype=np.float64)
         record = _RecordState(
-            numeric_planes=self._rng.normal(
-                size=(self.rows, n_record_bits, n_numeric)
-            ),
+            numeric_planes=self._rng.normal(size=(self.rows, n_record_bits, n_numeric)),
             categorical_weights=self._rng.integers(
                 0,
                 self.buckets,
@@ -310,11 +308,7 @@ class MStream(BaseModel):
         if categorical.size == 0:
             return np.empty((0, self.rows), dtype=np.intp)
         return np.asarray(
-            (
-                categorical[:, np.newaxis] * state.hash_a
-                + state.hash_b
-            )
-            % self.buckets,
+            (categorical[:, np.newaxis] * state.hash_a + state.hash_b) % self.buckets,
             dtype=np.intp,
         )
 
@@ -382,8 +376,7 @@ class MStream(BaseModel):
         numeric_decay = self.alpha if rollover else 1.0
         for feature_index, bin_index in enumerate(numeric_bins):
             current = (
-                state.numeric.counts.current[feature_index, bin_index]
-                * numeric_decay
+                state.numeric.counts.current[feature_index, bin_index] * numeric_decay
                 + 1.0
             )
             total = state.numeric.counts.total[feature_index, bin_index] + 1.0
@@ -447,9 +440,9 @@ class MStream(BaseModel):
             state.categorical.counts.current[
                 feature_index, self._row_index, indices
             ] += 1.0
-            state.categorical.counts.total[
-                feature_index, self._row_index, indices
-            ] += 1.0
+            state.categorical.counts.total[feature_index, self._row_index, indices] += (
+                1.0
+            )
 
         record_bins = self._record_bins(state.record, normalized, categorical)
         state.record.counts.current[self._row_index, record_bins] += 1.0

@@ -195,7 +195,5 @@ class OnlineIsolationForest(BaseModel):
                 ).T
 
         mean_depths = depths.mean(axis=1)
-        scores = 2 ** (
-            -mean_depths / (self.normalization_factor + np.finfo(float).eps)
-        )
+        scores = 2 ** (-mean_depths / (self.normalization_factor + np.finfo(float).eps))
         return np.asarray(scores, dtype=np.float64)

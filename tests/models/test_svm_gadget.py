@@ -105,9 +105,7 @@ class TestGADGETSVM(unittest.TestCase):
         """Create GADGET SVM instance for testing."""
         # Simple linear graph: 0 -> 1 -> 2
         graph = {0: [1], 1: [2], 2: []}
-        return GraphGatedOneClassSVM(
-            graph=graph, threshold=0.1, learning_rate=0.01
-        )
+        return GraphGatedOneClassSVM(graph=graph, threshold=0.1, learning_rate=0.01)
 
     def setUp(self):
         """Set up test fixtures."""

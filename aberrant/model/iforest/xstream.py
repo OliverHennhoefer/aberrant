@@ -189,8 +189,7 @@ class XStream(BaseModel):
             dtype=np.int32,
         )
         shift = (
-            self.rng.uniform(low=0.0, high=1.0, size=(self.n_chains, self.k))
-            * deltamax
+            self.rng.uniform(low=0.0, high=1.0, size=(self.n_chains, self.k)) * deltamax
         )
         cms_current = np.zeros(
             (self.n_chains, self.depth, self.cms_num_hashes, self.cms_width),
@@ -252,9 +251,9 @@ class XStream(BaseModel):
             feature = int(state.chain_dims[chain, level])
             scratch.feature_visits[feature] += 1
             if scratch.feature_visits[feature] == 1:
-                z_new = (
-                    y[feature] + state.shift[chain, feature]
-                ) / state.deltamax[feature]
+                z_new = (y[feature] + state.shift[chain, feature]) / state.deltamax[
+                    feature
+                ]
             else:
                 z_new = (
                     2.0 * scratch.z[feature]
@@ -273,9 +272,7 @@ class XStream(BaseModel):
                         + delta_mod * state.hash_coeffs_mod[:, feature]
                     ) % self.cms_width
 
-            buckets = (
-                scratch.hash_dots + hash_offsets_mod[level]
-            ) % self.cms_width
+            buckets = (scratch.hash_dots + hash_offsets_mod[level]) % self.cms_width
             yield level, buckets.astype(np.intp)
 
     def _update_sketch(

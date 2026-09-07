@@ -145,6 +145,7 @@ class TransformerPipeline(Pipeline):
         return (*self._prefix, self._terminal)
 
     def transform_one(self, x: FeatureMap) -> FeatureMap:
+        """Apply the learned transformer stages without calling ``learn_one``."""
         return self._checked_transform(self._terminal, self._transform_prefix(x))
 
     @overload
@@ -165,6 +166,7 @@ class ModelPipeline(Pipeline):
     _terminal: ModelProtocol
 
     def score_one(self, x: FeatureMap) -> float:
+        """Transform and score an event without calling any stage's ``learn_one``."""
         score = self._terminal.score_one(self._transform_prefix(x))
         if not isinstance(score, int | float):
             raise PipelineError(

@@ -19,10 +19,12 @@ Most detectors accept a numeric feature mapping (`dict[str, float]`). Graph,
 time-aware, and scalar time-series detectors define narrower event contracts in
 the [model guide](user_guide/models.md).
 
-!!! note "Development status"
+!!! note "API compatibility"
 
-    ABERRANT is pre-1.0 and under active development. The documented public
-    imports are intentional, but APIs can still change between releases.
+    ABERRANT 1.x preserves compatibility for its documented public APIs.
+    Private implementation details and exact numeric score sequences are
+    outside this guarantee. Read the [compatibility policy](api/index.md#compatibility-policy)
+    when upgrading.
 
 ## Start here
 

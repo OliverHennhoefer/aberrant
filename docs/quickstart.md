@@ -83,8 +83,10 @@ for score in score_stream:
 ```
 
 During its initial window, `QuantileThreshold.score_one` returns `0.0`. Once
-ready, it returns `1.0` at or above the learned quantile and a normalized value
-below `1.0` otherwise. It is not a calibrated anomaly probability.
+ready, it returns `1.0` at or above the learned quantile, including equality at
+zero or a negative threshold. Below a positive threshold it returns the score
+ratio clipped at zero; below a nonpositive threshold it returns `0.0`.
+It is not a calibrated anomaly probability.
 
 ## Continue from here
 

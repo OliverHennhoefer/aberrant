@@ -3,6 +3,7 @@ name: Docs
 on:
   pull_request:
     paths:
+      - "aberrant/**"
       - "docs/**"
       - "mkdocs.yml"
       - "pyproject.toml"
@@ -12,6 +13,7 @@ on:
     branches:
       - main
     paths:
+      - "aberrant/**"
       - "docs/**"
       - "mkdocs.yml"
       - "pyproject.toml"

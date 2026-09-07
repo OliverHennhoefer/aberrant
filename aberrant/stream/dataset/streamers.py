@@ -138,9 +138,7 @@ class NpzStreamer:
                     )
                 }
                 label: object = (
-                    raw_label.item()
-                    if isinstance(raw_label, np.generic)
-                    else raw_label
+                    raw_label.item() if isinstance(raw_label, np.generic) else raw_label
                 )
                 yield features, label
                 if progress is not None:

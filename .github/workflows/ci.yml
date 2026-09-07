@@ -75,6 +75,9 @@ jobs:
       - name: Ruff
         run: uv run --locked python -m ruff check .
 
+      - name: Ruff format
+        run: uv run --locked python -m ruff format --check .
+
       - name: Mypy
         run: uv run --locked python -m mypy aberrant
 

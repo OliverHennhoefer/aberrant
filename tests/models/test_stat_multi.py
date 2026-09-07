@@ -246,7 +246,107 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
         diff = x - feature_mean
         score = float(diff.T @ inv_cov_matrix @ diff)
 
-        self.assertEqual(scored, score)
+        self.assertAlmostEqual(scored, score)
+
+    def test_rank_deficient_covariance_has_positive_regularized_distance(self):
+        model = MovingMahalanobisDistance(window_size=3)
+        values = np.array([[2.0, 2.0, 3.0], [4.0, 0.0, 0.0], [4.0, 4.0, 1.0]])
+        query = np.array([1.0, 2.0, 3.0])
+        for point in values:
+            model.learn_one(dict(zip("abc", point, strict=True)))
+
+        # Three observations in three dimensions cannot give full covariance
+        # rank, even if the numerical inverse happens to succeed.
+        covariance = np.cov(values, rowvar=False, bias=True)
+        ridge = 1e-6 * np.trace(covariance) / 3
+        diff = query - np.mean(values, axis=0)
+        expected = float(diff @ np.linalg.solve(covariance + ridge * np.eye(3), diff))
+        score = model.score_one(dict(zip("abc", query, strict=True)))
+        self.assertGreater(score, 1.0)
+        np.testing.assert_allclose(score, expected, rtol=1e-9)
+
+    def test_correlated_features_preserve_distance_across_numeric_scales(self):
+        # In the (1, 1) and (1, -1) directions the covariance eigenvalues
+        # are 4/3 and zero; the diagonal ridge is (2/3) * 1e-6.
+        ridge = (2.0 / 3.0) * 1e-6
+        expected = 0.5 / (4.0 / 3.0 + ridge) + 0.5 / ridge
+        for scale in (1e-200, 1.0, 1e200):
+            with self.subTest(scale=scale):
+                model = MovingMahalanobisDistance(window_size=3)
+                for value in (1.0, 2.0, 3.0):
+                    model.learn_one({"a": scale * value, "b": scale * value})
+                score = model.score_one({"a": scale * 2.0, "b": scale * 3.0})
+                np.testing.assert_allclose(score, expected, rtol=1e-9)
+
+    def test_nearly_correlated_features_are_regularized(self):
+        model = MovingMahalanobisDistance(window_size=3)
+        for a, b in ((1.0, 1.0), (2.0, 2.0 + 1e-7), (3.0, 3.0)):
+            model.learn_one({"a": a, "b": b})
+
+        # An arbitrarily small perturbation of the correlated reference must
+        # not produce the enormous distance of an unstable unregularized solve.
+        np.testing.assert_allclose(
+            model.score_one({"a": 2.0, "b": 3.0}),
+            750000.375,
+            rtol=1e-6,
+        )
+
+    def test_large_constant_coordinate_does_not_erase_other_variance(self):
+        constant = float(2**700)
+        for scale in (1e-200, 1.0, 1e200):
+            with self.subTest(scale=scale):
+                model = MovingMahalanobisDistance(window_size=3)
+                for value in (-1.0, 0.0, 1.0):
+                    model.learn_one({"x": constant, "y": value * scale})
+
+                # The changing coordinate has variance 2/3 and receives a
+                # relative ridge of 1e-6/3, regardless of the constant's size.
+                expected = 4.0 / (2.0 / 3.0 + 1e-6 / 3.0)
+                self.assertAlmostEqual(
+                    model.score_one({"x": constant, "y": 2.0 * scale}), expected
+                )
+
+    def test_centering_handles_opposite_reference_extremes(self):
+        extreme = np.finfo(float).max
+        model = MovingMahalanobisDistance(window_size=3)
+        for value in (-extreme, 0.0, extreme):
+            model.learn_one({"x": value})
+
+        with np.errstate(over="raise", invalid="raise"):
+            self.assertAlmostEqual(model.score_one({"x": extreme / 2.0}), 0.375)
+
+    def test_centering_handles_opposite_query_extreme(self):
+        model = MovingMahalanobisDistance(window_size=3)
+        for value in (1e308, 1.1e308, 1.2e308):
+            model.learn_one({"x": value})
+
+        with np.errstate(over="raise", invalid="raise"):
+            self.assertAlmostEqual(model.score_one({"x": -1e308}), 661.5)
+
+    def test_well_conditioned_distance_is_unchanged_across_scales_and_bias(self):
+        for scale in (1e-200, 1.0, 1e200):
+            for bias in (False, True):
+                with self.subTest(scale=scale, bias=bias):
+                    model = MovingMahalanobisDistance(window_size=4, bias=bias)
+                    for a, b in ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)):
+                        model.learn_one({"a": a * scale, "b": b * scale})
+
+                    # Population covariance is I/2; sample covariance is 2I/3.
+                    expected = 10.0 if bias else 7.5
+                    self.assertAlmostEqual(
+                        model.score_one({"a": scale, "b": 2.0 * scale}), expected
+                    )
+
+    def test_constant_windows_keep_absolute_covariance_floor(self):
+        for value in (0.0, 0.1, 1.0, 1000.0):
+            with self.subTest(value=value):
+                model = MovingMahalanobisDistance(window_size=3)
+                for _ in range(3):
+                    model.learn_one({"a": value, "b": 1.0})
+                self.assertEqual(model.score_one({"a": value, "b": 1.0}), 0.0)
+                self.assertAlmostEqual(
+                    model.score_one({"a": value + 1.0, "b": 1.0}), 1e6
+                )
 
     def test_score_one_supports_one_dimensional_input_and_bias(self):
         biased = MovingMahalanobisDistance(window_size=3, bias=True)

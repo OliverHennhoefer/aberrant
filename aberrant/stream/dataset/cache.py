@@ -31,8 +31,7 @@ class CacheEntry:
 
     def __post_init__(self) -> None:
         if len(self.sha256) != 64 or any(
-            character not in "0123456789abcdefABCDEF"
-            for character in self.sha256
+            character not in "0123456789abcdefABCDEF" for character in self.sha256
         ):
             raise ValueError("sha256 must contain exactly 64 hexadecimal characters")
         if isinstance(self.size, bool) or self.size < 0:
@@ -127,8 +126,7 @@ class DatasetCacheStore:
             if not isinstance(raw_datasets, dict):
                 raise ValueError("Cache metadata datasets must be an object")
             entries = dict(
-                self._parse_entry(name, value)
-                for name, value in raw_datasets.items()
+                self._parse_entry(name, value) for name, value in raw_datasets.items()
             )
             return CacheMetadata(
                 version=_METADATA_VERSION,
@@ -201,8 +199,4 @@ class DatasetCacheStore:
     @staticmethod
     def size(artifacts: Mapping[str, Path]) -> int:
         """Return total bytes occupied by the supplied owned artifacts."""
-        return sum(
-            path.stat().st_size
-            for path in artifacts.values()
-            if path.is_file()
-        )
+        return sum(path.stat().st_size for path in artifacts.values() if path.is_file())

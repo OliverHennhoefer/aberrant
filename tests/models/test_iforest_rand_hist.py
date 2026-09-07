@@ -195,7 +195,9 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
         cached_nodes = sum(len(tree._node_random) for tree in model._trees)
         self.assertGreater(cached_nodes, 0)
-        self.assertLessEqual(cached_nodes, model.n_estimators * (2 * model.window_size - 1))
+        self.assertLessEqual(
+            cached_nodes, model.n_estimators * (2 * model.window_size - 1)
+        )
         self.assertIsInstance(model.score_one({"x": 1.5, "y": 2.0}), float)
 
     def test_node_random_values_are_independent_of_visit_order(self):
