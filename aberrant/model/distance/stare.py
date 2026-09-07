@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import deque
 from typing import TypeAlias
 
 import numpy as np
@@ -23,9 +23,8 @@ class StationaryRegionNeighborDetector(BaseModel):
     ``radius`` in the current window:
     ``score = 1 - min(neighbor_count / k, 1)``.
 
-    A lightweight stationary-region skipping approximation is implemented via
-    per-cell cache invalidation at slide boundaries: cells whose occupancy
-    changed less than ``skip_threshold`` keep cached neighbor estimates. Unlike
+    Candidate cell neighborhoods are reused while cell topology stays unchanged.
+    Distances are always evaluated for the current query and live points. Unlike
     the paper, this class uses radius-neighbor counts rather than kernel-density
     estimates and returns a per-query score rather than a top-n outlier set.
 
@@ -39,16 +38,15 @@ class StationaryRegionNeighborDetector(BaseModel):
         radius: Positive Euclidean neighborhood radius and grid-cell width.
         window_size: Maximum number of learned points retained. It must exceed
             ``k``.
-        slide_size: Number of learned events between stationary-cell cache
-            refreshes.
-        skip_threshold: Maximum relative cell-occupancy change, in ``[0, 1]``,
-            for retaining a cached neighbor estimate.
+        slide_size: Number of learned events per warm-up slide.
+        skip_threshold: Compatibility parameter in ``[0, 1]``. Approximate cached
+            counts have been replaced by exact query-specific counts.
         time_key: Event-time field to exclude from the feature vector. ``None``
             uses one-based arrival order; explicit times must be finite and
             non-decreasing.
         warm_up_slides: Complete slides required before non-zero scoring.
         predict_threshold: Score boundary used by ``predict_one``.
-        eps: Positive numerical floor used in relative-change calculations.
+        eps: Positive tolerance added to squared-distance comparisons.
 
     References:
         Yoon, S., Lee, J.-G., & Lee, B. S. (2020). Ultrafast Local Outlier
@@ -108,19 +106,13 @@ class StationaryRegionNeighborDetector(BaseModel):
         self._window_entries: deque[_Entry] = deque()
 
         self._entries_by_id: dict[int, np.ndarray] = {}
-        self._entry_cell_by_id: dict[int, _Cell] = {}
         self._cell_members: dict[_Cell, set[int]] = {}
-        self._cell_counts: dict[_Cell, int] = {}
 
-        self._slide_add: defaultdict[_Cell, int] = defaultdict(int)
-        self._slide_remove: defaultdict[_Cell, int] = defaultdict(int)
-        self._prev_cell_counts: dict[_Cell, int] = {}
-        self._dirty_cells: set[_Cell] = set()
-        self._neighbor_cache: dict[_Cell, float] = {}
+        # Keep one neighborhood, bounded by the number of retained cells.
+        self._neighbor_cache: dict[_Cell, tuple[_Cell, ...]] = {}
 
         self._next_entry_id: int = 0
         self._samples_seen: int = 0
-        self._current_slide_count: int = 0
 
     def reset(self) -> None:
         """Reset learned state while keeping hyperparameters."""
@@ -140,11 +132,18 @@ class StationaryRegionNeighborDetector(BaseModel):
                 return False
         return True
 
-    def _candidate_cells(self, cell: _Cell) -> list[_Cell]:
-        candidates: list[_Cell] = []
-        for existing_cell in self._cell_members:
-            if self._are_neighbor_cells(existing_cell, cell):
-                candidates.append(existing_cell)
+    def _candidate_cells(self, cell: _Cell) -> tuple[_Cell, ...]:
+        cached = self._neighbor_cache.get(cell)
+        if cached is not None:
+            return cached
+        candidates = tuple(
+            existing
+            for existing in self._cell_members
+            if self._are_neighbor_cells(existing, cell)
+        )
+        if cell in self._cell_members:
+            self._neighbor_cache.clear()
+            self._neighbor_cache[cell] = candidates
         return candidates
 
     def _count_neighbors_within_radius(self, vector: np.ndarray, cell: _Cell) -> float:
@@ -171,13 +170,9 @@ class StationaryRegionNeighborDetector(BaseModel):
 
         self._window_entries.append((entry_id, vector, cell))
         self._entries_by_id[entry_id] = vector
-        self._entry_cell_by_id[entry_id] = cell
+        if cell not in self._cell_members:
+            self._neighbor_cache.clear()
         self._cell_members.setdefault(cell, set()).add(entry_id)
-        self._cell_counts[cell] = self._cell_counts.get(cell, 0) + 1
-
-        self._slide_add[cell] += 1
-        self._dirty_cells.add(cell)
-        self._neighbor_cache.pop(cell, None)
 
     def _remove_oldest_entry(self) -> None:
         if not self._window_entries:
@@ -185,65 +180,19 @@ class StationaryRegionNeighborDetector(BaseModel):
 
         old_id, _old_vector, old_cell = self._window_entries.popleft()
         self._entries_by_id.pop(old_id, None)
-        self._entry_cell_by_id.pop(old_id, None)
 
         members = self._cell_members.get(old_cell)
         if members is not None:
             members.discard(old_id)
             if not members:
                 self._cell_members.pop(old_cell, None)
-
-        new_count = self._cell_counts.get(old_cell, 0) - 1
-        if new_count > 0:
-            self._cell_counts[old_cell] = new_count
-            self._dirty_cells.add(old_cell)
-        else:
-            self._cell_counts.pop(old_cell, None)
-            # Cell is no longer in the active window; avoid stale dirty markers.
-            self._dirty_cells.discard(old_cell)
-
-        self._slide_remove[old_cell] += 1
-        self._neighbor_cache.pop(old_cell, None)
-
-    def _expand_with_neighbors(self, cells: set[_Cell]) -> set[_Cell]:
-        if not cells:
-            return set()
-
-        expanded = set(cells)
-        for existing in self._cell_counts:
-            for touched in cells:
-                if self._are_neighbor_cells(existing, touched):
-                    expanded.add(existing)
-                    break
-        return expanded
+                self._neighbor_cache.clear()
 
     def _is_warm(self) -> bool:
         warm_samples = self.warm_up_slides * self.slide_size
         return self._samples_seen >= warm_samples and len(self._window_entries) >= (
             self.k + 1
         )
-
-    def _on_slide_boundary(self) -> None:
-        touched = set(self._slide_add) | set(self._slide_remove)
-        expanded = self._expand_with_neighbors(touched)
-
-        for cell in expanded:
-            current = self._cell_counts.get(cell, 0)
-            if current == 0:
-                self._dirty_cells.discard(cell)
-                self._neighbor_cache.pop(cell, None)
-                continue
-
-            prev = self._prev_cell_counts.get(cell, 0)
-            ratio = abs(current - prev) / float(max(prev, 1))
-            if ratio > self.skip_threshold:
-                self._dirty_cells.add(cell)
-                self._neighbor_cache.pop(cell, None)
-
-        self._dirty_cells.intersection_update(self._cell_counts)
-        self._prev_cell_counts = dict(self._cell_counts)
-        self._slide_add.clear()
-        self._slide_remove.clear()
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""
@@ -257,12 +206,7 @@ class StationaryRegionNeighborDetector(BaseModel):
             self._remove_oldest_entry()
 
         self._samples_seen += 1
-        self._current_slide_count += 1
         self._boundary.commit(event)
-
-        if self._current_slide_count >= self.slide_size:
-            self._on_slide_boundary()
-            self._current_slide_count = 0
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score for one sample."""
@@ -272,20 +216,7 @@ class StationaryRegionNeighborDetector(BaseModel):
 
         vector = event.features.values
         cell = self._cell_id(vector)
-        if (
-            cell in self._cell_counts
-            and cell in self._neighbor_cache
-            and cell not in self._dirty_cells
-        ):
-            neighbors = self._neighbor_cache[cell]
-        else:
-            neighbors = self._count_neighbors_within_radius(vector, cell)
-            if cell in self._cell_counts:
-                self._neighbor_cache[cell] = neighbors
-                self._dirty_cells.discard(cell)
-            else:
-                self._neighbor_cache.pop(cell, None)
-                self._dirty_cells.discard(cell)
+        neighbors = self._count_neighbors_within_radius(vector, cell)
 
         score = 1.0 - min(neighbors / float(self.k), 1.0)
         return float(np.clip(score, 0.0, 1.0))
@@ -301,5 +232,5 @@ class StationaryRegionNeighborDetector(BaseModel):
             f"slide_size={self.slide_size}, skip_threshold={self.skip_threshold}, "
             f"time_key={self.time_key!r}, warm_up_slides={self.warm_up_slides}, "
             f"predict_threshold={self.predict_threshold}, eps={self.eps}, "
-            f"samples_seen={self._samples_seen}, active_cells={len(self._cell_counts)})"
+            f"samples_seen={self._samples_seen}, active_cells={len(self._cell_members)})"
         )

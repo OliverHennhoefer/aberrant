@@ -111,7 +111,7 @@ def test_url_backend_retries_and_succeeds() -> None:
         backend = UrlLibDownloadBackend(retries=2, backoff_seconds=0.0)
 
         with patch(
-            "aberrant.stream.dataset.download.urllib.request.urlopen",
+            "urllib.request.urlopen",
             side_effect=[URLError("temporary network issue"), _FakeResponse(b"payload")],
         ) as mock_urlopen:
             backend.download("https://example.com/shuttle.npz", destination)
@@ -127,7 +127,7 @@ def test_url_backend_raises_after_retry_exhaustion() -> None:
 
         with (
             patch(
-                "aberrant.stream.dataset.download.urllib.request.urlopen",
+                "urllib.request.urlopen",
                 side_effect=RemoteDisconnected("no response"),
             ) as mock_urlopen,
             pytest.raises(RuntimeError, match="after 3 attempts"),

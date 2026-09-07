@@ -1,6 +1,8 @@
 """Unit tests for the NETS distance-based anomaly detector."""
 
+import pickle
 import unittest
+from collections import deque
 
 import numpy as np
 
@@ -194,10 +196,7 @@ class TestNETS(unittest.TestCase):
         # behavior and internal count consistency that are not exposed publicly.
         self.assertLessEqual(len(model._window_entries), 12)
         self.assertEqual(
-            sum(model._full_cell_counts.values()), len(model._window_entries)
-        )
-        self.assertEqual(
-            sum(model._sub_cell_counts.values()), len(model._window_entries)
+            sum(map(len, model._full_cell_members.values())), len(model._window_entries)
         )
 
     def test_score_only_queries_do_not_grow_neighbor_cache(self) -> None:
@@ -215,15 +214,15 @@ class TestNETS(unittest.TestCase):
             model.learn_one({"a": float(i), "b": float(i)})
 
         model.score_one({"a": 29.0, "b": 29.0})
-        cache_size_before = len(model._upper_bound_cache)
+        state_before = pickle.dumps(model)
 
         for i in range(500):
             value = float(10_000 + i * 10)
             model.score_one({"a": value, "b": value})
 
-        self.assertEqual(len(model._upper_bound_cache), cache_size_before)
+        self.assertEqual(pickle.dumps(model), state_before)
 
-    def test_upper_bound_cache_refreshes_after_learning(self) -> None:
+    def test_neighbor_score_refreshes_after_learning(self) -> None:
         model = self.create_model(
             time_key=None,
             k=2,
@@ -241,11 +240,11 @@ class TestNETS(unittest.TestCase):
         model.learn_one({"a": 20.0, "b": 20.0})
 
         query = {"a": 0.0, "b": 0.0}
-        self.assertEqual(model.score_one(query), 1.0)
+        self.assertEqual(model.score_one(query), 0.5)
 
         model.learn_one({"a": 0.2, "b": 0.1})
         refreshed_score = model.score_one(query)
-        self.assertLess(refreshed_score, 1.0)
+        self.assertEqual(refreshed_score, 0.0)
 
     def test_neighbor_cells_uses_offset_lookup_when_beneficial(self) -> None:
         model = self.create_model()
@@ -327,3 +326,35 @@ class TestNETS(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_continuous_score_matches_brute_force_through_evictions():
+    model = NETS(k=4, radius=1.0, window_size=16, slide_size=1, seed=42)
+    window = deque(maxlen=16)
+    rng = np.random.default_rng(42)
+    for point in rng.normal(size=(100, 2)):
+        model.learn_one(dict(zip(("a", "b"), point, strict=True)))
+        window.append(point)
+        if len(window) <= model.k:
+            continue
+        for query in rng.normal(size=(3, 2)):
+            neighbors = sum(
+                np.dot(point - query, point - query) <= 1.0 + model.eps
+                for point in window
+            )
+            expected = 1.0 - min(neighbors / model.k, 1.0)
+            assert (
+                model.score_one(dict(zip(("a", "b"), query, strict=True))) == expected
+            )
+
+
+def test_score_only_queries_in_shared_subspace_do_not_accumulate_state():
+    model = NETS(k=2, radius=1.0, window_size=5, slide_size=1, subspace_dim=1, seed=42)
+    for value in (0.1, 0.2, 0.3):
+        model.learn_one({"a": value, "b": value})
+    model.score_one({"a": 0.1, "b": 0.1})
+    before = pickle.dumps(model)
+    for i in range(1000):
+        model.score_one({"a": 0.1, "b": float(10 + i * 2)})
+        model.score_one({"a": float(10 + i * 2), "b": 0.1})
+    assert pickle.dumps(model) == before

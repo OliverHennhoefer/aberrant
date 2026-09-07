@@ -18,7 +18,7 @@ from aberrant.base.exceptions import (
     ValidationError,
 )
 from aberrant.base.model import BaseModel
-from aberrant.base.pipeline import Pipeline
+from aberrant.base.pipeline import ModelPipeline, Pipeline, TransformerPipeline
 from aberrant.base.protocols import (
     FeatureMap,
     LearnerProtocol,
@@ -40,6 +40,8 @@ __all__ = [
     "ModelNotFittedError",
     "AberrantError",
     "Pipeline",
+    "ModelPipeline",
+    "TransformerPipeline",
     "PipelineError",
     "LearnerProtocol",
     "ModelProtocol",

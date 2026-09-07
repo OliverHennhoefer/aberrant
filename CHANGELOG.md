@@ -39,6 +39,8 @@ Semantic Versioning.
 
 ### Changed
 
+- Mondrian and random-histogram trees now represent leaves and branches separately, with complete bounds and children instead of optional node fields.
+
 - Paper-derived custom variants now have accurate canonical public names:
   `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector`,
   `SignedGraphSketchDetector`, `OnlineAutoencoderEnsemble`,
@@ -65,6 +67,25 @@ Semantic Versioning.
   state objects, and isolation trees use explicit leaf/branch unions.
 
 ### Fixed
+
+- Isolate the release wheel smoke test from the checkout and verify that imports resolve inside the installation environment.
+
+- Include all non-integration tests in pull-request CI and coverage, including root-level pipeline, validation, dataset, and workflow checks.
+
+- Give transformer and model pipelines distinct runtime capabilities and one canonical stage sequence. `Pipeline(...)` and `|` retain valid execution behavior; use `TransformerPipeline` and `ModelPipeline` in place of generic pipeline annotations.
+
+- Validate entire transformer samples before updating scaler statistics or
+  committing projection schemas; failed initialization can be retried.
+
+- Cache only candidate cell neighborhoods in the stationary-region detector;
+  recompute exact distances so query order and adjacent-cell updates cannot
+  reuse stale neighbor counts.
+
+- Preserve per-tree sampling membership when online isolation forests evict
+  observations, preventing negative or drifting tree populations.
+
+- Simplify cell-neighborhood scoring to one bounded index; preserve fractional
+  scarcity scores and prevent score-only queries from accumulating cache entries.
 
 - Restored Achlioptas' target-dimension normalization in `RandomProjection`.
 - Kept ADWIN variance exact when old buckets are removed.

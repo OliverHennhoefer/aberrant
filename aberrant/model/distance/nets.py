@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from itertools import product
 from typing import TypeAlias
 
@@ -12,7 +13,7 @@ from aberrant.base.model import BaseModel
 from aberrant.utils.validation import NumericEventBoundary
 
 _Cell: TypeAlias = tuple[int, ...]
-_Entry: TypeAlias = tuple[int, np.ndarray, _Cell, _Cell, int]
+_Entry: TypeAlias = tuple[int, _Cell]
 _MAX_NEIGHBOR_OFFSETS = 20_000
 
 
@@ -21,12 +22,11 @@ class CellNeighborhoodDetector(BaseModel):
     Bounded cell-neighborhood streaming outlier detector.
 
     The detector keeps a bounded sliding window and quantizes samples into
-    full-space and random-subspace cells. Scores are based on neighborhood
+    full-space cells. Scores are based on neighborhood
     density within ``radius``:
     ``score = 1 - min(neighbor_count / k, 1)``.
 
-    NETS-inspired set-based processing is approximated via slide-wise net-effect
-    bookkeeping and cell-level upper-bound pruning before exact refinement.
+    NETS-inspired cell indexing limits exact distance checks to neighboring cells.
     This class returns a continuous score for one query point; it does not
     reproduce the paper's exact window-level inlier/outlier set algorithm.
 
@@ -41,16 +41,15 @@ class CellNeighborhoodDetector(BaseModel):
         radius: Positive Euclidean neighborhood radius and grid-cell width.
         window_size: Maximum number of learned points retained. It must exceed
             ``k``.
-        slide_size: Number of learned events per bookkeeping slide.
-        subspace_dim: Number of randomly selected features used by the
-            cell-level pruning index. ``None`` selects half of the established
-            feature count, rounded up.
+        slide_size: Number of learned events per warm-up slide.
+        subspace_dim: Compatibility parameter, validated against the feature count.
+            The former subspace index was redundant and has been removed.
         time_key: Event-time field to exclude from the feature vector. ``None``
             uses one-based arrival order; explicit times must be finite and
             non-decreasing.
         warm_up_slides: Complete slides required before non-zero scoring.
         predict_threshold: Score boundary used by ``predict_one``.
-        seed: Seed for the model-local subspace generator.
+        seed: Retained for constructor compatibility; scoring is deterministic.
         eps: Positive numerical floor used in bound calculations.
 
     References:
@@ -110,24 +109,10 @@ class CellNeighborhoodDetector(BaseModel):
         self._reset_state()
 
     def _reset_state(self) -> None:
-        self._rng = np.random.default_rng(self.seed)
-
         self._boundary = NumericEventBoundary(time_key=self.time_key)
-        self._subspace_indices: np.ndarray | None = None
-        self._active_subspace_dim = 0
-
         self._window_entries: deque[_Entry] = deque()
-        self._entries_by_id: dict[int, np.ndarray] = {}
-
-        self._full_cell_members: dict[_Cell, set[int]] = {}
-        self._sub_cell_members: dict[_Cell, set[int]] = {}
-        self._full_cell_counts: dict[_Cell, int] = {}
-        self._sub_cell_counts: dict[_Cell, int] = {}
-
-        self._upper_bound_cache: dict[tuple[_Cell, _Cell], float] = {}
+        self._full_cell_members: dict[_Cell, dict[int, np.ndarray]] = {}
         self._neighbor_offsets_cache: dict[int, tuple[_Cell, ...]] = {}
-
-        self._next_entry_id = 0
         self._samples_seen = 0
 
     def reset(self) -> None:
@@ -139,41 +124,8 @@ class CellNeighborhoodDetector(BaseModel):
         """Number of samples processed via ``learn_one``."""
         return self._samples_seen
 
-    def _initialize_subspace(self, n_features: int) -> np.ndarray:
-        if self._subspace_indices is not None:
-            return self._subspace_indices
-
-        if self.subspace_dim is None:
-            selected_dim = max(1, int(np.ceil(n_features / 2.0)))
-        else:
-            selected_dim = self.subspace_dim
-
-        if selected_dim > n_features:
-            raise ValueError(
-                f"subspace_dim ({selected_dim}) cannot exceed number of features "
-                f"({n_features})"
-            )
-
-        indices: np.ndarray
-        if selected_dim == n_features:
-            indices = np.arange(n_features, dtype=np.intp)
-        else:
-            indices = np.sort(
-                self._rng.choice(n_features, size=selected_dim, replace=False)
-            ).astype(np.intp)
-
-        self._subspace_indices = indices
-        self._active_subspace_dim = selected_dim
-        return indices
-
     def _full_cell_id(self, vector: np.ndarray) -> _Cell:
         return tuple(int(value) for value in np.floor(vector / self.radius))
-
-    def _sub_cell_id(self, vector: np.ndarray) -> _Cell:
-        if self._subspace_indices is None:
-            raise RuntimeError("Subspace indices are not initialized")
-        projected = vector[self._subspace_indices]
-        return tuple(int(value) for value in np.floor(projected / self.radius))
 
     def _are_neighbor_cells(self, left: _Cell, right: _Cell) -> bool:
         for left_dim, right_dim in zip(left, right, strict=False):
@@ -182,7 +134,7 @@ class CellNeighborhoodDetector(BaseModel):
         return True
 
     def _neighbor_cells(
-        self, cell: _Cell, cell_counts: dict[_Cell, int]
+        self, cell: _Cell, cell_counts: Mapping[_Cell, object]
     ) -> list[_Cell]:
         n_active_cells = len(cell_counts)
         if n_active_cells == 0:
@@ -225,182 +177,48 @@ class CellNeighborhoodDetector(BaseModel):
         self._neighbor_offsets_cache[n_dims] = offsets
         return offsets
 
-    def _add_entry(
-        self,
-        vector: np.ndarray,
-        full_cell: _Cell,
-        sub_cell: _Cell,
-        slide_id: int,
-    ) -> None:
-        entry_id = self._next_entry_id
-        self._next_entry_id += 1
-
-        self._window_entries.append((entry_id, vector, full_cell, sub_cell, slide_id))
-        self._entries_by_id[entry_id] = vector
-
-        self._full_cell_members.setdefault(full_cell, set()).add(entry_id)
-        self._sub_cell_members.setdefault(sub_cell, set()).add(entry_id)
-        self._full_cell_counts[full_cell] = self._full_cell_counts.get(full_cell, 0) + 1
-        self._sub_cell_counts[sub_cell] = self._sub_cell_counts.get(sub_cell, 0) + 1
-
-    def _remove_oldest_entry(self) -> None:
-        if not self._window_entries:
-            return
-
-        old_id, _vector, full_cell, sub_cell, _slide_id = self._window_entries.popleft()
-        self._entries_by_id.pop(old_id, None)
-
-        full_members = self._full_cell_members.get(full_cell)
-        if full_members is not None:
-            full_members.discard(old_id)
-            if not full_members:
-                self._full_cell_members.pop(full_cell, None)
-
-        sub_members = self._sub_cell_members.get(sub_cell)
-        if sub_members is not None:
-            sub_members.discard(old_id)
-            if not sub_members:
-                self._sub_cell_members.pop(sub_cell, None)
-
-        new_full_count = self._full_cell_counts.get(full_cell, 0) - 1
-        if new_full_count > 0:
-            self._full_cell_counts[full_cell] = new_full_count
-        else:
-            self._full_cell_counts.pop(full_cell, None)
-
-        new_sub_count = self._sub_cell_counts.get(sub_cell, 0) - 1
-        if new_sub_count > 0:
-            self._sub_cell_counts[sub_cell] = new_sub_count
-        else:
-            self._sub_cell_counts.pop(sub_cell, None)
-
     def _is_warm(self) -> bool:
         warm_samples = self.warm_up_slides * self.slide_size
-        return self._samples_seen >= warm_samples and len(self._window_entries) >= (
-            self.k + 1
-        )
-
-    def _upper_neighbor_bound(self, full_cell: _Cell, sub_cell: _Cell) -> float:
-        cache_key = (full_cell, sub_cell)
-        cached = self._upper_bound_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        full_upper = float(
-            sum(
-                self._full_cell_counts[cell]
-                for cell in self._neighbor_cells(full_cell, self._full_cell_counts)
-            )
-        )
-        sub_upper = float(
-            sum(
-                self._sub_cell_counts[cell]
-                for cell in self._neighbor_cells(sub_cell, self._sub_cell_counts)
-            )
-        )
-        upper = min(full_upper, sub_upper)
-
-        if full_cell in self._full_cell_counts or sub_cell in self._sub_cell_counts:
-            self._upper_bound_cache[cache_key] = upper
-
-        return upper
-
-    def _count_same_cell_neighbors(self, vector: np.ndarray, full_cell: _Cell) -> float:
-        member_ids = self._full_cell_members.get(full_cell)
-        if not member_ids:
-            return 0.0
-
-        count = 0
-        for entry_id in member_ids:
-            point = self._entries_by_id[entry_id]
-            diff = point - vector
-            if float(np.dot(diff, diff)) <= (self._radius_sq + self.eps):
-                count += 1
-        return float(count)
-
-    def _candidate_ids_for_cells(
-        self,
-        members: dict[_Cell, set[int]],
-        neighbor_cells: list[_Cell],
-    ) -> set[int]:
-        candidate_ids: set[int] = set()
-        for cell in neighbor_cells:
-            candidate_ids.update(members.get(cell, set()))
-        return candidate_ids
-
-    def _count_exact_neighbors(
-        self,
-        vector: np.ndarray,
-        full_cell: _Cell,
-        sub_cell: _Cell,
-    ) -> float:
-        full_neighbor_cells = self._neighbor_cells(full_cell, self._full_cell_counts)
-        sub_neighbor_cells = self._neighbor_cells(sub_cell, self._sub_cell_counts)
-
-        full_candidates = self._candidate_ids_for_cells(
-            self._full_cell_members,
-            full_neighbor_cells,
-        )
-        if not full_candidates:
-            return 0.0
-
-        sub_candidates = self._candidate_ids_for_cells(
-            self._sub_cell_members,
-            sub_neighbor_cells,
-        )
-        candidate_ids = full_candidates & sub_candidates
-        if not candidate_ids:
-            return 0.0
-
-        count = 0
-        for entry_id in candidate_ids:
-            point = self._entries_by_id[entry_id]
-            diff = point - vector
-            if float(np.dot(diff, diff)) <= (self._radius_sq + self.eps):
-                count += 1
-        return float(count)
+        return self._samples_seen >= warm_samples and len(self._window_entries) > self.k
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """Update detector state with one sample."""
+        """Update the single bounded cell index with one sample."""
         event = self._boundary.preview(x)
         vector = event.features.values
-        self._initialize_subspace(vector.shape[0])
-
-        full_cell = self._full_cell_id(vector)
-        sub_cell = self._sub_cell_id(vector)
-        slide_id = self._samples_seen // self.slide_size
-        self._add_entry(vector, full_cell, sub_cell, slide_id)
-
+        if self.subspace_dim is not None and self.subspace_dim > len(vector):
+            raise ValueError(
+                f"subspace_dim ({self.subspace_dim}) cannot exceed number of features "
+                f"({len(vector)})"
+            )
+        cell = self._full_cell_id(vector)
+        entry_id = self._samples_seen
+        self._window_entries.append((entry_id, cell))
+        self._full_cell_members.setdefault(cell, {})[entry_id] = vector
         if len(self._window_entries) > self.window_size:
-            self._remove_oldest_entry()
-        # Keep cache semantics simple: any learning update invalidates all
-        # upper-bound entries, while repeated score-only queries can still hit.
-        self._upper_bound_cache.clear()
-
+            old_id, old_cell = self._window_entries.popleft()
+            members = self._full_cell_members[old_cell]
+            del members[old_id]
+            if not members:
+                del self._full_cell_members[old_cell]
         self._samples_seen += 1
         self._boundary.commit(event)
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score for one sample."""
+        """Count exact neighbors, stopping once the score must be zero."""
         event = self._boundary.preview(x)
         if not self._boundary.schema.is_established or not self._is_warm():
             return 0.0
-
         vector = event.features.values
-        full_cell = self._full_cell_id(vector)
-        sub_cell = self._sub_cell_id(vector)
-
-        upper_bound = self._upper_neighbor_bound(full_cell, sub_cell)
-        if upper_bound < float(self.k):
-            return 1.0
-
-        lower_bound = self._count_same_cell_neighbors(vector, full_cell)
-        if lower_bound >= float(self.k):
-            return 0.0
-
-        neighbors = self._count_exact_neighbors(vector, full_cell, sub_cell)
-        score = 1.0 - min(neighbors / float(self.k), 1.0)
-        return float(np.clip(score, 0.0, 1.0))
+        cell = self._full_cell_id(vector)
+        neighbors = 0
+        for candidate in self._neighbor_cells(cell, self._full_cell_members):
+            for point in self._full_cell_members[candidate].values():
+                diff = point - vector
+                if float(np.dot(diff, diff)) <= self._radius_sq + self.eps:
+                    neighbors += 1
+                    if neighbors >= self.k:
+                        return 0.0
+        return 1.0 - neighbors / float(self.k)
 
     def predict_one(self, x: dict[str, float]) -> int:
         """Return binary anomaly prediction using ``predict_threshold``."""
@@ -414,6 +232,5 @@ class CellNeighborhoodDetector(BaseModel):
             f"time_key={self.time_key!r}, warm_up_slides={self.warm_up_slides}, "
             f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
             f"samples_seen={self._samples_seen}, "
-            f"active_full_cells={len(self._full_cell_counts)}, "
-            f"active_sub_cells={len(self._sub_cell_counts)})"
+            f"active_full_cells={len(self._full_cell_members)})"
         )

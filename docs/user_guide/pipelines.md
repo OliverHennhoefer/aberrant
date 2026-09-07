@@ -12,8 +12,10 @@ or one terminal anomaly model. `|` composes ABERRANT transformers left to right.
 | `transformer | ... | model` | `learn_one`, `score_one` |
 
 A model is terminal. Appending a transformer or another model after it raises
-`IncompatibleComponentError`. Calling `score_one` on a transformer-ending
-pipeline or `transform_one` on a model-ending pipeline raises `PipelineError`.
+`IncompatibleComponentError`. Transformer pipelines expose no `score_one`; model pipelines expose no
+`transform_one`. Runtime protocol checks therefore match actual capabilities.
+`Pipeline(...)` returns a `TransformerPipeline` or `ModelPipeline`, both of which
+remain instances of `Pipeline`. Use these concrete types for annotations.
 
 ## Learning uses post-update transforms
 
