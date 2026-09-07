@@ -66,6 +66,10 @@ Semantic Versioning.
 
 ### Fixed
 
+- Cache only candidate cell neighborhoods in the stationary-region detector;
+  recompute exact distances so query order and adjacent-cell updates cannot
+  reuse stale neighbor counts.
+
 - Preserve per-tree sampling membership when online isolation forests evict
   observations, preventing negative or drifting tree populations.
 

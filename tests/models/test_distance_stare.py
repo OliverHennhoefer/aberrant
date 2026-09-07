@@ -185,9 +185,11 @@ class TestSTARE(unittest.TestCase):
             )
 
         self.assertLessEqual(len(model._window_entries), 12)
-        self.assertEqual(sum(model._cell_counts.values()), len(model._window_entries))
+        self.assertEqual(
+            sum(map(len, model._cell_members.values())), len(model._window_entries)
+        )
 
-    def test_dirty_cells_remain_bounded_after_evictions(self) -> None:
+    def test_cached_neighborhood_remains_bounded_after_evictions(self) -> None:
         model = self.create_model(
             time_key=None,
             k=2,
@@ -201,7 +203,9 @@ class TestSTARE(unittest.TestCase):
             model.learn_one({"a": float(i * 10), "b": float(i * 10)})
 
         self.assertLessEqual(len(model._window_entries), model.window_size)
-        self.assertLessEqual(len(model._dirty_cells), len(model._cell_counts))
+        self.assertLessEqual(len(model._neighbor_cache), 1)
+        for cells in model._neighbor_cache.values():
+            self.assertLessEqual(len(cells), len(model._cell_members))
 
     def test_score_only_queries_do_not_grow_neighbor_cache(self) -> None:
         model = self.create_model(
@@ -249,3 +253,26 @@ class TestSTARE(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_queries_in_same_cell_have_independent_neighbor_counts():
+    model = STARE(k=2, radius=1, window_size=5, slide_size=1)
+    for value in (0.1, 1.8, 1.9):
+        model.learn_one({"x": value})
+    assert model.score_one({"x": 0.1}) == 0.5
+    assert model.score_one({"x": 0.9}) == 0.0
+    assert model.score_one({"x": 0.1}) == 0.5
+
+
+def test_neighbor_counts_follow_adjacent_cell_updates_and_evictions():
+    model = STARE(k=2, radius=1, window_size=3, slide_size=1)
+    for value in (0.1, 5.0, 6.0):
+        model.learn_one({"x": value})
+    assert model.score_one({"x": 0.9}) == 0.5
+    model.learn_one({"x": 1.8})
+    assert model.score_one({"x": 0.9}) == 0.5
+    model.learn_one({"x": 0.1})
+    assert model.score_one({"x": 0.9}) == 0.0
+    model.learn_one({"x": 5.0})
+    model.learn_one({"x": 6.0})
+    assert model.score_one({"x": 0.9}) == 0.5
