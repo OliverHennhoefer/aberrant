@@ -48,10 +48,18 @@ jobs:
           uv venv .venv-smoke --python 3.11
           VIRTUAL_ENV=.venv-smoke uv pip install dist/*.whl
           . .venv-smoke/bin/activate
-          python - <<'PY'
+          python -I - <<'PY'
+          import sys
+          from pathlib import Path
+
+          import aberrant
           from aberrant.model import ThresholdModel
           from aberrant.model.iforest import OnlineIsolationForest
           from aberrant.transform.preprocessing import StandardScaler
+
+          package_path = Path(aberrant.__file__).resolve()
+          environment_path = Path(sys.prefix).resolve()
+          assert package_path.is_relative_to(environment_path), package_path
 
           model = ThresholdModel(ceiling=1.0)
           assert model.score_one({"x": 2.0}) == 1.0

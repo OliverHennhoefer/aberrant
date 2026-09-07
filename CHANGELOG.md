@@ -68,6 +68,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- Isolate the release wheel smoke test from the checkout and verify that imports resolve inside the installation environment.
+
 - Include all non-integration tests in pull-request CI and coverage, including root-level pipeline, validation, dataset, and workflow checks.
 
 - Give transformer and model pipelines distinct runtime capabilities and one canonical stage sequence. `Pipeline(...)` and `|` retain valid execution behavior; use `TransformerPipeline` and `ModelPipeline` in place of generic pipeline annotations.
