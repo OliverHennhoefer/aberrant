@@ -60,41 +60,44 @@ def _kurtosis_weights(moments: np.ndarray) -> np.ndarray:
     return np.asarray(np.log1p(np.maximum(kurtosis, 0.0)), dtype=np.float64)
 
 
-@dataclass
-class _RHFNode:
-    """One STREamRHF node."""
+@dataclass(slots=True)
+class _RHFLeaf:
+    """A terminal bucket owns its observations."""
 
     depth: int
     node_id: int
     moments: np.ndarray
-    points: list[np.ndarray] | None = None
-    split_feature: int | None = None
-    split_value: float | None = None
-    left: _RHFNode | None = None
-    right: _RHFNode | None = None
-
-    @property
-    def is_leaf(self) -> bool:
-        return self.split_feature is None
+    points: list[np.ndarray]
 
     @property
     def size(self) -> int:
-        if self.is_leaf:
-            return 0 if self.points is None else len(self.points)
-        left_size = 0 if self.left is None else self.left.size
-        right_size = 0 if self.right is None else self.right.size
-        return left_size + right_size
+        return len(self.points)
 
     def collect_points(self) -> list[np.ndarray]:
-        """Collect all points below this node."""
-        if self.is_leaf:
-            return [] if self.points is None else list(self.points)
-        points: list[np.ndarray] = []
-        if self.left is not None:
-            points.extend(self.left.collect_points())
-        if self.right is not None:
-            points.extend(self.right.collect_points())
-        return points
+        return list(self.points)
+
+
+@dataclass(slots=True)
+class _RHFBranch:
+    """An internal histogram split owns two complete subtrees."""
+
+    depth: int
+    node_id: int
+    moments: np.ndarray
+    split_feature: int
+    split_value: float
+    left: _RHFNode
+    right: _RHFNode
+
+    @property
+    def size(self) -> int:
+        return self.left.size + self.right.size
+
+    def collect_points(self) -> list[np.ndarray]:
+        return self.left.collect_points() + self.right.collect_points()
+
+
+_RHFNode = _RHFLeaf | _RHFBranch
 
 
 class _RandomHistogramTree:
@@ -172,7 +175,7 @@ class _RandomHistogramTree:
         cache_random: bool = True,
     ) -> _RHFNode:
         moments = _moments_for(points, self.n_features)
-        leaf = _RHFNode(
+        leaf = _RHFLeaf(
             depth=depth,
             node_id=node_id,
             moments=moments,
@@ -201,7 +204,7 @@ class _RandomHistogramTree:
         if not left_points or not right_points:
             return leaf
 
-        return _RHFNode(
+        return _RHFBranch(
             depth=depth,
             node_id=node_id,
             moments=moments,
@@ -230,7 +233,7 @@ class _RandomHistogramTree:
         return self.leaf_size(point)
 
     def _insert_node(self, node: _RHFNode, point: np.ndarray) -> _RHFNode:
-        if node.is_leaf:
+        if isinstance(node, _RHFLeaf):
             points = node.collect_points()
             points.append(point)
             return self._build_node(points, depth=node.depth, node_id=node.node_id)
@@ -245,12 +248,8 @@ class _RandomHistogramTree:
 
         node.moments = updated_moments
         if point[node.split_feature] <= node.split_value:
-            if node.left is None:
-                raise RuntimeError("Split node has no left child")
             node.left = self._insert_node(node.left, point)
         else:
-            if node.right is None:
-                raise RuntimeError("Split node has no right child")
             node.right = self._insert_node(node.right, point)
         return node
 
@@ -262,7 +261,7 @@ class _RandomHistogramTree:
 
     def _preview_insert_node(self, node: _RHFNode, point: np.ndarray) -> int:
         """Preview insertion, rebuilding only a temporary affected subtree."""
-        if node.is_leaf:
+        if isinstance(node, _RHFLeaf):
             points = node.collect_points()
             points.append(point)
             preview = self._build_node(
@@ -291,29 +290,17 @@ class _RandomHistogramTree:
             )
             return self._leaf_size_from(preview, point)
 
-        if node.split_feature is None or node.split_value is None:
-            raise RuntimeError("Invalid split node")
         if point[node.split_feature] <= node.split_value:
-            if node.left is None:
-                raise RuntimeError("Split node has no left child")
             return self._preview_insert_node(node.left, point)
-        if node.right is None:
-            raise RuntimeError("Split node has no right child")
         return self._preview_insert_node(node.right, point)
 
     @staticmethod
     def _leaf_size_from(node: _RHFNode, point: np.ndarray) -> int:
         """Return the leaf size reached by a point from a supplied subtree."""
-        while not node.is_leaf:
-            if node.split_feature is None or node.split_value is None:
-                raise RuntimeError("Invalid split node")
+        while isinstance(node, _RHFBranch):
             if point[node.split_feature] <= node.split_value:
-                if node.left is None:
-                    raise RuntimeError("Split node has no left child")
                 node = node.left
             else:
-                if node.right is None:
-                    raise RuntimeError("Split node has no right child")
                 node = node.right
         return node.size
 

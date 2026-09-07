@@ -6,11 +6,12 @@ import unittest
 import numpy as np
 
 from aberrant.model.iforest.mondrian import (
-    MondrianIsolationForest as MondrianForest,
+    MondrianBranch,
+    MondrianLeaf,
+    MondrianTree,
 )
 from aberrant.model.iforest.mondrian import (
-    MondrianNode,
-    MondrianTree,
+    MondrianIsolationForest as MondrianForest,
 )
 from tests.utils import DataGenerator
 
@@ -19,23 +20,23 @@ class TestMondrianNode(unittest.TestCase):
     """Test suite for MondrianNode."""
 
     def test_initialization(self):
-        """Node should initialize as an empty leaf."""
-        node = MondrianNode()
+        """A leaf starts occupied and carries no branch-only metadata."""
+        point = np.array([3.0, 2.0, 1.0])
+        node = MondrianLeaf.from_point(point, math.inf)
 
         self.assertTrue(node.is_leaf())
-        self.assertIsNone(node.split_feature)
-        self.assertIsNone(node.split_threshold)
-        self.assertIsNone(node.left_child)
-        self.assertIsNone(node.right_child)
-        self.assertEqual(node.count, 0)
-        self.assertIsNone(node.min)
-        self.assertIsNone(node.max)
+        self.assertFalse(hasattr(node, "split_feature"))
+        self.assertFalse(hasattr(node, "left_child"))
+        self.assertEqual(node.count, 1)
+        np.testing.assert_array_equal(node.min, point)
+        np.testing.assert_array_equal(node.max, point)
         self.assertTrue(math.isinf(node.split_time))
+        point[:] = -1.0
+        np.testing.assert_array_equal(node.min, [3.0, 2.0, 1.0])
 
     def test_update_stats(self):
         """Node stats should track min/max bounds and count."""
-        node = MondrianNode()
-        node.update_stats(np.array([3.0, 2.0, 1.0]))
+        node = MondrianLeaf.from_point(np.array([3.0, 2.0, 1.0]), math.inf)
         node.update_stats(np.array([1.0, 5.0, 4.0]))
 
         self.assertEqual(node.count, 2)
@@ -44,17 +45,12 @@ class TestMondrianNode(unittest.TestCase):
 
     def test_recompute_from_children(self):
         """Internal node should derive bounds/count from both children."""
-        left = MondrianNode()
-        left.update_stats(np.array([0.0, 1.0]))
+        left = MondrianLeaf.from_point(np.array([0.0, 1.0]), math.inf)
         left.update_stats(np.array([1.0, 2.0]))
 
-        right = MondrianNode()
-        right.update_stats(np.array([3.0, 4.0]))
+        right = MondrianLeaf.from_point(np.array([3.0, 4.0]), math.inf)
 
-        parent = MondrianNode(split_time=0.2)
-        parent.is_leaf_ = False
-        parent.left_child = left
-        parent.right_child = right
+        parent = MondrianBranch.join(left, right, 0, 2.0, 0.2)
         parent.recompute_from_children()
 
         self.assertEqual(parent.count, 3)
@@ -77,9 +73,7 @@ class TestMondrianTree(unittest.TestCase):
         np.testing.assert_array_equal(tree.selected_indices, selected_indices)
         self.assertEqual(tree.lambda_, 1.5)
         self.assertEqual(tree.n_samples, 0)
-        self.assertTrue(tree.root.is_leaf())
-        self.assertEqual(tree.root.count, 0)
-        self.assertEqual(tree.root.split_time, 1.5)
+        self.assertIsNone(tree.root)
 
     def test_first_sample_learned_once(self):
         """First update should increment root count exactly once."""

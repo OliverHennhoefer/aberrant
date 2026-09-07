@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -24,72 +25,73 @@ def _average_path_length(n: int) -> float:
     return 2.0 * (math.log(n - 1) + euler_mascheroni) - 2.0 * (n - 1) / n
 
 
-class MondrianNode:
-    """
-    Node in an online Mondrian tree.
+@dataclass(slots=True)
+class _MondrianBlock:
+    """Bounds and population shared by every non-empty block."""
 
-    Nodes store an axis-aligned block (`min`, `max`), subtree sample count,
-    split metadata for internal nodes, and split time `split_time`.
-    """
+    min: np.ndarray
+    max: np.ndarray
+    count: int
+    split_time: float
 
-    __slots__ = [
-        "split_feature",
-        "split_threshold",
-        "split_time",
-        "left_child",
-        "right_child",
-        "is_leaf_",
-        "min",
-        "max",
-        "count",
-    ]
 
-    def __init__(self, split_time: float = math.inf) -> None:
-        """Initialize a Mondrian node."""
-        self.split_feature: int | None = None
-        self.split_threshold: float | None = None
-        self.split_time: float = split_time
-        self.left_child: MondrianNode | None = None
-        self.right_child: MondrianNode | None = None
-        self.is_leaf_: bool = True
-        self.min: np.ndarray | None = None
-        self.max: np.ndarray | None = None
-        self.count: int = 0
+class MondrianLeaf(_MondrianBlock):
+    """An occupied terminal block, with no split or child metadata."""
+
+    __slots__ = ()
+
+    @classmethod
+    def from_point(cls, point: np.ndarray, split_time: float) -> MondrianLeaf:
+        return cls(point.copy(), point.copy(), 1, split_time)
 
     def is_leaf(self) -> bool:
-        """Return whether this node is a leaf."""
-        return self.is_leaf_
+        return True
 
-    def update_stats(self, x_values: np.ndarray) -> None:
-        """Update this node's bounding block and sample count with one point."""
-        if self.count == 0:
-            self.min = x_values.copy()
-            self.max = x_values.copy()
-        else:
-            if self.min is None or self.max is None:
-                raise RuntimeError("Non-empty node has incomplete bounds")
-            np.minimum(self.min, x_values, out=self.min)
-            np.maximum(self.max, x_values, out=self.max)
+    def update_stats(self, point: np.ndarray) -> None:
+        np.minimum(self.min, point, out=self.min)
+        np.maximum(self.max, point, out=self.max)
         self.count += 1
 
-    def recompute_from_children(self) -> None:
-        """Recompute block bounds and count from both children."""
-        if self.left_child is None or self.right_child is None:
-            raise RuntimeError("Internal node must have both children")
-        if self.left_child.min is None or self.left_child.max is None:
-            raise RuntimeError("Left child has incomplete bounds")
-        if self.right_child.min is None or self.right_child.max is None:
-            raise RuntimeError("Right child has incomplete bounds")
 
-        if self.min is None:
-            self.min = np.minimum(self.left_child.min, self.right_child.min)
-        else:
-            np.minimum(self.left_child.min, self.right_child.min, out=self.min)
-        if self.max is None:
-            self.max = np.maximum(self.left_child.max, self.right_child.max)
-        else:
-            np.maximum(self.left_child.max, self.right_child.max, out=self.max)
+@dataclass(slots=True)
+class MondrianBranch(_MondrianBlock):
+    """A split with exactly two occupied children."""
+
+    split_feature: int
+    split_threshold: float
+    left_child: MondrianNode
+    right_child: MondrianNode
+
+    @classmethod
+    def join(
+        cls,
+        left: MondrianNode,
+        right: MondrianNode,
+        split_feature: int,
+        split_threshold: float,
+        split_time: float,
+    ) -> MondrianBranch:
+        return cls(
+            np.minimum(left.min, right.min),
+            np.maximum(left.max, right.max),
+            left.count + right.count,
+            split_time,
+            split_feature,
+            split_threshold,
+            left,
+            right,
+        )
+
+    def is_leaf(self) -> bool:
+        return False
+
+    def recompute_from_children(self) -> None:
+        np.minimum(self.left_child.min, self.right_child.min, out=self.min)
+        np.maximum(self.left_child.max, self.right_child.max, out=self.max)
         self.count = self.left_child.count + self.right_child.count
+
+
+MondrianNode = MondrianLeaf | MondrianBranch
 
 
 class MondrianTree:
@@ -107,17 +109,17 @@ class MondrianTree:
         self.lambda_ = lambda_
         self.rng = rng
         self._projected_buffer = np.empty(len(selected_indices), dtype=np.float64)
-        self.root = MondrianNode(split_time=lambda_)
+        self.root: MondrianNode | None = None
         self.n_samples = 0
 
     def learn_one(self, x_projected: np.ndarray) -> None:
         """Insert one projected point with online Mondrian extension."""
-        if self.root.count == 0:
-            self.root.update_stats(x_projected)
-            self.n_samples += 1
-            return
-
-        self.root = self._extend_block(self.root, x_projected, parent_split_time=0.0)
+        if self.root is None:
+            self.root = MondrianLeaf.from_point(x_projected, self.lambda_)
+        else:
+            self.root = self._extend_block(
+                self.root, x_projected, parent_split_time=0.0
+            )
         self.n_samples += 1
 
     def learn_one_from_global(self, global_features: np.ndarray) -> None:
@@ -137,10 +139,6 @@ class MondrianTree:
         If a sampled split time occurs before the node's own split time, create
         a new parent above this node; otherwise recurse or absorb into leaf.
         """
-        if node.min is None or node.max is None:
-            node.update_stats(x_values)
-            return node
-
         lower_extension = np.maximum(node.min - x_values, 0.0)
         upper_extension = np.maximum(x_values - node.max, 0.0)
         extension_weights = lower_extension + upper_extension
@@ -155,42 +153,31 @@ class MondrianTree:
                 split_feature=split_feature,
             )
 
-            new_leaf = MondrianNode(split_time=self.lambda_)
-            new_leaf.update_stats(x_values)
+            new_leaf = MondrianLeaf.from_point(x_values, self.lambda_)
+            left, right = (
+                (new_leaf, node)
+                if x_values[split_feature] <= split_threshold
+                else (node, new_leaf)
+            )
+            return MondrianBranch.join(
+                left,
+                right,
+                split_feature,
+                split_threshold,
+                parent_split_time + sampled_time,
+            )
 
-            parent = MondrianNode(split_time=parent_split_time + sampled_time)
-            parent.split_feature = split_feature
-            parent.split_threshold = split_threshold
-            parent.is_leaf_ = False
-
-            if x_values[split_feature] <= split_threshold:
-                parent.left_child = new_leaf
-                parent.right_child = node
-            else:
-                parent.left_child = node
-                parent.right_child = new_leaf
-
-            parent.recompute_from_children()
-            return parent
-
-        if node.is_leaf():
+        if isinstance(node, MondrianLeaf):
             node.update_stats(x_values)
             return node
 
-        if node.split_feature is None or node.split_threshold is None:
-            raise RuntimeError("Internal node missing split metadata")
-
         if x_values[node.split_feature] <= node.split_threshold:
-            if node.left_child is None:
-                raise RuntimeError("Internal node missing left child")
             node.left_child = self._extend_block(
                 node.left_child,
                 x_values,
                 parent_split_time=node.split_time,
             )
         else:
-            if node.right_child is None:
-                raise RuntimeError("Internal node missing right child")
             node.right_child = self._extend_block(
                 node.right_child,
                 x_values,
@@ -226,9 +213,6 @@ class MondrianTree:
         split_feature: int,
     ) -> float:
         """Sample split threshold on the extension interval for one feature."""
-        if node.min is None or node.max is None:
-            return float(x_values[split_feature])
-
         value = float(x_values[split_feature])
         lower = float(node.min[split_feature])
         upper = float(node.max[split_feature])
@@ -241,26 +225,17 @@ class MondrianTree:
 
     def score_one(self, x_projected: np.ndarray) -> float:
         """Return path length plus leaf-size adjustment for one point."""
-        if self.root.count == 0:
+        if self.root is None:
             return 0.0
 
         path_length = 0
         current_node = self.root
 
-        while not current_node.is_leaf():
+        while isinstance(current_node, MondrianBranch):
             path_length += 1
-            if (
-                current_node.split_feature is None
-                or current_node.split_threshold is None
-            ):
-                raise RuntimeError("Internal node missing split metadata")
             if x_projected[current_node.split_feature] <= current_node.split_threshold:
-                if current_node.left_child is None:
-                    raise RuntimeError("Internal node missing left child")
                 current_node = current_node.left_child
             else:
-                if current_node.right_child is None:
-                    raise RuntimeError("Internal node missing right child")
                 current_node = current_node.right_child
 
         return float(path_length + _average_path_length(current_node.count))

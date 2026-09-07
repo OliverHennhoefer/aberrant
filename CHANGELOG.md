@@ -39,6 +39,8 @@ Semantic Versioning.
 
 ### Changed
 
+- Mondrian and random-histogram trees now represent leaves and branches separately, with complete bounds and children instead of optional node fields.
+
 - Paper-derived custom variants now have accurate canonical public names:
   `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector`,
   `SignedGraphSketchDetector`, `OnlineAutoencoderEnsemble`,
