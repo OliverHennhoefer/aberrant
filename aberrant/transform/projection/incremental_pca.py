@@ -1,10 +1,10 @@
 """Incremental Principal Component Analysis transformer."""
 
-import math
-
 import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
+from aberrant.transform.projection._schema import ProjectionSchema
+from aberrant.utils.validation import coerce_feature_values
 
 
 class IncrementalPCA(BaseTransformer):
@@ -83,11 +83,7 @@ class IncrementalPCA(BaseTransformer):
 
         self.n_components: int = n_components
         self.n0: int = n0
-        self.feature_names: list[str] | None = list(keys) if keys is not None else None
-        if self.feature_names is not None and len(self.feature_names) != len(
-            set(self.feature_names)
-        ):
-            raise ValueError("Feature names cannot contain duplicates")
+        self._schema = ProjectionSchema(n_components, keys)
         self.tol: float = tol
         self.forgetting_factor = forgetting_factor
 
@@ -95,43 +91,20 @@ class IncrementalPCA(BaseTransformer):
         self.window: list[np.ndarray] = []  # Store data points during initialization
         self.n0_reached: bool = False  # Flag for switching to online mode
         self.n_samples_seen: int = 0  # Total number of samples processed
-        self.n_features: int = 0  # Number of features in the data
 
         # PCA components (eigenvalues and eigenvectors)
         self.values: np.ndarray = np.array([])  # Eigenvalues (variances)
         self.vectors: np.ndarray = np.array([])  # Eigenvectors (loadings)
 
-        self._check_n_features()
+    @property
+    def feature_names(self) -> list[str] | None:
+        """Established feature names in projection order."""
+        return self._schema.feature_names
 
-    def _check_n_features(self) -> None:
-        """Validate n_components against feature count."""
-        if self.feature_names is not None:
-            self.n_features = len(self.feature_names)
-            if self.n_components > len(self.feature_names):
-                raise ValueError(
-                    f"n_components ({self.n_components}) must be <= number of features ({len(self.feature_names)})"
-                )
-
-    @staticmethod
-    def _validate_input(x: dict[str, float]) -> None:
-        """Reject values that would irreversibly poison PCA state."""
-        for key, value in x.items():
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError) as e:
-                raise ValueError(f"Feature '{key}' must be numeric") from e
-            if not math.isfinite(numeric):
-                raise ValueError(f"Feature '{key}' must be finite")
-
-    def _vectorize(self, x: dict[str, float]) -> np.ndarray:
-        """Build a stable-order vector and reject extra schema fields."""
-        if self.feature_names is None:
-            raise RuntimeError("Feature schema is not initialized")
-        data_vector = np.array([x[key] for key in self.feature_names], dtype=float)
-        if len(x) != len(self.feature_names):
-            unexpected = sorted(set(x).difference(self.feature_names))
-            raise ValueError(f"Input contains unexpected feature(s): {unexpected}")
-        return data_vector
+    @property
+    def n_features(self) -> int:
+        """Number of established input features."""
+        return 0 if self._schema.names is None else len(self._schema.names)
 
     def _update_online_pca(self, data_vector: np.ndarray) -> None:
         """
@@ -239,10 +212,10 @@ class IncrementalPCA(BaseTransformer):
         Args:
             data_vector: New data point to add to initialization window.
         """
-        self.window.append(data_vector)
-        if len(self.window) >= self.n0:
+        window = [*self.window, data_vector]
+        if len(window) >= self.n0:
             # Perform initial full PCA and switch to online mode
-            initial_data = np.array(self.window)
+            initial_data = np.array(window)
             u, s, vt = np.linalg.svd(initial_data, full_matrices=False)
             s = s / np.sqrt(max(1, initial_data.shape[0] - 1))
 
@@ -252,6 +225,8 @@ class IncrementalPCA(BaseTransformer):
             self.vectors = rotation[:, : self.n_components]
             self.n0_reached = True
             self.window = []
+        else:
+            self.window = window
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -263,12 +238,8 @@ class IncrementalPCA(BaseTransformer):
         Raises:
             ValueError: If `n_components` is greater than the number of features in `x`.
         """
-        self._validate_input(x)
-        if self.feature_names is None:
-            self.feature_names = list(x.keys())
-            self._check_n_features()
-
-        data_vector = self._vectorize(x)
+        prepared = self._schema.prepare(x)
+        data_vector = prepared.values
 
         if self.n0_reached:
             self._update_online_pca(data_vector)
@@ -276,6 +247,7 @@ class IncrementalPCA(BaseTransformer):
             self._initialize_pca(data_vector)
 
         self.n_samples_seen += 1
+        self._schema.commit(prepared)
 
     def transform_one(self, x: dict[str, float]) -> dict[str, float]:
         """
@@ -288,8 +260,11 @@ class IncrementalPCA(BaseTransformer):
             Transformed data point as dictionary with component names as keys.
         """
 
-        self._validate_input(x)
-        data_vector = self._vectorize(x) if self.feature_names is not None else None
+        data_vector = None
+        if self._schema.is_established:
+            data_vector = self._schema.prepare(x).values
+        else:
+            coerce_feature_values(x)
         if self.n0_reached:
             if data_vector is None:
                 raise RuntimeError(

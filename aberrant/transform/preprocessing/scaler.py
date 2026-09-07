@@ -4,17 +4,7 @@ import math
 from collections import Counter, defaultdict
 
 from aberrant.base.transformer import BaseTransformer
-
-
-def _finite_value(feature: str, value: float) -> float:
-    """Validate a scalar before it reaches persistent streaming statistics."""
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError) as e:
-        raise ValueError(f"Feature '{feature}' must be numeric") from e
-    if not math.isfinite(numeric):
-        raise ValueError(f"Feature '{feature}' must be finite")
-    return numeric
+from aberrant.utils.validation import coerce_feature_values
 
 
 class MinMaxScaler(BaseTransformer):
@@ -63,8 +53,7 @@ class MinMaxScaler(BaseTransformer):
         Args:
             x: A dictionary of feature-value pairs.
         """
-        for feature, value in x.items():
-            numeric_value = _finite_value(feature, value)
+        for feature, numeric_value in coerce_feature_values(x).items():
             if feature not in self.min:
                 self.min[feature] = math.inf
                 self.max[feature] = -math.inf
@@ -86,8 +75,7 @@ class MinMaxScaler(BaseTransformer):
             ValueError: If feature hasn't been seen during learning.
         """
         scaled_x = {}
-        for feature, value in x.items():
-            numeric_value = _finite_value(feature, value)
+        for feature, numeric_value in coerce_feature_values(x).items():
             if feature not in self.min or feature not in self.max:
                 raise ValueError(
                     f"Feature '{feature}' has not been seen during learning."
@@ -157,8 +145,7 @@ class StandardScaler(BaseTransformer):
         Args:
             x: A dictionary of feature-value pairs.
         """
-        for feature, value in x.items():
-            numeric_value = _finite_value(feature, value)
+        for feature, numeric_value in coerce_feature_values(x).items():
             self.counts[feature] += 1
             old_mean = self.means[feature]
 
@@ -187,8 +174,7 @@ class StandardScaler(BaseTransformer):
             ValueError: If feature hasn't been seen during learning.
         """
         scaled_x = {}
-        for feature, value in x.items():
-            numeric_value = _finite_value(feature, value)
+        for feature, numeric_value in coerce_feature_values(x).items():
             if feature not in self.means:
                 raise ValueError(
                     f"Feature '{feature}' has not been seen during learning."

@@ -30,6 +30,18 @@ def coerce_integer_feature(value: object, key: str) -> int:
     return as_int
 
 
+def coerce_feature_values(features: Mapping[str, float]) -> dict[str, float]:
+    """Validate a complete transformer sample, preserving float coercion."""
+    validated = {}
+    for key, value in features.items():
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Feature '{key}' must be numeric") from exc
+        validated[key] = coerce_finite_number(numeric, label=f"Feature '{key}'")
+    return validated
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedFeatures:
     """Validated feature vector awaiting an optional schema commit."""
@@ -47,6 +59,7 @@ class FeatureSchema:
         names: Sequence[str] | None = None,
         *,
         expected_size: int | None = None,
+        sort_names: bool = True,
     ) -> None:
         if expected_size is not None and expected_size <= 0:
             raise ValueError("expected_size must be positive or None")
@@ -65,6 +78,7 @@ class FeatureSchema:
 
         self._names = resolved_names
         self._expected_size = expected_size
+        self._sort_names = sort_names
         self._revision = 0
 
     @property
@@ -91,7 +105,7 @@ class FeatureSchema:
                 label=f"Feature '{key}'",
             )
 
-        names = self._names or tuple(sorted(features))
+        names = self._names or tuple(sorted(features) if self._sort_names else features)
         if self._expected_size is not None and len(features) != self._expected_size:
             raise ValueError(
                 f"Expected {self._expected_size} features, got {len(features)}"

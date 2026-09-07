@@ -66,6 +66,9 @@ Semantic Versioning.
 
 ### Fixed
 
+- Validate entire transformer samples before updating scaler statistics or
+  committing projection schemas; failed initialization can be retried.
+
 - Cache only candidate cell neighborhoods in the stationary-region detector;
   recompute exact distances so query order and adjacent-cell updates cannot
   reuse stale neighbor counts.
