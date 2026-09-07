@@ -66,6 +66,9 @@ Semantic Versioning.
 
 ### Fixed
 
+- Preserve per-tree sampling membership when online isolation forests evict
+  observations, preventing negative or drifting tree populations.
+
 - Simplify cell-neighborhood scoring to one bounded index; preserve fractional
   scarcity scores and prevent score-only queries from accumulating cache entries.
 

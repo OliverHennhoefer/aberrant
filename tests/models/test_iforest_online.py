@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import numpy as np
 
+from aberrant.model.iforest._online_tree import OnlineIsolationTree
 from aberrant.model.iforest.online import OnlineIsolationForest
 
 
@@ -309,3 +310,30 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_subsampled_tree_forgets_exactly_the_learned_membership():
+    tree = OnlineIsolationTree(
+        max_leaf_samples=32,
+        tree_type="fixed",
+        subsample=0.4,
+        branching_factor=2,
+        data_size=0,
+        rng=np.random.default_rng(42),
+    )
+    batch = np.arange(40.0).reshape(-1, 1)
+    tree.learn(batch)
+    retained = tree.data_size
+    assert 0 < retained < len(batch)
+    tree.unlearn(batch[:13])
+    tree.unlearn(batch[13:])
+    assert tree.data_size == 0
+    assert tree.root.data_size == 0
+
+
+def test_subsampled_forest_population_stays_within_window():
+    model = OnlineIsolationForest(num_trees=2, window_size=8, subsample=0.5, seed=42)
+    for i in range(1000):
+        model.learn_one({"x": float(i)})
+        for tree in model.trees:
+            assert 0 <= tree.data_size <= model.window_size

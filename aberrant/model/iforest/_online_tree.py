@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -106,9 +107,14 @@ class OnlineIsolationTree:
         )
         self.root: _OnlineNode | None = None
         self.next_node_index = 0
+        self._sample_membership: deque[bool] = deque()
 
     def learn(self, data: np.ndarray) -> OnlineIsolationTree:
-        selected = data[self.rng.random(data.shape[0]) < self.subsample]
+        membership = np.asarray(
+            self.rng.random(data.shape[0]) < self.subsample, dtype=np.bool_
+        )
+        self._sample_membership.extend(bool(value) for value in membership)
+        selected = data[membership]
         if selected.shape[0] == 0:
             return self
 
@@ -129,7 +135,16 @@ class OnlineIsolationTree:
         return self
 
     def unlearn(self, data: np.ndarray) -> OnlineIsolationTree:
-        selected = data[self.rng.random(data.shape[0]) < self.subsample]
+        """Forget a FIFO prefix using its original sampling decisions."""
+        count = data.shape[0]
+        if count > len(self._sample_membership):
+            raise ValueError("Cannot unlearn more observations than were learned")
+        membership = np.fromiter(
+            (self._sample_membership.popleft() for _ in range(count)),
+            dtype=np.bool_,
+            count=count,
+        )
+        selected = data[membership]
         if selected.shape[0] == 0:
             return self
 
@@ -234,12 +249,12 @@ class OnlineIsolationTree:
         if not bounded_children:
             return
         node.bounds = _Bounds(
-            minimum=np.vstack(
-                [child.bounds.minimum for child in bounded_children]
-            ).min(axis=0),
-            maximum=np.vstack(
-                [child.bounds.maximum for child in bounded_children]
-            ).max(axis=0),
+            minimum=np.vstack([child.bounds.minimum for child in bounded_children]).min(
+                axis=0
+            ),
+            maximum=np.vstack([child.bounds.maximum for child in bounded_children]).max(
+                axis=0
+            ),
         )
 
     @staticmethod
