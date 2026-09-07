@@ -68,6 +68,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- Include all non-integration tests in pull-request CI and coverage, including root-level pipeline, validation, dataset, and workflow checks.
+
 - Give transformer and model pipelines distinct runtime capabilities and one canonical stage sequence. `Pipeline(...)` and `|` retain valid execution behavior; use `TransformerPipeline` and `ModelPipeline` in place of generic pipeline annotations.
 
 - Validate entire transformer samples before updating scaler statistics or

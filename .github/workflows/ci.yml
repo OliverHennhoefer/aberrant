@@ -79,7 +79,7 @@ jobs:
         run: uv run --locked python -m mypy aberrant
 
       - name: Unit tests
-        run: uv run --locked python -m pytest tests/models tests/drift tests/transformers -q
+        run: uv run --locked python -m pytest tests --ignore=tests/integration -q
 
   extras-smoke:
     runs-on: ubuntu-latest
@@ -113,7 +113,7 @@ jobs:
           PY
 
       - name: FAISS model smoke tests
-        run: uv run --locked python -m pytest tests/models/test_distance_knn.py -q
+        run: uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_public_imports_extras.py -q
 
   integration-smoke:
     runs-on: ubuntu-latest
@@ -133,7 +133,7 @@ jobs:
         run: uv sync --locked --extra dev
 
       - name: Integration smoke
-        run: uv run --locked python -m pytest tests/test_public_imports_base.py tests/test_public_imports_extras.py tests/integration -q
+        run: uv run --locked python -m pytest tests/integration -q
 
   coverage:
     runs-on: ubuntu-latest
@@ -153,7 +153,7 @@ jobs:
         run: uv sync --locked --extra dev
 
       - name: Coverage
-        run: uv run --locked python -m pytest tests/models tests/drift tests/transformers --cov=aberrant --cov-report=xml --cov-report=term-missing -q
+        run: uv run --locked python -m pytest tests --ignore=tests/integration --cov=aberrant --cov-report=xml --cov-report=term-missing -q
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
