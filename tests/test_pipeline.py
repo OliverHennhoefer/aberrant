@@ -8,8 +8,10 @@ from aberrant.base import (
     BaseModel,
     BaseTransformer,
     IncompatibleComponentError,
+    ModelPipeline,
     ModelProtocol,
     Pipeline,
+    TransformerPipeline,
     TransformerProtocol,
 )
 
@@ -145,3 +147,53 @@ def test_pipeline_rejects_ambiguous_structural_components() -> None:
         Pipeline(_StatefulTransformer(), Ambiguous())
     with pytest.raises(IncompatibleComponentError):
         Pipeline(Ambiguous(), _RecordingModel())
+
+
+@pytest.mark.parametrize(
+    ("pipeline_type", "terminal_type"),
+    [
+        (ModelPipeline, _StatefulTransformer),
+        (TransformerPipeline, _RecordingModel),
+    ],
+)
+@pytest.mark.parametrize("nested", [False, True])
+def test_concrete_pipeline_rejects_incompatible_terminal(
+    pipeline_type, terminal_type, nested
+) -> None:
+    terminal = terminal_type()
+    if nested:
+        terminal = Pipeline(_StatefulTransformer(), terminal)
+    with pytest.raises(IncompatibleComponentError, match=pipeline_type.__name__):
+        pipeline_type(_StatefulTransformer(), terminal)
+
+
+@pytest.mark.parametrize(
+    ("pipeline_type", "terminal_type", "method"),
+    [
+        (ModelPipeline, _RecordingModel, "score_one"),
+        (TransformerPipeline, _StatefulTransformer, "transform_one"),
+    ],
+)
+def test_concrete_pipeline_preserves_type_behavior_and_pickling(
+    pipeline_type, terminal_type, method
+) -> None:
+    pipeline = pipeline_type(_StatefulTransformer(), terminal_type())
+    assert type(pipeline) is pipeline_type
+    pipeline.learn_one({"x": 1.0})
+    result = getattr(pipeline, method)({"x": 2.0})
+    assert result == (3.0 if method == "score_one" else {"x": 4.0})
+    restored = pickle.loads(pickle.dumps(pipeline))
+    assert type(restored) is pipeline_type
+    assert getattr(restored, method)({"x": 2.0}) == result
+
+
+@pytest.mark.parametrize("base_type", [ModelPipeline, TransformerPipeline])
+def test_concrete_pipeline_subclasses_preserve_their_type(base_type) -> None:
+    class CustomPipeline(base_type):
+        pass
+
+    terminal = (
+        _RecordingModel() if base_type is ModelPipeline else _StatefulTransformer()
+    )
+    pipeline = CustomPipeline(_StatefulTransformer(), terminal)
+    assert type(pipeline) is CustomPipeline

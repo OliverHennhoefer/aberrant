@@ -45,10 +45,21 @@ class Pipeline:
                 "an unambiguous transformer or model component",
             )
         pipeline: TransformerPipeline | ModelPipeline
-        if is_transformer:
-            pipeline = object.__new__(TransformerPipeline)
+        if cls is Pipeline:
+            pipeline = (
+                object.__new__(TransformerPipeline)
+                if is_transformer
+                else object.__new__(ModelPipeline)
+            )
+        elif (issubclass(cls, TransformerPipeline) and is_transformer) or (
+            issubclass(cls, ModelPipeline) and is_model
+        ):
+            pipeline = object.__new__(cls)
         else:
-            pipeline = object.__new__(ModelPipeline)
+            raise IncompatibleComponentError(
+                second.__class__.__name__,
+                f"a terminal compatible with {cls.__name__}",
+            )
         pipeline._initialize(first, second)
         return pipeline
 
