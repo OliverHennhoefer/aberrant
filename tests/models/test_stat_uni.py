@@ -1,3 +1,4 @@
+import math
 import unittest
 from collections import deque
 
@@ -211,6 +212,58 @@ class TestMovingGeometricAverage(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "requires positive values"):
             model.score_one({"value": -1.0})
+
+    def test_long_constant_window_does_not_overflow(self):
+        model = MovingGeometricAverage(window_size=200)
+        for _ in range(200):
+            model.learn_one({"value": 100.0})
+
+        self.assertEqual(model.score_one({"value": 100.0}), 0.0)
+        expected = 100.0 * math.expm1(math.log(2.0) / 201)
+        np.testing.assert_allclose(
+            model.score_one({"value": 200.0}), expected, rtol=1e-11
+        )
+
+    def test_long_small_value_window_preserves_nonzero_change(self):
+        model = MovingGeometricAverage(window_size=200)
+        for _ in range(200):
+            model.learn_one({"value": 0.01})
+
+        expected = 0.01 * math.expm1(math.log(100.0) / 201)
+        np.testing.assert_allclose(
+            model.score_one({"value": 1.0}), expected, rtol=1e-11
+        )
+
+    def test_value_mode_preserves_scale_and_score_direction(self):
+        for scale in (1e-200, 1.0, 1e200):
+            for abs_diff in (False, True):
+                with self.subTest(scale=scale, abs_diff=abs_diff):
+                    model = MovingGeometricAverage(200, abs_diff=abs_diff)
+                    for _ in range(200):
+                        model.learn_one({"value": scale})
+
+                    expected = scale * math.expm1(math.log(0.5) / 201)
+                    if abs_diff:
+                        expected = abs(expected)
+                    np.testing.assert_allclose(
+                        model.score_one({"value": scale / 2}),
+                        expected,
+                        rtol=1e-10,
+                        atol=0.0,
+                    )
+
+    def test_growth_mode_avoids_overflowing_individual_ratios(self):
+        model = MovingGeometricAverage(3, absoluteValues=True, abs_diff=False)
+        for value in (1e-200, 1e200, 1e-200):
+            model.learn_one({"value": value})
+
+        # The retained factors multiply to one, despite individually exceeding
+        # floating-point range. The candidate's geometric growth is 10^(400/3).
+        expected = 10.0 ** (400.0 / 3.0) - 1.0
+        np.testing.assert_allclose(
+            model.score_one({"value": 1e200}), expected, rtol=1e-12
+        )
+        self.assertEqual(model.score_one({"value": 1e-200}), 0.0)
 
 
 class TestMovingMedian(unittest.TestCase):

@@ -283,7 +283,7 @@ built-in warm-up policy; `score_one` returns the supplied criterion's loss and
 | Class | Contract |
 | --- | --- |
 | `ThresholdModel` | Stateless binary output: `1.0` when any configured ceiling or floor is violated, otherwise `0.0`. Scalar bounds apply to every supplied feature; mapping bounds ignore unconfigured feature names. |
-| `QuantileThreshold` | Sliding score-window policy. It becomes ready after `min(window_size, max(10, floor(0.1 * window_size)))` learned scores, returns `1.0` at or above the quantile, and otherwise returns a ratio below `1.0`. |
+| `QuantileThreshold` | Sliding score-window policy. It becomes ready after `min(window_size, max(10, floor(0.1 * window_size)))` learned scores and returns `1.0` at or above the quantile for any threshold sign. Below a positive threshold it returns `max(score / threshold, 0.0)`; below a zero or negative threshold it returns `0.0`. |
 | `NullModel` | Stateless baseline that always returns `0.0`. |
 | `RandomModel` | Uniform `[0, 1)` baseline. Each `score_one` consumes one draw from its model-local generator; `learn_one` is a no-op. |
 

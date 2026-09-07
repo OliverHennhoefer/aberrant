@@ -146,7 +146,9 @@ class DatasetManager:
             temporary_path = None
             return destination
         except Exception as exc:
-            raise RuntimeError(f"Failed to download dataset {dataset.value}: {exc}") from exc
+            raise RuntimeError(
+                f"Failed to download dataset {dataset.value}: {exc}"
+            ) from exc
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
@@ -191,10 +193,7 @@ class DatasetManager:
 
     def _artifact_paths(self) -> dict[str, Path]:
         """Return the exact registered artifact paths owned by this manager."""
-        return {
-            dataset.value: self._path(dataset)
-            for dataset in DATASET_REGISTRY
-        }
+        return {dataset.value: self._path(dataset) for dataset in DATASET_REGISTRY}
 
     def clear_cache(self, dataset: Dataset | None = None) -> None:
         """Remove one registered artifact or all registered artifacts."""

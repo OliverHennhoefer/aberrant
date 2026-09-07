@@ -45,9 +45,7 @@ def _mass_distance_profile(
     # Centering is algebraically neutral for z-normalized distance and avoids
     # variance cancellation when a sensor has a large numeric offset.
     centered_series = series - float(np.mean(series))
-    cumulative = np.concatenate(
-        ([0.0], np.cumsum(centered_series, dtype=np.float64))
-    )
+    cumulative = np.concatenate(([0.0], np.cumsum(centered_series, dtype=np.float64)))
     cumulative_sq = np.concatenate(
         ([0.0], np.cumsum(centered_series * centered_series, dtype=np.float64))
     )
@@ -131,9 +129,7 @@ class XLagDAMP(BaseModel):
         if subsequence_length < 2:
             raise ValueError("subsequence_length must be at least 2")
 
-        resolved_x_lag = (
-            16 * subsequence_length if x_lag is None else x_lag
-        )
+        resolved_x_lag = 16 * subsequence_length if x_lag is None else x_lag
         if resolved_x_lag < subsequence_length:
             raise ValueError("x_lag must be at least subsequence_length")
 
@@ -150,9 +146,7 @@ class XLagDAMP(BaseModel):
         self.start_index = resolved_start_index
         self.eps = eps
 
-        self._initial_search_length = _next_power_of_two(
-            8 * self.subsequence_length
-        )
+        self._initial_search_length = _next_power_of_two(8 * self.subsequence_length)
         self._history_capacity = self.x_lag + self.subsequence_length - 1
         self._reset_state()
 
@@ -268,9 +262,7 @@ class XLagDAMP(BaseModel):
 
             if first_iteration:
                 first_iteration = False
-                segment = combined[
-                    query_start - search_length + 1 : query_start + 1
-                ]
+                segment = combined[query_start - search_length + 1 : query_start + 1]
             else:
                 segment_start = (
                     query_start

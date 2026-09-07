@@ -30,8 +30,7 @@ discord_end = int(np.argmax(scores))
 detected_start = discord_end - subsequence_length + 1
 
 print(
-    f"Expected discord region: [{discord_start}, "
-    f"{discord_start + subsequence_length})"
+    f"Expected discord region: [{discord_start}, {discord_start + subsequence_length})"
 )
 print(
     f"Detected discord subsequence: [{detected_start}, "

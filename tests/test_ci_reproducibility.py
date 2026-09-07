@@ -1,7 +1,15 @@
 """Repository policy checks for reproducible GitHub Actions workflows."""
 
+import os
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
+
+import pytest
+
+from aberrant import __version__
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTION_USE = re.compile(r"^\s*uses:\s*[^@\s]+@([^\s#]+)", re.MULTILINE)
@@ -33,3 +41,41 @@ def test_all_uv_sync_commands_use_the_lockfile() -> None:
 
     assert sync_commands
     assert all("--locked" in command for command in sync_commands)
+
+
+def _run_release_version_check(tag: str) -> subprocess.CompletedProcess[str]:
+    workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    check_step = workflow.split("- name: Validate release version\n", 1)[1].split(
+        "- name:", 1
+    )[0]
+    assert "if: startsWith(github.ref, 'refs/tags/')" in check_step
+    assert workflow.index("name: Validate release version") < workflow.index(
+        "name: Build distributions"
+    )
+    script_match = re.search(
+        r"<<'PY'\n(.*?)^\s+PY$", check_step, re.MULTILINE | re.DOTALL
+    )
+    assert script_match is not None
+    return subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(script_match.group(1))],
+        cwd=WORKFLOWS.parents[1],
+        env={**os.environ, "GITHUB_REF_NAME": tag},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_release_accepts_the_package_version_tag() -> None:
+    result = _run_release_version_check(f"v{__version__}")
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("tag", ["v0.0.0", __version__, f"v{__version__}rc1"])
+def test_release_rejects_mismatched_version_tags(tag: str) -> None:
+    result = _run_release_version_check(tag)
+
+    assert result.returncode != 0
+    assert "does not match package version" in result.stderr
+    assert f"expected 'v{__version__}'" in result.stderr

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from aberrant.model.stat._univariate_base import (
     _BaseMovingUnivariate,
     _extract_univariate_value,
@@ -88,18 +90,21 @@ class MovingGeometricAverage(_BaseMovingUnivariate):
             return 0.0
 
         if self.absoluteValues:
-            factors = [
-                self.window[index + 1] / self.window[index]
-                for index in range(window_length - 1)
-            ]
-            score_factor = value / self.window[-1]
+            # Consecutive growth factors telescope to last / first. Work in
+            # logs so neither individual ratios nor their product overflow.
+            first_log = math.log(self.window[0])
+            current_log_mean = (math.log(self.window[-1]) - first_log) / (
+                window_length - 1
+            )
+            candidate_log_mean = (math.log(value) - first_log) / window_length
         else:
-            factors = list(self.window)
-            score_factor = value
+            current_log_mean = (
+                math.fsum(math.log(sample) for sample in self.window) / window_length
+            )
+            candidate_log_mean = current_log_mean + (
+                math.log(value) - current_log_mean
+            ) / (window_length + 1)
 
-        product = 1.0
-        for factor in factors:
-            product *= factor
-        current_geometric = product ** (1 / len(factors))
-        new_geometric = (product * score_factor) ** (1 / (len(factors) + 1))
+        current_geometric = math.exp(current_log_mean)
+        new_geometric = math.exp(candidate_log_mean)
         return self._difference(new_geometric, current_geometric)

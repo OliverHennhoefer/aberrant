@@ -200,13 +200,38 @@ class TestQuantileThresholdEdgeCases(unittest.TestCase):
         qt = QuantileThreshold(window_size=50)
         for _ in range(50):
             qt.learn_one({"score": 0.0})
-        # Threshold should be 0 or very small
-        # Score of 0 should not be detected as anomaly
+        self.assertEqual(qt.threshold, 0.0)
+        # Equality follows the same >= rule for every threshold sign.
         score = qt.score_one({"score": 0.0})
-        self.assertEqual(score, 0.0)
+        self.assertEqual(score, 1.0)
+        self.assertEqual(qt.score_one({"score": -0.1}), 0.0)
         # Positive score should be anomaly
         score = qt.score_one({"score": 0.1})
         self.assertEqual(score, 1.0)
+
+    def test_negative_threshold_uses_learned_boundary(self):
+        qt = QuantileThreshold(quantile=0.9, window_size=10)
+        for value in range(-10, 0):
+            qt.learn_one({"score": float(value)})
+
+        self.assertAlmostEqual(qt.threshold, -1.9)
+        for candidate in [-1.9, -1.0, 0.0, 1.0]:
+            with self.subTest(candidate=candidate):
+                self.assertEqual(qt.score_one({"score": candidate}), 1.0)
+        for candidate in [-100.0, -2.0]:
+            with self.subTest(candidate=candidate):
+                self.assertEqual(qt.score_one({"score": candidate}), 0.0)
+        self.assertEqual(qt.n_scores, 10)
+        self.assertAlmostEqual(qt.threshold, -1.9)
+
+    def test_constant_negative_scores_include_equality(self):
+        qt = QuantileThreshold(quantile=0.5, window_size=10)
+        for _ in range(10):
+            qt.learn_one({"score": -10.0})
+
+        self.assertEqual(qt.score_one({"score": -11.0}), 0.0)
+        self.assertEqual(qt.score_one({"score": -10.0}), 1.0)
+        self.assertEqual(qt.score_one({"score": -5.0}), 1.0)
 
     def test_constant_scores(self):
         """Test with constant scores."""

@@ -11,6 +11,10 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.Pipeline
 
+::: aberrant.base.TransformerPipeline
+
+::: aberrant.base.ModelPipeline
+
 ::: aberrant.base.LearnerProtocol
 
 ::: aberrant.base.TransformerProtocol

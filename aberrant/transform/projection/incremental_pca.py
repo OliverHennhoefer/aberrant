@@ -18,9 +18,10 @@ class IncrementalPCA(BaseTransformer):
 
     Args:
         n_components: Number of principal components to keep.
-        n0: Initial number of samples for warm-up phase.
+        n0: Initial number of samples for warm-up phase. Must be at least
+            ``n_components`` to establish every output component.
         keys: Feature names. If None, inferred from first sample.
-        tol: Tolerance for considering residual significance.
+        tol: Finite, non-negative tolerance for considering residual significance.
         forgetting_factor: Weight for new values (0 < f < 1). If None, uses 1/t.
 
     Examples:
@@ -76,8 +77,10 @@ class IncrementalPCA(BaseTransformer):
             raise ValueError("n_components must be positive")
         if n0 <= 0:
             raise ValueError("n0 must be positive")
-        if tol < 0:
-            raise ValueError("tol must be non-negative")
+        if n0 < n_components:
+            raise ValueError("n0 must be at least n_components")
+        if not np.isfinite(tol) or tol < 0:
+            raise ValueError("tol must be non-negative and finite")
         if forgetting_factor is not None and not (0 < forgetting_factor < 1):
             raise ValueError("forgetting_factor must be 0 < forgetting_factor < 1")
 
@@ -131,7 +134,7 @@ class IncrementalPCA(BaseTransformer):
         residual = x_scaled - self.vectors @ xhat
         norm_residual = float(np.linalg.norm(residual))
 
-        if norm_residual >= self.tol:
+        if norm_residual > 0.0 and norm_residual >= self.tol:
             lambda_updated, xhat = self._expand_subspace(
                 lambda_updated, xhat, residual, norm_residual
             )

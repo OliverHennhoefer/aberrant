@@ -46,8 +46,8 @@ def _reference_x_lag_damp(
         expansion_num = 0
 
         while approximate_distance >= best_so_far:
-            far_start = matlab_index - search_length + 1 + (
-                expansion_num * subsequence_length
+            far_start = (
+                matlab_index - search_length + 1 + (expansion_num * subsequence_length)
             )
             if (
                 far_start <= matlab_index - x_lag
@@ -71,14 +71,10 @@ def _reference_x_lag_damp(
 
             if first_iteration:
                 first_iteration = False
-                segment = series[
-                    matlab_index - search_length : matlab_index
-                ]
+                segment = series[matlab_index - search_length : matlab_index]
             else:
                 segment_start = (
-                    matlab_index
-                    - search_length
-                    + expansion_num * subsequence_length
+                    matlab_index - search_length + expansion_num * subsequence_length
                 )
                 segment_end = (
                     matlab_index
@@ -272,9 +268,7 @@ class TestXLagDAMP(unittest.TestCase):
         exact = float(
             np.min(
                 _mass_distance_profile(
-                    combined[
-                        max(0, query_start - model.x_lag) : query_start + 1
-                    ],
+                    combined[max(0, query_start - model.x_lag) : query_start + 1],
                     combined[query_start:],
                     eps=model.eps,
                 )
@@ -298,12 +292,7 @@ class TestXLagDAMP(unittest.TestCase):
             40 * subsequence_length,
         )
         stream[300:312] = np.linspace(-2.0, 2.0, subsequence_length) + np.sign(
-            np.sin(
-                6.0
-                * np.pi
-                * np.arange(subsequence_length)
-                / subsequence_length
-            )
+            np.sin(6.0 * np.pi * np.arange(subsequence_length) / subsequence_length)
         )
 
         reference_scores, reference_best = _reference_x_lag_damp(

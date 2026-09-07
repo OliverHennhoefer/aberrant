@@ -31,8 +31,28 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --extra dev --extra faiss
 
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          uv run --locked python - <<'PY'
+          import os
+
+          import aberrant
+
+          expected_tag = f"v{aberrant.__version__}"
+          actual_tag = os.environ["GITHUB_REF_NAME"]
+          if actual_tag != expected_tag:
+              raise SystemExit(
+                  f"Release tag {actual_tag!r} does not match package version "
+                  f"{aberrant.__version__!r}; expected {expected_tag!r}."
+              )
+          PY
+
       - name: Ruff
         run: uv run --locked python -m ruff check .
+
+      - name: Ruff format
+        run: uv run --locked python -m ruff format --check .
 
       - name: Mypy
         run: uv run --locked python -m mypy aberrant

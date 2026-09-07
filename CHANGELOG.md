@@ -7,8 +7,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-07
+
 ### Added
 
+- Documented compatibility policy for the stable public API.
+- Release tag/version validation before distribution builds and publication.
+- API reference entries for `ModelPipeline` and `TransformerPipeline`, with
+  documentation rebuilds triggered by package source changes.
 - Public API exports for `aberrant.model.svm`, `aberrant.model.stat`, `aberrant.stream`,
   `aberrant.transform`, and deep lazy exports.
 - Regression tests for feature-order stability in `OnlineIsolationForest`.
@@ -67,6 +73,17 @@ Semantic Versioning.
   state objects, and isolation trees use explicit leaf/branch unions.
 
 ### Fixed
+
+- Reject PCA configurations with fewer warm-up samples than retained components
+  and prevent zero-residual normalization at `tol=0` from corrupting projections.
+- Honor negative and zero quantile thresholds when classifying scores. Equality
+  now consistently returns `1.0`, including at zero; below nonpositive thresholds
+  the output is `0.0`.
+- Compute geometric means in the log domain to avoid window-product overflow
+  and underflow.
+- Stabilize Mahalanobis scoring for singular and ill-conditioned covariance
+  matrices so ordinary correlated observations cannot produce negative distances.
+- Apply the configured formatter across the package, examples, and tests.
 
 - Isolate the release wheel smoke test from the checkout and verify that imports resolve inside the installation environment.
 

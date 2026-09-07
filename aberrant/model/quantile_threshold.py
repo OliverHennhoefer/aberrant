@@ -14,7 +14,7 @@ class QuantileThreshold(BaseModel):
 
     This model maintains a sliding window of anomaly scores and computes
     an adaptive threshold based on a specified quantile. Points scoring
-    above the threshold are classified as anomalies.
+    at or above the threshold are classified as anomalies.
 
     Unlike static thresholds, QuantileThreshold adapts to the actual
     distribution of scores observed during streaming.
@@ -41,7 +41,8 @@ class QuantileThreshold(BaseModel):
         The model expects input dictionaries with a score key (default ``"score"``).
         ``score_one`` returns:
         - 1.0 if the score is greater than or equal to the threshold (anomaly)
-        - max(score/threshold, 0.0) if below threshold (normalized, in [0, 1))
+        - max(score/threshold, 0.0) if below a positive threshold (in [0, 1))
+        - 0.0 if below a zero or negative threshold
         - 0.0 during warmup (insufficient data for threshold)
     """
 
@@ -125,7 +126,8 @@ class QuantileThreshold(BaseModel):
 
         Returns:
             - 1.0 if score >= threshold (anomaly)
-            - score/threshold if score < threshold (normalized)
+            - max(score/threshold, 0.0) if below a positive threshold
+            - 0.0 if below a zero or negative threshold
             - 0.0 if threshold not yet computed (warmup period)
         """
         if self.score_key not in x:
@@ -137,15 +139,14 @@ class QuantileThreshold(BaseModel):
         if self._threshold is None:
             return 0.0
 
-        # Avoid division by zero
-        if self._threshold <= 0:
-            return 1.0 if score > 0 else 0.0
-
-        # Classify as anomaly if above threshold
+        # Compare against the learned boundary regardless of its sign.
         if score >= self._threshold:
             return 1.0
 
-        # Return normalized score
+        # A ratio only has the documented scale for positive thresholds.
+        if self._threshold <= 0:
+            return 0.0
+
         return max(score / self._threshold, 0.0)
 
     def reset(self) -> None:

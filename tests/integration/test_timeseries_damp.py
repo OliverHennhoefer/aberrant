@@ -22,12 +22,7 @@ class TestXLagDAMPIntegration(unittest.TestCase):
 
         discord_start = 25 * subsequence_length
         discord = np.sign(
-            np.sin(
-                6.0
-                * np.pi
-                * np.arange(subsequence_length)
-                / subsequence_length
-            )
+            np.sin(6.0 * np.pi * np.arange(subsequence_length) / subsequence_length)
         ) + np.linspace(-1.0, 1.0, subsequence_length)
         series[discord_start : discord_start + subsequence_length] = discord
 
@@ -44,9 +39,7 @@ class TestXLagDAMPIntegration(unittest.TestCase):
             model.learn_one({"value": float(value)})
             labels.append(
                 int(
-                    discord_start
-                    <= index
-                    <= discord_start + 2 * subsequence_length - 2
+                    discord_start <= index <= discord_start + 2 * subsequence_length - 2
                 )
             )
 

@@ -122,7 +122,9 @@ If an application checkpoints model objects anyway:
   versions;
 - test round-trip scores and subsequent learning for every model type;
 - retain the source event offset needed to resume without gaps or duplicates;
-- expect pre-1.0 upgrades to require rebuilding state from events.
+- keep a path to rebuild state from events when upgrading; the
+  [public API compatibility policy](../api/index.md#compatibility-policy) does not
+  guarantee cross-version checkpoint compatibility.
 
 ## Deployment checklist
 

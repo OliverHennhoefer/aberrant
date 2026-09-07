@@ -18,10 +18,28 @@ Private names beginning with `_` are implementation details. Optional
 PyTorch objects are public only through their explicitly documented import
 paths and are excluded from wildcard exports when the dependency is absent.
 
-!!! note "Public does not mean frozen"
+## Compatibility policy
 
-    ABERRANT is pre-1.0. Public APIs are deliberate and typed, but can still
-    change between releases. Consult the changelog when upgrading.
+Starting with 1.0.0, ABERRANT follows Semantic Versioning for the documented
+public API. Within 1.x, existing public import paths, constructor parameters,
+methods, properties, return types, and documented behavior remain compatible.
+Minor releases may add compatible capabilities; incompatible public API changes
+require a new major version.
+
+Private modules, names beginning with `_`, and undocumented internal attributes
+are excluded from this guarantee. Experimental model descriptions qualify
+algorithm maturity; they do not exempt documented public interfaces from the
+compatibility policy.
+
+Bug fixes may correct numeric results, including score values and seeded score
+sequences, to match documented semantics. Exact floating-point results or random
+sequences across package, dependency, and platform versions are not guaranteed.
+Review the changelog, revalidate score thresholds, and run a chronological canary
+stream when upgrading.
+
+Model object layout and pickle/joblib checkpoints are not a stable interchange
+format. Cross-version serialization compatibility is not promised; see
+[persistence and upgrades](../user_guide/best_practices.md#persistence-and-upgrades).
 
 ## Shared model shape
 

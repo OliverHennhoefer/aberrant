@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 
+from aberrant.model.iforest import OnlineIsolationForest
 from aberrant.transform.projection.incremental_pca import IncrementalPCA
 
 
@@ -22,10 +23,54 @@ class TestIncrementalPCA(unittest.TestCase):
             IncrementalPCA(0)
         with self.assertRaisesRegex(ValueError, "n0 must be positive"):
             IncrementalPCA(1, n0=0)
-        with self.assertRaisesRegex(ValueError, "tol must be non-negative"):
-            IncrementalPCA(1, tol=-1.0)
+        with self.assertRaisesRegex(ValueError, "n0 must be at least n_components"):
+            IncrementalPCA(3, n0=2)
+        for tol in (-1.0, float("nan"), float("inf"), float("-inf")):
+            with (
+                self.subTest(tol=tol),
+                self.assertRaisesRegex(ValueError, "tol must be non-negative"),
+            ):
+                IncrementalPCA(1, tol=tol)
         with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
             IncrementalPCA(1, keys=["x", "x"])
+
+    def test_minimum_warmup_preserves_pipeline_feature_schema(self):
+        ipca = IncrementalPCA(3, n0=3)
+        pipeline = ipca | OnlineIsolationForest(num_trees=1, window_size=8, seed=1)
+        samples = [
+            {"x": 1.0, "y": 0.0, "z": 0.0, "w": 0.0},
+            {"x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0},
+            {"x": 0.0, "y": 0.0, "z": 1.0, "w": 0.0},
+            {"x": 0.0, "y": 0.0, "z": 0.0, "w": 2.0},
+        ]
+        expected_keys = {"component_0", "component_1", "component_2"}
+
+        for sample in samples:
+            self.assertEqual(set(ipca.transform_one(sample)), expected_keys)
+            pipeline.learn_one(sample)
+            self.assertEqual(set(ipca.transform_one(sample)), expected_keys)
+            self.assertTrue(np.isfinite(pipeline.score_one(sample)))
+
+        self.assertTrue(ipca.n0_reached)
+        self.assertEqual(ipca.n_samples_seen, len(samples))
+
+    def test_zero_tolerance_preserves_zero_and_repeated_samples(self):
+        for value in (0.0, 1.0):
+            with self.subTest(value=value):
+                ipca = IncrementalPCA(1, n0=1, tol=0.0)
+                sample = {"x": value, "y": 0.0}
+                with np.errstate(divide="raise", invalid="raise"):
+                    for _ in range(5):
+                        ipca.learn_one(sample)
+                        transformed = ipca.transform_one(sample)
+                        self.assertAlmostEqual(abs(transformed["component_0"]), value)
+                        self.assertTrue(np.all(np.isfinite(ipca.values)))
+                        self.assertTrue(np.all(np.isfinite(ipca.vectors)))
+
+                    # A new direction must remain learnable after zero residuals.
+                    ipca.learn_one({"x": 0.0, "y": 4.0})
+                    transformed = ipca.transform_one({"x": 0.0, "y": 4.0})
+                    self.assertAlmostEqual(abs(transformed["component_0"]), 4.0)
 
     def test_keys_are_owned_and_non_finite_values_do_not_poison_state(self):
         keys = ["x", "y"]
