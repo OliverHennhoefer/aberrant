@@ -66,6 +66,9 @@ Semantic Versioning.
 
 ### Fixed
 
+- Simplify cell-neighborhood scoring to one bounded index; preserve fractional
+  scarcity scores and prevent score-only queries from accumulating cache entries.
+
 - Restored Achlioptas' target-dimension normalization in `RandomProjection`.
 - Kept ADWIN variance exact when old buckets are removed.
 - Made the FAISS engine return mean L2 distance instead of mean squared L2
