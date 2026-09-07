@@ -1,5 +1,7 @@
 """Behavioral contracts for typed online pipelines."""
 
+import pickle
+
 import pytest
 
 from aberrant.base import (
@@ -8,7 +10,6 @@ from aberrant.base import (
     IncompatibleComponentError,
     ModelProtocol,
     Pipeline,
-    PipelineError,
     TransformerProtocol,
 )
 
@@ -97,11 +98,50 @@ def test_pipeline_rejects_model_as_first_component() -> None:
         Pipeline(_RecordingModel(), _StatefulTransformer())  # type: ignore[arg-type]
 
 
-def test_capability_specific_methods_fail_clearly_at_runtime() -> None:
+def test_pipeline_protocols_match_available_capabilities() -> None:
     transformer_pipeline = _StatefulTransformer() | _StatefulTransformer()
     model_pipeline = _StatefulTransformer() | _RecordingModel()
 
-    with pytest.raises(PipelineError, match="requires a model-ending"):
-        transformer_pipeline.score_one({"x": 1.0})  # type: ignore[misc]
-    with pytest.raises(PipelineError, match="transformer-ending"):
-        model_pipeline.transform_one({"x": 1.0})  # type: ignore[misc]
+    assert isinstance(transformer_pipeline, Pipeline)
+    assert isinstance(transformer_pipeline, TransformerProtocol)
+    assert not isinstance(transformer_pipeline, ModelProtocol)
+    assert not hasattr(transformer_pipeline, "score_one")
+    assert isinstance(model_pipeline, Pipeline)
+    assert isinstance(model_pipeline, ModelProtocol)
+    assert not isinstance(model_pipeline, TransformerProtocol)
+    assert not hasattr(model_pipeline, "transform_one")
+
+
+def test_parenthesized_model_pipeline_preserves_learning_and_pickling() -> None:
+    first, second, model = (
+        _StatefulTransformer(),
+        _StatefulTransformer(),
+        _RecordingModel(),
+    )
+    pipeline = Pipeline(first, Pipeline(second, model))
+    pipeline.learn_one({"x": 1.0})
+    assert model.learned == [3.0]
+    assert pipeline.score_one({"x": 2.0}) == 4.0
+    restored = pickle.loads(pickle.dumps(pipeline))
+    assert restored.score_one({"x": 2.0}) == 4.0
+    assert isinstance(restored, ModelProtocol)
+    assert not isinstance(restored, TransformerProtocol)
+
+
+def test_transformer_terminal_is_not_transformed_during_learning() -> None:
+    first, second = _StatefulTransformer(), _StatefulTransformer()
+    pipeline = Pipeline(first, second)
+    pipeline.learn_one({"x": 1.0})
+    assert second.learned == [2.0]
+    assert second.transformed == []
+
+
+def test_pipeline_rejects_ambiguous_structural_components() -> None:
+    class Ambiguous(_StatefulTransformer):
+        def score_one(self, x: dict[str, float]) -> float:
+            return x["x"]
+
+    with pytest.raises(IncompatibleComponentError):
+        Pipeline(_StatefulTransformer(), Ambiguous())
+    with pytest.raises(IncompatibleComponentError):
+        Pipeline(Ambiguous(), _RecordingModel())

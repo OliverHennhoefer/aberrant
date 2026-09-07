@@ -3,7 +3,7 @@
 import abc
 from typing import overload
 
-from aberrant.base.pipeline import Pipeline
+from aberrant.base.pipeline import ModelPipeline, Pipeline, TransformerPipeline
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
 
 
@@ -44,18 +44,14 @@ class BaseTransformer(abc.ABC):
         raise NotImplementedError
 
     @overload
-    def __or__(self, other: TransformerProtocol) -> "Pipeline[TransformerProtocol]": ...
+    def __or__(self, other: TransformerProtocol) -> TransformerPipeline: ...
 
     @overload
-    def __or__(self, other: ModelProtocol) -> "Pipeline[ModelProtocol]": ...
+    def __or__(self, other: ModelProtocol) -> ModelPipeline: ...
 
     def __or__(
         self, other: TransformerProtocol | ModelProtocol
-    ) -> "Pipeline[TransformerProtocol] | Pipeline[ModelProtocol]":
-        if isinstance(other, TransformerProtocol) and not isinstance(
-            other, ModelProtocol
-        ):
-            return Pipeline(self, other)
+    ) -> TransformerPipeline | ModelPipeline:
         return Pipeline(self, other)
 
     def __repr__(self) -> str:
