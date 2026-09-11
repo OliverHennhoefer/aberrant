@@ -49,6 +49,8 @@ behind a batch-estimator abstraction.
 - **Choose the right state strategy** from sliding windows, bounded sketches,
   fading summaries, and model-specific incremental updates.
 - **Compose online preprocessing** with detectors using `|` pipelines.
+- **Discover and configure built-ins** through a typed catalog with
+  machine-readable capabilities and an allowlisted declarative builder.
 - **Separate detection from policy** with drift detectors and static or adaptive
   score thresholds.
 - **Run repeatable experiments** with registry-backed benchmark streams and a
@@ -185,6 +187,40 @@ Any custom object satisfying `TransformerProtocol` or `ModelProtocol` can join
 a pipeline; subclassing an ABERRANT base class is optional. Read the
 [pipeline guide](https://oliverhennhoefer.github.io/aberrant/user_guide/pipelines/)
 for lifecycle and composition rules.
+
+## Application integration
+
+The built-in catalog makes model facts and construction available to services,
+configuration UIs, and deployment tooling without duplicating import paths or
+warm-up formulas:
+
+```python
+from aberrant.catalog import DetectorConfig, get_model_spec
+
+spec = get_model_spec("online_isolation_forest")
+print(spec.parameter_schema())
+
+config = DetectorConfig.from_mapping(
+    {
+        "transformers": [
+            {
+                "id": "feature_schema_guard",
+                "params": {"features": ["temperature", "pressure"]},
+            },
+            {"id": "standard_scaler"},
+        ],
+        "model": {
+            "id": "online_isolation_forest",
+            "params": {"window_size": 512, "seed": 42},
+        },
+    }
+)
+detector = config.build()
+```
+
+See the [application integration guide](https://oliverhennhoefer.github.io/aberrant/user_guide/integrations/)
+for the catalog manifest, capability fields, KNN/FAISS configuration, and the
+boundary between package metadata and application policy.
 
 ## Streaming datasets
 

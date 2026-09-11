@@ -105,7 +105,7 @@ jobs:
         run: |
           uv run --locked python - <<'PY'
           from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
-          from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
+          from aberrant.similarity import FaissSimilaritySearchEngine
 
           assert Autoencoder is not None
           assert OnlineAutoencoderEnsemble is not None
@@ -116,7 +116,9 @@ jobs:
           PY
 
       - name: FAISS model smoke tests
-        run: uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_public_imports_extras.py -q
+        run: |
+          uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_catalog_faiss.py -q
+          uv run --locked python -m pytest tests/test_public_imports_extras.py -q
 
   integration-smoke:
     runs-on: ubuntu-latest

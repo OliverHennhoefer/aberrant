@@ -1,9 +1,9 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from aberrant.model.distance.knn import KNN
+from aberrant.similarity import FaissSimilaritySearchEngine
 from aberrant.stream.dataset import Dataset, load
 from aberrant.transform.preprocessing.scaler import MinMaxScaler
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
 
 engine = FaissSimilaritySearchEngine(window_size=250, warm_up=50)
 model = KNN(k=45, similarity_engine=engine)

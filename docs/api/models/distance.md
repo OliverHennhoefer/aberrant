@@ -19,4 +19,4 @@ STARE procedures.
 
 This engine requires `aberrant[faiss]`.
 
-::: aberrant.utils.similar.faiss_engine.FaissSimilaritySearchEngine
+::: aberrant.similarity.FaissSimilaritySearchEngine

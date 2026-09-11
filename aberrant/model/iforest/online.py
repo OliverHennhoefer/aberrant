@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from typing import Literal
 
 import numpy as np
 
@@ -47,11 +48,11 @@ class OnlineIsolationForest(BaseModel):
         self,
         num_trees: int = 100,
         max_leaf_samples: int = 32,
-        tree_type: str = "adaptive",
+        tree_type: Literal["fixed", "adaptive"] = "adaptive",
         subsample: float = 1.0,
         window_size: int = 2048,
         branching_factor: int = 2,
-        metric: str = "axisparallel",
+        metric: Literal["axisparallel"] = "axisparallel",
         n_jobs: int = 1,
         seed: int | None = None,
     ) -> None:

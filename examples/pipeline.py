@@ -1,10 +1,10 @@
 from sklearn.metrics import average_precision_score
 
 from aberrant.model.distance.knn import KNN
+from aberrant.similarity import FaissSimilaritySearchEngine
 from aberrant.stream.dataset import Dataset, load
 from aberrant.transform.preprocessing.scaler import MinMaxScaler, StandardScaler
 from aberrant.transform.projection.incremental_pca import IncrementalPCA
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
 
 # Baseline pipeline: scaling + KNN.
 baseline_pipeline = MinMaxScaler() | KNN(

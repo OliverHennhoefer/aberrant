@@ -6,6 +6,8 @@ not learn.
 
 ## Preprocessing
 
+::: aberrant.transform.preprocessing.FeatureSchemaGuard
+
 ::: aberrant.transform.preprocessing.MinMaxScaler
 
 ::: aberrant.transform.preprocessing.StandardScaler
