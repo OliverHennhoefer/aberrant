@@ -8,7 +8,7 @@ class KNN(BaseModel):
     ``learn_one`` appends the observation to the supplied engine. ``score_one``
     returns exactly the scalar produced by ``engine.search(x, n_neighbors=k)``;
     its range and orientation therefore belong to the engine's contract. With
-    :class:`~aberrant.utils.similar.faiss_engine.FaissSimilaritySearchEngine`,
+    :class:`~aberrant.similarity.FaissSimilaritySearchEngine`,
     the score is the mean Euclidean distance to the ``k`` nearest retained
     observations, and higher values are more anomalous.
 

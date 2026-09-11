@@ -7,6 +7,18 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Immutable, machine-readable catalogs for every built-in model, transformer,
+  and similarity engine, including parameter schemas, optional dependency
+  availability, and configuration-resolved operational capabilities.
+- Versioned `DetectorConfig` construction with allowlisted component IDs,
+  nested similarity-engine configuration, feature-width validation, and stable
+  configuration fingerprints.
+- Public `FeatureSchemaGuard` input transformer and typed catalog configuration
+  errors.
+- Stable `aberrant.similarity.FaissSimilaritySearchEngine` import path.
+
 ## [1.0.0] - 2026-09-07
 
 ### Added

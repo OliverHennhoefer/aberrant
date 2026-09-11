@@ -6,7 +6,7 @@ pytest.importorskip("torch")
 pytest.importorskip("faiss")
 
 from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
+from aberrant.similarity import FaissSimilaritySearchEngine
 
 
 def test_public_imports_extras_smoke() -> None:

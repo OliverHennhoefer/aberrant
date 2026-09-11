@@ -10,10 +10,13 @@ from typing import TYPE_CHECKING
 
 from aberrant.base.exceptions import (
     AberrantError,
+    ConfigurationError,
     IncompatibleComponentError,
+    MissingOptionalDependencyError,
     ModelNotFittedError,
     PipelineError,
     TransformationError,
+    UnknownComponentError,
     UnsupportedFeatureError,
     ValidationError,
 )
@@ -35,8 +38,10 @@ __all__ = [
     "BaseModel",
     "BaseSimilaritySearchEngine",
     "BaseTransformer",
+    "ConfigurationError",
     "FeatureMap",
     "IncompatibleComponentError",
+    "MissingOptionalDependencyError",
     "ModelNotFittedError",
     "AberrantError",
     "Pipeline",
@@ -47,6 +52,7 @@ __all__ = [
     "ModelProtocol",
     "TransformationError",
     "TransformerProtocol",
+    "UnknownComponentError",
     "UnsupportedFeatureError",
     "ValidationError",
 ]

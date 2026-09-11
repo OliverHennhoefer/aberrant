@@ -61,7 +61,7 @@ class XStream(BaseModel):
         window_size: Number of learned projected points per current/reference
             window swap.
         init_sample_size: Number of projected points used to establish chain
-            scales before window counting starts.
+            scales. These points also populate the reference-window counters.
         density: Fraction of projected coordinates updated by each input
             feature's deterministic signed projection, in ``(0, 1]``.
         max_feature_cache_size: Maximum cached feature-name projections, with

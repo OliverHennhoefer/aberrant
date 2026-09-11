@@ -16,10 +16,12 @@ from aberrant import __version__
 from aberrant.base import (
     BaseModel,
     BaseTransformer,
+    ConfigurationError,
     ModelProtocol,
     Pipeline,
     TransformerProtocol,
 )
+from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
 from aberrant.model.distance import (
@@ -53,7 +55,11 @@ from aberrant.model.svm import (
 from aberrant.model.timeseries import XLagDAMP
 from aberrant.stream import Dataset, load
 from aberrant.stream.dataset import BatchStreamer, NpzStreamer
-from aberrant.transform.preprocessing import MinMaxScaler, StandardScaler
+from aberrant.transform.preprocessing import (
+    FeatureSchemaGuard,
+    MinMaxScaler,
+    StandardScaler,
+)
 from aberrant.transform.projection import IncrementalPCA, RandomProjection
 
 
@@ -61,6 +67,7 @@ def test_public_imports_base_smoke() -> None:
     assert isinstance(__version__, str)
     assert BaseModel is not None
     assert BaseTransformer is not None
+    assert ConfigurationError is not None
     assert Pipeline is not None
     assert ModelProtocol is not None
     assert TransformerProtocol is not None
@@ -99,6 +106,10 @@ def test_public_imports_base_smoke() -> None:
     assert StandardScaler is not None
     assert IncrementalPCA is not None
     assert RandomProjection is not None
+    assert FeatureSchemaGuard is not None
+    assert DetectorConfig is not None
+    assert MODEL_CATALOG
+    assert build_detector is not None
     assert Dataset is not None
     assert load is not None
     assert BatchStreamer is not None

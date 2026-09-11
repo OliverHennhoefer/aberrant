@@ -8,6 +8,7 @@ public methods, properties, return types, and model-specific caveats. Use the
 ## Public package surface
 
 - [Base interfaces and protocols](base.md)
+- [Built-in catalog and declarative configuration](catalog.md)
 - [Anomaly models](models/index.md)
 - [Transformers](transform.md)
 - [Drift detectors](drift.md)

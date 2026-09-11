@@ -93,6 +93,11 @@ alerting warm-up explicit in application code.
     Incremental preprocessing, projection, structural protocols, and update
     order.
 
+-   **[Application integration](integrations.md)**
+
+    Machine-readable capabilities, strict declarative configuration, safe
+    construction, and event-schema enforcement.
+
 -   **[Streaming datasets](streaming.md)**
 
     Registered artifacts, local NPZ streams, batching, validation, and cache
