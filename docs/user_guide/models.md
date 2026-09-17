@@ -14,6 +14,7 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Fixed-size projection/frequency state | `StreamingLODA`, `MStream`, or `StreamingRSHash` | Memory is controlled by projection, histogram, or sketch dimensions |
 | Dynamic edges | `MIDAS`, `ISCONNA`, `AnoEdgeL`, or `SignedGraphSketchDetector` | Models repeated edges, endpoint patterns, dense submatrices, or graph-level structure |
 | Scalar time-series discords | `RollingMatrixProfile` or `XLagDAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
+| Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
 | Interpretable local statistic change | `aberrant.model.stat` | Measures candidate-induced changes in means, spread, moments, covariance, or correlation |
 | Learned reconstruction error | `OnlineAutoencoderEnsemble` or optional `Autoencoder` | Uses NumPy or user-supplied PyTorch autoencoders |
 | Static or adaptive score policy | `ThresholdModel` or `QuantileThreshold` | Converts feature or detector-score boundaries into a decision-oriented output |
@@ -248,6 +249,62 @@ retraining is needed as history rolls. This API supplies the latest
 left-profile score and match; it does not maintain a historical profile or
 return global motif/discord rankings. The exclusion and constant-window
 conventions follow [STUMPY](https://stumpy.readthedocs.io/en/latest/api.html).
+
+`MultivariateRollingMatrixProfile` extends this scoring contract to aligned
+observations with one or more fixed, named channels. At each eligible historical
+start it takes the **largest channel distance**, then selects the interval with
+the smallest such distance: `min(reference, max(channel, distance))`. Every
+channel shares the same reference start. Separate scalar detectors can each
+find a familiar shape at different times and miss a new relationship between
+channels; requiring a common match can expose that change.
+
+```python
+from aberrant.model.timeseries import MultivariateRollingMatrixProfile
+
+detector = MultivariateRollingMatrixProfile(
+    subsequence_length=4, window_size=32, exclusion_zone=3
+)
+for value in [0.0, 1.0, 0.0, -1.0] * 20:
+    event = {"sensor_a": value, "sensor_b": 2 * value}
+    score, reference_start, channel_distances = detector.explain_one(event)
+    if detector.is_ready:
+        print(score, reference_start, channel_distances)
+    detector.learn_one(event)
+```
+
+`explain_one` returns a fresh mapping of distances at the selected common match,
+in sorted feature-name order. Its maximum equals the score. These distances
+describe the mismatch with that interval, not a causal diagnosis or each
+channel's independently nearest match. `match_one` returns just the score and
+reference index; `score_one` returns just the score. All three are read-only.
+
+The first successful `learn_one` fixes the feature-key set; every subsequent
+event must include all channels. Input order is canonicalized, but observations
+must already be aligned. Warm-up lasts `m + exclusion_zone` learned events;
+`explain_one` returns `(0.0, None, {})` before readiness. The same overlap rules,
+earliest-match tie breaking, bounded eviction, and reset behavior as the scalar
+model apply. Use `exclusion_zone=m-1` to prohibit overlapping matches.
+
+With `normalize=True`, each channel's query and reference windows are normalized
+independently. This preserves shape and relative timing differences while
+removing per-channel level and amplitude differences. Constant-window distances
+use the same zero/`sqrt(m)` convention as the scalar model. In raw mode, channels
+with larger units can dominate the maximum; use comparable units or fixed
+scaling when that is inappropriate. Raw scores beyond the floating-point range
+raise `OverflowError`. Adding an identical channel does not dilute the score.
+
+For `d` fixed channels, typical scoring costs `O(d * W * log(W))`, with direct
+numerical refinement up to `O(d * W * m)` and learning cost `O(d * m)`. State and
+working memory are `O(d * W)`. Scoring continues through eviction without
+retraining. Both rolling models provide exact nearest distances; XLagDAMP's
+early-abandoned scores described below can be approximate.
+
+This is a causal, bounded-window adaptation of the pre-max aggregation in
+[Matrix Profile for Anomaly Detection on Multidimensional Time Series](https://arxiv.org/html/2409.09298v1#S4.SS1).
+The catalog ID is `multivariate_rolling_matrix_profile`; it is available in the
+core installation and in declarative model pipelines. The
+[seeded streaming example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py)
+demonstrates a changed phase relationship and its common-match explanation.
 
 `XLagDAMP` accepts exactly one consistently named scalar feature. It scores the
 subsequence ending at the candidate event by z-normalized Euclidean distance to

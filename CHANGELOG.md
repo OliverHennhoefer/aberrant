@@ -9,6 +9,10 @@ Semantic Versioning.
 
 ### Added
 
+- `MultivariateRollingMatrixProfile` exact, causal joint subsequence scores over
+  bounded history, with common-match indices, per-channel distance explanations,
+  normalized/raw distances, catalog and pipeline integration, and a seeded
+  phase-change example. Scalar matrix-profile numerical helpers are shared.
 - `RollingMatrixProfile` exact, causal subsequence scores and nearest-match
   indices over bounded history, with normalized/raw Euclidean distances,
   constant-window support, catalog integration, and a streaming example.

@@ -29,6 +29,7 @@ post-update transform downstream. See [Pipelines](pipelines.md).
 | --- | --- |
 | General multivariate detector | A non-empty `dict[str, float]` with finite numeric values and, for schema-owning models, the same feature-key set after the first successful `learn_one` |
 | Univariate moving statistic, `RollingMatrixProfile`, and `XLagDAMP` | Exactly one consistently named numeric feature |
+| `MultivariateRollingMatrixProfile` | One or more fixed named channels per aligned observation; every event supplies all channels |
 | Bivariate covariance/correlation statistic | Exactly two consistently named numeric features |
 | Edge-stream detector | Named source and destination fields, usually integer-like, plus the configured timestamp field when `time_key` is not `None` |
 | Drift detector | One finite scalar passed to `update(value)` |

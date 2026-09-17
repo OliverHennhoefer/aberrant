@@ -758,6 +758,19 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
+        "multivariate_rolling_matrix_profile",
+        "MultivariateRollingMatrixProfile",
+        "aberrant.model.timeseries",
+        "time_series",
+        _capabilities(
+            event_kind=EventKind.TABULAR,
+            score_kind=ScoreKind.NON_NEGATIVE,
+            warmup=_matrix_profile_warmup,
+            state=StateKind.BOUNDED,
+            resettable=True,
+        ),
+    ),
+    _model(
         "rolling_matrix_profile",
         "RollingMatrixProfile",
         "aberrant.model.timeseries",

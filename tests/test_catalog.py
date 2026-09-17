@@ -28,7 +28,10 @@ from aberrant.catalog import (
     get_model_spec,
 )
 from aberrant.model.distance import SDOStream
-from aberrant.model.timeseries import RollingMatrixProfile
+from aberrant.model.timeseries import (
+    MultivariateRollingMatrixProfile,
+    RollingMatrixProfile,
+)
 
 PUBLIC_MODEL_MODULES = (
     "aberrant.model",
@@ -300,8 +303,15 @@ def test_matrix_profile_catalog_capabilities_and_warmup(zone) -> None:
         model.learn_one({"x": float(index)})
 
 
-def test_matrix_profile_parameter_schema_and_manifest() -> None:
-    spec = get_model_spec("rolling_matrix_profile")
+@pytest.mark.parametrize(
+    "model_id,model_class",
+    [
+        ("rolling_matrix_profile", RollingMatrixProfile),
+        ("multivariate_rolling_matrix_profile", MultivariateRollingMatrixProfile),
+    ],
+)
+def test_matrix_profile_parameter_schema_and_manifest(model_id, model_class) -> None:
+    spec = get_model_spec(model_id)
     schema = spec.parameter_schema()
     assert schema["required"] == ["subsequence_length"]
     assert schema["properties"]["normalize"] == {"type": "boolean", "default": True}
@@ -309,12 +319,62 @@ def test_matrix_profile_parameter_schema_and_manifest() -> None:
     assert schema["properties"]["exclusion_zone"]["default"] is None
     assert spec.capabilities().warmup.minimum is None
     entry = next(
-        entry
-        for entry in catalog_manifest()["models"]
-        if entry["id"] == "rolling_matrix_profile"
+        entry for entry in catalog_manifest()["models"] if entry["id"] == model_id
     )
     assert entry["available"]
-    assert entry["import_path"] == "aberrant.model.timeseries.RollingMatrixProfile"
+    assert entry["import_path"] == f"aberrant.model.timeseries.{model_class.__name__}"
+
+
+@pytest.mark.parametrize("zone", [None, 0, 3, 7])
+def test_multivariate_matrix_profile_capabilities_and_warmup(zone) -> None:
+    spec = get_model_spec("multivariate_rolling_matrix_profile")
+    params = {"subsequence_length": 4, "exclusion_zone": zone}
+    model = create_model(spec.id, params)
+    assert isinstance(model, MultivariateRollingMatrixProfile)
+    assert model.window_size == 64
+    capabilities = spec.capabilities(params)
+    assert spec.family == "time_series"
+    assert capabilities.event_kind is EventKind.TABULAR
+    assert capabilities.feature_schema is FeatureSchemaKind.FIXED
+    assert capabilities.feature_count.minimum == 1
+    assert capabilities.feature_count.maximum is None
+    assert capabilities.score_kind is ScoreKind.NON_NEGATIVE
+    assert capabilities.state is StateKind.BOUNDED
+    assert capabilities.higher_is_more_anomalous and capabilities.resettable
+    assert capabilities.warmup.unit is WarmupUnit.EVENTS
+    expected = 4 + (1 if zone is None else zone)
+    assert capabilities.warmup.minimum == expected
+    for index in range(expected + 2):
+        event = {"a": float(index), "b": float(index % 3)}
+        assert model.is_ready == capabilities.warmup.is_satisfied(index)
+        assert (model.match_one(event)[1] is not None) == model.is_ready
+        model.learn_one(event)
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("features", [["a"], ["b", "a"], ["a", "b", "c", "d"]])
+def test_multivariate_matrix_profile_configured_pipeline_matches_direct(
+    normalize, features
+) -> None:
+    params = {"subsequence_length": 4, "window_size": 16, "normalize": normalize}
+    config = DetectorConfig.from_mapping(
+        {
+            "transformers": [
+                {"id": "feature_schema_guard", "params": {"features": features}}
+            ],
+            "model": {"id": "multivariate_rolling_matrix_profile", "params": params},
+        }
+    )
+    configured = build_detector(DetectorConfig.from_mapping(config.as_dict()))
+    direct = MultivariateRollingMatrixProfile(**params)
+    for index in range(70):
+        event = {
+            name: float((index * (channel + 2)) % 13)
+            for channel, name in enumerate(features)
+        }
+        assert configured.score_one(event) == direct.score_one(event)
+        configured.learn_one(event)
+        direct.learn_one(event)
 
 
 @pytest.mark.parametrize("normalize", [True, False])
