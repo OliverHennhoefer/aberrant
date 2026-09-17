@@ -49,6 +49,7 @@ artifact on first use.
 | ISCONNA | [`isconna.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/isconna.py) | Seeded synthetic edge stream |
 | MIDAS-R | [`midas.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/midas.py) | Seeded synthetic edge stream |
 | Signed graph sketch | [`signed_graph_sketch.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/signed_graph_sketch.py) | Seeded synthetic multi-graph stream |
+| Rolling matrix profile | [`rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rolling_matrix_profile.py) | Seeded periodic stream with a discord, continuous scores, and nearest-match indices; no `eval` extra needed |
 | X-Lag DAMP | [`xlag_damp.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/xlag_damp.py) | Seeded synthetic periodic series with an injected discord; no `eval` extra needed |
 
 The AnoEdge example is an API demonstration, not a claim that tabular SHUTTLE

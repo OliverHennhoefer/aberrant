@@ -273,6 +273,16 @@ def _damp_warmup(params: Parameters) -> WarmupRequirement:
     return _events(resolved + _as_int(subsequence_length) - 2)
 
 
+def _matrix_profile_warmup(params: Parameters) -> WarmupRequirement:
+    subsequence_length = params.get("subsequence_length")
+    if subsequence_length is None:
+        return _events(None)
+    length = _as_int(subsequence_length)
+    exclusion_zone = params.get("exclusion_zone")
+    zone = (length + 3) // 4 if exclusion_zone is None else _as_int(exclusion_zone)
+    return _events(length + zone)
+
+
 def _moving_capabilities(
     feature_count: FeatureCount,
     *,
@@ -745,6 +755,20 @@ _MODEL_SPECS = (
             warmup=_fixed_warmup(1),
             state=StateKind.BOUNDED,
             resettable=False,
+        ),
+    ),
+    _model(
+        "rolling_matrix_profile",
+        "RollingMatrixProfile",
+        "aberrant.model.timeseries",
+        "time_series",
+        _capabilities(
+            event_kind=EventKind.UNIVARIATE,
+            feature_count=ONE_FEATURE,
+            score_kind=ScoreKind.NON_NEGATIVE,
+            warmup=_matrix_profile_warmup,
+            state=StateKind.BOUNDED,
+            resettable=True,
         ),
     ),
     _model(

@@ -27,7 +27,7 @@ Model documentation is split by event structure and method family.
 
 -   **[Time series](timeseries.md)**
 
-    Pure-online X-Lag Amnesic DAMP.
+    Exact rolling matrix-profile scores and X-Lag Amnesic DAMP.
 
 -   **[Statistical models](stat.md)**
 

@@ -9,6 +9,9 @@ Semantic Versioning.
 
 ### Added
 
+- `RollingMatrixProfile` exact, causal subsequence scores and nearest-match
+  indices over bounded history, with normalized/raw Euclidean distances,
+  constant-window support, catalog integration, and a streaming example.
 - Immutable, machine-readable catalogs for every built-in model, transformer,
   and similarity engine, including parameter schemas, optional dependency
   availability, and configuration-resolved operational capabilities.

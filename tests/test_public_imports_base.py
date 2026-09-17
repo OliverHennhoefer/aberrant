@@ -52,7 +52,7 @@ from aberrant.model.svm import (
     GraphGatedOneClassSVM,
     IncrementalOneClassSVMAdaptiveKernel,
 )
-from aberrant.model.timeseries import XLagDAMP
+from aberrant.model.timeseries import RollingMatrixProfile, XLagDAMP
 from aberrant.stream import Dataset, load
 from aberrant.stream.dataset import BatchStreamer, NpzStreamer
 from aberrant.transform.preprocessing import (
@@ -99,7 +99,7 @@ def test_public_imports_base_smoke() -> None:
     assert StreamingRSHash is not None
     assert IncrementalOneClassSVMAdaptiveKernel is not None
     assert GraphGatedOneClassSVM is not None
-    assert XLagDAMP is not None
+    assert XLagDAMP is not None and RollingMatrixProfile is not None
     assert MovingAverage is not None
     assert MovingCovariance is not None
     assert MinMaxScaler is not None

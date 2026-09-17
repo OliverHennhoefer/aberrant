@@ -13,7 +13,7 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Local density or neighborhood isolation | `LocalOutlierFactor`, `SDOStream`, or a cell-neighborhood detector | Scores relative to nearby points, observers, or radius cells |
 | Fixed-size projection/frequency state | `StreamingLODA`, `MStream`, or `StreamingRSHash` | Memory is controlled by projection, histogram, or sketch dimensions |
 | Dynamic edges | `MIDAS`, `ISCONNA`, `AnoEdgeL`, or `SignedGraphSketchDetector` | Models repeated edges, endpoint patterns, dense submatrices, or graph-level structure |
-| Scalar time-series discords | `XLagDAMP` | Compares the current subsequence with preceding subsequences under bounded X-Lag history |
+| Scalar time-series discords | `RollingMatrixProfile` or `XLagDAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
 | Interpretable local statistic change | `aberrant.model.stat` | Measures candidate-induced changes in means, spread, moments, covariance, or correlation |
 | Learned reconstruction error | `OnlineAutoencoderEnsemble` or optional `Autoencoder` | Uses NumPy or user-supplied PyTorch autoencoders |
 | Static or adaptive score policy | `ThresholdModel` or `QuantileThreshold` | Converts feature or detector-score boundaries into a decision-oriented output |
@@ -193,6 +193,61 @@ Primary references are linked from each class, including
 [StreamSpot](https://doi.org/10.1145/2939672.2939783).
 
 ### Time-series discord detection
+
+`RollingMatrixProfile` gives an exact nearest-subsequence distance on every
+event after warm-up, using only the current event and previously learned
+values. It accepts exactly one consistently named finite numeric feature.
+Higher scores indicate greater novelty; `match_one` also returns the nearest
+reference's absolute, zero-based start index since the last reset.
+
+```python
+from aberrant.model.timeseries import RollingMatrixProfile
+
+detector = RollingMatrixProfile(subsequence_length=4, window_size=32)
+for value in [0.0, 1.0, 0.0, -1.0] * 20:
+    event = {"value": value}
+    score, reference_start = detector.match_one(event)
+    # score_one(event) returns the same score without the reference index.
+    if detector.is_ready:
+        print(score, reference_start)
+    detector.learn_one(event)
+```
+
+`window_size` counts the entire comparison window **including the candidate**;
+the oldest sample is excluded from scoring when it would fall outside that
+window. Learning retains at most `window_size` samples, defaulting to
+`16 * subsequence_length`. Expired references cannot remain nearest matches.
+Scoring never changes history or locks the feature name; learning works even
+without preceding scoring calls.
+
+With subsequence length `m`, the default exclusion radius is `ceil(m / 4)`.
+Reference starts must be more than that radius behind the query start, so
+overlap is allowed. Set `exclusion_zone=m-1` for nonoverlapping references.
+The window must hold at least `m + exclusion_zone + 1` samples. Scoring starts
+after `m + exclusion_zone` learned samples, without waiting for the window to
+fill; earlier calls return `0.0` and no match. Use `is_ready` to distinguish
+warm-up zeros from genuine zero distances. Scores belong to the subsequence
+ending at the current event, and equal distances choose the earliest retained
+reference.
+
+By default, each subsequence is independently z-normalized using population
+standard deviation, so scores describe shape rather than absolute level or
+amplitude. Normalized distances range from zero to `2 * sqrt(m)`, apart from
+floating-point roundoff. Two constant subsequences have distance zero even
+at different levels; a constant and a nonconstant have distance `sqrt(m)`.
+Use `normalize=False` for ordinary Euclidean distances when level and amplitude
+changes matter. Raw distances are not normalized to `[0, 1]`; distances beyond
+the floating-point range raise `OverflowError`.
+
+The implementation recomputes an FFT distance profile and directly checks
+potential minima. Memory is `O(window_size)`; typical scoring work is
+`O(window_size * log(window_size))`, with up to
+`O(window_size * subsequence_length)` for numerically ambiguous candidates.
+Learning computes only the newest window's statistics. No restart or batch
+retraining is needed as history rolls. This API supplies the latest
+left-profile score and match; it does not maintain a historical profile or
+return global motif/discord rankings. The exclusion and constant-window
+conventions follow [STUMPY](https://stumpy.readthedocs.io/en/latest/api.html).
 
 `XLagDAMP` accepts exactly one consistently named scalar feature. It scores the
 subsequence ending at the candidate event by z-normalized Euclidean distance to
