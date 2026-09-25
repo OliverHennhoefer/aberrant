@@ -7,6 +7,8 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-25
+
 ### Added
 
 - `MultivariateRollingMatrixProfile` exact, causal joint subsequence scores over
@@ -25,6 +27,11 @@ Semantic Versioning.
 - Public `FeatureSchemaGuard` input transformer and typed catalog configuration
   errors.
 - Stable `aberrant.similarity.FaissSimilaritySearchEngine` import path.
+
+### Changed
+
+- Updated the pinned build backend to Hatchling 1.32.4 and refreshed GitHub
+  Actions dependencies, including aligned CodeQL 4.38.1 steps.
 
 ## [1.0.0] - 2026-09-07
 
