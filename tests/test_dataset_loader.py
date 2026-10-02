@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import multiprocessing
+import os
 from dataclasses import replace
 from http.client import RemoteDisconnected
 from multiprocessing.queues import Queue
@@ -283,6 +284,141 @@ def test_metadata_publication_is_atomic_and_leaves_no_temporary_file() -> None:
         assert store.metadata_file.exists()
         assert not list(cache_dir.glob(".metadata.*.tmp"))
         assert store.read().datasets["shuttle"] == _cache_entry(payload)
+
+
+@pytest.mark.parametrize("has_previous_artifact", [False, True])
+def test_failed_metadata_publication_restores_previous_cache(
+    tmp_path: Path, has_previous_artifact: bool
+) -> None:
+    store = DatasetCacheStore(tmp_path)
+    destination = store.path("shuttle")
+    payload = _valid_npz_payload()
+    temporary_path = tmp_path / ".artifact.tmp"
+    if has_previous_artifact:
+        temporary_path.write_bytes(payload)
+        store.publish(
+            dataset_name="shuttle",
+            temporary_path=temporary_path,
+            destination=destination,
+            entry=_cache_entry(payload),
+        )
+    previous_metadata = (
+        store.metadata_file.read_bytes() if store.metadata_file.exists() else None
+    )
+    temporary_path.write_bytes(b"replacement")
+    replace_file = os.replace
+
+    def fail_metadata_replace(source: Path, target: Path) -> None:
+        if target == store.metadata_file:
+            raise OSError("metadata publication failed")
+        replace_file(source, target)
+
+    with (
+        patch(
+            "aberrant.stream.dataset.cache.os.replace",
+            side_effect=fail_metadata_replace,
+        ),
+        pytest.raises(OSError, match="metadata publication failed"),
+    ):
+        store.publish(
+            dataset_name="shuttle",
+            temporary_path=temporary_path,
+            destination=destination,
+            entry=_cache_entry(b"replacement"),
+        )
+
+    assert not list(tmp_path.glob(".metadata.*.tmp"))
+    assert not list(tmp_path.glob("*.bak"))
+    if not has_previous_artifact:
+        assert not destination.exists()
+        assert not store.metadata_file.exists()
+        assert dict(store.read().datasets) == {}
+        return
+    assert destination.read_bytes() == payload
+    assert store.metadata_file.read_bytes() == previous_metadata
+    trusted_info = replace(
+        get_dataset_info(Dataset.SHUTTLE),
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    manager = DatasetManager(cache_dir=tmp_path, release_tag="test-release")
+    with patch(
+        "aberrant.stream.dataset.loader.get_dataset_info", return_value=trusted_info
+    ):
+        streamer = manager.load(Dataset.SHUTTLE, auto_download=False)
+    assert list(streamer.stream()) == [
+        ({"feature_0": 1.0, "feature_1": 2.0}, 0),
+        ({"feature_0": 3.0, "feature_1": 4.0}, 1),
+    ]
+
+
+def test_failed_artifact_restoration_retains_backup(tmp_path: Path) -> None:
+    store = DatasetCacheStore(tmp_path)
+    destination = store.path("shuttle")
+    payload = b"previous"
+    temporary_path = tmp_path / ".artifact.tmp"
+    temporary_path.write_bytes(payload)
+    store.publish(
+        dataset_name="shuttle",
+        temporary_path=temporary_path,
+        destination=destination,
+        entry=_cache_entry(payload),
+    )
+    temporary_path.write_bytes(b"replacement")
+    replace_file = os.replace
+
+    def fail_metadata_and_restoration(source: Path, target: Path) -> None:
+        if target == store.metadata_file or source.suffix == ".bak":
+            raise OSError("cannot replace")
+        replace_file(source, target)
+
+    with (
+        patch(
+            "aberrant.stream.dataset.cache.os.replace",
+            side_effect=fail_metadata_and_restoration,
+        ),
+        pytest.raises(OSError, match="cannot replace"),
+    ):
+        store.publish(
+            dataset_name="shuttle",
+            temporary_path=temporary_path,
+            destination=destination,
+            entry=_cache_entry(b"replacement"),
+        )
+
+    backups = list(tmp_path.glob("*.bak"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == payload
+    assert store.read().datasets["shuttle"] == _cache_entry(payload)
+
+
+def test_backup_cleanup_failure_keeps_successful_publication(tmp_path: Path) -> None:
+    store = DatasetCacheStore(tmp_path)
+    destination = store.path("shuttle")
+    temporary_path = tmp_path / ".artifact.tmp"
+    unlink_file = Path.unlink
+
+    def fail_backup_unlink(path: Path, *, missing_ok: bool = False) -> None:
+        if path.suffix == ".bak":
+            raise PermissionError("backup is in use")
+        unlink_file(path, missing_ok=missing_ok)
+
+    for payload in (b"previous", b"replacement"):
+        temporary_path.write_bytes(payload)
+        with patch.object(
+            Path, "unlink", autospec=True, side_effect=fail_backup_unlink
+        ):
+            store.publish(
+                dataset_name="shuttle",
+                temporary_path=temporary_path,
+                destination=destination,
+                entry=_cache_entry(payload),
+            )
+
+    assert destination.read_bytes() == b"replacement"
+    assert store.read().datasets["shuttle"] == _cache_entry(b"replacement")
+    backups = list(tmp_path.glob("*.bak"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == b"previous"
 
 
 def test_metadata_updates_are_merged_across_processes() -> None:
