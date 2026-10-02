@@ -13,7 +13,7 @@ permissions:
   security-events: write
 
 env:
-  UV_VERSION: "0.9.9"
+  UV_VERSION: "0.12.18"
 
 jobs:
   dependency-review:
@@ -38,10 +38,10 @@ jobs:
         run: uv python install 3.11
 
       - name: Install locked dependencies
-        run: uv sync --locked --extra security
+        run: uv sync --locked --extra dev --extra security
 
       - name: Audit dependencies
-        run: uv run --locked python -m pip_audit --local --skip-editable
+        run: uv run --locked --extra dev --extra security python -m pip_audit --local --skip-editable
 
   codeql:
     runs-on: ubuntu-latest

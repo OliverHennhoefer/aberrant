@@ -34,6 +34,10 @@ Semantic Versioning.
 ### Development
 
 - Aligned the pre-commit Ruff version with the lockfile and applied its formatting.
+- Updated uv to 0.12.18 in GitHub Actions and relaxed the minimum version
+  requirement so Dependabot can update the lockfile.
+- Updated virtualenv to a patched release for CVE-2026-102925 and included
+  development dependencies in the security audit.
 
 ## [1.1.0] - 2026-09-25
 
