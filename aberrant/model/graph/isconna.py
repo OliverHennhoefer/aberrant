@@ -41,6 +41,34 @@ class _CMSGroup:
             gap_accumulated=np.zeros(shape, dtype=np.float64),
         )
 
+    def select(self, rows: np.ndarray, indices: np.ndarray) -> _CMSGroup:
+        """Copy only the queried cells into the same typed transition state."""
+        return _CMSGroup(
+            busy_current=self.busy_current[rows, indices],
+            busy_previous=self.busy_previous[rows, indices],
+            width_time=self.width_time[rows, indices],
+            gap_time=self.gap_time[rows, indices],
+            frequency_current=self.frequency_current[rows, indices],
+            frequency_accumulated=self.frequency_accumulated[rows, indices],
+            width_current=self.width_current[rows, indices],
+            width_accumulated=self.width_accumulated[rows, indices],
+            gap_current=self.gap_current[rows, indices],
+            gap_accumulated=self.gap_accumulated[rows, indices],
+        )
+
+    def store(self, rows: np.ndarray, indices: np.ndarray, cells: _CMSGroup) -> None:
+        """Commit a selected-cell transition to the retained sketch."""
+        self.busy_current[rows, indices] = cells.busy_current
+        self.busy_previous[rows, indices] = cells.busy_previous
+        self.width_time[rows, indices] = cells.width_time
+        self.gap_time[rows, indices] = cells.gap_time
+        self.frequency_current[rows, indices] = cells.frequency_current
+        self.frequency_accumulated[rows, indices] = cells.frequency_accumulated
+        self.width_current[rows, indices] = cells.width_current
+        self.width_accumulated[rows, indices] = cells.width_accumulated
+        self.gap_current[rows, indices] = cells.gap_current
+        self.gap_accumulated[rows, indices] = cells.gap_accumulated
+
 
 class ISCONNA(BaseModel):
     """
@@ -253,82 +281,53 @@ class ISCONNA(BaseModel):
         rollover: bool,
         time_index: int,
     ) -> tuple[float, float, float]:
-        rows = self._row_index
-        busy_current = group.busy_current[rows, indices].copy()
-        busy_previous = group.busy_previous[rows, indices].copy()
-        width_time = group.width_time[rows, indices].copy()
-        gap_time = group.gap_time[rows, indices].copy()
-        frequency_current = group.frequency_current[rows, indices].copy()
-        frequency_accumulated = group.frequency_accumulated[rows, indices].copy()
-        width_current = group.width_current[rows, indices].copy()
-        width_accumulated = group.width_accumulated[rows, indices].copy()
-        gap_current = group.gap_current[rows, indices].copy()
-        gap_accumulated = group.gap_accumulated[rows, indices].copy()
-
+        cells = group.select(self._row_index, indices)
         if rollover:
-            frequency_current *= self.time_decay_factor
-            absent = ~busy_current
-            gap_continues = absent & busy_previous
-            gap_accumulated[gap_continues] += gap_current[gap_continues]
-            gap_current[gap_continues] *= self.time_decay_factor
-            gap_time[gap_continues] += 1
-            gap_current[absent] += 1.0
-            busy_previous = busy_current
-            busy_current = np.zeros_like(busy_current)
+            self._reset_group(cells)
+        self._record_observation(cells)
+        return self._group_scores(cells, time_index)
 
-        frequency_current += 1.0
-        frequency_accumulated += 1.0
-
-        first_in_timestamp = ~busy_current
-        starts_new_width = first_in_timestamp & ~busy_previous
-        width_accumulated[starts_new_width] += width_current[starts_new_width]
-        width_current[starts_new_width] *= self.time_decay_factor
-        width_time[starts_new_width] += 1
-        width_current[first_in_timestamp] += 1.0
-
-        width_index = int(np.argmin(width_time))
-        gap_index = int(np.argmin(gap_time))
+    def _group_scores(
+        self, cells: _CMSGroup, time_index: int
+    ) -> tuple[float, float, float]:
+        width_index = int(np.argmin(cells.width_time))
+        gap_index = int(np.argmin(cells.gap_time))
         return (
             self._g_test(
-                float(np.min(frequency_current)),
-                float(np.min(frequency_accumulated)),
+                float(np.min(cells.frequency_current)),
+                float(np.min(cells.frequency_accumulated)),
                 time_index,
             ),
             self._g_test(
-                float(width_current[width_index]),
-                float(width_accumulated[width_index]),
-                int(width_time[width_index]),
+                float(cells.width_current[width_index]),
+                float(cells.width_accumulated[width_index]),
+                int(cells.width_time[width_index]),
             ),
             self._g_test(
-                float(gap_current[gap_index]),
-                float(gap_accumulated[gap_index]),
-                int(gap_time[gap_index]),
+                float(cells.gap_current[gap_index]),
+                float(cells.gap_accumulated[gap_index]),
+                int(cells.gap_time[gap_index]),
             ),
         )
 
+    def _record_observation(self, cells: _CMSGroup) -> None:
+        """Apply the candidate update to selected learning or preview cells."""
+        cells.frequency_current += 1.0
+        cells.frequency_accumulated += 1.0
+        first_in_timestamp = ~cells.busy_current
+        starts_new_width = first_in_timestamp & ~cells.busy_previous
+        cells.width_accumulated[starts_new_width] += cells.width_current[
+            starts_new_width
+        ]
+        cells.width_current[starts_new_width] *= self.time_decay_factor
+        cells.width_time[starts_new_width] += 1
+        cells.width_current[first_in_timestamp] += 1.0
+        cells.busy_current.fill(True)
+
     def _update_group(self, group: _CMSGroup, indices: np.ndarray) -> None:
-        rows = self._row_index
-        group.frequency_current[rows, indices] += 1.0
-        group.frequency_accumulated[rows, indices] += 1.0
-
-        first_in_timestamp = ~group.busy_current[rows, indices]
-        if not np.any(first_in_timestamp):
-            return
-
-        first_rows = rows[first_in_timestamp]
-        first_indices = indices[first_in_timestamp]
-        starts_new_width = ~group.busy_previous[first_rows, first_indices]
-        if np.any(starts_new_width):
-            width_rows = first_rows[starts_new_width]
-            width_indices = first_indices[starts_new_width]
-            group.width_accumulated[width_rows, width_indices] += group.width_current[
-                width_rows, width_indices
-            ]
-            group.width_current[width_rows, width_indices] *= self.time_decay_factor
-            group.width_time[width_rows, width_indices] += 1
-
-        group.width_current[first_rows, first_indices] += 1.0
-        group.busy_current[first_rows, first_indices] = True
+        cells = group.select(self._row_index, indices)
+        self._record_observation(cells)
+        group.store(self._row_index, indices, cells)
 
     def _component_scores(
         self, bucket: int, src: int, dst: int
