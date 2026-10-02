@@ -7,6 +7,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Updated all pinned CodeQL steps to 4.38.2 and grouped their Dependabot
+  updates to keep action versions aligned.
+- Updated the locked urllib3 dependency to 2.8.0 to fix three security
+  advisories reported by the dependency audit.
+- Added a CI policy check requiring all CodeQL steps to use the same commit.
+
 ## [1.1.0] - 2026-09-25
 
 ### Added
