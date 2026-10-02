@@ -28,6 +28,7 @@ from aberrant.catalog import (
     get_model_spec,
 )
 from aberrant.model.distance import SDOStream
+from aberrant.model.stat import MovingGeometricAverage, MovingHarmonicAverage
 from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
@@ -164,6 +165,74 @@ def test_capabilities_resolve_from_model_parameters() -> None:
     assert edge.feature_count.minimum == 2
     assert edge.feature_count.maximum is None
     assert get_model_spec("half_space_trees").capabilities().requires_unit_interval
+
+
+@pytest.mark.parametrize(
+    ("absolute_values", "ready_count"), [(None, 2), (False, 2), (True, 3)]
+)
+def test_geometric_average_warmup_matches_scoring_readiness(
+    absolute_values: bool | None, ready_count: int
+) -> None:
+    params: dict[str, object] = {"window_size": 10}
+    if absolute_values is not None:
+        params["absoluteValues"] = absolute_values
+    warmup = get_model_spec("moving_geometric_average").capabilities(params).warmup
+    model = create_model("moving_geometric_average", params)
+    assert isinstance(model, MovingGeometricAverage)
+    query = {"x": 20.0}
+
+    assert warmup.unit is WarmupUnit.RETAINED_VALUES
+    assert warmup.minimum == ready_count
+    for ignored_value in (-1.0, 0.0):
+        model.learn_one({"x": ignored_value})
+    assert len(model.window) == 0
+    assert warmup.remaining(len(model.window)) == ready_count
+    for index in range(ready_count):
+        assert not warmup.is_satisfied(len(model.window))
+        assert model.score_one(query) == 0.0
+        model.learn_one({"x": float(index + 1)})
+
+    assert warmup.is_satisfied(len(model.window))
+    assert model.score_one(query) > 0.0
+
+
+@pytest.mark.parametrize(
+    ("absolute_values", "window_size"), [(False, 1), (True, 1), (True, 2)]
+)
+def test_geometric_average_undersized_window_never_satisfies_warmup(
+    absolute_values: bool, window_size: int
+) -> None:
+    params = {"window_size": window_size, "absoluteValues": absolute_values}
+    warmup = get_model_spec("moving_geometric_average").capabilities(params).warmup
+    model = create_model("moving_geometric_average", params)
+    assert isinstance(model, MovingGeometricAverage)
+
+    for index in range(10):
+        model.learn_one({"x": float(index + 1)})
+        assert not warmup.is_satisfied(len(model.window))
+        assert model.score_one({"x": 20.0}) == 0.0
+
+
+def test_harmonic_average_warmup_requires_a_retained_nonzero_value() -> None:
+    params = {"window_size": 10}
+    warmup = get_model_spec("moving_harmonic_average").capabilities(params).warmup
+    model = create_model("moving_harmonic_average", params)
+    assert isinstance(model, MovingHarmonicAverage)
+    query = {"x": 20.0}
+
+    assert warmup.unit is WarmupUnit.RETAINED_VALUES
+    assert warmup.minimum == 1
+    for _ in range(3):
+        model.learn_one({"x": 0.0})
+        assert len(model.window) == 0
+        assert warmup.remaining(len(model.window)) == 1
+        assert model.score_one(query) == 0.0
+
+    model.learn_one({"x": 1.0})
+    assert warmup.is_satisfied(len(model.window))
+    assert model.score_one(query) > 0.0
+    model.learn_one({"x": 0.0})
+    assert warmup.is_satisfied(len(model.window))
 
 
 @pytest.mark.parametrize(
