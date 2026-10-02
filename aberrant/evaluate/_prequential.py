@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
+from numbers import Real
 from time import perf_counter_ns
 from typing import Literal
 
@@ -30,12 +31,9 @@ def _nonnegative_int(value: object, name: str) -> int:
 def _binary_label(value: object) -> int | None:
     if value is None:
         return None
-    if isinstance(value, bool | np.bool_):
-        return int(value)
-    numeric = coerce_finite_number(value, label="Evaluation label")
-    if numeric not in (0.0, 1.0):
+    if not isinstance(value, Real | np.bool_) or value not in (0, 1):
         raise ValueError("Evaluation label must be 0, 1 or None")
-    return int(numeric)
+    return 1 if value == 1 else 0
 
 
 class PrequentialEvaluator:
