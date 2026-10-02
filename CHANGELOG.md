@@ -7,6 +7,13 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Core-only `SeasonalResidualDetector` with additive Holt-Winters forecasts,
+  causal raw/scaled residual scores and explanations, two-cycle initialization,
+  bounded seasonal state, reset/readiness, catalog construction, and a seeded
+  fixed-cadence example.
+
 ### Changed
 
 - Unified the bounded radius-neighbor detectors and ISCONNA's preview/learning

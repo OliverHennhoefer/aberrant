@@ -7,7 +7,7 @@ Available submodules:
     - sketch: Sketch-based streaming models
     - stat: Statistical models
     - svm: SVM-based models
-    - timeseries: Time-series discord models
+    - timeseries: Time-series discord and seasonal forecast-residual models
     - deep: Deep learning models (requires torch)
 
 Also available directly:

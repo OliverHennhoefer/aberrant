@@ -1,5 +1,10 @@
 # Time-Series Models API
 
+::: aberrant.model.timeseries.SeasonalResidualDetector
+    options:
+      inherited_members: true
+      show_bases: false
+
 ::: aberrant.model.timeseries.MultivariateRollingMatrixProfile
     options:
       inherited_members: true

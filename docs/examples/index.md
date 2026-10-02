@@ -52,6 +52,7 @@ artifact on first use.
 | Rolling matrix profile | [`rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rolling_matrix_profile.py) | Seeded periodic stream with a discord, continuous scores, and nearest-match indices; no `eval` extra needed |
 | Multivariate rolling matrix profile | [`multivariate_rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py) | Seeded two-channel phase change, continuous joint scores, common-match indices, and channel distances; no `eval` extra needed |
 | X-Lag DAMP | [`xlag_damp.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/xlag_damp.py) | Seeded synthetic periodic series with an injected discord; no `eval` extra needed |
+| Seasonal forecast residual | [`seasonal_residual.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/seasonal_residual.py) | Seeded seasonal stream with an unexpectedly low observation, prior forecast, and signed residual; no `eval` extra needed |
 
 The AnoEdge example is an API demonstration, not a claim that tabular SHUTTLE
 rows are a scientifically meaningful graph benchmark.
