@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
+from statistics import mean
 
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import FeatureSchema, coerce_finite_number
@@ -130,8 +131,8 @@ class SeasonalResidualDetector(BaseModel):
         self, values: list[float]
     ) -> tuple[float, float, list[float], float]:
         m = self.season_length
-        first_mean = _sum(value / m for value in values[:m])
-        second_mean = _sum(value / m for value in values[m:])
+        first_mean = mean(values[:m])
+        second_mean = mean(values[m:])
         trend = _sum((second_mean / m, -first_mean / m))
         midpoint = (m - 1) / 2
         seasonal = [
@@ -206,12 +207,11 @@ class SeasonalResidualDetector(BaseModel):
             base = _sum((self._level, self._trend))
             forecast = _sum((base, self._seasonal[phase]))
             residual = _sum((value, -forecast))
-            adjusted = _sum((value, -self._seasonal[phase]))
-            level = _blend(base, adjusted, self.alpha)
-            trend = _blend(self._trend, _sum((level, -self._level)), self.beta)
-            seasonal_value = _blend(
-                self._seasonal[phase], _sum((value, -base)), self.gamma
-            )
+            # Residual corrections avoid overflowing unweighted intermediates.
+            level_correction = self.alpha * residual
+            level = _sum((base, level_correction))
+            trend = _sum((self._trend, self.beta * level_correction))
+            seasonal_value = _sum((self._seasonal[phase], self.gamma * residual))
             scale = _blend(self._residual_scale, abs(residual), self.residual_alpha)
             # Publish only after all arithmetic succeeds. No per-event season copy.
             self._level, self._trend = level, trend

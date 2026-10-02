@@ -184,6 +184,56 @@ def test_initialization_overflow_rolls_back_candidate_and_readiness():
     assert not model.is_ready
 
 
+@pytest.mark.parametrize("season_length", [3, 12])
+@pytest.mark.parametrize(
+    "value",
+    [sys.float_info.max, -sys.float_info.max, math.ulp(0.0), -math.ulp(0.0)],
+)
+def test_constant_float_extremes_initialize_and_continue(season_length, value):
+    model = SeasonalResidualDetector(season_length, normalize=False)
+    _learn(model, [value] * (2 * season_length))
+    assert model.is_ready
+    for _ in range(season_length):
+        assert model.explain_one({"value": value}) == (0.0, value, 0.0)
+        model.learn_one({"value": value})
+    assert model.n_samples_seen == 3 * season_length
+    assert model.residual_scale == model.min_scale
+
+
+@pytest.mark.parametrize("sign", [-1, 1])
+@pytest.mark.parametrize("alpha", [0.0, 0.2])
+def test_representable_update_avoids_unweighted_overflow(sign, alpha):
+    model = SeasonalResidualDetector(2, alpha=alpha, normalize=False)
+    _learn(model, [0.0, sign * 1e308, 0.0, sign * 1e308])
+    event = {"value": sign * 1.5e308}
+    assert model.explain_one(event) == (1.5e308, 0.0, event["value"])
+    model.learn_one(event)
+    # Weighted components fit in a float even though value minus season does not.
+    expected_level = sign * (5e307 + alpha * 1.5e308)
+    expected_trend = sign * (0.05 * (alpha * 1.5e308))
+    expected_season = sign * -3.5e307
+    expected_forecast = expected_level + expected_trend + sign * 5e307
+    assert model.explain_one({"value": expected_forecast}) == pytest.approx(
+        (0.0, expected_forecast, 0.0), abs=1e293
+    )
+    assert model.residual_scale == pytest.approx(7.5e306)
+    model.learn_one({"value": expected_forecast})
+    following_forecast = expected_level + 2 * expected_trend + expected_season
+    assert model.explain_one({"value": following_forecast}) == pytest.approx(
+        (0.0, following_forecast, 0.0), abs=1e293
+    )
+    assert model.n_samples_seen == 6
+
+
+def test_unrepresentable_level_update_is_atomic():
+    model = SeasonalResidualDetector(2, alpha=1.0, gamma=0.0, normalize=False)
+    _learn(model, [0.0, 1e308, 0.0, 1e308])
+    before = pickle.dumps(model)
+    with pytest.raises(OverflowError):
+        model.learn_one({"value": 1.5e308})
+    assert pickle.dumps(model) == before
+
+
 @pytest.mark.parametrize("method", ["score_one", "explain_one", "learn_one"])
 def test_ready_residual_overflow_is_atomic(method):
     model = SeasonalResidualDetector(2)
