@@ -13,6 +13,9 @@ from aberrant import __version__
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTION_USE = re.compile(r"^\s*uses:\s*[^@\s]+@([^\s#]+)", re.MULTILINE)
+CODEQL_ACTION_USE = re.compile(
+    r"^\s*uses:\s*github/codeql-action/[^@\s]+@([^\s#]+)", re.MULTILINE
+)
 COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -29,6 +32,17 @@ def test_all_third_party_actions_are_pinned_to_commit_shas() -> None:
 
     assert references
     assert all(COMMIT_SHA.fullmatch(reference) for reference in references)
+
+
+def test_all_codeql_actions_use_the_same_commit() -> None:
+    references = [
+        reference
+        for workflow in _workflow_texts()
+        for reference in CODEQL_ACTION_USE.findall(workflow)
+    ]
+
+    assert references
+    assert len(set(references)) == 1, "CodeQL action steps must use the same commit"
 
 
 def test_all_uv_sync_commands_use_the_lockfile() -> None:
