@@ -9,11 +9,31 @@ Semantic Versioning.
 
 ### Changed
 
+- Unified the bounded radius-neighbor detectors and ISCONNA's preview/learning
+  transitions to remove duplicated scoring and state-update logic.
+- Built-in pipeline transformers now restore their learned state when a later
+  stage rejects an event. Custom transformers can opt into this behavior through
+  `TransactionalTransformerProtocol`.
+- Simplified FAISS retention around validated vectors and staged index updates;
+  its `window` and `keys` diagnostics return owned snapshots.
 - Updated all pinned CodeQL steps to 4.38.2 and grouped their Dependabot
   updates to keep action versions aligned.
 - Updated the locked urllib3 dependency to 2.8.0 to fix three security
   advisories reported by the dependency audit.
 - Added a CI policy check requiring all CodeQL steps to use the same commit.
+
+### Fixed
+
+- Prevented RSHash decay underflow from poisoning subsequent learning.
+- Kept radius-neighbor cell candidates consistent with distance tolerances.
+- Matched autoencoder input tensors to the supplied module's device and dtype.
+- Restored cached artifacts when metadata publication fails and closed
+  interleaved NPZ streams independently.
+- Kept PCA components unchanged if online eigendecomposition fails.
+
+### Development
+
+- Aligned the pre-commit Ruff version with the lockfile and applied its formatting.
 
 ## [1.1.0] - 2026-09-25
 

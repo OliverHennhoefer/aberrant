@@ -2,9 +2,25 @@
 
 import math
 from collections import Counter, defaultdict
+from collections.abc import Iterator, MutableMapping
+from contextlib import contextmanager
+from typing import TypeVar
 
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.validation import coerce_feature_values
+
+_Value = TypeVar("_Value", int, float)
+
+
+def _restore_features(
+    values: MutableMapping[str, _Value], previous: dict[str, _Value | None]
+) -> None:
+    """Restore changed feature values, including their prior absence."""
+    for feature, value in previous.items():
+        if value is None:
+            values.pop(feature, None)
+        else:
+            values[feature] = value
 
 
 class MinMaxScaler(BaseTransformer):
@@ -45,6 +61,18 @@ class MinMaxScaler(BaseTransformer):
         self.feature_range = (lower, upper)
         self.min: dict[str, float] = {}
         self.max: dict[str, float] = {}
+
+    @contextmanager
+    def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
+        """Restore extrema if this or a downstream pipeline stage rejects an event."""
+        previous_min = {feature: self.min.get(feature) for feature in x}
+        previous_max = {feature: self.max.get(feature) for feature in x}
+        try:
+            yield
+        except BaseException:
+            _restore_features(self.min, previous_min)
+            _restore_features(self.max, previous_max)
+            raise
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -135,6 +163,20 @@ class StandardScaler(BaseTransformer):
         self.counts: Counter[str] = Counter()
         self.means: defaultdict[str, float] = defaultdict(float)
         self.sum_sq_diffs: defaultdict[str, float] = defaultdict(float)
+
+    @contextmanager
+    def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
+        """Restore running moments if a pipeline update fails."""
+        previous_counts = {feature: self.counts.get(feature) for feature in x}
+        previous_means = {feature: self.means.get(feature) for feature in x}
+        previous_diffs = {feature: self.sum_sq_diffs.get(feature) for feature in x}
+        try:
+            yield
+        except BaseException:
+            _restore_features(self.counts, previous_counts)
+            _restore_features(self.means, previous_means)
+            _restore_features(self.sum_sq_diffs, previous_diffs)
+            raise
 
     def learn_one(self, x: dict[str, float]) -> None:
         """

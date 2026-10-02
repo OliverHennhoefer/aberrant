@@ -1,8 +1,12 @@
 """Unit tests for the ISCONNA graph-stream anomaly detector."""
 
+import copy
+import pickle
 import unittest
+from dataclasses import fields
 
 import numpy as np
+import pytest
 
 from aberrant.model.graph import ISCONNA
 
@@ -271,3 +275,82 @@ class TestISCONNA(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.parametrize("include_endpoints", [False, True])
+def test_candidate_preview_matches_learning_across_collisions_and_rollovers(
+    include_endpoints,
+):
+    model = ISCONNA(
+        count_min_rows=3,
+        count_min_cols=7,
+        include_endpoints=include_endpoints,
+        time_decay_factor=0.7,
+        seed=22,
+    )
+    rng = np.random.default_rng(22)
+    timestamp = 1
+    for _ in range(150):
+        timestamp += int(rng.integers(0, 3))
+        event = {
+            "src": float(rng.integers(0, 6)),
+            "dst": float(rng.integers(0, 6)),
+            "t": float(timestamp),
+        }
+        src, dst = int(event["src"]), int(event["dst"])
+        before = pickle.dumps(model)
+        preview = model._component_scores(timestamp, src, dst)
+        assert pickle.dumps(model) == before
+        reference = copy.deepcopy(model)
+        reference.learn_one(event)
+        groups = [(reference._edge, reference._indices(src, dst))]
+        if reference._source is not None and reference._destination is not None:
+            groups += [
+                (reference._source, reference._indices(src, 0)),
+                (reference._destination, reference._indices(dst, 0)),
+            ]
+        components = []
+        for group, indices in groups:
+            rows = np.arange(reference.count_min_rows)
+            width_time = group.width_time[rows, indices]
+            gap_time = group.gap_time[rows, indices]
+            width_row = int(np.argmin(width_time))
+            gap_row = int(np.argmin(gap_time))
+            components.append(
+                (
+                    _reference_g_test(
+                        float(np.min(group.frequency_current[rows, indices])),
+                        float(np.min(group.frequency_accumulated[rows, indices])),
+                        reference._time_index(timestamp),
+                    ),
+                    _reference_g_test(
+                        float(group.width_current[rows, indices][width_row]),
+                        float(group.width_accumulated[rows, indices][width_row]),
+                        int(width_time[width_row]),
+                    ),
+                    _reference_g_test(
+                        float(group.gap_current[rows, indices][gap_row]),
+                        float(group.gap_accumulated[rows, indices][gap_row]),
+                        int(gap_time[gap_row]),
+                    ),
+                )
+            )
+        assert preview == tuple(np.max(components, axis=0))
+        model.learn_one(event)
+
+
+def _reference_g_test(current: float, accumulated: float, time: int) -> float:
+    if current == 0.0 or accumulated == 0.0 or time <= 1:
+        return 0.0
+    return float(2.0 * current * abs(np.log(current * float(time - 1) / accumulated)))
+
+
+def test_preview_state_copies_only_one_cell_per_sketch_row():
+    model = ISCONNA(count_min_rows=3, count_min_cols=101, seed=22)
+    group = model._edge
+    cells = group.select(model._row_index, model._indices(1, 2))
+    for field in fields(group):
+        original = getattr(group, field.name)
+        selected = getattr(cells, field.name)
+        assert selected.shape == (model.count_min_rows,)
+        assert not np.shares_memory(selected, original)

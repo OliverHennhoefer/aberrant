@@ -1,5 +1,7 @@
 """Online autoencoder for anomaly detection."""
 
+from itertools import chain
+
 import torch
 from torch import optim
 
@@ -49,11 +51,27 @@ class Autoencoder(BaseModel):
         self.optimizer = optimizer
         self._schema = FeatureSchema(expected_size=model.input_size)
 
-        # Pre-allocate tensors on the correct device to avoid repeated creation
-        device = model.device
+        # The supplied module owns tensor placement and dtype, including changes
+        # made through standard PyTorch .to(), .double(), and .float() calls.
+        device, dtype = self._input_options()
         self.x_tensor = torch.empty(
-            1, self.model.input_size, dtype=torch.float32, device=device
+            1, self.model.input_size, device=device, dtype=dtype
         )
+
+    def _input_options(self) -> tuple[torch.device, torch.dtype]:
+        reference = next(chain(self.model.parameters(), self.model.buffers()), None)
+        if reference is None:
+            return self.model.device, torch.float32
+        return reference.device, reference.dtype
+
+    def _input_tensor(self) -> torch.Tensor:
+        """Reuse input storage until the module's placement or dtype changes."""
+        device, dtype = self._input_options()
+        if self.x_tensor.device != device or self.x_tensor.dtype != dtype:
+            self.x_tensor = torch.empty(
+                1, self.model.input_size, device=device, dtype=dtype
+            )
+        return self.x_tensor
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -63,17 +81,18 @@ class Autoencoder(BaseModel):
             x: Feature dictionary with string keys and float values.
         """
         prepared = self._schema.preview(x)
+        x_tensor = self._input_tensor()
 
         # Set model to training mode
         self.model.train()
 
         # Efficiently load data into pre-allocated tensor without creating new tensors
-        self._fill_tensor(prepared, self.x_tensor)
+        self._fill_tensor(prepared, x_tensor)
 
         # Forward pass and backpropagation
         self.optimizer.zero_grad(set_to_none=True)
-        output = self.model(self.x_tensor)
-        loss = self.criterion(output, self.x_tensor)
+        output = self.model(x_tensor)
+        loss = self.criterion(output, x_tensor)
         loss.backward()
         self.optimizer.step()
         self._schema.commit(prepared)
@@ -89,16 +108,17 @@ class Autoencoder(BaseModel):
             Reconstruction error as anomaly score.
         """
         prepared = self._schema.preview(x)
+        x_tensor = self._input_tensor()
 
         # Set model to evaluation mode
         self.model.eval()
 
         # Efficiently load data into pre-allocated tensor
-        self._fill_tensor(prepared, self.x_tensor)
+        self._fill_tensor(prepared, x_tensor)
 
         with torch.no_grad():
-            output = self.model(self.x_tensor)
-            loss = self.criterion(output, self.x_tensor)
+            output = self.model(x_tensor)
+            loss = self.criterion(output, x_tensor)
         return float(loss.item())
 
     @staticmethod

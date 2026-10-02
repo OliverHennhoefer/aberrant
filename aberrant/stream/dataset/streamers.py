@@ -65,7 +65,7 @@ class NpzStreamer:
         self.show_progress = show_progress
         self._archive: np.lib.npyio.NpzFile | None = None
 
-    def __enter__(self) -> NpzStreamer:
+    def _open_archive(self) -> np.lib.npyio.NpzFile:
         if not self.file_path.exists():
             raise FileNotFoundError(f"NPZ file not found: {self.file_path}")
         archive: np.lib.npyio.NpzFile | None = None
@@ -79,12 +79,18 @@ class NpzStreamer:
                 raise KeyError(
                     f"Label array '{self.label_column}' not found in NPZ file"
                 )
-            self._archive = archive
-            return self
+            return archive
         except Exception:
             if archive is not None:
                 archive.close()
             raise
+
+    def __enter__(self) -> NpzStreamer:
+        """Open one explicit context; nested contexts on this object are rejected."""
+        if self._archive is not None:
+            raise RuntimeError("NPZ file is already open in a with block")
+        self._archive = self._open_archive()
+        return self
 
     def __exit__(
         self,
@@ -100,11 +106,15 @@ class NpzStreamer:
         archive = self._archive
         if archive is None:
             raise RuntimeError("NPZ file is not open; use stream() or a with block")
+        return self._samples(archive)
 
+    def _samples(self, archive: np.lib.npyio.NpzFile) -> Iterator[Sample]:
         features_array = archive[self.feature_column]
         labels_array = archive[self.label_column]
         if features_array.ndim != 2:
             raise ValueError("Feature array must be two-dimensional")
+        if labels_array.ndim == 0:
+            raise ValueError("Label array must have a sample axis")
         if features_array.shape[0] != labels_array.shape[0]:
             raise ValueError(
                 "Feature and label arrays have different lengths: "
@@ -148,9 +158,9 @@ class NpzStreamer:
                 progress.close()
 
     def stream(self) -> Iterator[Sample]:
-        """Open the artifact and yield samples row by row."""
-        with self:
-            yield from self
+        """Yield samples while owning an archive independently of other streams."""
+        with self._open_archive() as archive:
+            yield from self._samples(archive)
 
     def get_metadata(self) -> DatasetInfo | None:
         """Return registered metadata when supplied by the loader."""

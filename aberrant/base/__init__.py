@@ -26,6 +26,7 @@ from aberrant.base.protocols import (
     FeatureMap,
     LearnerProtocol,
     ModelProtocol,
+    TransactionalTransformerProtocol,
     TransformerProtocol,
 )
 from aberrant.base.similarity import BaseSimilaritySearchEngine
@@ -52,6 +53,7 @@ __all__ = [
     "ModelProtocol",
     "TransformationError",
     "TransformerProtocol",
+    "TransactionalTransformerProtocol",
     "UnknownComponentError",
     "UnsupportedFeatureError",
     "ValidationError",

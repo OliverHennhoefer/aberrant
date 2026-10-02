@@ -1,6 +1,7 @@
 """Unit tests for the RSHash sketch-based anomaly detector."""
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -91,6 +92,48 @@ class TestRSHash(unittest.TestCase):
             model.score_one({"t": 1.5, "a": 1.0, "b": 2.0})
         with self.assertRaises(ValueError):
             model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
+
+    def test_large_time_gap_forgets_counts_without_poisoning_state(self) -> None:
+        model = self.create_model(warm_up_samples=1)
+        model.learn_one({"t": 0.0, "a": 1.0, "b": 2.0})
+        counts_before = model._counts.copy()
+        query = {"t": 100_000.0, "a": 1.0, "b": 2.0}
+
+        self.assertEqual(model.score_one(query), 1.0)
+        np.testing.assert_array_equal(model._counts, counts_before)
+        self.assertEqual(model._boundary.clock.max_time, 0.0)
+        self.assertEqual(model._scale, 1.0)
+
+        model.learn_one(query)
+        np.testing.assert_array_equal(
+            model._counts.sum(axis=2),
+            np.ones((model.components_num, model.hash_num)),
+        )
+        self.assertEqual(model._scale, 1.0)
+        self.assertEqual(model._boundary.clock.max_time, query["t"])
+        model.learn_one({"t": 100_001.0, "a": 1.1, "b": 2.1})
+        self.assertEqual(model.n_samples_seen, 3)
+
+    def test_failed_hashing_does_not_apply_decay_or_advance_time(self) -> None:
+        model = self.create_model()
+        control = self.create_model()
+        initial = {"t": 0.0, "a": 1.0, "b": 2.0}
+        model.learn_one(initial)
+        control.learn_one(initial)
+
+        with (
+            patch.object(model, "_bucket_indices", side_effect=RuntimeError("hash")),
+            self.assertRaisesRegex(RuntimeError, "hash"),
+        ):
+            model.learn_one({"t": 10.0, "a": 1.5, "b": 2.5})
+
+        self.assertEqual(model._scale, control._scale)
+        self.assertEqual(model._boundary.clock.max_time, 0.0)
+        next_point = {"t": 1.0, "a": 1.2, "b": 2.2}
+        model.learn_one(next_point)
+        control.learn_one(next_point)
+        np.testing.assert_array_equal(model._counts, control._counts)
+        self.assertEqual(model._scale, control._scale)
 
     def test_internal_clock_fallback_without_time_key(self) -> None:
         model = self.create_model(time_key=None, warm_up_samples=4)

@@ -296,6 +296,50 @@ class TestAutoencoder(unittest.TestCase):
         self.assertEqual(model.model.device, torch.device("cpu"))
         self.assertEqual(model.x_tensor.device, torch.device("cpu"))
 
+    def test_supplied_double_architecture_controls_input_dtype(self) -> None:
+        architecture = VanillaAutoencoder(input_size=3, seed=42).double()
+        model = Autoencoder(
+            architecture, optim.SGD(architecture.parameters()), nn.MSELoss()
+        )
+        point = {"a": 1.0, "b": 2.0, "c": 3.0}
+
+        model.learn_one(point)
+        self.assertIsInstance(model.score_one(point), float)
+        self.assertEqual(model.x_tensor.dtype, torch.float64)
+
+    def test_input_storage_tracks_standard_module_dtype_changes(self) -> None:
+        model = self.create_model()
+        point = {"a": 1.0, "b": 2.0, "c": 3.0}
+        initial_tensor = model.x_tensor
+        model.learn_one(point)
+        model.model.double()
+
+        self.assertIsInstance(model.score_one(point), float)
+        self.assertEqual(model.x_tensor.dtype, torch.float64)
+        self.assertIsNot(model.x_tensor, initial_tensor)
+        double_tensor = model.x_tensor
+        model.score_one(point)
+        self.assertIs(model.x_tensor, double_tensor)
+
+        model.model.float()
+        model.learn_one(point)
+        self.assertEqual(model.x_tensor.dtype, torch.float32)
+        self.assertIsNot(model.x_tensor, double_tensor)
+
+    @unittest.skipUnless(
+        TORCH_AVAILABLE and torch.cuda.is_available(), "CUDA unavailable"
+    )
+    def test_input_storage_tracks_module_device_moves(self) -> None:
+        model = self.create_model()
+        model.model.to("cuda")
+        point = {"a": 1.0, "b": 2.0, "c": 3.0}
+
+        self.assertIsInstance(model.score_one(point), float)
+        self.assertEqual(model.x_tensor.device.type, "cuda")
+        model.model.cpu()
+        self.assertIsInstance(model.score_one(point), float)
+        self.assertEqual(model.x_tensor.device.type, "cpu")
+
     def test_gradient_updates(self):
         """Test that gradients are computed and applied correctly."""
         architecture = VanillaAutoencoder(input_size=3, seed=42)

@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from shutil import copyfile
 from tempfile import NamedTemporaryFile
 from types import MappingProxyType
 
@@ -174,12 +176,50 @@ class DatasetCacheStore:
         destination: Path,
         entry: CacheEntry,
     ) -> None:
-        """Replace an artifact, then merge metadata under one process lock."""
+        """Publish under one process lock, restoring the artifact on failure.
+
+        Metadata is replaced atomically. If publication raises before that
+        replacement, the previous artifact is restored, or a new artifact is
+        removed. Abrupt process termination can still leave a mismatched pair;
+        the manager verifies the artifact against metadata before reuse.
+        """
         with self._lock:
             entries = dict(self.read().datasets)
-            os.replace(temporary_path, destination)
-            entries[dataset_name] = entry
-            self._write_unlocked(entries)
+            backup_path = self._backup_artifact(destination)
+            try:
+                os.replace(temporary_path, destination)
+                entries[dataset_name] = entry
+                self._write_unlocked(entries)
+            except BaseException:
+                if backup_path is None:
+                    destination.unlink(missing_ok=True)
+                else:
+                    # If restoration fails, retain the backup for recovery.
+                    os.replace(backup_path, destination)
+                raise
+            else:
+                if backup_path is not None:
+                    # Publication has committed; cleanup cannot undo that result.
+                    with suppress(OSError):
+                        backup_path.unlink()
+
+    @staticmethod
+    def _backup_artifact(destination: Path) -> Path | None:
+        if not destination.exists():
+            return None
+        with NamedTemporaryFile(
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".bak",
+            delete=False,
+        ) as file:
+            backup_path = Path(file.name)
+        try:
+            copyfile(destination, backup_path)
+        except BaseException:
+            backup_path.unlink(missing_ok=True)
+            raise
+        return backup_path
 
     def remove(self, dataset_name: str, artifact_path: Path) -> None:
         """Remove one artifact and its metadata under one process lock."""

@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-from collections import deque
-from typing import TypeAlias
-
-import numpy as np
-
-from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary
-
-_Cell: TypeAlias = tuple[int, ...]
-_Entry: TypeAlias = tuple[int, np.ndarray, _Cell]
+from aberrant.model.distance._radius_neighbors import _RadiusNeighborDetector
 
 
-class StationaryRegionNeighborDetector(BaseModel):
+class StationaryRegionNeighborDetector(_RadiusNeighborDetector):
     """
     Stationary-region neighbor detector for streaming data.
 
@@ -35,7 +26,7 @@ class StationaryRegionNeighborDetector(BaseModel):
 
     Args:
         k: Neighbor count at which the scarcity score reaches zero.
-        radius: Positive Euclidean neighborhood radius and grid-cell width.
+        radius: Finite positive Euclidean neighborhood radius and grid-cell width.
         window_size: Maximum number of learned points retained. It must exceed
             ``k``.
         slide_size: Number of learned events per warm-up slide.
@@ -66,164 +57,19 @@ class StationaryRegionNeighborDetector(BaseModel):
         predict_threshold: float = 0.5,
         eps: float = 1e-9,
     ) -> None:
-        if k <= 0:
-            raise ValueError("k must be positive")
-        if radius <= 0.0:
-            raise ValueError("radius must be positive")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
-        if window_size <= k:
-            raise ValueError("window_size must be greater than k")
-        if slide_size <= 0:
-            raise ValueError("slide_size must be positive")
         if not (0.0 <= skip_threshold <= 1.0):
             raise ValueError("skip_threshold must be in [0, 1]")
-        if time_key is not None and (not isinstance(time_key, str) or not time_key):
-            raise ValueError("time_key must be a non-empty string or None")
-        if warm_up_slides <= 0:
-            raise ValueError("warm_up_slides must be positive")
-        if not (0.0 <= predict_threshold <= 1.0):
-            raise ValueError("predict_threshold must be in [0, 1]")
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
-
-        self.k = k
-        self.radius = radius
-        self.window_size = window_size
-        self.slide_size = slide_size
         self.skip_threshold = skip_threshold
-        self.time_key = time_key
-        self.warm_up_slides = warm_up_slides
-        self.predict_threshold = predict_threshold
-        self.eps = eps
-
-        self._radius_sq = self.radius * self.radius
-
-        self._reset_state()
-
-    def _reset_state(self) -> None:
-        self._boundary = NumericEventBoundary(time_key=self.time_key)
-        self._window_entries: deque[_Entry] = deque()
-
-        self._entries_by_id: dict[int, np.ndarray] = {}
-        self._cell_members: dict[_Cell, set[int]] = {}
-
-        # Keep one neighborhood, bounded by the number of retained cells.
-        self._neighbor_cache: dict[_Cell, tuple[_Cell, ...]] = {}
-
-        self._next_entry_id: int = 0
-        self._samples_seen: int = 0
-
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
-    @property
-    def n_samples_seen(self) -> int:
-        """Number of samples processed via ``learn_one``."""
-        return self._samples_seen
-
-    def _cell_id(self, vector: np.ndarray) -> _Cell:
-        return tuple(int(value) for value in np.floor(vector / self.radius))
-
-    def _are_neighbor_cells(self, left: _Cell, right: _Cell) -> bool:
-        for left_dim, right_dim in zip(left, right, strict=False):
-            if abs(left_dim - right_dim) > 1:
-                return False
-        return True
-
-    def _candidate_cells(self, cell: _Cell) -> tuple[_Cell, ...]:
-        cached = self._neighbor_cache.get(cell)
-        if cached is not None:
-            return cached
-        candidates = tuple(
-            existing
-            for existing in self._cell_members
-            if self._are_neighbor_cells(existing, cell)
+        super().__init__(
+            k=k,
+            radius=radius,
+            window_size=window_size,
+            slide_size=slide_size,
+            time_key=time_key,
+            warm_up_slides=warm_up_slides,
+            predict_threshold=predict_threshold,
+            eps=eps,
         )
-        if cell in self._cell_members:
-            self._neighbor_cache.clear()
-            self._neighbor_cache[cell] = candidates
-        return candidates
-
-    def _count_neighbors_within_radius(self, vector: np.ndarray, cell: _Cell) -> float:
-        if not self._cell_members:
-            return 0.0
-
-        count = 0
-        for candidate_cell in self._candidate_cells(cell):
-            member_ids = self._cell_members.get(candidate_cell)
-            if not member_ids:
-                continue
-
-            for entry_id in member_ids:
-                point = self._entries_by_id[entry_id]
-                diff = point - vector
-                if float(np.dot(diff, diff)) <= (self._radius_sq + self.eps):
-                    count += 1
-
-        return float(count)
-
-    def _add_entry(self, vector: np.ndarray, cell: _Cell) -> None:
-        entry_id = self._next_entry_id
-        self._next_entry_id += 1
-
-        self._window_entries.append((entry_id, vector, cell))
-        self._entries_by_id[entry_id] = vector
-        if cell not in self._cell_members:
-            self._neighbor_cache.clear()
-        self._cell_members.setdefault(cell, set()).add(entry_id)
-
-    def _remove_oldest_entry(self) -> None:
-        if not self._window_entries:
-            return
-
-        old_id, _old_vector, old_cell = self._window_entries.popleft()
-        self._entries_by_id.pop(old_id, None)
-
-        members = self._cell_members.get(old_cell)
-        if members is not None:
-            members.discard(old_id)
-            if not members:
-                self._cell_members.pop(old_cell, None)
-                self._neighbor_cache.clear()
-
-    def _is_warm(self) -> bool:
-        warm_samples = self.warm_up_slides * self.slide_size
-        return self._samples_seen >= warm_samples and len(self._window_entries) >= (
-            self.k + 1
-        )
-
-    def learn_one(self, x: dict[str, float]) -> None:
-        """Update detector state with one sample."""
-        event = self._boundary.preview(x)
-        vector = event.features.values
-
-        cell = self._cell_id(vector)
-        self._add_entry(vector, cell)
-
-        if len(self._window_entries) > self.window_size:
-            self._remove_oldest_entry()
-
-        self._samples_seen += 1
-        self._boundary.commit(event)
-
-    def score_one(self, x: dict[str, float]) -> float:
-        """Compute anomaly score for one sample."""
-        event = self._boundary.preview(x)
-        if not self._boundary.schema.is_established or not self._is_warm():
-            return 0.0
-
-        vector = event.features.values
-        cell = self._cell_id(vector)
-        neighbors = self._count_neighbors_within_radius(vector, cell)
-
-        score = 1.0 - min(neighbors / float(self.k), 1.0)
-        return float(np.clip(score, 0.0, 1.0))
-
-    def predict_one(self, x: dict[str, float]) -> int:
-        """Return binary anomaly prediction using ``predict_threshold``."""
-        return int(self.score_one(x) >= self.predict_threshold)
 
     def __repr__(self) -> str:
         return (

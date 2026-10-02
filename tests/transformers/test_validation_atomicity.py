@@ -1,6 +1,7 @@
 """Rejected samples must not change transformer learning state."""
 
 import pickle
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -43,3 +44,18 @@ def test_projection_retry_matches_clean_seeded_initialization():
     clean.learn_one(sample)
     np.testing.assert_array_equal(failed.random_matrix, clean.random_matrix)
     assert failed.transform_one(sample) == clean.transform_one(sample)
+
+
+def test_online_pca_decomposition_failure_keeps_previous_components():
+    model = IncrementalPCA(n_components=1, n0=2)
+    for sample in [{"a": 1.0, "b": 0.0}, {"a": 2.0, "b": 0.0}]:
+        model.learn_one(sample)
+    before = pickle.dumps(model)
+    with (
+        patch("numpy.linalg.eig", side_effect=np.linalg.LinAlgError("failed")),
+        pytest.raises(np.linalg.LinAlgError),
+    ):
+        model.learn_one({"a": 1.0, "b": 1.0})
+    assert pickle.dumps(model) == before
+    model.learn_one({"a": 1.0, "b": 1.0})
+    assert model.vectors.shape == (2, 1)

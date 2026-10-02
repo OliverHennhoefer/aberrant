@@ -40,6 +40,11 @@ checks its trusted SHA-256 digest and NPZ structure, publishes it under the
 cache lock using per-file atomic replacement, and returns an `NpzStreamer`.
 Later calls validate and reuse the cached artifact.
 
+If metadata publication fails, the cache restores the previous artifact. A
+newly introduced artifact is removed instead. An abrupt process termination
+between the two file replacements can still leave a mismatch, which validation
+rejects before reuse.
+
 ```python
 from itertools import islice
 
@@ -55,6 +60,11 @@ for features, label in islice(dataset.stream(), 3):
 columns are exposed as `feature_0`, `feature_1`, and so on unless
 `feature_prefix` is changed. Labels preserve the scalar type stored in the NPZ
 file and are therefore typed as `object`.
+
+Each `stream()` invocation owns a separate archive, so iterators from the same
+streamer can be interleaved safely. Exhaust the iterator or call its `close()`
+method when stopping early to release the archive promptly. Explicit `with
+streamer:` contexts remain available but cannot be nested on the same object.
 
 Set `auto_download=False` when a missing or invalid cache entry should raise
 `FileNotFoundError` instead of using the network:
