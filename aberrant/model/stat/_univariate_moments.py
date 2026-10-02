@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from aberrant.model.stat._univariate_base import _BaseMovingUnivariate
-from aberrant.model.stat._univariate_order import _linear_quantile
+from aberrant.utils.statistics import linear_quantile
 
 
 def _mean(values: Sequence[float]) -> float:
@@ -19,7 +19,7 @@ def _variance(values: Sequence[float]) -> float:
 
 def _interquartile_range(values: Sequence[float]) -> float:
     ordered = sorted(values)
-    return _linear_quantile(ordered, 0.75) - _linear_quantile(ordered, 0.25)
+    return linear_quantile(ordered, 0.75) - linear_quantile(ordered, 0.25)
 
 
 def _average_absolute_deviation(values: Sequence[float]) -> float:

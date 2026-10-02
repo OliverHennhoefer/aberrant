@@ -2,23 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from aberrant.model.stat._univariate_base import _BaseMovingUnivariate
-
-
-def _linear_quantile(sorted_values: Sequence[float], quantile: float) -> float:
-    """Match NumPy's default linear interpolation for an already sorted sample."""
-    rank = (len(sorted_values) - 1) * quantile
-    lower_index = int(rank)
-    upper_index = min(lower_index + 1, len(sorted_values) - 1)
-    fraction = rank - lower_index
-    if lower_index == upper_index:
-        return float(sorted_values[lower_index])
-    return float(
-        (1 - fraction) * sorted_values[lower_index]
-        + fraction * sorted_values[upper_index]
-    )
+from aberrant.utils.statistics import linear_quantile
 
 
 class MovingMedian(_BaseMovingUnivariate):
@@ -31,8 +16,8 @@ class MovingMedian(_BaseMovingUnivariate):
         current = sorted(self.window)
         candidate = sorted([*current, self._extract_value(x)])
         return self._difference(
-            _linear_quantile(candidate, 0.5),
-            _linear_quantile(current, 0.5),
+            linear_quantile(candidate, 0.5),
+            linear_quantile(current, 0.5),
         )
 
     def __repr__(self) -> str:
@@ -54,13 +39,13 @@ class MovingQuantile(_BaseMovingUnivariate):
             raise ValueError("quantile must be between 0 and 1.")
         self.quantile = quantile
 
-    def _quantile(self, sorted_list: list[float]) -> float:
-        return _linear_quantile(sorted_list, self.quantile)
-
     def score_one(self, x: dict[str, float]) -> float:
         if not self.window:
             return 0.0
 
         current = sorted(self.window)
         candidate = sorted([*current, self._extract_value(x)])
-        return self._difference(self._quantile(candidate), self._quantile(current))
+        return self._difference(
+            linear_quantile(candidate, self.quantile),
+            linear_quantile(current, self.quantile),
+        )

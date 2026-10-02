@@ -894,6 +894,13 @@ _TRANSFORMER_SPECS = (
         _preserve_features,
     ),
     _transformer(
+        "rolling_robust_scaler",
+        "RollingRobustScaler",
+        "aberrant.transform.preprocessing",
+        "preprocessing",
+        _preserve_features,
+    ),
+    _transformer(
         "incremental_pca",
         "IncrementalPCA",
         "aberrant.transform.projection",

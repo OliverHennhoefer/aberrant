@@ -9,6 +9,10 @@ Semantic Versioning.
 
 ### Added
 
+- `RollingRobustScaler` with bounded per-feature median/IQR calibration,
+  readiness diagnostics, deviation-preserving zero-IQR fallback, explicit
+  freeze/unfreeze controls, transactional pipeline rollback, catalog support,
+  and a deterministic comparison of frozen and adaptive calibration.
 - `PrequentialEvaluator` with immutable per-event records and cumulative results,
   score-before-learn ordering, explicit warm-up/readiness and label-free learning
   policies, catalog construction/fingerprints, separate model-call timings, and
@@ -31,6 +35,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- Shared linear-quantile interpolation across rolling robust scaling and moving
+  statistics, preserving narrow-window IQRs and constant subnormal references.
 - Geometric and harmonic catalog warm-up now counts retained values, with the
   geometric minimum resolved from `absoluteValues`, so evaluation requires an
   explicit readiness policy instead of admitting warm-up sentinel scores.
