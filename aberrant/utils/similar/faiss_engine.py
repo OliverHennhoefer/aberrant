@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+from importlib import import_module
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 
 faiss: ModuleType | None
 try:
-    import faiss
+    faiss = import_module("faiss")
 except ModuleNotFoundError:  # pragma: no cover - exercised when optional extra missing
     faiss = None
 
