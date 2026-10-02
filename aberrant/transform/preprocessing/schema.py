@@ -1,6 +1,8 @@
 """Feature-schema validation for application input boundaries."""
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from copy import copy
 
 from aberrant.base.exceptions import ValidationError
 from aberrant.base.transformer import BaseTransformer
@@ -45,6 +47,16 @@ class FeatureSchemaGuard(BaseTransformer):
         """Validate an event and commit its schema after successful validation."""
         prepared = self._prepare(x)
         self._schema.commit(prepared)
+
+    @contextmanager
+    def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
+        """Restore the feature schema if a pipeline update fails."""
+        previous = copy(self._schema)
+        try:
+            yield
+        except BaseException:
+            self._schema = previous
+            raise
 
     def transform_one(self, x: dict[str, float]) -> dict[str, float]:
         """Validate and return an ordered, float-valued copy of an event."""

@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import NoReturn, overload
 
 from .exceptions import IncompatibleComponentError, PipelineError
-from .protocols import FeatureMap, ModelProtocol, TransformerProtocol
+from .protocols import (
+    FeatureMap,
+    ModelProtocol,
+    TransactionalTransformerProtocol,
+    TransformerProtocol,
+)
 
 
 class Pipeline:
@@ -96,11 +102,16 @@ class Pipeline:
 
     def learn_one(self, x: FeatureMap) -> None:
         """Learn from one sample using each prefix transformer's updated state."""
-        current = x
-        for transformer in self._prefix:
-            transformer.learn_one(current)
-            current = self._checked_transform(transformer, current)
-        self._terminal.learn_one(current)
+        with ExitStack() as transaction:
+            current = x
+            for transformer in self._prefix:
+                if isinstance(transformer, TransactionalTransformerProtocol):
+                    transaction.enter_context(transformer.learning_transaction(current))
+                transformer.learn_one(current)
+                current = self._checked_transform(transformer, current)
+            if isinstance(self._terminal, TransactionalTransformerProtocol):
+                transaction.enter_context(self._terminal.learning_transaction(current))
+            self._terminal.learn_one(current)
 
     def _transform_prefix(self, x: FeatureMap) -> FeatureMap:
         for transformer in self._prefix:

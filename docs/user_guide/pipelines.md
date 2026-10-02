@@ -31,6 +31,19 @@ This is a deliberate post-update contract. In contrast,
 component's `learn_one`. It therefore evaluates against transformer and model
 state learned from earlier events.
 
+All built-in transformers restore their learned state if a later stage rejects
+the event or transformation fails. For example, a model rejecting an unexpected
+feature count does not leave its upstream scaler trained on that rejected event.
+The terminal model remains responsible for its own failed-update behavior.
+
+Custom transformers can provide a `learning_transaction(event)` context manager to
+participate in this rollback contract, as described by
+`TransactionalTransformerProtocol`. The context keeps state on success and
+restores its snapshot when an exception leaves it. Snapshot only the state that
+learning this event can change to keep sparse updates efficient. Custom components without
+this optional method retain the normal sequential learning contract; external
+side effects are the component's responsibility.
+
 !!! important "Prequential order"
 
     When an evaluated event must not influence its own representation or

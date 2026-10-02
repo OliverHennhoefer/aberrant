@@ -1,5 +1,9 @@
 """Random projection transformer for dimensionality reduction."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from copy import copy
+
 import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
@@ -83,6 +87,16 @@ class RandomProjection(BaseTransformer):
             self.random_matrix = matrix
             self.n_dimensions = len(prepared.names)
         self._schema.commit(prepared)
+
+    @contextmanager
+    def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
+        """Restore schema and matrix initialization if a pipeline update fails."""
+        previous = copy(self._schema), self.random_matrix, self.n_dimensions
+        try:
+            yield
+        except BaseException:
+            self._schema, self.random_matrix, self.n_dimensions = previous
+            raise
 
     def transform_one(self, x: dict[str, float]) -> dict[str, float]:
         """

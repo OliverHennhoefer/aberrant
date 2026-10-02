@@ -1,5 +1,9 @@
 """Incremental Principal Component Analysis transformer."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from copy import copy
+
 import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
@@ -109,6 +113,30 @@ class IncrementalPCA(BaseTransformer):
         """Number of established input features."""
         return 0 if self._schema.names is None else len(self._schema.names)
 
+    @contextmanager
+    def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
+        """Restore PCA state if a pipeline update fails; arrays are replaced, not edited."""
+        previous = (
+            copy(self._schema),
+            self.window,
+            self.n0_reached,
+            self.n_samples_seen,
+            self.values,
+            self.vectors,
+        )
+        try:
+            yield
+        except BaseException:
+            (
+                self._schema,
+                self.window,
+                self.n0_reached,
+                self.n_samples_seen,
+                self.values,
+                self.vectors,
+            ) = previous
+            raise
+
     def _update_online_pca(self, data_vector: np.ndarray) -> None:
         """
         Update PCA components using online algorithm.
@@ -134,62 +162,12 @@ class IncrementalPCA(BaseTransformer):
         residual = x_scaled - self.vectors @ xhat
         norm_residual = float(np.linalg.norm(residual))
 
+        vectors = self.vectors
         if norm_residual > 0.0 and norm_residual >= self.tol:
-            lambda_updated, xhat = self._expand_subspace(
-                lambda_updated, xhat, residual, norm_residual
-            )
+            lambda_updated = np.append(lambda_updated, 0.0)
+            xhat = np.append(xhat, norm_residual)
+            vectors = np.column_stack((vectors, residual / norm_residual))
 
-        # Update eigendecomposition and store results
-        self._update_eigendecomposition(lambda_updated, xhat)
-
-    def _expand_subspace(
-        self,
-        lambda_updated: np.ndarray,
-        xhat: np.ndarray,
-        residual: np.ndarray,
-        norm_residual: float,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Expand subspace when residual is significant.
-
-        Args:
-            lambda_updated: Current eigenvalues.
-            xhat: Projected data point.
-            residual: Orthogonal residual.
-            norm_residual: Norm of the residual.
-
-        Returns:
-            Extended eigenvalues and projected data point.
-        """
-        k = len(lambda_updated) + 1
-
-        # Extend eigenvalues
-        lambda_extended = np.zeros(k)
-        lambda_extended[: len(lambda_updated)] = lambda_updated
-
-        # Extend projection
-        xhat_extended = np.zeros(k)
-        xhat_extended[: len(xhat)] = xhat
-        xhat_extended[-1] = norm_residual
-
-        # Extend vector matrix
-        U_extended = np.zeros((self.n_features, k))
-        U_extended[:, : self.vectors.shape[1]] = self.vectors
-        U_extended[:, -1] = residual / norm_residual
-
-        self.vectors = U_extended
-        return lambda_extended, xhat_extended
-
-    def _update_eigendecomposition(
-        self, lambda_updated: np.ndarray, xhat: np.ndarray
-    ) -> None:
-        """
-        Compute and apply eigendecomposition update.
-
-        Args:
-            lambda_updated: Updated eigenvalues.
-            xhat: Projected data point.
-        """
         # Compute eigendecomposition of updated covariance matrix
         matrix_to_decompose = np.diag(lambda_updated) + np.outer(xhat, xhat)
         eigenvalues, eigenvectors = np.linalg.eig(matrix_to_decompose)
@@ -204,9 +182,8 @@ class IncrementalPCA(BaseTransformer):
             eigenvalues = eigenvalues[: self.n_components]
             eigenvectors = eigenvectors[:, : self.n_components]
 
-        # Update stored values
-        self.values = eigenvalues
-        self.vectors = self.vectors @ eigenvectors
+        # Publish both arrays only after the entire decomposition succeeds.
+        self.values, self.vectors = eigenvalues, vectors @ eigenvectors
 
     def _initialize_pca(self, data_vector: np.ndarray) -> None:
         """

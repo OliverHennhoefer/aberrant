@@ -1,6 +1,7 @@
 """Behavioral contracts for typed online pipelines."""
 
 import pickle
+from contextlib import contextmanager
 
 import pytest
 
@@ -13,6 +14,14 @@ from aberrant.base import (
     Pipeline,
     TransformerPipeline,
     TransformerProtocol,
+)
+from aberrant.model.stat import MovingAverage
+from aberrant.transform import (
+    FeatureSchemaGuard,
+    IncrementalPCA,
+    MinMaxScaler,
+    RandomProjection,
+    StandardScaler,
 )
 
 
@@ -197,3 +206,110 @@ def test_concrete_pipeline_subclasses_preserve_their_type(base_type) -> None:
     )
     pipeline = CustomPipeline(_StatefulTransformer(), terminal)
     assert type(pipeline) is CustomPipeline
+
+
+@pytest.mark.parametrize("warm", [False, True])
+def test_terminal_rejection_restores_scaler_state(warm):
+    scaler = StandardScaler()
+    model = MovingAverage(window_size=3)
+    pipeline = scaler | model
+    clean = StandardScaler() | MovingAverage(window_size=3)
+    if warm:
+        pipeline.learn_one({"a": 1.0})
+        clean.learn_one({"a": 1.0})
+    before = pickle.dumps((scaler, model))
+
+    with pytest.raises(ValueError, match="exactly one"):
+        pipeline.learn_one({"a": 100.0, "b": 2.0})
+
+    assert pickle.dumps((scaler, model)) == before
+    pipeline.learn_one({"a": 3.0})
+    clean.learn_one({"a": 3.0})
+    assert pipeline.score_one({"a": 4.0}) == clean.score_one({"a": 4.0})
+
+
+@pytest.mark.parametrize(
+    ("factory", "mapping_names"),
+    [
+        (StandardScaler, ("counts", "means", "sum_sq_diffs")),
+        (MinMaxScaler, ("min", "max")),
+    ],
+)
+def test_rejected_update_preserves_scaler_mapping_references(factory, mapping_names):
+    scaler = factory()
+    pipeline = scaler | MovingAverage(window_size=3)
+    pipeline.learn_one({"a": 1.0})
+    previous = [
+        (name, getattr(scaler, name), dict(getattr(scaler, name)))
+        for name in mapping_names
+    ]
+    with pytest.raises(ValueError, match="exactly one"):
+        pipeline.learn_one({"a": 100.0, "b": 2.0})
+    for name, reference, values in previous:
+        assert getattr(scaler, name) is reference
+        assert reference == values
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        StandardScaler,
+        MinMaxScaler,
+        FeatureSchemaGuard,
+        lambda: RandomProjection(n_components=2, seed=42),
+        lambda: IncrementalPCA(n_components=2, n0=2),
+    ],
+)
+@pytest.mark.parametrize("warm", [False, True])
+def test_all_builtin_transformers_restore_after_downstream_rejection(factory, warm):
+    class RejectingModel(_RecordingModel):
+        def learn_one(self, x):
+            raise ValueError("rejected by terminal")
+
+    transformer = factory()
+    sample = {"a": 1.0, "b": 2.0}
+    if warm:
+        transformer.learn_one(sample)
+        transformer.learn_one({"a": 2.0, "b": 1.0})
+    before = pickle.dumps(transformer)
+    pipeline = transformer | RejectingModel()
+
+    with pytest.raises(ValueError, match="rejected by terminal"):
+        pipeline.learn_one(sample)
+
+    assert pickle.dumps(transformer) == before
+
+
+def test_transformer_rejection_restores_upstream_state():
+    scaler = StandardScaler()
+    pipeline = scaler | RandomProjection(n_components=2, seed=42)
+    before = pickle.dumps(pipeline)
+    with pytest.raises(ValueError, match="number of features"):
+        pipeline.learn_one({"a": 1.0})
+    assert pickle.dumps(pipeline) == before
+    pipeline.learn_one({"a": 1.0, "b": 2.0})
+    assert scaler.counts == {"a": 1, "b": 1}
+
+
+def test_custom_transformer_can_opt_into_learning_transactions():
+    class Transactional(_StatefulTransformer):
+        @contextmanager
+        def learning_transaction(self, x):
+            previous = self.state, self.learned.copy(), self.transformed.copy()
+            try:
+                yield
+            except BaseException:
+                self.state, self.learned, self.transformed = previous
+                raise
+
+    class RejectingModel(_RecordingModel):
+        def learn_one(self, x):
+            raise ValueError("rejected by terminal")
+
+    transformer = Transactional()
+    pipeline = transformer | RejectingModel()
+    with pytest.raises(ValueError):
+        pipeline.learn_one({"x": 1.0})
+    assert transformer.state == 0.0
+    assert transformer.learned == []
+    assert transformer.transformed == []
