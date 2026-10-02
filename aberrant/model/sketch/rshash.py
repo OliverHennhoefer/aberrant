@@ -110,7 +110,6 @@ class StreamingRSHash(BaseModel):
 
         self._samples_seen: int = 0
         self._scale: float = 1.0
-        self._last_learned_time: float | None = None
 
     def reset(self) -> None:
         """Reset learned state while keeping hyperparameters."""
@@ -193,46 +192,11 @@ class StreamingRSHash(BaseModel):
         delta2 = vector - self._mean
         self._m2 += delta * delta2
 
-    def _renormalize_counts(self) -> None:
-        if self._counts is None:
-            return
-        if self._scale <= 0.0:
-            raise RuntimeError("Internal scale must be positive")
-
-        self._counts *= self._scale
-        self._scale = 1.0
-
-    def _apply_decay(self, current_time: float) -> None:
-        if self._last_learned_time is None:
-            self._last_learned_time = current_time
-            return
-
-        delta = current_time - self._last_learned_time
-        if delta < 0.0:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {current_time}, "
-                f"current {self._last_learned_time}"
-            )
-
-        if delta > 0.0 and self.decay > 0.0:
-            self._scale *= float(np.exp(-self.decay * delta))
-            if self._scale < self._scale_renorm_threshold:
-                self._renormalize_counts()
-
-        self._last_learned_time = current_time
-
-    def _query_scale(self, current_time: float) -> float:
-        if self._last_learned_time is None:
+    def _preview_scale(self, current_time: float) -> float:
+        """Preview fading relative to the boundary's last committed timestamp."""
+        if self._samples_seen == 0 or self.decay == 0.0:
             return self._scale
-
-        delta = current_time - self._last_learned_time
-        if delta < 0.0:
-            raise ValueError(
-                f"Non-monotonic timestamp: received {current_time}, "
-                f"current {self._last_learned_time}"
-            )
-        if delta == 0.0 or self.decay == 0.0:
-            return self._scale
+        delta = current_time - self._boundary.clock.max_time
         return self._scale * float(np.exp(-self.decay * delta))
 
     def _bucket_indices(self, normalized: np.ndarray) -> np.ndarray:
@@ -294,15 +258,19 @@ class StreamingRSHash(BaseModel):
         vector = event.features.values
 
         self._initialize_hash_state(n_features=vector.shape[0])
-        self._apply_decay(current_time)
-
         normalized = self._normalize(vector)
         buckets = self._bucket_indices(normalized)
+        scale = self._preview_scale(current_time)
 
         if self._counts is None:
             raise RuntimeError("Count sketch is not initialized")
-        if self._scale <= 0.0:
-            raise RuntimeError("Internal scale must be positive")
+
+        # Materialize small scales before insertion. Underflow means complete
+        # forgetting, so zero the old counts and start again at unit scale.
+        if scale < self._scale_renorm_threshold:
+            self._counts *= scale
+            scale = 1.0
+        self._scale = scale
 
         increment = 1.0 / self._scale
         for component in range(self.components_num):
@@ -327,7 +295,7 @@ class StreamingRSHash(BaseModel):
         vector = event.features.values
         normalized = self._normalize(vector)
         buckets = self._bucket_indices(normalized)
-        query_scale = self._query_scale(current_time)
+        query_scale = self._preview_scale(current_time)
         return float(max(0.0, self._score_buckets(buckets, query_scale)))
 
     def __repr__(self) -> str:
