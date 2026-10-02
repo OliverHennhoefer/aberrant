@@ -12,6 +12,8 @@ not learn.
 
 ::: aberrant.transform.preprocessing.StandardScaler
 
+::: aberrant.transform.preprocessing.RollingRobustScaler
+
 ## Projection
 
 ::: aberrant.transform.projection.IncrementalPCA

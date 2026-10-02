@@ -7,6 +7,13 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `RollingRobustScaler` with bounded per-feature median/IQR calibration,
+  readiness diagnostics, deviation-preserving zero-IQR fallback, explicit
+  freeze/unfreeze controls, transactional pipeline rollback, catalog support,
+  and a deterministic comparison of frozen and adaptive calibration.
+
 ### Changed
 
 - Unified the bounded radius-neighbor detectors and ISCONNA's preview/learning

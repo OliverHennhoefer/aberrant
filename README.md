@@ -191,6 +191,11 @@ for lifecycle and composition rules.
 
 ## Application integration
 
+`RollingRobustScaler` adds exact median/IQR scaling over bounded recent
+feature windows. Its `freeze()` and `unfreeze()` controls make calibration
+updates explicit; see the [transformer guide](https://oliverhennhoefer.github.io/aberrant/user_guide/transformers/)
+for readiness, zero-IQR behavior, and downstream coordinate considerations.
+
 The built-in catalog makes model facts and construction available to services,
 configuration UIs, and deployment tooling without duplicating import paths or
 warm-up formulas:

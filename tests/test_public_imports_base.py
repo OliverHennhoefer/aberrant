@@ -62,6 +62,7 @@ from aberrant.stream.dataset import BatchStreamer, NpzStreamer
 from aberrant.transform.preprocessing import (
     FeatureSchemaGuard,
     MinMaxScaler,
+    RollingRobustScaler,
     StandardScaler,
 )
 from aberrant.transform.projection import IncrementalPCA, RandomProjection
@@ -122,6 +123,10 @@ def test_public_imports_base_smoke() -> None:
     assert load is not None
     assert BatchStreamer is not None
     assert NpzStreamer is not None
+
+
+def test_rolling_robust_scaler_public_import() -> None:
+    assert RollingRobustScaler is not None
 
 
 def test_removed_compatibility_exports_stay_removed() -> None:

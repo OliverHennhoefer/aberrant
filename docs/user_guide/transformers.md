@@ -8,12 +8,14 @@ can precede another transformer or one terminal model in a pipeline.
 
 | Transformer | Learned state | Output | Important semantics |
 | --- | --- | --- | --- |
+| `FeatureSchemaGuard` | Configured or first-learned feature schema | Same keys and values in schema order | Rejects invalid values or a changed feature set |
 | `MinMaxScaler` | Per-feature running minimum and maximum | Same keys, values mapped to `feature_range` | A value outside the learned extrema can transform outside the requested range; a constant learned feature maps to the lower bound |
 | `StandardScaler` | Per-feature count, mean, and population variance accumulator | Same keys, centered values and optionally population-standardized values | A feature with zero learned variance maps to `0.0`; `with_std=False` centers without scaling |
+| `RollingRobustScaler` | Per-feature recent window, median, and interquartile range | Same keys, median-centered and IQR-scaled values | Exact linearly interpolated quartiles; zero IQR uses `fallback_scale` to preserve deviations; calibration can be frozen |
 | `IncrementalPCA` | Warm-up SVD followed by an incremental uncentered subspace | `component_0` through `component_{n_components - 1}` | Returns zero components until `n0` events; inputs are projected around the origin, not around an internally learned mean |
 | `RandomProjection` | One seeded sparse Achlioptas projection matrix | `component_0` through `component_{n_components - 1}` | `learn_one` establishes the schema and matrix once; later calls do not fit distributional parameters |
 
-All four reject non-numeric or non-finite values before updating their
+All built-in transformers reject non-numeric or non-finite values before updating their
 persistent state.
 
 ## Scaling one stream
@@ -41,6 +43,64 @@ print(transformed)
 `transform_one` does not update the learned moments. If the candidate should
 affect scaling, call `learn_one` first; that is exactly what
 `Pipeline.learn_one` does.
+
+## Robust recent-window calibration
+
+`RollingRobustScaler(window_size=256, min_samples=1, fallback_scale=1.0)`
+retains at most `window_size` observations per feature and computes
+`(value - median) / (Q3 - Q1)`. Quartiles interpolate linearly at
+`(n - 1) * q`. A zero IQR uses `fallback_scale` instead: a constant reference
+of `10.0` with the default fallback maps a candidate of `13.0` to `3.0`.
+There is no clipping or normalization to `[0, 1]`.
+
+Missing features do not advance their own windows. `sample_counts` returns a
+detached snapshot of retained counts, and `is_ready` becomes true when every
+learned feature has `min_samples` observations. An empty scaler is unready;
+introducing a new feature can make it unready again. Use `FeatureSchemaGuard`
+when the set of features must remain fixed. Transformations use provisional
+statistics during warm-up, so a pipeline can accumulate history normally;
+exclude that warm-up from evaluation explicitly.
+
+Adaptive calibration follows recent data. Freeze a ready scaler before fitting
+a downstream reference model when a fixed coordinate system is required:
+
+```python
+from aberrant.transform import RollingRobustScaler
+
+adaptive = RollingRobustScaler(window_size=5, min_samples=5)
+frozen = RollingRobustScaler(window_size=5, min_samples=5)
+for value in [0, 2, 4, 6, 8]:
+    adaptive.learn_one({"x": float(value)})
+    frozen.learn_one({"x": float(value)})
+frozen.freeze()
+
+for value in [10, 12, 14, 16, 18]:
+    adaptive.learn_one({"x": float(value)})
+    frozen.learn_one({"x": float(value)})
+
+assert adaptive.transform_one({"x": 18.0}) == {"x": 1.0}
+assert frozen.transform_one({"x": 18.0}) == {"x": 3.5}
+```
+
+Frozen learning still validates finite input and rejects unseen features.
+`unfreeze()` resumes rolling updates from the retained window; `reset()` clears
+all calibration and unfreezes while retaining constructor parameters.
+
+Changing scaler coordinates does not re-express the points, tree boundaries,
+or parameters already retained by a downstream model. Rebuild or recalibrate
+that model under application control when needed. The example compares
+representations, not detection accuracy. Pipeline scoring uses prior scaler
+state; pipeline learning passes the same event through its post-update
+representation, as for the other scalers.
+
+For `F` supplied features, window size `W`, and `D` distinct learned feature
+names, adaptive learning costs `O(F W log W)`, transformation costs `O(F)`,
+and persistent storage is `O(D W)`. Statistics are cached during learning.
+Frozen learning costs `O(F)`. Updates validate and stage the entire event;
+non-finite statistics or output are rejected. Pipeline rollback restores
+evicted observations and removes newly introduced feature state after a later
+stage rejects an event. See the standalone
+[frozen/adaptive example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/rolling_robust_scaler.py).
 
 ## Projection schemas
 
