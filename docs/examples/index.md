@@ -67,6 +67,7 @@ rows are a scientifically meaningful graph benchmark.
 | [`autoencoder.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/autoencoder.py) | User-supplied PyTorch architecture and optimizer | `aberrant[dl,eval]` and registered SHUTTLE dataset |
 | [`knn.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/knn.py) | FAISS-backed KNN distance | `aberrant[faiss,eval]` and registered SHUTTLE dataset |
 | [`pipeline.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/pipeline.py) | Scaler/KNN versus scaler/PCA/KNN | `aberrant[faiss,eval]` and registered SHUTTLE dataset |
+| [`prequential_evaluation.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/prequential_evaluation.py) | Fresh configured detectors on the same ordered stream, with metrics and score/update timings | `aberrant[eval]`; seeded synthetic stream |
 
 Read each script's warm-up and learning policy before comparing its metrics.
 Several demonstrations intentionally warm up only on labeled-normal rows; that

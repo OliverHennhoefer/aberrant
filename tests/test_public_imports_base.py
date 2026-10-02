@@ -23,6 +23,7 @@ from aberrant.base import (
 )
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
+from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
 from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
 from aberrant.model.distance import (
     KNN,
@@ -63,6 +64,7 @@ from aberrant.stream.dataset import BatchStreamer, NpzStreamer
 from aberrant.transform.preprocessing import (
     FeatureSchemaGuard,
     MinMaxScaler,
+    RollingRobustScaler,
     StandardScaler,
 )
 from aberrant.transform.projection import IncrementalPCA, RandomProjection
@@ -124,6 +126,16 @@ def test_public_imports_base_smoke() -> None:
     assert load is not None
     assert BatchStreamer is not None
     assert NpzStreamer is not None
+
+
+def test_rolling_robust_scaler_public_import() -> None:
+    assert RollingRobustScaler is not None
+
+
+def test_evaluation_public_imports_base_smoke() -> None:
+    assert EvaluationRecord is not None
+    assert EvaluationResult is not None
+    assert PrequentialEvaluator is not None
 
 
 def test_removed_compatibility_exports_stay_removed() -> None:

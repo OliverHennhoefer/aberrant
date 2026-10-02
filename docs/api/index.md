@@ -13,6 +13,7 @@ public methods, properties, return types, and model-specific caveats. Use the
 - [Transformers](transform.md)
 - [Drift detectors](drift.md)
 - [Dataset registry, cache, and streams](stream.md)
+- [Prequential evaluation](evaluate.md)
 
 Objects exported from the documented package `__init__.py` files are public.
 Private names beginning with `_` are implementation details. Optional
