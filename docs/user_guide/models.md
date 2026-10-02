@@ -14,6 +14,7 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Fixed-size projection/frequency state | `StreamingLODA`, `MStream`, or `StreamingRSHash` | Memory is controlled by projection, histogram, or sketch dimensions |
 | Dynamic edges | `MIDAS`, `ISCONNA`, `AnoEdgeL`, or `SignedGraphSketchDetector` | Models repeated edges, endpoint patterns, dense submatrices, or graph-level structure |
 | Scalar time-series discords | `RollingMatrixProfile` or `XLagDAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
+| Departures from a known seasonal forecast | `SeasonalResidualDetector` | Scores one-step-ahead errors from additive level, trend, and seasonal components |
 | Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
 | Interpretable local statistic change | `aberrant.model.stat` | Measures candidate-induced changes in means, spread, moments, covariance, or correlation |
 | Learned reconstruction error | `OnlineAutoencoderEnsemble` or optional `Autoencoder` | Uses NumPy or user-supplied PyTorch autoencoders |
@@ -192,6 +193,66 @@ Primary references are linked from each class, including
 [ISCONNA](https://arxiv.org/abs/2104.01632),
 [AnoGraph/AnoEdge](https://doi.org/10.1145/3580305.3599273), and
 [StreamSpot](https://doi.org/10.1145/2939672.2939783).
+
+### Seasonal forecast residuals
+
+`SeasonalResidualDetector` scores an observation against its expected value for
+the current seasonal position. It supports one consistently named feature,
+additive seasonality, and a known period at a fixed sampling cadence. For hourly
+data with a daily cycle, set `season_length=24`.
+
+```python
+from aberrant.model.timeseries import SeasonalResidualDetector
+
+detector = SeasonalResidualDetector(season_length=4, key="requests", min_scale=1.0)
+for value in [10.0, 20.0, 15.0, 5.0] * 3:
+    event = {"requests": value}
+    score, forecast, residual = detector.explain_one(event)
+    if detector.is_ready:
+        print(score, forecast, residual)
+    detector.learn_one(event)
+```
+
+The first `2 * season_length` learned events initialize the components. Before
+readiness, `score_one` returns `0.0` and `explain_one` returns
+`(0.0, None, None)`. Each cycle's mean defines its midpoint level; the difference
+between cycle means divided by the period estimates trend. The average
+detrended value at each seasonal position defines seasonality, and the second
+cycle's midpoint level is advanced to its final position. Initialization is
+deterministic and uses only learned observations.
+
+Thereafter, the prior forecast is `level + trend + season[phase]`. Learning
+updates level from the seasonally adjusted observation, trend from the level
+change, and that phase's seasonal component from the observation minus the
+**prior** level and trend. The `alpha`, `beta`, and `gamma` parameters follow
+the [additive Holt-Winters component equations](https://otexts.com/fpp3/holt-winters.html);
+`beta` denotes beta-star and `gamma` must be at most `1-alpha`. Smoothing weights
+are supplied by the caller, with no parameter optimization.
+
+The default score is absolute forecast error divided by the previously learned
+mean absolute error, floored at `min_scale`. Warm-up initializes this scale from
+its fitted errors; later updates smooth actual prior forecast errors using
+`residual_alpha`. Choose `min_scale` in the feature's units for nearly noiseless
+series. This is an error ratio, with no probability interpretation or fixed
+upper bound. Set `normalize=False` for absolute error in input units.
+`explain_one` returns `(score, forecast, signed_residual)`; a negative residual
+identifies an unexpectedly low observation. All scoring calls are read-only.
+
+Every successful `learn_one` advances one seasonal position, even without a
+preceding score. Learn every observation at the intended cadence: skipping an
+anomaly update would also skip its position. Learning anomalies can change both
+the forecast and residual scale. Fill missing observations upstream; this model
+does not inspect timestamps or infer gaps. Use consistent input units, since
+an adaptive upstream scaler changes the coordinates of its retained forecast.
+It does not discover seasonal periods or support multiple simultaneous cycles.
+
+State and initialization work are `O(season_length)`; steady scoring and learning
+are `O(1)`. `reset` clears learned state and any inferred name while preserving
+an explicitly configured `key`. Invalid events and unrepresentable arithmetic
+leave learned state unchanged; the latter raises `OverflowError`.
+The catalog ID is `seasonal_residual_detector`. The
+[seeded example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/seasonal_residual.py)
+shows a low observation that is ordinary at another seasonal position.
 
 ### Time-series discord detection
 

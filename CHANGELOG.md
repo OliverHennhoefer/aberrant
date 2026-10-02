@@ -9,6 +9,10 @@ Semantic Versioning.
 
 ### Added
 
+- Core-only `SeasonalResidualDetector` with additive Holt-Winters forecasts,
+  causal raw/scaled residual scores and explanations, two-cycle initialization,
+  bounded seasonal state, reset/readiness, catalog construction, and a seeded
+  fixed-cadence example.
 - `RollingRobustScaler` with bounded per-feature median/IQR calibration,
   readiness diagnostics, deviation-preserving zero-IQR fallback, explicit
   freeze/unfreeze controls, transactional pipeline rollback, catalog support,

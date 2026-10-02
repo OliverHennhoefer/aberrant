@@ -27,7 +27,8 @@ Model documentation is split by event structure and method family.
 
 -   **[Time series](timeseries.md)**
 
-    Exact rolling matrix-profile scores and X-Lag Amnesic DAMP.
+    Seasonal forecast residuals, exact rolling matrix-profile scores, and
+    X-Lag Amnesic DAMP.
 
 -   **[Statistical models](stat.md)**
 
