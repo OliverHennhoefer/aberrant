@@ -31,6 +31,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- Shared linear-quantile interpolation across rolling robust scaling and moving
+  statistics, preserving narrow-window IQRs and constant subnormal references.
 - Prevented RSHash decay underflow from poisoning subsequent learning.
 - Kept radius-neighbor cell candidates consistent with distance tolerances.
 - Matched autoencoder input tensors to the supplied module's device and dtype.

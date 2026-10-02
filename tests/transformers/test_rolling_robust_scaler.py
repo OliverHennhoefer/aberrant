@@ -36,6 +36,24 @@ def test_exact_linear_quartiles_match_numpy(length: int) -> None:
     assert scaler.transform_one({"x": 3.0})["x"] == pytest.approx((3 - median) / scale)
 
 
+@pytest.mark.parametrize(
+    ("reference", "candidate", "expected"),
+    [
+        ([1.5000000000000004, 1.5000000000000007], 1.500000000000001, 3.0),
+        ([1e-323, 1.5e-323], 2e-323, 2.0),
+        ([5e-324, 1e-323], 1.5e-323, 1.0),
+    ],
+)
+def test_narrow_nonconstant_windows_keep_their_iqr(
+    reference: list[float], candidate: float, expected: float
+) -> None:
+    scaler = RollingRobustScaler(window_size=2)
+    for value in reference:
+        scaler.learn_one({"x": value})
+
+    assert scaler.transform_one({"x": candidate}) == {"x": expected}
+
+
 def test_outlier_does_not_dominate_the_reference_scale() -> None:
     scaler = RollingRobustScaler(window_size=8)
     for value in [0, 1, 2, 3, 4, 5, 6, 1_000_000]:

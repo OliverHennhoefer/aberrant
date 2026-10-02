@@ -5,17 +5,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from aberrant.base.transformer import BaseTransformer
+from aberrant.utils.statistics import linear_quantile
 from aberrant.utils.validation import coerce_feature_values, coerce_finite_number
-
-
-def _quantile(ordered: list[float], probability: float) -> float:
-    """Linearly interpolate sorted values without overflowing their difference."""
-    position = (len(ordered) - 1) * probability
-    lower = int(position)
-    fraction = position - lower
-    if fraction == 0.0 or ordered[lower] == ordered[lower + 1]:
-        return ordered[lower]
-    return (1.0 - fraction) * ordered[lower] + fraction * ordered[lower + 1]
 
 
 class RollingRobustScaler(BaseTransformer):
@@ -134,8 +125,8 @@ class RollingRobustScaler(BaseTransformer):
         for feature, value in values.items():
             window = (*self._windows.get(feature, ()), value)[-self.window_size :]
             ordered = sorted(window)
-            median = _quantile(ordered, 0.5)
-            iqr = _quantile(ordered, 0.75) - _quantile(ordered, 0.25)
+            median = linear_quantile(ordered, 0.5)
+            iqr = linear_quantile(ordered, 0.75) - linear_quantile(ordered, 0.25)
             if not math.isfinite(median) or not math.isfinite(iqr):
                 raise ValueError(f"Feature '{feature}' median and IQR must be finite")
             windows[feature] = window
