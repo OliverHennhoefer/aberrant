@@ -25,9 +25,15 @@ def test_fixed_cadence_seasonal_drop_is_explained_and_recovery_continues():
         }
     ).build()
     scores = []
-    for value in values:
+    for index, value in enumerate(values):
         event = {"requests": float(value)}
         scores.append(model.score_one(event))
+        if index == anomaly_index:
+            score, forecast, residual = model.explain_one(event)
+            assert score == scores[-1]
+            assert forecast is not None and residual is not None
+            assert residual < -25.0
+            assert np.isclose(value - forecast, residual)
         model.learn_one(event)
     scores = np.asarray(scores)
     assert np.all(np.isfinite(scores))

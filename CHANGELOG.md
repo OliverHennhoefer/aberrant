@@ -31,8 +31,6 @@ Semantic Versioning.
 
 ### Fixed
 
-- Preserved representable seasonal initialization and updates at float extremes
-  with accurate cycle means and residual-based component corrections.
 - Prevented RSHash decay underflow from poisoning subsequent learning.
 - Kept radius-neighbor cell candidates consistent with distance tolerances.
 - Matched autoencoder input tensors to the supplied module's device and dtype.

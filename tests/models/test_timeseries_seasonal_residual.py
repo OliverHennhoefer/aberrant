@@ -268,7 +268,7 @@ def test_catalog_contract_declarative_build_and_pipeline_scoring():
     ).build()
     pipeline = FeatureSchemaGuard(features=["value"]) | model
     _learn(pipeline, (1, 2, 1, 2))
-    assert pipeline.score_one({"value": 1.0}) == 0.0
+    assert pipeline.score_one({"value": 3.0}) == pytest.approx(2e6)
 
 
 def test_seasonal_deviation_exceeds_seeded_normal_errors():
