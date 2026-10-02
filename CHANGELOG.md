@@ -7,6 +7,13 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `PrequentialEvaluator` with immutable per-event records and cumulative results,
+  score-before-learn ordering, explicit warm-up/readiness and label-free learning
+  policies, catalog construction/fingerprints, separate model-call timings, and
+  optional bounded-window or exact full-stream ranking metrics.
+
 ### Changed
 
 - Unified the bounded radius-neighbor detectors and ISCONNA's preview/learning

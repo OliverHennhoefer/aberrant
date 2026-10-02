@@ -11,6 +11,89 @@ Install the metric dependency with `aberrant[eval]`:
 python -m pip install "aberrant[eval]"
 ```
 
+## Stateful evaluator
+
+`PrequentialEvaluator` owns the score-before-learn loop. Pass a structural model
+or a `DetectorConfig`; configurations construct fresh models and record the
+normalized configuration, including seeds, and its fingerprint in each result.
+
+```python
+from aberrant.catalog import ComponentConfig, DetectorConfig
+from aberrant.evaluate import PrequentialEvaluator
+
+config = DetectorConfig(
+    model=ComponentConfig("online_isolation_forest", {"seed": 42}),
+    transformers=(ComponentConfig("standard_scaler"),),
+)
+evaluator = PrequentialEvaluator(
+    config, warmup=64, metrics=True, metric_window_size=1000,
+)
+
+# Substitute any ordered iterable of (feature dictionary, binary label).
+events = [({"temperature": float(i % 7)}, int(i == 79)) for i in range(100)]
+for record in evaluator.iter_evaluate(events):
+    if record.score is not None:
+        print(record.index, record.label, record.score)
+
+result = evaluator.result()
+print(result.average_precision, result.roc_auc, result.config_fingerprint)
+```
+
+Warm-up counts **successful learning calls**, not arrivals. Excluded events have
+`score=None` and an explicit `"warmup"` or `"not_ready"` reason. Their labels do
+not enter metrics. The readiness callback inspects prior model state before the
+candidate is scored. For a standalone SDOStream configuration, import
+`SDOStream` from `aberrant.model.distance` and use
+`readiness=lambda model: isinstance(model, SDOStream) and model.n_observers >= 6`
+for its default neighbor count instead of counting observer readiness as
+arrivals. A configured detector without transformers uses catalog warm-up
+automatically when it is expressed in events. Other units, unknown warm-up, and
+transformer pipelines require an explicit warm-up or readiness policy. Existing
+model instances default to zero evaluator warm-up; their caller supplies any
+required calibration or readiness policy.
+
+Labels must be binary numeric values (normal `0`, anomaly `1`), booleans, or
+`None` for unknown. NumPy scalars are accepted. Labels are supplied only to
+metrics and records; the model receives only feature dictionaries. The default
+policy learns every event, including evaluated anomalies. An optional
+`learn_filter(event, score)` can skip learning without using labels. Its score
+is `None` during exclusion, and its descriptive `learn_policy_name` is recorded.
+Readiness and learning callbacks must return Python booleans and readiness must
+not update the model.
+
+Metrics are disabled by default, so the base install can still produce traces,
+counters and timings. `metrics=True` loads scikit-learn from the `eval` extra.
+The default metric window holds the latest 1000 **labeled, scored events** and
+results report its size and prevalence separately from cumulative prevalence.
+Set `metric_window_size=None` explicitly for exact full-stream ranking metrics;
+this retains all labeled scores and uses `O(n)` memory. A finite window uses
+`O(window_size)` retention. AP is `None` when no positive labels are present;
+ROC AUC is `None` unless both classes are present. Raw trace scores preserve the
+model's scale; metrics honor `higher_is_more_anomalous`, resolved from catalog
+metadata when available. Unknown catalog orientation requires an explicit
+choice; existing model instances default to higher-is-more-anomalous.
+
+Records are yielded as events are processed and never retained by the evaluator.
+Write them to a file or another sink when a full trace is needed. Results include
+separate cumulative score and learn call durations in nanoseconds; divide by
+`n_scored` and `n_learned` respectively for means. Timings exclude validation,
+callback and metric work. Peak process memory and tail latency require external
+benchmark instrumentation. Computing a result evaluates metrics on the retained
+window and does not call the model.
+
+`update`, `iter_evaluate`, and `evaluate` continue the same evaluator and model
+state; `evaluate` consumes a stream and returns a cumulative result. Create a
+fresh evaluator for each comparison. Existing models are never reset or cloned,
+and datasets are never reordered. Record dataset identity/order and callback
+implementations alongside the result; a config fingerprint identifies model
+construction, not the entire experiment. Model errors propagate without
+advancing evaluator statistics, but model rollback depends on the model itself.
+Do not retry a failed update unless that model's state is known to be recoverable.
+
+The [seeded example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/prequential_evaluation.py)
+compares fresh models using the same ordered stream and learning policy. See
+the [Evaluation API](../api/evaluate.md) for signatures and result fields.
+
 ## Complete offline evaluation
 
 This program uses a clean synthetic warm-up, then evaluates a chronologically

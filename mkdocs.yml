@@ -57,6 +57,7 @@ nav:
     - Transform: api/transform.md
     - Drift: api/drift.md
     - Stream Datasets: api/stream.md
+    - Evaluation: api/evaluate.md
   - Contributing: contributing.md
   - Changelog: changelog.md
 
