@@ -55,6 +55,8 @@ behind a batch-estimator abstraction.
   score thresholds.
 - **Run repeatable experiments** with registry-backed benchmark streams and a
   validated local dataset cache.
+- **Compare streaming detectors** with a catalog-aware `PrequentialEvaluator`,
+  explicit warm-up, bounded metric windows, and separate score/update timings.
 - **Extend without framework coupling** through typed, structural transformer
   and model protocols. The distribution includes `py.typed` metadata.
 

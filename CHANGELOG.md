@@ -13,6 +13,10 @@ Semantic Versioning.
   readiness diagnostics, deviation-preserving zero-IQR fallback, explicit
   freeze/unfreeze controls, transactional pipeline rollback, catalog support,
   and a deterministic comparison of frozen and adaptive calibration.
+- `PrequentialEvaluator` with immutable per-event records and cumulative results,
+  score-before-learn ordering, explicit warm-up/readiness and label-free learning
+  policies, catalog construction/fingerprints, separate model-call timings, and
+  optional bounded-window or exact full-stream ranking metrics.
 
 ### Changed
 
@@ -33,6 +37,11 @@ Semantic Versioning.
 
 - Shared linear-quantile interpolation across rolling robust scaling and moving
   statistics, preserving narrow-window IQRs and constant subnormal references.
+- Geometric and harmonic catalog warm-up now counts retained values, with the
+  geometric minimum resolved from `absoluteValues`, so evaluation requires an
+  explicit readiness policy instead of admitting warm-up sentinel scores.
+- Prequential evaluation rejects complex labels before scoring or learning,
+  including NumPy complex scalars that previously lost their imaginary part.
 - Prevented RSHash decay underflow from poisoning subsequent learning.
 - Kept radius-neighbor cell candidates consistent with distance tolerances.
 - Matched autoencoder input tensors to the supplied module's device and dtype.

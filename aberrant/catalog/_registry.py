@@ -47,8 +47,10 @@ def _events(count: int | None) -> WarmupRequirement:
     return WarmupRequirement(count, WarmupUnit.EVENTS)
 
 
-def _fixed_warmup(count: int) -> Callable[[Parameters], WarmupRequirement]:
-    return lambda _params: _events(count)
+def _fixed_warmup(
+    count: int, unit: WarmupUnit = WarmupUnit.EVENTS
+) -> Callable[[Parameters], WarmupRequirement]:
+    return lambda _params: WarmupRequirement(count, unit)
 
 
 def _parameter_warmup(name: str) -> Callable[[Parameters], WarmupRequirement]:
@@ -283,10 +285,15 @@ def _matrix_profile_warmup(params: Parameters) -> WarmupRequirement:
     return _events(length + zone)
 
 
+def _geometric_warmup(params: Parameters) -> WarmupRequirement:
+    minimum = 3 if bool(params.get("absoluteValues", False)) else 2
+    return WarmupRequirement(minimum, WarmupUnit.RETAINED_VALUES)
+
+
 def _moving_capabilities(
     feature_count: FeatureCount,
     *,
-    warmup: int,
+    warmup: int | Callable[[Parameters], WarmupRequirement],
 ) -> Callable[[Parameters], ModelCapabilities]:
     return _capabilities(
         event_kind=(
@@ -296,7 +303,7 @@ def _moving_capabilities(
         ),
         feature_count=feature_count,
         score_kind=_difference_score,
-        warmup=_fixed_warmup(warmup),
+        warmup=_fixed_warmup(warmup) if isinstance(warmup, int) else warmup,
         state=StateKind.BOUNDED,
         resettable=False,
         higher_is_more_anomalous=_difference_orientation,
@@ -694,8 +701,6 @@ _MODEL_SPECS = (
         for component_id, class_name in (
             ("moving_average", "MovingAverage"),
             ("moving_average_absolute_deviation", "MovingAverageAbsoluteDeviation"),
-            ("moving_geometric_average", "MovingGeometricAverage"),
-            ("moving_harmonic_average", "MovingHarmonicAverage"),
             ("moving_interquartile_range", "MovingInterquartileRange"),
             ("moving_kurtosis", "MovingKurtosis"),
             ("moving_median", "MovingMedian"),
@@ -703,6 +708,22 @@ _MODEL_SPECS = (
             ("moving_skewness", "MovingSkewness"),
             ("moving_variance", "MovingVariance"),
         )
+    ),
+    _model(
+        "moving_geometric_average",
+        "MovingGeometricAverage",
+        "aberrant.model.stat",
+        "statistical",
+        _moving_capabilities(ONE_FEATURE, warmup=_geometric_warmup),
+    ),
+    _model(
+        "moving_harmonic_average",
+        "MovingHarmonicAverage",
+        "aberrant.model.stat",
+        "statistical",
+        _moving_capabilities(
+            ONE_FEATURE, warmup=_fixed_warmup(1, WarmupUnit.RETAINED_VALUES)
+        ),
     ),
     _model(
         "moving_correlation_coefficient",
