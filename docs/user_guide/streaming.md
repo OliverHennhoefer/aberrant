@@ -61,6 +61,11 @@ columns are exposed as `feature_0`, `feature_1`, and so on unless
 `feature_prefix` is changed. Labels preserve the scalar type stored in the NPZ
 file and are therefore typed as `object`.
 
+Row-wise iteration materializes the complete feature and label arrays from the
+NPZ archive. Memory therefore scales with artifact size; this benchmark reader
+is not an out-of-core source. For unbounded inputs, supply a lazy `DatasetStream`
+to `BatchStreamer` or an event iterable directly to `PrequentialEvaluator`.
+
 Each `stream()` invocation owns a separate archive, so iterators from the same
 streamer can be interleaved safely. Exhaust the iterator or call its `close()`
 method when stopping early to release the archive promptly. Explicit `with

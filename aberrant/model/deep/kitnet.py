@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,6 +14,32 @@ from aberrant.utils.validation import FeatureSchema
 _PHASE_FEATURE_MAP = "feature_map_warmup"
 _PHASE_DETECTOR = "detector_warmup"
 _PHASE_READY = "ready"
+
+
+def _finite_array(values: np.ndarray, label: str) -> np.ndarray:
+    if not np.all(np.isfinite(values)):
+        raise OverflowError(f"Autoencoder {label} exceeds the float64 range")
+    return values
+
+
+def _rmse(error: np.ndarray) -> float:
+    """Avoid squaring unscaled residuals when the RMSE is representable."""
+    _finite_array(error, "residual")
+    scale = float(np.max(np.abs(error)))
+    if scale == 0.0:
+        return 0.0
+    return float(np.linalg.norm(error / scale) / math.sqrt(error.size) * scale)
+
+
+@dataclass
+class _AutoencoderUpdate:
+    """Finite parameters and pre-update error for one proposed training step."""
+
+    error: float
+    w1: np.ndarray
+    b1: np.ndarray
+    w2: np.ndarray
+    b2: np.ndarray
 
 
 @dataclass
@@ -28,7 +56,7 @@ class _NumpyAutoencoder:
             raise ValueError("input_dim must be positive")
         if self.hidden_dim <= 0:
             raise ValueError("hidden_dim must be positive")
-        if self.learning_rate <= 0.0:
+        if not math.isfinite(self.learning_rate) or self.learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
 
         limit = np.sqrt(6.0 / float(self.input_dim + self.hidden_dim))
@@ -57,13 +85,19 @@ class _NumpyAutoencoder:
         """Compute RMSE reconstruction error without updating parameters."""
         _, output = self._forward(x)
         error = output - x
-        return float(np.sqrt(np.mean(error * error)))
+        return _rmse(error)
 
     def learn(self, x: np.ndarray) -> float:
         """Update parameters on one sample and return RMSE."""
+        update = self.propose_update(x)
+        self.apply_update(update)
+        return update.error
+
+    def propose_update(self, x: np.ndarray) -> _AutoencoderUpdate:
+        """Compute a complete finite training step without changing parameters."""
         hidden, output = self._forward(x)
         error = output - x
-        rmse = float(np.sqrt(np.mean(error * error)))
+        rmse = _rmse(error)
 
         # 0.5 * mean squared error -> gradient: (output - x) / input_dim
         grad_output = error / float(self.input_dim)
@@ -77,12 +111,19 @@ class _NumpyAutoencoder:
         grad_w1 = np.outer(grad_hidden_linear, x)
         grad_b1 = grad_hidden_linear
 
-        self.w2 -= self.learning_rate * grad_w2
-        self.b2 -= self.learning_rate * grad_b2
-        self.w1 -= self.learning_rate * grad_w1
-        self.b1 -= self.learning_rate * grad_b1
+        # Stage a complete finite update before publishing weights. One extreme
+        # sample must not leave NaN weights that poison every subsequent event.
+        with np.errstate(over="ignore", invalid="ignore"):
+            w2 = _finite_array(self.w2 - self.learning_rate * grad_w2, "weights")
+            b2 = _finite_array(self.b2 - self.learning_rate * grad_b2, "bias")
+            w1 = _finite_array(self.w1 - self.learning_rate * grad_w1, "weights")
+            b1 = _finite_array(self.b1 - self.learning_rate * grad_b1, "bias")
+        return _AutoencoderUpdate(rmse, w1, b1, w2, b2)
 
-        return rmse
+    def apply_update(self, update: _AutoencoderUpdate) -> None:
+        """Publish an already validated training step."""
+        self.w1, self.b1 = update.w1, update.b1
+        self.w2, self.b2 = update.w2, update.b2
 
 
 class OnlineAutoencoderEnsemble(BaseModel):
@@ -147,7 +188,7 @@ class OnlineAutoencoderEnsemble(BaseModel):
             raise ValueError("feature_map_grace must be positive")
         if ad_grace < 0:
             raise ValueError("ad_grace must be non-negative")
-        if learning_rate <= 0.0:
+        if not math.isfinite(learning_rate) or learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
         if not (0.0 < hidden_ratio <= 1.0):
             raise ValueError("hidden_ratio must be in (0, 1]")
@@ -194,33 +235,42 @@ class OnlineAutoencoderEnsemble(BaseModel):
         """Whether the model is ready to produce non-zero anomaly scores."""
         return self._phase == _PHASE_READY
 
-    def _update_feature_statistics(self, x_vec: np.ndarray) -> None:
-        """Accumulate first/second moments for online correlation estimates."""
+    def _preview_feature_statistics(
+        self, x_vec: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Preview first/second moments without publishing a feature-map event."""
         if self._sum is None or self._sum_sq is None or self._sum_cross is None:
             n_features = x_vec.size
-            self._sum = np.zeros(n_features, dtype=np.float64)
-            self._sum_sq = np.zeros(n_features, dtype=np.float64)
-            self._sum_cross = np.zeros((n_features, n_features), dtype=np.float64)
+            previous_sum = np.zeros(n_features, dtype=np.float64)
+            previous_sq = np.zeros(n_features, dtype=np.float64)
+            previous_cross = np.zeros((n_features, n_features), dtype=np.float64)
+        else:
+            previous_sum, previous_sq = self._sum, self._sum_sq
+            previous_cross = self._sum_cross
 
-        self._sum += x_vec
-        self._sum_sq += x_vec * x_vec
-        self._sum_cross += np.outer(x_vec, x_vec)
-        self._feature_map_samples += 1
+        with np.errstate(over="ignore", invalid="ignore"):
+            total = _finite_array(previous_sum + x_vec, "feature sum")
+            squared = _finite_array(previous_sq + x_vec * x_vec, "feature moment")
+            cross = _finite_array(
+                previous_cross + np.outer(x_vec, x_vec), "feature cross moment"
+            )
+        return total, squared, cross
 
-    def _build_feature_groups(self) -> list[np.ndarray]:
+    def _build_feature_groups(
+        self,
+        total: np.ndarray,
+        squared: np.ndarray,
+        cross: np.ndarray,
+        samples: int,
+    ) -> list[np.ndarray]:
         """Build feature groups from absolute Pearson correlations."""
-        if self._sum is None or self._sum_sq is None or self._sum_cross is None:
-            raise RuntimeError("Feature statistics are not initialized")
-        if self._feature_map_samples <= 0:
-            raise RuntimeError("No feature-map samples collected")
-
-        count = float(self._feature_map_samples)
-        means = self._sum / count
-        variances = (self._sum_sq / count) - (means * means)
+        count = float(samples)
+        means = total / count
+        variances = (squared / count) - (means * means)
         variances = np.clip(variances, 1e-12, None)
         std = np.sqrt(variances)
 
-        covariance = (self._sum_cross / count) - np.outer(means, means)
+        covariance = (cross / count) - np.outer(means, means)
         denom = np.outer(std, std)
         correlations = np.divide(
             covariance,
@@ -264,67 +314,106 @@ class OnlineAutoencoderEnsemble(BaseModel):
         compressed = min(max(1, raw), input_dim - 1)
         return compressed
 
-    def _spawn_rng(self) -> np.random.Generator:
+    @staticmethod
+    def _spawn_rng(parent: np.random.Generator) -> np.random.Generator:
         """Spawn a deterministic child RNG from model RNG state."""
-        seed = int(self.rng.integers(0, np.iinfo(np.int32).max))
+        seed = int(parent.integers(0, np.iinfo(np.int32).max))
         return np.random.default_rng(seed)
 
-    def _initialize_detector(self) -> None:
+    def _create_detector(
+        self, groups: list[np.ndarray], rng: np.random.Generator
+    ) -> tuple[list[_NumpyAutoencoder], _NumpyAutoencoder]:
         """Create the ensemble and output autoencoders after feature mapping."""
-        self._feature_groups = self._build_feature_groups()
-        self._ensemble = []
+        ensemble = []
 
-        for group in self._feature_groups:
+        for group in groups:
             input_dim = int(group.size)
             hidden_dim = self._hidden_dim(input_dim)
-            self._ensemble.append(
+            ensemble.append(
                 _NumpyAutoencoder(
                     input_dim=input_dim,
                     hidden_dim=hidden_dim,
                     learning_rate=self.learning_rate,
-                    rng=self._spawn_rng(),
+                    rng=self._spawn_rng(rng),
                 )
             )
 
-        output_dim = len(self._feature_groups)
+        output_dim = len(groups)
         output_hidden = self._hidden_dim(output_dim)
-        self._output_ae = _NumpyAutoencoder(
+        output_ae = _NumpyAutoencoder(
             input_dim=output_dim,
             hidden_dim=output_hidden,
             learning_rate=self.learning_rate,
-            rng=self._spawn_rng(),
+            rng=self._spawn_rng(rng),
         )
+        return ensemble, output_ae
 
-    def _ensemble_errors(self, x_vec: np.ndarray, train: bool) -> np.ndarray:
+    def _ensemble_errors(self, x_vec: np.ndarray) -> np.ndarray:
         """Compute per-sub-autoencoder reconstruction errors."""
         if not self._feature_groups or not self._ensemble:
             raise RuntimeError("Detector is not initialized")
 
         errors = np.empty(len(self._ensemble), dtype=np.float64)
         for idx, (group, autoencoder) in enumerate(
-            zip(self._feature_groups, self._ensemble, strict=False)
+            zip(self._feature_groups, self._ensemble, strict=True)
         ):
             subset = x_vec[group]
-            errors[idx] = (
-                autoencoder.learn(subset) if train else autoencoder.score(subset)
-            )
+            errors[idx] = autoencoder.score(subset)
         return errors
 
-    def _train_detector(self, x_vec: np.ndarray) -> None:
-        """Train ensemble and output autoencoders on one sample."""
-        if self._output_ae is None:
+    @staticmethod
+    def _train_detector(
+        x_vec: np.ndarray,
+        groups: list[np.ndarray],
+        ensemble: list[_NumpyAutoencoder],
+        output_ae: _NumpyAutoencoder | None,
+    ) -> None:
+        """Validate every network's update before publishing any parameters."""
+        if output_ae is None:
             raise RuntimeError("Output autoencoder is not initialized")
 
-        errors = self._ensemble_errors(x_vec, train=True)
-        self._output_ae.learn(errors)
+        updates = [
+            autoencoder.propose_update(x_vec[group])
+            for group, autoencoder in zip(groups, ensemble, strict=True)
+        ]
+        errors = np.asarray([update.error for update in updates], dtype=np.float64)
+        output_update = output_ae.propose_update(errors)
+        for autoencoder, update in zip(ensemble, updates, strict=True):
+            autoencoder.apply_update(update)
+        output_ae.apply_update(output_update)
 
     def _score_detector(self, x_vec: np.ndarray) -> float:
         """Compute anomaly score from current detector state."""
         if self._output_ae is None:
             raise RuntimeError("Output autoencoder is not initialized")
 
-        errors = self._ensemble_errors(x_vec, train=False)
+        errors = self._ensemble_errors(x_vec)
         return self._output_ae.score(errors)
+
+    def _learn_feature_map(self, x_vec: np.ndarray) -> None:
+        """Publish moments and an optional detector transition as one event."""
+        total, squared, cross = self._preview_feature_statistics(x_vec)
+        samples = self._feature_map_samples + 1
+        if samples >= self.feature_map_grace:
+            groups = self._build_feature_groups(total, squared, cross, samples)
+            # A rejected transition must not consume the next detector's seeds.
+            rng = deepcopy(self.rng)
+            ensemble, output_ae = self._create_detector(groups, rng)
+            if self.ad_grace == 0:
+                # Ensure "ready" implies detector weights saw at least one sample.
+                self._train_detector(x_vec, groups, ensemble, output_ae)
+
+            self._feature_groups, self._ensemble, self._output_ae = (
+                groups,
+                ensemble,
+                output_ae,
+            )
+            self.rng = rng
+            self._detector_samples = int(self.ad_grace == 0)
+            self._phase = _PHASE_READY if self.ad_grace == 0 else _PHASE_DETECTOR
+
+        self._sum, self._sum_sq, self._sum_cross = total, squared, cross
+        self._feature_map_samples = samples
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update model state with a single sample."""
@@ -332,23 +421,18 @@ class OnlineAutoencoderEnsemble(BaseModel):
         x_vec = prepared.values
 
         if self._phase == _PHASE_FEATURE_MAP:
-            self._update_feature_statistics(x_vec)
-            if self._feature_map_samples >= self.feature_map_grace:
-                self._initialize_detector()
-                if self.ad_grace == 0:
-                    # Ensure "ready" implies detector weights saw at least one sample.
-                    self._train_detector(x_vec)
-                    self._detector_samples += 1
-                    self._phase = _PHASE_READY
-                else:
-                    self._phase = _PHASE_DETECTOR
+            self._learn_feature_map(x_vec)
         elif self._phase == _PHASE_DETECTOR:
-            self._train_detector(x_vec)
+            self._train_detector(
+                x_vec, self._feature_groups, self._ensemble, self._output_ae
+            )
             self._detector_samples += 1
             if self._detector_samples >= self.ad_grace:
                 self._phase = _PHASE_READY
         elif self._phase == _PHASE_READY and self.adaptive_after_warmup:
-            self._train_detector(x_vec)
+            self._train_detector(
+                x_vec, self._feature_groups, self._ensemble, self._output_ae
+            )
 
         self._samples_seen += 1
         self._schema.commit(prepared)

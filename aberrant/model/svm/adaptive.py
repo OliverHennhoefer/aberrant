@@ -3,7 +3,11 @@ from collections import deque
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema, PreparedFeatures
+from aberrant.utils.validation import (
+    FeatureSchema,
+    PreparedFeatures,
+    coerce_integer_count,
+)
 
 
 class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
@@ -58,10 +62,8 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
             )
         if not (0.0 < adaptation_rate <= 1.0):
             raise ValueError("adaptation_rate must be in (0, 1]")
-        if buffer_size <= 0:
-            raise ValueError("buffer_size must be positive")
-        if sv_budget <= 0:
-            raise ValueError("sv_budget must be positive")
+        buffer_size = coerce_integer_count(buffer_size, label="buffer_size")
+        sv_budget = coerce_integer_count(sv_budget, label="sv_budget")
         if tolerance < 0.0:
             raise ValueError("tolerance must be non-negative")
 
@@ -80,7 +82,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self.rho: float = 0.0
         self.K_sv: np.ndarray | None = None
 
-        self.data_buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
+        self.data_buffer: deque[np.ndarray] = deque(maxlen=self.buffer_size)
         self.n_samples: int = 0
 
         self._schema = FeatureSchema()

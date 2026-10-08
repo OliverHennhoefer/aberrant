@@ -31,7 +31,11 @@ detector itself, while `reset()` clears its learned state and detection count.
 Implementation-specific details matter:
 
 - ADWIN checks compressed bucket boundaries rather than retaining every raw
-  observation. A smaller `delta` is more conservative.
+  observation. A smaller `delta` is more conservative. Its default stationary
+  history uses O(log N) buckets. Set `max_window_size` for a hard history bound;
+  oldest whole buckets are removed, so the retained width can fall below the
+  configured maximum. The bound must be at least `2 * min_window_length` and
+  changes the history available for detecting slow drift.
 - KSWIN requires `stat_size < window_size / 2`. ABERRANT uses SciPy's
   asymptotic two-sample KS test and requires both `p_value <= alpha` and a KS
   statistic greater than `0.1`. `seed` controls its historical sampling.

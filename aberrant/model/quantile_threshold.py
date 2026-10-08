@@ -3,9 +3,8 @@
 import math
 from collections import deque
 
-import numpy as np
-
 from aberrant.base.model import BaseModel
+from aberrant.utils.statistics import linear_quantile
 
 
 class QuantileThreshold(BaseModel):
@@ -114,8 +113,9 @@ class QuantileThreshold(BaseModel):
 
     def _update_threshold(self) -> None:
         """Recompute the quantile-based threshold."""
-        scores_array = np.array(self._scores)
-        self._threshold = float(np.quantile(scores_array, self.quantile))
+        # Interpolate without subtracting opposite float extremes: NumPy's
+        # interpolation can retain an infinite threshold from finite scores.
+        self._threshold = linear_quantile(sorted(self._scores), self.quantile)
 
     def score_one(self, x: dict[str, float]) -> float:
         """

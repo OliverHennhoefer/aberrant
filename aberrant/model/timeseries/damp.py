@@ -9,11 +9,40 @@ from typing import cast
 import numpy as np
 
 from aberrant.base.model import BaseModel
+from aberrant.model.timeseries._matrix_profile import (
+    _normalized_window,
+    _window_statistics,
+)
+from aberrant.utils.validation import coerce_finite_number
 
 
 def _next_power_of_two(value: int) -> int:
     """Return the smallest power of two greater than or equal to ``value``."""
     return 1 << (value - 1).bit_length()
+
+
+def _stable_distance_profile(
+    series: np.ndarray, query: np.ndarray, eps: float
+) -> np.ndarray:
+    """Refine an ill-scaled MASS calculation with bounded direct distances."""
+
+    def normalized(values: np.ndarray, label: str) -> np.ndarray:
+        statistics = _window_statistics(values)
+        exponent, _, deviation = statistics
+        try:
+            scaled_eps = math.ldexp(eps, -exponent)
+        except OverflowError:
+            scaled_eps = math.inf
+        if deviation <= scaled_eps:
+            raise ValueError(f"DAMP does not support constant {label} subsequences")
+        return _normalized_window(values, statistics)
+
+    normalized_query = normalized(query, "query")
+    result = np.empty(series.size - query.size + 1, dtype=np.float64)
+    for index in range(result.size):
+        candidate = normalized(series[index : index + query.size], "candidate")
+        result[index] = np.linalg.norm(candidate - normalized_query)
+    return result
 
 
 def _mass_distance_profile(
@@ -36,11 +65,19 @@ def _mass_distance_profile(
     if n < m:
         raise ValueError("series must be at least as long as query")
 
+    # Squared moments and FFT products can overflow despite finite inputs.
+    # Direct power-of-two-normalized refinement keeps memory bounded by x_lag
+    # and handles both very large values and subnormal deviations.
+    magnitude = max(float(np.max(np.abs(series))), float(np.max(np.abs(query))))
+    safe_max = math.sqrt(np.finfo(np.float64).max / (4 * max(n, m)))
+    if magnitude > safe_max or 0.0 < magnitude < math.sqrt(np.finfo(np.float64).tiny):
+        return _stable_distance_profile(series, query, eps)
+
     query_mean = float(np.mean(query))
     centered_query = query - query_mean
     query_std = float(np.std(centered_query))
     if query_std <= eps:
-        raise ValueError("DAMP does not support constant query subsequences")
+        return _stable_distance_profile(series, query, eps)
 
     # Centering is algebraically neutral for z-normalized distance and avoids
     # variance cancellation when a sensor has a large numeric offset.
@@ -58,7 +95,8 @@ def _mass_distance_profile(
     )
     window_stds = np.sqrt(window_variances)
     if np.any(window_stds <= eps):
-        raise ValueError("DAMP does not support constant candidate subsequences")
+        # Cumulative moment cancellation can also imitate a constant window.
+        return _stable_distance_profile(series, query, eps)
 
     reversed_query = centered_query[::-1]
     padded_query = np.pad(reversed_query, (0, n - m))
@@ -67,6 +105,8 @@ def _mass_distance_profile(
     ).real[m - 1 : n]
 
     normalized_dot = dot_products / (window_stds * query_std)
+    if not np.all(np.isfinite(normalized_dot)):
+        return _stable_distance_profile(series, query, eps)
     squared_distances = 2.0 * (float(m) - normalized_dot)
     return cast(np.ndarray, np.sqrt(np.maximum(squared_distances, 0.0)))
 
@@ -138,6 +178,7 @@ class XLagDAMP(BaseModel):
         )
         if resolved_start_index < subsequence_length:
             raise ValueError("start_index must be at least subsequence_length")
+        eps = coerce_finite_number(eps, label="eps")
         if eps <= 0.0:
             raise ValueError("eps must be positive")
 

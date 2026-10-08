@@ -171,8 +171,8 @@ class MStream(BaseModel):
         )
         return numeric_indices, categorical_indices
 
-    @staticmethod
     def _split_values(
+        self,
         values: np.ndarray,
         numeric_indices: np.ndarray,
         categorical_indices: np.ndarray,
@@ -182,9 +182,12 @@ class MStream(BaseModel):
             raise ValueError("Numeric MStream features must be greater than -1")
 
         categorical_values = values[categorical_indices]
-        categorical = np.rint(categorical_values).astype(np.int64)
-        if not np.allclose(categorical_values, categorical, rtol=0.0, atol=1e-9):
+        rounded = np.rint(categorical_values)
+        if not np.allclose(categorical_values, rounded, rtol=0.0, atol=1e-9):
             raise ValueError("Configured categorical features must be integer-like")
+        # All categorical hashes are modulo buckets. Reduce before converting
+        # to int64, allowing long-lived streams to keep introducing large IDs.
+        categorical = np.remainder(rounded, self.buckets).astype(np.int64)
         return numeric, categorical
 
     def _create_state(
@@ -339,11 +342,16 @@ class MStream(BaseModel):
         )
 
     @staticmethod
-    def _counts_to_anomaly(total: float, current: float, time_index: int) -> float:
-        current_mean = total / float(time_index)
-        squared_error = max(0.0, current - current_mean) ** 2
-        return squared_error / current_mean + squared_error / (
-            current_mean * float(max(1, time_index - 1))
+    def _counts_to_log_anomaly(total: float, current: float, time_index: int) -> float:
+        """Logarithm of the statistic without time-scaled intermediates."""
+        residual = max(0.0, current - total * (1 / time_index))
+        if residual == 0.0:
+            return -math.inf
+        return (
+            2.0 * math.log(residual)
+            - math.log(total)
+            + math.log(time_index)
+            + math.log1p(1 / max(1, time_index - 1))
         )
 
     def _candidate_counts(
@@ -370,7 +378,7 @@ class MStream(BaseModel):
     ) -> float:
         rollover = self._is_rollover(state, bucket)
         time_index = self._time_index(state, bucket)
-        total_score = 0.0
+        log_statistics: list[float] = []
 
         numeric_bins = self._numeric_bins(normalized)
         numeric_decay = self.alpha if rollover else 1.0
@@ -380,7 +388,9 @@ class MStream(BaseModel):
                 + 1.0
             )
             total = state.numeric.counts.total[feature_index, bin_index] + 1.0
-            total_score += self._counts_to_anomaly(total, current, time_index)
+            log_statistics.append(
+                self._counts_to_log_anomaly(total, current, time_index)
+            )
 
         categorical_bins = self._categorical_bins(state.categorical, categorical)
         for feature_index, indices in enumerate(categorical_bins):
@@ -393,7 +403,9 @@ class MStream(BaseModel):
                 indices,
                 rollover=rollover,
             )
-            total_score += self._counts_to_anomaly(total, current, time_index)
+            log_statistics.append(
+                self._counts_to_log_anomaly(total, current, time_index)
+            )
 
         record_bins = self._record_bins(state.record, normalized, categorical)
         current, total = self._candidate_counts(
@@ -401,8 +413,9 @@ class MStream(BaseModel):
             record_bins,
             rollover=rollover,
         )
-        total_score += self._counts_to_anomaly(total, current, time_index)
-        return float(np.log1p(total_score))
+        log_statistics.append(self._counts_to_log_anomaly(total, current, time_index))
+        # Initial log(1) preserves log(1 + sum(statistics)), including all zeros.
+        return float(np.logaddexp.reduce(log_statistics, initial=0.0))
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update model state with a single sample."""

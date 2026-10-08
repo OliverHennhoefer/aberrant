@@ -12,6 +12,33 @@ from aberrant.utils.validation import NumericEventBoundary
 _HASH_MODULUS = np.int64(2_147_483_647)  # Large Mersenne prime.
 
 
+def _time_difference_ratio(
+    current: int | float, previous: int | float
+) -> tuple[int, int]:
+    """Subtract exact timestamp representations before any float conversion."""
+    current_numerator, current_denominator = current.as_integer_ratio()
+    previous_numerator, previous_denominator = previous.as_integer_ratio()
+    numerator = (
+        current_numerator * previous_denominator
+        - previous_numerator * current_denominator
+    )
+    return numerator, current_denominator * previous_denominator
+
+
+def _time_difference(current: int | float, previous: int | float) -> int | float:
+    """Preserve mixed timestamp precision while retaining same-type arithmetic."""
+    if isinstance(current, int) == isinstance(previous, int):
+        return current - previous
+    numerator, denominator = _time_difference_ratio(current, previous)
+    return numerator if denominator == 1 else numerator / denominator
+
+
+def _log_time_difference(current: int | float, previous: int | float) -> float:
+    """Take the log of a positive elapsed time without float conversion."""
+    numerator, denominator = _time_difference_ratio(current, previous)
+    return math.log(numerator) - math.log(denominator)
+
+
 class StreamingRSHash(BaseModel):
     """
     Bounded-memory streaming adaptation of RS-Hash.
@@ -192,12 +219,29 @@ class StreamingRSHash(BaseModel):
         delta2 = vector - self._mean
         self._m2 += delta * delta2
 
-    def _preview_scale(self, current_time: float) -> float:
+    def _preview_scale(self, current_time: int | float) -> float:
         """Preview fading relative to the boundary's last committed timestamp."""
         if self._samples_seen == 0 or self.decay == 0.0:
             return self._scale
-        delta = current_time - self._boundary.clock.max_time
-        return self._scale * float(np.exp(-self.decay * delta))
+        previous_time = self._boundary.clock.max_time
+        try:
+            delta = _time_difference(current_time, previous_time)
+        except OverflowError:
+            log_delta = _log_time_difference(current_time, previous_time)
+        else:
+            if delta <= 745.0:
+                return self._scale * float(np.exp(-self.decay * delta))
+            log_delta = (
+                _log_time_difference(current_time, previous_time)
+                if isinstance(delta, float) and math.isinf(delta)
+                else math.log(delta)
+            )
+        # Comparing logs handles huge elapsed times and tiny fading rates
+        # without converting an unrepresentable difference or product first.
+        log_elapsed_decay = log_delta + math.log(self.decay)
+        if log_elapsed_decay > math.log(745.0):
+            return 0.0
+        return self._scale * math.exp(-math.exp(log_elapsed_decay))
 
     def _bucket_indices(self, normalized: np.ndarray) -> np.ndarray:
         if (
@@ -234,7 +278,9 @@ class StreamingRSHash(BaseModel):
         if self._counts is None:
             return 0.0
 
-        normalizer = float(np.log1p(max(self._samples_seen, 1)))
+        # NumPy treats Python integers beyond uint64 as objects, for which its
+        # log1p ufunc fails. math.log accepts arbitrary-size integer counters.
+        normalizer = math.log(1 + max(self._samples_seen, 1))
         if normalizer <= 0.0:
             return 0.0
 

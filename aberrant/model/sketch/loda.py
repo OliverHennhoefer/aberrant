@@ -7,7 +7,7 @@ from typing import cast
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary
+from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 
 class StreamingLODA(BaseModel):
@@ -70,8 +70,7 @@ class StreamingLODA(BaseModel):
             raise ValueError("n_bins must be greater than 1")
         if sparsity is not None and not (0.0 < sparsity <= 1.0):
             raise ValueError("sparsity must be in (0, 1] or None")
-        if warm_up_samples <= 0:
-            raise ValueError("warm_up_samples must be positive")
+        warm_up_samples = coerce_integer_count(warm_up_samples, label="warm_up_samples")
         if not (0.0 < decay <= 1.0):
             raise ValueError("decay must be in (0, 1]")
         if time_key is not None and (not isinstance(time_key, str) or not time_key):

@@ -11,6 +11,7 @@ import numpy as np
 from tqdm import tqdm
 
 from aberrant.stream.dataset.registry import DatasetInfo
+from aberrant.utils.validation import coerce_integer_count
 
 Sample: TypeAlias = tuple[dict[str, float], object]
 
@@ -29,6 +30,9 @@ class DatasetStream(Protocol):
 
 class NpzStreamer:
     """Row-wise iterator over an NPZ dataset artifact.
+
+    Feature and label arrays are materialized in full. Memory scales with the
+    finite artifact size; use a lazy custom DatasetStream for unbounded input.
 
     Args:
         file_path: Path to the NPZ archive.
@@ -187,8 +191,7 @@ class BatchStreamer:
     """
 
     def __init__(self, base_streamer: DatasetStream, batch_size: int = 1000) -> None:
-        if batch_size <= 0:
-            raise ValueError("batch_size must be positive")
+        batch_size = coerce_integer_count(batch_size, label="batch_size")
         self.base_streamer = base_streamer
         self.batch_size = batch_size
 

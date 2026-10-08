@@ -1,5 +1,6 @@
 """Unit tests for the MStream sketch-based anomaly detector."""
 
+import math
 import unittest
 
 import numpy as np
@@ -66,18 +67,27 @@ class TestMStream(unittest.TestCase):
         with self.assertRaises(ValueError):
             model.learn_one({"t": 1.0, "x": 1.0, "category": 1.5})
 
-    def test_counts_to_anomaly_matches_author_formula(self) -> None:
-        total = 8.0
-        current = 4.0
-        time_index = 5
+    @staticmethod
+    def author_statistic(total: float, current: float, time_index: int) -> float:
+        """Evaluate the published raw statistic at ordinary magnitudes."""
         mean = total / time_index
         squared_error = max(0.0, current - mean) ** 2
-        expected = squared_error / mean + squared_error / (mean * 4.0)
-        self.assertAlmostEqual(
-            MStream._counts_to_anomaly(total, current, time_index),
-            expected,
-        )
-        self.assertEqual(MStream._counts_to_anomaly(8.0, 1.0, 5), 0.0)
+        return squared_error / mean + squared_error / (mean * max(1, time_index - 1))
+
+    def test_log_statistic_matches_author_formula(self) -> None:
+        for total, current, time_index in (
+            (8.0, 4.0, 5),
+            (8.0, 1.0, 5),
+            (8.0, 9.0, 1),
+            (8.0, 8.0, 1),
+        ):
+            with self.subTest(total=total, current=current, time_index=time_index):
+                statistic = self.author_statistic(total, current, time_index)
+                expected = math.log(statistic) if statistic > 0.0 else -math.inf
+                self.assertAlmostEqual(
+                    MStream._counts_to_log_anomaly(total, current, time_index),
+                    expected,
+                )
 
     def test_numeric_transform_and_online_min_max_match_author_code(self) -> None:
         model = MStream(rows=1, buckets=11, time_key="t", seed=1)
@@ -153,10 +163,30 @@ class TestMStream(unittest.TestCase):
 
         query = {"t": 5.0, "x": 1.0}
         expected = np.log1p(
-            MStream._counts_to_anomaly(8.0, 3.0 * model.alpha + 1.0, 5)
-            + MStream._counts_to_anomaly(9.0, 4.0 * model.alpha + 1.0, 5)
+            self.author_statistic(8.0, 3.0 * model.alpha + 1.0, 5)
+            + self.author_statistic(9.0, 4.0 * model.alpha + 1.0, 5)
         )
         self.assertAlmostEqual(model.score_one(query), float(expected))
+
+    def test_all_zero_statistics_return_zero_score(self) -> None:
+        model = self.create_model()
+        sample = {"t": 0, "x": 1.0, "category": 2.0}
+        model.learn_one(sample)
+        self.assertEqual(model.score_one(sample), 0.0)
+
+    def test_huge_time_score_keeps_every_attribute_and_record_contribution(
+        self,
+    ) -> None:
+        for numeric in ({}, {"x": 1.0, "y": 1.0}):
+            with self.subTest(numeric=numeric):
+                model = self.create_model()
+                sample = {"t": 0, "category": 2.0, **numeric}
+                model.learn_one(sample)
+                expected = 400 * math.log(10.0) + math.log(
+                    (len(numeric) + 2) * (model.alpha + 1.0) ** 2 / 2.0
+                )
+                query = {**sample, "t": 10**400}
+                self.assertAlmostEqual(model.score_one(query), expected)
 
     def test_rollover_decays_current_counts_once_like_author_code(self) -> None:
         model = self.create_model(rows=1, buckets=1024)

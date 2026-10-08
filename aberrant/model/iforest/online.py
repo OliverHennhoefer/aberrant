@@ -158,18 +158,25 @@ class OnlineIsolationForest(BaseModel):
         )
 
     def learn_batch(self, data: np.ndarray) -> None:
-        """Learn a two-dimensional numeric batch."""
+        """Learn a batch in window-sized chunks to bound temporary tree state."""
         self._validate_batch(data)
         if data.shape[0] == 0:
             return
         if self._n_features is None:
             self._n_features = data.shape[1]
 
+        for start in range(0, len(data), self.window_size):
+            self._learn_chunk(data[start : start + self.window_size])
+
+    def _learn_chunk(self, data: np.ndarray) -> None:
+        """Apply a bounded update without retaining views of an incoming batch."""
         self.data_size += data.shape[0]
         self._refresh_normalization()
         self._run_tree_updates("learn", data)
 
-        self.data_window.extend(data.copy())
+        # Rows yielded from a 2D copy share its complete backing allocation.
+        # Copy each retained row independently so eviction releases its storage.
+        self.data_window.extend(row.copy() for row in data)
         if self.data_size <= self.window_size:
             return
 

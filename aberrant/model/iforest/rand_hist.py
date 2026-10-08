@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 _OPEN_UNIT_LOW = float(np.nextafter(0.0, 1.0))
 
@@ -354,8 +354,7 @@ class StreamRandomHistogramForest(BaseModel):
             raise ValueError("n_estimators must be positive")
         if max_depth <= 0:
             raise ValueError("max_depth must be positive")
-        if window_size <= 1:
-            raise ValueError("window_size must be greater than 1")
+        window_size = coerce_integer_count(window_size, label="window_size", minimum=2)
 
         self.n_estimators = n_estimators
         self.max_depth = max_depth

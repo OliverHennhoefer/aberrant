@@ -126,6 +126,93 @@ If an application checkpoints model objects anyway:
   [public API compatibility policy](../api/index.md#compatibility-policy) does not
   guarantee cross-version checkpoint compatibility.
 
+## Long running streams
+
+The streaming interface alone does not guarantee constant memory or unlimited
+numeric lifetime. The package-wide longevity audit exercises all built-in model
+families, transformers, drift detectors, evaluation, batching, and native FAISS.
+The bounds below assume fixed feature dimensions and constructor parameters;
+they describe retained observations and arrays, excluding exact lifetime counters.
+
+| Implementations | Retained state and conditions |
+| --- | --- |
+| `ASDIsolationForest`, `HalfSpaceTrees`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` | Configured windows, trees, samples, or sketches. Large `OnlineIsolationForest.learn` batches are processed in bounded chunks, and retained rows own their storage. `XStream(max_feature_cache_size=None)` permits an unlimited feature-name cache; keep a finite cache budget for schema churn. |
+| `MondrianIsolationForest` | Default lifetime trees can grow indefinitely. Set `window_size=W` for periodic replacement from the latest W events. Between replacements each tree represents at most `2W - 1` events; replacement has a bounded latency spike. This is periodic rebuilding, not exact per-event sliding-window deletion. |
+| `KNN`, `LocalOutlierFactor`, `SDOStream`, `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector` | Configured point windows, observer budgets, cells, and bounded indexes. A custom KNN engine owns its own retention policy. |
+| `MStream`, `StreamingLODA`, `StreamingRSHash` | Fixed sketches, projections, histograms, and feature statistics. Novel values do not create a persistent key per value. |
+| `MIDAS`, `ISCONNA`, `AnoEdgeL`, `SignedGraphSketchDetector` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
+| `GraphGatedOneClassSVM`, `IncrementalOneClassSVMAdaptiveKernel` | Fixed support-vector, feature-map, and neighborhood budgets. |
+| `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `XLagDAMP`, `SeasonalResidualDetector` | Configured rolling series, lag, season, and residual arrays. DAMP rejects constant subsequences. |
+| All ten univariate moving statistics, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
+| `QuantileThreshold`, `ThresholdModel`, `NullModel`, `RandomModel` | Configured score window, fixed rule configuration, or generator state. |
+| `OnlineAutoencoderEnsemble` | Fixed feature-map statistics and network weights; frozen and adaptive phases retain no observation history. |
+| `Autoencoder`, bundled feedforward/LSTM architectures | Fixed tensor buffers, network parameters, gradients, and ordinary optimizer state. Supplied architectures, losses, and optimizers can have their own unbounded state or numeric failures. |
+| `MinMaxScaler`, `StandardScaler`, `RollingRobustScaler` | State grows with **distinct feature names**. Place `FeatureSchemaGuard` first to enforce a finite schema. Robust windows are bounded per feature, not across an unlimited feature vocabulary. |
+| `FeatureSchemaGuard`, `RandomProjection`, `IncrementalPCA` | Fixed schema/projection arrays. PCA retains only its first `n0` events during initialization, then releases them. |
+| `ADWIN`, `KSWIN`, `PageHinkley` | Default ADWIN uses O(log N) buckets on stationary streams; `max_window_size` bounds its represented history by discarding oldest whole buckets. KSWIN has a fixed window; Page-Hinkley uses scalar statistics. |
+| `Pipeline`, `PrequentialEvaluator`, `BatchStreamer` | Pipeline retains components; evaluation retains at most `metric_window_size` labeled scores; batching retains at most `batch_size` events. Evaluation with `metric_window_size=None` explicitly retains O(N) scores when metrics are enabled. |
+| NPZ loading, dataset cache, download and validation | NPZ iteration materializes the complete feature and label arrays. It is a finite benchmark source, not an out-of-core or infinite source. Downloads and hashing use bounded byte chunks; cached artifacts occupy disk. |
+
+For bounded service operation, consume records incrementally, enforce a fixed
+schema, use positive integer window/batch sizes, and keep both the input queue
+and output sink bounded. `iter_evaluate` and `BatchStreamer` can consume infinite
+generators lazily; `evaluate` returns only after its input ends. Close generators
+when stopping early. Storing all outputs with `list`, or accepting arrivals faster
+than processing, can exhaust application memory independently of model bounds.
+
+Numeric limits remain observable even with bounded data retention:
+
+- Exact Python counters occupy O(log N) bits; cumulative floating-point counts
+  eventually lose unit precision. ISCONNA's fixed-width pattern counters saturate
+  at the signed 64-bit maximum rather than wrapping negative.
+- `StreamingRSHash` normalizes faded occupancy by a lifetime sample count.
+  Its absolute scores can approach 1 on a long stationary stream with positive
+  decay; calibrate against recent scores rather than assume a stationary scale.
+- Shared integer clocks and `MIDAS`/`ISCONNA`/`AnoEdgeL` edge identifiers remain
+  exact past `2**53` when supplied as Python/NumPy integers. The numeric
+  identifiers in `SignedGraphSketchDetector` and categorical vectors in
+  `MStream` still use float64. Passing integers through float-valued preprocessing or
+  `PrequentialEvaluator`'s float event conversion loses that exactness. Supply
+  integers directly to models when this matters. Floating timestamps cannot
+  recover precision already lost by the caller. SDOStream's internal float64
+  observer timestamps still lose single-step age precision beyond `2**53` and
+  reject values outside float64's finite range before changing model state.
+- A reproduced PyTorch Adam limitation is that a float32 step counter stops
+  advancing at `2**24` updates. Finite loss and gradients also do not guarantee
+  finite internal optimizer moments. The generic wrapper does not change the
+  semantics of a caller-supplied optimizer.
+- FAISS float32 squared distances and some Euclidean/moment calculations can
+  overflow for large finite values. Raw distances, variances, gradients and
+  scores still require a representable numeric range. Standardize inputs at
+  ordinary magnitudes; cumulative sums in `StandardScaler` also have finite
+  floating-point range.
+
+The `tests/test_stream_longevity_*.py` suites cover long window turnover,
+retained-object/NumPy storage bounds, released-history weak references, live
+`tracemalloc` plateaus, score-only calls, lazy infinite inputs, and accelerated
+large counters/timestamps. Strict expected-failure tests preserve reproduced
+unresolved numeric limits. These are finite tests plus source-level state bounds,
+not a proof of execution for infinitely many events, arbitrary parameter sizes,
+custom components, devices, or every optional dependency build.
+
+The audit includes CPU PyTorch and the real native FAISS index. On the tested
+Windows installation FAISS required `FAISS_OPT_LEVEL=generic` and importing
+`faiss` before the test runner to avoid intermittent native DLL initialization
+failures. Native index sizes and FIFO scores were checked; native allocator leak
+instrumentation and CUDA testing were unavailable.
+
+Verified on 2026-10-08 with Windows, CPython 3.12.10, NumPy 2.3.5, SciPy 1.16.3,
+PyTorch 2.13.0 CPU, and FAISS 1.13.0: the complete unit and integration run
+finished with **1,963 passed, 109 passing subtests, 5 strict expected failures,
+and 1 CUDA skip**. The four longevity suites contain 240 cases. Additional
+focused suites cover rejected ensemble events, timestamp representation, and
+integer-capacity contracts. The five expected
+failures reproduce FAISS/SDOStream/LOF extreme-value distance errors and the two
+external Adam limitations above; they are unresolved constraints. Ruff lint and
+formatting, mypy across 95 source files, wheel/sdist builds, and an isolated
+built-wheel import/bounded-mode smoke check also passed. Integration used a
+validated local SHUTTLE artifact; no dataset downloads were needed.
+
 ## Deployment checklist
 
 1. Pin the feature schema, units, event-time policy, model constructor, and

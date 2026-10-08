@@ -111,6 +111,14 @@ def _normalized_score(params: Parameters) -> ScoreKind:
     )
 
 
+def _mondrian_state(params: Parameters) -> StateKind:
+    return (
+        StateKind.BOUNDED
+        if params.get("window_size") is not None
+        else StateKind.GROWING
+    )
+
+
 def _difference_score(params: Parameters) -> ScoreKind:
     return (
         ScoreKind.NON_NEGATIVE
@@ -596,7 +604,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.ZERO_TO_ONE,
             warmup=_fixed_warmup(2),
-            state=StateKind.GROWING,
+            state=_mondrian_state,
             resettable=False,
         ),
     ),

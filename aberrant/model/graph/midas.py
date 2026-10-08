@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 
 import numpy as np
 
@@ -93,6 +94,7 @@ class MIDAS(BaseModel):
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by fixed-size sketches.
+    - Raw statistics larger than float64 can represent saturate at its maximum.
 
     Args:
         source_key: Input field containing the integer-like source identifier.
@@ -195,15 +197,27 @@ class MIDAS(BaseModel):
         return self._samples_seen
 
     @staticmethod
+    def _integer_bytes(value: int) -> bytes:
+        return int(value).to_bytes((value.bit_length() + 8) // 8, "little", signed=True)
+
+    @staticmethod
     def _source_payload(src: int) -> bytes:
+        if not -(1 << 63) <= src < (1 << 63):
+            return b"S" + MIDAS._integer_bytes(src)
         return b"s" + int(src).to_bytes(8, byteorder="little", signed=True)
 
     @staticmethod
     def _destination_payload(dst: int) -> bytes:
+        if not -(1 << 63) <= dst < (1 << 63):
+            return b"D" + MIDAS._integer_bytes(dst)
         return b"d" + int(dst).to_bytes(8, byteorder="little", signed=True)
 
     @staticmethod
     def _edge_payload(src: int, dst: int) -> bytes:
+        if not (-(1 << 63) <= src < (1 << 63) and -(1 << 63) <= dst < (1 << 63)):
+            source = MIDAS._integer_bytes(src)
+            destination = MIDAS._integer_bytes(dst)
+            return b"E" + str(len(source)).encode("ascii") + b":" + source + destination
         return (
             b"e"
             + int(src).to_bytes(8, byteorder="little", signed=True)
@@ -240,6 +254,19 @@ class MIDAS(BaseModel):
         """Return the score from ``NormalCore`` and ``RelationalCore``."""
         if total == 0.0 or time_index - 1 == 0:
             return 0.0
+        if time_index > 1e150 or current > 1e150 / time_index:
+            # The published expression squares a time-scaled residual. That
+            # intermediate overflows long before the statistic itself does.
+            residual = abs(current - total * (1 / time_index))
+            if residual == 0.0:
+                return 0.0
+            log_score = (
+                2.0 * math.log(residual)
+                + math.log(time_index)
+                + math.log(time_index / (time_index - 1))
+                - math.log(total)
+            )
+            return math.exp(min(log_score, math.log(np.finfo(np.float64).max)))
         return float(
             ((current - total / float(time_index)) * float(time_index)) ** 2
             / (total * float(time_index - 1))

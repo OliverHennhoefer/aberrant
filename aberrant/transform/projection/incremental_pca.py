@@ -8,7 +8,7 @@ import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
 from aberrant.transform.projection._schema import ProjectionSchema
-from aberrant.utils.validation import coerce_feature_values
+from aberrant.utils.validation import coerce_feature_values, coerce_integer_count
 
 
 class IncrementalPCA(BaseTransformer):
@@ -77,10 +77,8 @@ class IncrementalPCA(BaseTransformer):
         """
         super().__init__()
 
-        if n_components <= 0:
-            raise ValueError("n_components must be positive")
-        if n0 <= 0:
-            raise ValueError("n0 must be positive")
+        n_components = coerce_integer_count(n_components, label="n_components")
+        n0 = coerce_integer_count(n0, label="n0")
         if n0 < n_components:
             raise ValueError("n0 must be at least n_components")
         if not np.isfinite(tol) or tol < 0:

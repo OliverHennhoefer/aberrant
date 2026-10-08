@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -96,6 +97,7 @@ class ISCONNA(BaseModel):
     - Scores are continuous and non-negative.
     - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by a fixed sketch size.
+    - Width and gap occurrence counters saturate at the signed int64 maximum.
 
     Args:
         source_key: Input field containing the integer-like source identifier.
@@ -237,6 +239,10 @@ class ISCONNA(BaseModel):
         """Return the G-test statistic used by the original implementation."""
         if current == 0.0 or accumulated == 0.0 or time <= 1:
             return 0.0
+        if time > 1e150:
+            # Work in log space so a large elapsed-time ratio cannot overflow.
+            log_ratio = math.log(current) + math.log(time - 1) - math.log(accumulated)
+            return 2.0 * current * abs(log_ratio)
         return float(
             2.0 * current * abs(np.log(current * float(time - 1) / accumulated))
         )
@@ -248,7 +254,9 @@ class ISCONNA(BaseModel):
         gap_continues = absent & group.busy_previous
         group.gap_accumulated[gap_continues] += group.gap_current[gap_continues]
         group.gap_current[gap_continues] *= self.time_decay_factor
-        group.gap_time[gap_continues] += 1
+        group.gap_time[gap_continues] = (
+            np.minimum(group.gap_time[gap_continues], np.iinfo(np.int64).max - 1) + 1
+        )
         group.gap_current[absent] += 1.0
 
         group.busy_previous[:] = group.busy_current
@@ -320,7 +328,10 @@ class ISCONNA(BaseModel):
             starts_new_width
         ]
         cells.width_current[starts_new_width] *= self.time_decay_factor
-        cells.width_time[starts_new_width] += 1
+        cells.width_time[starts_new_width] = (
+            np.minimum(cells.width_time[starts_new_width], np.iinfo(np.int64).max - 1)
+            + 1
+        )
         cells.width_current[first_in_timestamp] += 1.0
         cells.busy_current.fill(True)
 

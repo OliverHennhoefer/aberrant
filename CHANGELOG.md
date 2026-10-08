@@ -9,6 +9,12 @@ Semantic Versioning.
 
 ### Added
 
+- Package-wide streaming longevity regressions covering bounded retention,
+  eviction, lazy infinite inputs, deep optimizer/graph storage, and accelerated
+  counter/timestamp aging; documented remaining numeric and retention limits.
+- Optional bounded-history modes for `MondrianIsolationForest(window_size=...)`
+  and `ADWIN(max_window_size=...)`, preserving default lifetime semantics.
+
 - Core-only `SeasonalResidualDetector` with additive Holt-Winters forecasts,
   causal raw/scaled residual scores and explanations, two-cycle initialization,
   bounded seasonal state, reset/readiness, catalog construction, and a seeded
@@ -23,6 +29,15 @@ Semantic Versioning.
   optional bounded-window or exact full-stream ranking metrics.
 
 ### Changed
+
+- Updated locked fsspec to 2026.6.0 to resolve CVE-2026-104851 reported by
+  dependency-audit CI.
+- Hardened long-running processing against oversized-batch storage retention,
+  non-integer capacities that disable batching, warm-up completion or eviction,
+  deep Mondrian/Random Cut tree recursion,
+  fixed-width sketch counter wrapping, lossy integer clocks/IDs, and several
+  large-time or finite-input numeric failures. Page-Hinkley now updates its mean
+  without accumulating an overflowing lifetime sum.
 
 - Unified the bounded radius-neighbor detectors and ISCONNA's preview/learning
   transitions to remove duplicated scoring and state-update logic.
@@ -39,6 +54,13 @@ Semantic Versioning.
 
 ### Fixed
 
+- Bounded components share strict integer-capacity validation; NumPy integer
+  capacities normalize before storage and ADWIN's cross-parameter arithmetic.
+- SDOStream rejects timestamps outside its float64 storage range before state
+  changes; RSHash preserves mixed integer/float elapsed times without overflow
+  or loss of small gaps at large clock values.
+- KitNET rejects overflowing training events without partially updating its
+  ensemble, feature-map transition, schema, counters, or random generator.
 - Shared linear-quantile interpolation across rolling robust scaling and moving
   statistics, preserving narrow-window IQRs and constant subnormal references.
 - Geometric and harmonic catalog warm-up now counts retained values, with the

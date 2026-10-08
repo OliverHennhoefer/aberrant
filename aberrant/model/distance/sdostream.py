@@ -7,7 +7,7 @@ from typing import Literal
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary
+from aberrant.utils.validation import NumericEventBoundary, coerce_finite_number
 
 
 class SDOStream(BaseModel):
@@ -257,7 +257,9 @@ class SDOStream(BaseModel):
             x: Input feature dictionary.
         """
         event = self._boundary.preview(x)
-        current_time = event.timestamp.value
+        current_time = coerce_finite_number(
+            event.timestamp.value, label="Timestamp value"
+        )
         vector = event.features.values
         self._ensure_state_arrays(n_features=vector.shape[0])
 
@@ -329,7 +331,9 @@ class SDOStream(BaseModel):
             Continuous non-negative anomaly score.
         """
         event = self._boundary.preview(x)
-        current_time = event.timestamp.value
+        current_time = coerce_finite_number(
+            event.timestamp.value, label="Timestamp value"
+        )
         vector = event.features.values
 
         if self._n_observers < self.warm_up_observers:
