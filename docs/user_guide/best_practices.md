@@ -203,8 +203,10 @@ instrumentation and CUDA testing were unavailable.
 
 Verified on 2026-10-08 with Windows, CPython 3.12.10, NumPy 2.3.5, SciPy 1.16.3,
 PyTorch 2.13.0 CPU, and FAISS 1.13.0: the complete unit and integration run
-finished with **1,629 passed, 103 passing subtests, 5 strict expected failures,
-and 1 CUDA skip**. The four longevity suites contain 237 cases. The five expected
+finished with **1,963 passed, 109 passing subtests, 5 strict expected failures,
+and 1 CUDA skip**. The four longevity suites contain 240 cases. Additional
+focused suites cover rejected ensemble events, timestamp representation, and
+integer-capacity contracts. The five expected
 failures reproduce FAISS/SDOStream/LOF extreme-value distance errors and the two
 external Adam limitations above; they are unresolved constraints. Ruff lint and
 formatting, mypy across 95 source files, wheel/sdist builds, and an isolated
