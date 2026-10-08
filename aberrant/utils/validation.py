@@ -15,7 +15,10 @@ def coerce_finite_number(value: object, *, label: str) -> float:
     """Return a finite float or raise a consistently worded error."""
     if not isinstance(value, int | float | np.number):
         raise ValueError(f"{label} must be numeric")
-    result = float(value)
+    try:
+        result = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{label} must be finite") from exc
     if not np.isfinite(result):
         raise ValueError(f"{label} must be finite")
     return result

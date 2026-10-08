@@ -175,7 +175,8 @@ Numeric limits remain observable even with bounded data retention:
   `PrequentialEvaluator`'s float event conversion loses that exactness. Supply
   integers directly to models when this matters. Floating timestamps cannot
   recover precision already lost by the caller. SDOStream's internal float64
-  observer timestamps still lose single-step age precision beyond `2**53`.
+  observer timestamps still lose single-step age precision beyond `2**53` and
+  reject values outside float64's finite range before changing model state.
 - A reproduced PyTorch Adam limitation is that a float32 step counter stops
   advancing at `2**24` updates. Finite loss and gradients also do not guarantee
   finite internal optimizer moments. The generic wrapper does not change the
