@@ -118,6 +118,7 @@ jobs:
       - name: FAISS model smoke tests
         run: |
           uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_catalog_faiss.py -q
+          uv run --locked python -m pytest tests/test_stream_longevity_forests_distance.py -k faiss -q
           uv run --locked python -m pytest tests/test_public_imports_extras.py -q
 
   integration-smoke:
