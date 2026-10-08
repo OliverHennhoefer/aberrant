@@ -52,6 +52,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- KitNET rejects overflowing training events without partially updating its
+  ensemble, feature-map transition, schema, counters, or random generator.
 - Shared linear-quantile interpolation across rolling robust scaling and moving
   statistics, preserving narrow-window IQRs and constant subnormal references.
 - Geometric and harmonic catalog warm-up now counts retained values, with the
