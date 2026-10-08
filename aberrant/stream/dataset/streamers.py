@@ -11,6 +11,7 @@ import numpy as np
 from tqdm import tqdm
 
 from aberrant.stream.dataset.registry import DatasetInfo
+from aberrant.utils.validation import coerce_integer_count
 
 Sample: TypeAlias = tuple[dict[str, float], object]
 
@@ -190,14 +191,9 @@ class BatchStreamer:
     """
 
     def __init__(self, base_streamer: DatasetStream, batch_size: int = 1000) -> None:
-        if (
-            isinstance(batch_size, bool)
-            or not isinstance(batch_size, int | np.integer)
-            or batch_size <= 0
-        ):
-            raise ValueError("batch_size must be positive integer")
+        batch_size = coerce_integer_count(batch_size, label="batch_size")
         self.base_streamer = base_streamer
-        self.batch_size = int(batch_size)
+        self.batch_size = batch_size
 
     def stream(self) -> Iterator[tuple[list[dict[str, float]], list[object]]]:
         """Yield feature and label batches."""

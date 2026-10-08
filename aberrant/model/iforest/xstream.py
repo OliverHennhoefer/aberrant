@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import coerce_finite_number
+from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
 
 
 @dataclass(slots=True)
@@ -98,27 +98,15 @@ class XStream(BaseModel):
             raise ValueError("cms_width must be positive")
         if cms_num_hashes <= 0:
             raise ValueError("cms_num_hashes must be positive")
-        if (
-            isinstance(window_size, bool)
-            or not isinstance(window_size, int | np.integer)
-            or window_size <= 0
-        ):
-            raise ValueError("window_size must be positive integer")
-        if (
-            isinstance(init_sample_size, bool)
-            or not isinstance(init_sample_size, int | np.integer)
-            or init_sample_size <= 0
-        ):
-            raise ValueError("init_sample_size must be positive integer")
+        window_size = coerce_integer_count(window_size, label="window_size")
+        init_sample_size = coerce_integer_count(
+            init_sample_size, label="init_sample_size"
+        )
         if not (0.0 < density <= 1.0):
             raise ValueError("density must be in (0, 1]")
-        if max_feature_cache_size is not None and (
-            isinstance(max_feature_cache_size, bool)
-            or not isinstance(max_feature_cache_size, int | np.integer)
-            or max_feature_cache_size <= 0
-        ):
-            raise ValueError(
-                "max_feature_cache_size must be positive or None (integer capacity required)"
+        if max_feature_cache_size is not None:
+            max_feature_cache_size = coerce_integer_count(
+                max_feature_cache_size, label="max_feature_cache_size"
             )
 
         self.k = k
@@ -126,12 +114,10 @@ class XStream(BaseModel):
         self.depth = depth
         self.cms_width = cms_width
         self.cms_num_hashes = cms_num_hashes
-        self.window_size = int(window_size)
-        self.init_sample_size = int(init_sample_size)
+        self.window_size = window_size
+        self.init_sample_size = init_sample_size
         self.density = density
-        self.max_feature_cache_size = (
-            None if max_feature_cache_size is None else int(max_feature_cache_size)
-        )
+        self.max_feature_cache_size = max_feature_cache_size
         self.seed = seed
 
         self._reset_state()

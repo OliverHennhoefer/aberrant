@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 
 def _average_path_length(n: int) -> float:
@@ -292,8 +292,10 @@ class MondrianIsolationForest(BaseModel):
             raise ValueError("subspace_size must be positive")
         if lambda_ <= 0:
             raise ValueError("lambda_ must be positive")
-        if window_size is not None and window_size <= 1:
-            raise ValueError("window_size must be greater than 1 or None")
+        if window_size is not None:
+            window_size = coerce_integer_count(
+                window_size, label="window_size", minimum=2
+            )
 
         self.n_estimators = n_estimators
         self.subspace_size = subspace_size

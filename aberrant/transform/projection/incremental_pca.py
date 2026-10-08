@@ -8,7 +8,7 @@ import numpy as np
 
 from aberrant.base.transformer import BaseTransformer
 from aberrant.transform.projection._schema import ProjectionSchema
-from aberrant.utils.validation import coerce_feature_values
+from aberrant.utils.validation import coerce_feature_values, coerce_integer_count
 
 
 class IncrementalPCA(BaseTransformer):
@@ -77,14 +77,8 @@ class IncrementalPCA(BaseTransformer):
         """
         super().__init__()
 
-        if (
-            isinstance(n_components, bool)
-            or not isinstance(n_components, int | np.integer)
-            or n_components <= 0
-        ):
-            raise ValueError("n_components must be positive integer")
-        if isinstance(n0, bool) or not isinstance(n0, int | np.integer) or n0 <= 0:
-            raise ValueError("n0 must be positive integer")
+        n_components = coerce_integer_count(n_components, label="n_components")
+        n0 = coerce_integer_count(n0, label="n0")
         if n0 < n_components:
             raise ValueError("n0 must be at least n_components")
         if not np.isfinite(tol) or tol < 0:
@@ -92,8 +86,8 @@ class IncrementalPCA(BaseTransformer):
         if forgetting_factor is not None and not (0 < forgetting_factor < 1):
             raise ValueError("forgetting_factor must be 0 < forgetting_factor < 1")
 
-        self.n_components: int = int(n_components)
-        self.n0: int = int(n0)
+        self.n_components: int = n_components
+        self.n0: int = n0
         self._schema = ProjectionSchema(n_components, keys)
         self.tol: float = tol
         self.forgetting_factor = forgetting_factor

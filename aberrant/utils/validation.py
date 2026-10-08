@@ -11,6 +11,23 @@ import numpy as np
 NumericScalar: TypeAlias = int | float | np.number
 
 
+def coerce_integer_count(value: object, *, label: str, minimum: int = 1) -> int:
+    """Validate a strict integer count and normalize it before bound arithmetic."""
+    if minimum == 0:
+        requirement = "non-negative integer"
+    elif minimum == 1:
+        requirement = "positive integer"
+    else:
+        requirement = f"an integer greater than {minimum - 1}"
+    message = f"{label} must be {requirement}"
+    if isinstance(value, bool) or not isinstance(value, int | np.integer):
+        raise ValueError(message)
+    result = int(value)
+    if result < minimum:
+        raise ValueError(message)
+    return result
+
+
 def coerce_finite_number(value: object, *, label: str) -> float:
     """Return a finite float or raise a consistently worded error."""
     if not isinstance(value, int | float | np.number):

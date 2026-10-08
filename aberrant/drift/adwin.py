@@ -2,9 +2,8 @@
 
 import math
 
-import numpy as np
-
 from aberrant.drift.base import BaseDriftDetector, _finite_observation
+from aberrant.utils.validation import coerce_integer_count
 
 
 class ADWIN(BaseDriftDetector):
@@ -67,38 +66,29 @@ class ADWIN(BaseDriftDetector):
     ) -> None:
         if not 0 < delta < 1:
             raise ValueError("delta must be in (0, 1)")
-        for name, value in (
-            ("clock", clock),
-            ("max_buckets", max_buckets),
-            ("min_window_length", min_window_length),
-        ):
-            if (
-                isinstance(value, bool)
-                or not isinstance(value, int | np.integer)
-                or value <= 0
-            ):
-                raise ValueError(f"{name} must be positive integer")
-        if (
-            isinstance(grace_period, bool)
-            or not isinstance(grace_period, int | np.integer)
-            or grace_period < 0
-        ):
-            raise ValueError("grace_period must be non-negative integer")
-        if max_window_size is not None and (
-            isinstance(max_window_size, bool)
-            or not isinstance(max_window_size, int | np.integer)
-            or max_window_size < 2 * min_window_length
-        ):
-            raise ValueError(
-                "max_window_size must be an integer at least 2 * min_window_length or None"
+        clock = coerce_integer_count(clock, label="clock")
+        max_buckets = coerce_integer_count(max_buckets, label="max_buckets")
+        min_window_length = coerce_integer_count(
+            min_window_length, label="min_window_length"
+        )
+        grace_period = coerce_integer_count(
+            grace_period, label="grace_period", minimum=0
+        )
+        if max_window_size is not None:
+            max_window_size = coerce_integer_count(
+                max_window_size, label="max_window_size"
             )
+            if max_window_size < 2 * min_window_length:
+                raise ValueError(
+                    "max_window_size must be an integer at least 2 * min_window_length or None"
+                )
 
         self.delta = delta
-        self.clock = int(clock)
-        self.max_buckets = int(max_buckets)
-        self.min_window_length = int(min_window_length)
-        self.grace_period = int(grace_period)
-        self.max_window_size = None if max_window_size is None else int(max_window_size)
+        self.clock = clock
+        self.max_buckets = max_buckets
+        self.min_window_length = min_window_length
+        self.grace_period = grace_period
+        self.max_window_size = max_window_size
 
         self._reset_state()
 

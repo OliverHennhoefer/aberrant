@@ -13,6 +13,7 @@ from aberrant.utils.validation import (
     MonotonicClock,
     PreparedTimestamp,
     coerce_finite_number,
+    coerce_integer_count,
 )
 
 
@@ -130,12 +131,6 @@ class SignedGraphSketchDetector(BaseModel):
             raise ValueError("shingle_size must be positive")
         if num_clusters <= 0:
             raise ValueError("num_clusters must be positive")
-        if (
-            isinstance(max_graphs, bool)
-            or not isinstance(max_graphs, int | np.integer)
-            or max_graphs <= 0
-        ):
-            raise ValueError("max_graphs must be positive integer")
         if num_clusters > max_graphs:
             raise ValueError("num_clusters must be less than or equal to max_graphs")
         if warm_up_graphs <= 0:
@@ -188,6 +183,7 @@ class SignedGraphSketchDetector(BaseModel):
             edge_type_key=self.edge_type_key,
             time_key=self.time_key,
         )
+        max_graphs = coerce_integer_count(max_graphs, label="max_graphs")
         self._validate_hyperparameters(
             sketch_dim=sketch_dim,
             shingle_size=shingle_size,
@@ -201,7 +197,7 @@ class SignedGraphSketchDetector(BaseModel):
         self.sketch_dim = sketch_dim
         self.shingle_size = shingle_size
         self.num_clusters = num_clusters
-        self.max_graphs = int(max_graphs)
+        self.max_graphs = max_graphs
         self.warm_up_graphs = warm_up_graphs
         self.normalize_score = normalize_score
         self.predict_threshold = predict_threshold

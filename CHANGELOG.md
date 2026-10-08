@@ -54,6 +54,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- Bounded components share strict integer-capacity validation; NumPy integer
+  capacities normalize before storage and ADWIN's cross-parameter arithmetic.
 - SDOStream rejects timestamps outside its float64 storage range before state
   changes; RSHash preserves mixed integer/float elapsed times without overflow
   or loss of small gaps at large clock values.
