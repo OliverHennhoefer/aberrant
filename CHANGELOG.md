@@ -30,6 +30,8 @@ Semantic Versioning.
 
 ### Changed
 
+- Updated locked fsspec to 2026.6.0 to resolve CVE-2026-104851 reported by
+  dependency-audit CI.
 - Hardened long-running processing against oversized-batch storage retention,
   non-integer capacities that disable batching, warm-up completion or eviction,
   deep Mondrian/Random Cut tree recursion,
