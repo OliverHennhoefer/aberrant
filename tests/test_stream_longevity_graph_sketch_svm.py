@@ -30,7 +30,11 @@ def _retained_bytes(value: object, seen: set[int] | None = None) -> int:
     seen.add(id(value))
     size = sys.getsizeof(value)
     if isinstance(value, np.ndarray):
-        return size
+        return size + (
+            _retained_bytes(value.base, seen) if value.base is not None else 0
+        )
+    if isinstance(value, memoryview):
+        return size + _retained_bytes(value.obj, seen)
     if isinstance(value, dict):
         return size + sum(
             _retained_bytes(key, seen) + _retained_bytes(item, seen)
@@ -44,6 +48,28 @@ def _retained_bytes(value: object, seen: set[int] | None = None) -> int:
         if hasattr(value, slot):
             size += _retained_bytes(getattr(value, slot), seen)
     return size
+
+
+@pytest.mark.parametrize("owner_kind", ["ndarray", "buffer"])
+def test_retained_bytes_counts_storage_pinned_by_tiny_numpy_views(owner_kind):
+    if owner_kind == "buffer":
+        owner = bytearray(1_000_000)
+        view = np.frombuffer(owner, dtype=np.uint8)[:1]
+    else:
+        owner = np.zeros(1_000_000, dtype=np.uint8)
+        view = owner[:1]
+
+    assert view.nbytes == 1
+    assert _retained_bytes(view) >= 1_000_000
+
+
+def test_retained_bytes_counts_shared_numpy_storage_only_once():
+    owner = np.zeros(1_000_000, dtype=np.uint8)
+    first, second = owner[:1], owner[-1:]
+    views = [first, second]
+
+    expected = sum(sys.getsizeof(value) for value in (views, first, second, owner))
+    assert _retained_bytes(views) == expected
 
 
 _FACTORIES: list[tuple[str, Callable[[], BaseModel], str]] = [
