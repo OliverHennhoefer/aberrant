@@ -98,24 +98,40 @@ class XStream(BaseModel):
             raise ValueError("cms_width must be positive")
         if cms_num_hashes <= 0:
             raise ValueError("cms_num_hashes must be positive")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
-        if init_sample_size <= 0:
-            raise ValueError("init_sample_size must be positive")
+        if (
+            isinstance(window_size, bool)
+            or not isinstance(window_size, int | np.integer)
+            or window_size <= 0
+        ):
+            raise ValueError("window_size must be positive integer")
+        if (
+            isinstance(init_sample_size, bool)
+            or not isinstance(init_sample_size, int | np.integer)
+            or init_sample_size <= 0
+        ):
+            raise ValueError("init_sample_size must be positive integer")
         if not (0.0 < density <= 1.0):
             raise ValueError("density must be in (0, 1]")
-        if max_feature_cache_size is not None and max_feature_cache_size <= 0:
-            raise ValueError("max_feature_cache_size must be positive or None")
+        if max_feature_cache_size is not None and (
+            isinstance(max_feature_cache_size, bool)
+            or not isinstance(max_feature_cache_size, int | np.integer)
+            or max_feature_cache_size <= 0
+        ):
+            raise ValueError(
+                "max_feature_cache_size must be positive or None (integer capacity required)"
+            )
 
         self.k = k
         self.n_chains = n_chains
         self.depth = depth
         self.cms_width = cms_width
         self.cms_num_hashes = cms_num_hashes
-        self.window_size = window_size
-        self.init_sample_size = init_sample_size
+        self.window_size = int(window_size)
+        self.init_sample_size = int(init_sample_size)
         self.density = density
-        self.max_feature_cache_size = max_feature_cache_size
+        self.max_feature_cache_size = (
+            None if max_feature_cache_size is None else int(max_feature_cache_size)
+        )
         self.seed = seed
 
         self._reset_state()
@@ -191,9 +207,14 @@ class XStream(BaseModel):
         shift = (
             self.rng.uniform(low=0.0, high=1.0, size=(self.n_chains, self.k)) * deltamax
         )
+        # A bucket can receive every observation in a reference window. Keep
+        # compact counters for ordinary windows, widening only when necessary.
+        counter_dtype = (
+            np.int32 if self.window_size <= np.iinfo(np.int32).max else np.int64
+        )
         cms_current = np.zeros(
             (self.n_chains, self.depth, self.cms_num_hashes, self.cms_width),
-            dtype=np.int32,
+            dtype=counter_dtype,
         )
         hash_coeffs = self.rng.integers(
             1,

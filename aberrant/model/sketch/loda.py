@@ -70,8 +70,12 @@ class StreamingLODA(BaseModel):
             raise ValueError("n_bins must be greater than 1")
         if sparsity is not None and not (0.0 < sparsity <= 1.0):
             raise ValueError("sparsity must be in (0, 1] or None")
-        if warm_up_samples <= 0:
-            raise ValueError("warm_up_samples must be positive")
+        if (
+            isinstance(warm_up_samples, bool)
+            or not isinstance(warm_up_samples, int | np.integer)
+            or warm_up_samples <= 0
+        ):
+            raise ValueError("warm_up_samples must be positive integer")
         if not (0.0 < decay <= 1.0):
             raise ValueError("decay must be in (0, 1]")
         if time_key is not None and (not isinstance(time_key, str) or not time_key):
@@ -86,7 +90,7 @@ class StreamingLODA(BaseModel):
         self.n_projections = n_projections
         self.n_bins = n_bins
         self.sparsity = sparsity
-        self.warm_up_samples = warm_up_samples
+        self.warm_up_samples = int(warm_up_samples)
         self.decay = decay
         self.time_key = time_key
         self.pseudocount = pseudocount

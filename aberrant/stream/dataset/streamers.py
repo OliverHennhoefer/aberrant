@@ -30,6 +30,9 @@ class DatasetStream(Protocol):
 class NpzStreamer:
     """Row-wise iterator over an NPZ dataset artifact.
 
+    Feature and label arrays are materialized in full. Memory scales with the
+    finite artifact size; use a lazy custom DatasetStream for unbounded input.
+
     Args:
         file_path: Path to the NPZ archive.
         dataset_info: Optional immutable registry metadata returned by
@@ -187,10 +190,14 @@ class BatchStreamer:
     """
 
     def __init__(self, base_streamer: DatasetStream, batch_size: int = 1000) -> None:
-        if batch_size <= 0:
-            raise ValueError("batch_size must be positive")
+        if (
+            isinstance(batch_size, bool)
+            or not isinstance(batch_size, int | np.integer)
+            or batch_size <= 0
+        ):
+            raise ValueError("batch_size must be positive integer")
         self.base_streamer = base_streamer
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size)
 
     def stream(self) -> Iterator[tuple[list[dict[str, float]], list[object]]]:
         """Yield feature and label batches."""

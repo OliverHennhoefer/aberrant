@@ -44,6 +44,11 @@ extension but Isolation Forest path-length scoring. The original
 [Mondrian Forest](https://proceedings.neurips.cc/paper_files/paper/2014/hash/195f15384c2a79cedf293e4a847ce85c-Abstract.html)
 is supervised and does not define this anomaly score.
 
+Its default lifetime mode can keep growing on expanding streams. For bounded
+retention, set `window_size`: trees periodically rebuild from the latest complete
+window, representing at most twice that window minus one event between rebuilds.
+This changes the reference history and introduces periodic rebuild work.
+
 `OnlineIsolationForest.n_jobs=1` executes tree work sequentially;
 `n_jobs=-1` uses all logical CPUs reported by the operating system. Positive
 values request that many worker threads.

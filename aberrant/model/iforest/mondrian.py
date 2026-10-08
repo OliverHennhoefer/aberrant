@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -139,52 +140,54 @@ class MondrianTree:
         If a sampled split time occurs before the node's own split time, create
         a new parent above this node; otherwise recurse or absorb into leaf.
         """
-        lower_extension = np.maximum(node.min - x_values, 0.0)
-        upper_extension = np.maximum(x_values - node.max, 0.0)
-        extension_weights = lower_extension + upper_extension
-        extension_rate = float(np.sum(extension_weights))
-        sampled_time = self._sample_exponential(extension_rate)
+        # Expanding ranges can create arbitrarily deep trees. Keep the update
+        # path explicitly rather than consuming one Python frame per branch.
+        path: list[tuple[MondrianBranch, bool]] = []
+        while True:
+            lower_extension = np.maximum(node.min - x_values, 0.0)
+            upper_extension = np.maximum(x_values - node.max, 0.0)
+            extension_weights = lower_extension + upper_extension
+            extension_rate = float(np.sum(extension_weights))
+            sampled_time = self._sample_exponential(extension_rate)
 
-        if parent_split_time + sampled_time < node.split_time:
-            split_feature = self._sample_split_feature(extension_weights)
-            split_threshold = self._sample_split_threshold(
-                x_values=x_values,
-                node=node,
-                split_feature=split_feature,
-            )
+            if parent_split_time + sampled_time < node.split_time:
+                split_feature = self._sample_split_feature(extension_weights)
+                split_threshold = self._sample_split_threshold(
+                    x_values=x_values,
+                    node=node,
+                    split_feature=split_feature,
+                )
+                new_leaf = MondrianLeaf.from_point(x_values, self.lambda_)
+                left, right = (
+                    (new_leaf, node)
+                    if x_values[split_feature] <= split_threshold
+                    else (node, new_leaf)
+                )
+                node = MondrianBranch.join(
+                    left,
+                    right,
+                    split_feature,
+                    split_threshold,
+                    parent_split_time + sampled_time,
+                )
+                break
 
-            new_leaf = MondrianLeaf.from_point(x_values, self.lambda_)
-            left, right = (
-                (new_leaf, node)
-                if x_values[split_feature] <= split_threshold
-                else (node, new_leaf)
-            )
-            return MondrianBranch.join(
-                left,
-                right,
-                split_feature,
-                split_threshold,
-                parent_split_time + sampled_time,
-            )
+            if isinstance(node, MondrianLeaf):
+                node.update_stats(x_values)
+                break
 
-        if isinstance(node, MondrianLeaf):
-            node.update_stats(x_values)
-            return node
+            go_left = x_values[node.split_feature] <= node.split_threshold
+            path.append((node, go_left))
+            parent_split_time = node.split_time
+            node = node.left_child if go_left else node.right_child
 
-        if x_values[node.split_feature] <= node.split_threshold:
-            node.left_child = self._extend_block(
-                node.left_child,
-                x_values,
-                parent_split_time=node.split_time,
-            )
-        else:
-            node.right_child = self._extend_block(
-                node.right_child,
-                x_values,
-                parent_split_time=node.split_time,
-            )
-
-        node.recompute_from_children()
+        for parent, go_left in reversed(path):
+            if go_left:
+                parent.left_child = node
+            else:
+                parent.right_child = node
+            parent.recompute_from_children()
+            node = parent
         return node
 
     def _sample_exponential(self, rate: float) -> float:
@@ -260,6 +263,12 @@ class MondrianIsolationForest(BaseModel):
         subspace_size: Number of features sampled per tree.
         lambda_: Mondrian lifetime budget.
         seed: Random seed for reproducibility.
+        window_size: Optional bound on recent observations used to replace the
+            trees. After the initial window, every ``window_size`` observations
+            rebuilds each tree from the latest complete window. Between rebuilds
+            each tree contains at most ``2 * window_size - 1`` observations.
+            ``None`` preserves lifetime learning, whose tree memory can grow
+            without bound on expanding streams.
 
     References:
         Lakshminarayanan, B., Roy, D. M., & Teh, Y. W. (2014). Mondrian
@@ -273,6 +282,7 @@ class MondrianIsolationForest(BaseModel):
         subspace_size: int = 256,
         lambda_: float = 1.0,
         seed: int | None = None,
+        window_size: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -282,16 +292,20 @@ class MondrianIsolationForest(BaseModel):
             raise ValueError("subspace_size must be positive")
         if lambda_ <= 0:
             raise ValueError("lambda_ must be positive")
+        if window_size is not None and window_size <= 1:
+            raise ValueError("window_size must be greater than 1 or None")
 
         self.n_estimators = n_estimators
         self.subspace_size = subspace_size
         self.lambda_ = lambda_
         self.seed = seed
+        self.window_size = window_size
 
         self.rng = np.random.default_rng(seed)
         self.trees: list[MondrianTree] = []
         self.n_samples = 0
         self._schema = FeatureSchema()
+        self._window: deque[np.ndarray] = deque(maxlen=window_size)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update all trees with one feature dictionary."""
@@ -303,6 +317,14 @@ class MondrianIsolationForest(BaseModel):
             tree.learn_one_from_global(prepared.values)
 
         self.n_samples += 1
+        if self.window_size is not None:
+            self._window.append(prepared.values.copy())
+            if self.trees[0].n_samples >= 2 * self.window_size:
+                for tree in self.trees:
+                    tree.root = None
+                    tree.n_samples = 0
+                    for point in self._window:
+                        tree.learn_one_from_global(point)
         self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
@@ -345,12 +367,17 @@ class MondrianIsolationForest(BaseModel):
 
     def _compute_c_factor(self) -> float:
         """Compute forest-level isolation normalization term."""
-        return _average_path_length(self.n_samples)
+        population = (
+            self.trees[0].n_samples
+            if self.window_size is not None and self.trees
+            else self.n_samples
+        )
+        return _average_path_length(population)
 
     def __repr__(self) -> str:
         """Return a string representation of the MondrianIsolationForest."""
         return (
             f"MondrianIsolationForest(n_estimators={self.n_estimators}, "
             f"subspace_size={self.subspace_size}, "
-            f"lambda_={self.lambda_}, seed={self.seed})"
+            f"lambda_={self.lambda_}, seed={self.seed}, window_size={self.window_size})"
         )

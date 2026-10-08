@@ -9,6 +9,12 @@ Semantic Versioning.
 
 ### Added
 
+- Package-wide streaming longevity regressions covering bounded retention,
+  eviction, lazy infinite inputs, deep optimizer/graph storage, and accelerated
+  counter/timestamp aging; documented remaining numeric and retention limits.
+- Optional bounded-history modes for `MondrianIsolationForest(window_size=...)`
+  and `ADWIN(max_window_size=...)`, preserving default lifetime semantics.
+
 - Core-only `SeasonalResidualDetector` with additive Holt-Winters forecasts,
   causal raw/scaled residual scores and explanations, two-cycle initialization,
   bounded seasonal state, reset/readiness, catalog construction, and a seeded
@@ -23,6 +29,13 @@ Semantic Versioning.
   optional bounded-window or exact full-stream ranking metrics.
 
 ### Changed
+
+- Hardened long-running processing against oversized-batch storage retention,
+  non-integer capacities that disable batching, warm-up completion or eviction,
+  deep Mondrian/Random Cut tree recursion,
+  fixed-width sketch counter wrapping, lossy integer clocks/IDs, and several
+  large-time or finite-input numeric failures. Page-Hinkley now updates its mean
+  without accumulating an overflowing lifetime sum.
 
 - Unified the bounded radius-neighbor detectors and ISCONNA's preview/learning
   transitions to remove duplicated scoring and state-update logic.

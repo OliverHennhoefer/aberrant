@@ -58,10 +58,18 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
             )
         if not (0.0 < adaptation_rate <= 1.0):
             raise ValueError("adaptation_rate must be in (0, 1]")
-        if buffer_size <= 0:
-            raise ValueError("buffer_size must be positive")
-        if sv_budget <= 0:
-            raise ValueError("sv_budget must be positive")
+        if (
+            isinstance(buffer_size, bool)
+            or not isinstance(buffer_size, int | np.integer)
+            or buffer_size <= 0
+        ):
+            raise ValueError("buffer_size must be positive integer")
+        if (
+            isinstance(sv_budget, bool)
+            or not isinstance(sv_budget, int | np.integer)
+            or sv_budget <= 0
+        ):
+            raise ValueError("sv_budget must be positive integer")
         if tolerance < 0.0:
             raise ValueError("tolerance must be non-negative")
 
@@ -69,8 +77,8 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self.gamma = float(initial_gamma)
         self.gamma_min, self.gamma_max = gamma_bounds
         self.adaptation_rate = adaptation_rate
-        self.buffer_size = buffer_size
-        self.sv_budget = sv_budget
+        self.buffer_size = int(buffer_size)
+        self.sv_budget = int(sv_budget)
         self.tolerance = tolerance
 
         # Support vectors deliberately remain in raw coordinates.
@@ -80,7 +88,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self.rho: float = 0.0
         self.K_sv: np.ndarray | None = None
 
-        self.data_buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
+        self.data_buffer: deque[np.ndarray] = deque(maxlen=self.buffer_size)
         self.n_samples: int = 0
 
         self._schema = FeatureSchema()

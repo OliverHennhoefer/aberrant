@@ -78,7 +78,6 @@ class PageHinkley(BaseDriftDetector):
     def _reset_state(self) -> None:
         """Initialize or reset internal state."""
         self._n: int = 0
-        self._sum: float = 0.0
         self._mean: float = 0.0
 
         # Cumulative sums for detecting increases and decreases
@@ -136,8 +135,13 @@ class PageHinkley(BaseDriftDetector):
         self._n += 1
 
         # Update running mean
-        self._sum += x
-        self._mean = self._sum / self._n
+        # Do not retain a lifetime sum: it can overflow even for a constant
+        # finite signal whose mean is representable.
+        difference = x - self._mean
+        if abs(difference) == float("inf"):
+            self._mean = self._mean * ((self._n - 1) / self._n) + x / self._n
+        else:
+            self._mean += difference / self._n
 
         # Compute deviation from mean
         deviation = x - self._mean - self.delta

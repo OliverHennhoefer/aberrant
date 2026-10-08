@@ -141,63 +141,64 @@ class _RandomCutTree:
         node: _RCFLeaf | _RCFBranch | None,
         new_leaf: _RCFLeaf,
     ) -> _RCFLeaf | _RCFBranch:
-        """Recursively insert a leaf and return subtree root."""
+        """Insert a leaf without a Python recursion limit on tree depth."""
         new_id = new_leaf.point_ids[0]
-
-        if node is None:
-            self._id_to_leaf[new_id] = new_leaf
-            return new_leaf
-
-        if isinstance(node, _RCFLeaf):
-            if np.array_equal(node.point, new_leaf.point):
-                node.point_ids.append(new_id)
-                node.size += 1
-                self._id_to_leaf[new_id] = node
-                self._recompute_upwards(node.parent)
-                return node
-
-            branch = self._split_leaf(node, new_leaf)
-            self._id_to_leaf[new_id] = new_leaf
-            return branch
-
-        expanded_min = np.minimum(node.bbox_min, new_leaf.point)
-        expanded_max = np.maximum(node.bbox_max, new_leaf.point)
-        sample = self._sample_cut(expanded_min, expanded_max)
-
-        if sample is not None:
-            cut_dim, cut_value = sample
-            if (
-                cut_value <= node.bbox_min[cut_dim]
-                or cut_value >= node.bbox_max[cut_dim]
-            ):
-                if new_leaf.point[cut_dim] <= cut_value:
-                    branch = _RCFBranch(
-                        left=new_leaf,
-                        right=node,
-                        cut_dim=cut_dim,
-                        cut_value=cut_value,
-                    )
-                else:
-                    branch = _RCFBranch(
-                        left=node,
-                        right=new_leaf,
-                        cut_dim=cut_dim,
-                        cut_value=cut_value,
-                    )
-                branch.left.parent = branch
-                branch.right.parent = branch
-                branch.recompute()
+        path: list[tuple[_RCFBranch, bool]] = []
+        while True:
+            if node is None:
                 self._id_to_leaf[new_id] = new_leaf
-                return branch
+                node = new_leaf
+                break
 
-        if new_leaf.point[node.cut_dim] <= node.cut_value:
-            node.left = self._insert_node(node.left, new_leaf)
-            node.left.parent = node
-        else:
-            node.right = self._insert_node(node.right, new_leaf)
-            node.right.parent = node
+            if isinstance(node, _RCFLeaf):
+                if np.array_equal(node.point, new_leaf.point):
+                    node.point_ids.append(new_id)
+                    node.size += 1
+                    self._id_to_leaf[new_id] = node
+                else:
+                    node = self._split_leaf(node, new_leaf)
+                    self._id_to_leaf[new_id] = new_leaf
+                break
 
-        node.recompute()
+            expanded_min = np.minimum(node.bbox_min, new_leaf.point)
+            expanded_max = np.maximum(node.bbox_max, new_leaf.point)
+            sample = self._sample_cut(expanded_min, expanded_max)
+
+            if sample is not None:
+                cut_dim, cut_value = sample
+                if (
+                    cut_value <= node.bbox_min[cut_dim]
+                    or cut_value >= node.bbox_max[cut_dim]
+                ):
+                    left, right = (
+                        (new_leaf, node)
+                        if new_leaf.point[cut_dim] <= cut_value
+                        else (node, new_leaf)
+                    )
+                    node = _RCFBranch(
+                        left=left,
+                        right=right,
+                        cut_dim=cut_dim,
+                        cut_value=cut_value,
+                    )
+                    node.left.parent = node
+                    node.right.parent = node
+                    node.recompute()
+                    self._id_to_leaf[new_id] = new_leaf
+                    break
+
+            go_left = new_leaf.point[node.cut_dim] <= node.cut_value
+            path.append((node, go_left))
+            node = node.left if go_left else node.right
+
+        for parent, go_left in reversed(path):
+            if go_left:
+                parent.left = node
+            else:
+                parent.right = node
+            node.parent = parent
+            parent.recompute()
+            node = parent
         return node
 
     def _split_leaf(

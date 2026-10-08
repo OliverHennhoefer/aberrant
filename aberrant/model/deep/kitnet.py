@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,6 +13,21 @@ from aberrant.utils.validation import FeatureSchema
 _PHASE_FEATURE_MAP = "feature_map_warmup"
 _PHASE_DETECTOR = "detector_warmup"
 _PHASE_READY = "ready"
+
+
+def _finite_array(values: np.ndarray, label: str) -> np.ndarray:
+    if not np.all(np.isfinite(values)):
+        raise OverflowError(f"Autoencoder {label} exceeds the float64 range")
+    return values
+
+
+def _rmse(error: np.ndarray) -> float:
+    """Avoid squaring unscaled residuals when the RMSE is representable."""
+    _finite_array(error, "residual")
+    scale = float(np.max(np.abs(error)))
+    if scale == 0.0:
+        return 0.0
+    return float(np.linalg.norm(error / scale) / math.sqrt(error.size) * scale)
 
 
 @dataclass
@@ -28,7 +44,7 @@ class _NumpyAutoencoder:
             raise ValueError("input_dim must be positive")
         if self.hidden_dim <= 0:
             raise ValueError("hidden_dim must be positive")
-        if self.learning_rate <= 0.0:
+        if not math.isfinite(self.learning_rate) or self.learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
 
         limit = np.sqrt(6.0 / float(self.input_dim + self.hidden_dim))
@@ -57,13 +73,13 @@ class _NumpyAutoencoder:
         """Compute RMSE reconstruction error without updating parameters."""
         _, output = self._forward(x)
         error = output - x
-        return float(np.sqrt(np.mean(error * error)))
+        return _rmse(error)
 
     def learn(self, x: np.ndarray) -> float:
         """Update parameters on one sample and return RMSE."""
         hidden, output = self._forward(x)
         error = output - x
-        rmse = float(np.sqrt(np.mean(error * error)))
+        rmse = _rmse(error)
 
         # 0.5 * mean squared error -> gradient: (output - x) / input_dim
         grad_output = error / float(self.input_dim)
@@ -77,10 +93,14 @@ class _NumpyAutoencoder:
         grad_w1 = np.outer(grad_hidden_linear, x)
         grad_b1 = grad_hidden_linear
 
-        self.w2 -= self.learning_rate * grad_w2
-        self.b2 -= self.learning_rate * grad_b2
-        self.w1 -= self.learning_rate * grad_w1
-        self.b1 -= self.learning_rate * grad_b1
+        # Stage a complete finite update before publishing weights. One extreme
+        # sample must not leave NaN weights that poison every subsequent event.
+        with np.errstate(over="ignore", invalid="ignore"):
+            w2 = _finite_array(self.w2 - self.learning_rate * grad_w2, "weights")
+            b2 = _finite_array(self.b2 - self.learning_rate * grad_b2, "bias")
+            w1 = _finite_array(self.w1 - self.learning_rate * grad_w1, "weights")
+            b1 = _finite_array(self.b1 - self.learning_rate * grad_b1, "bias")
+        self.w2, self.b2, self.w1, self.b1 = w2, b2, w1, b1
 
         return rmse
 
@@ -147,7 +167,7 @@ class OnlineAutoencoderEnsemble(BaseModel):
             raise ValueError("feature_map_grace must be positive")
         if ad_grace < 0:
             raise ValueError("ad_grace must be non-negative")
-        if learning_rate <= 0.0:
+        if not math.isfinite(learning_rate) or learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
         if not (0.0 < hidden_ratio <= 1.0):
             raise ValueError("hidden_ratio must be in (0, 1]")
@@ -198,13 +218,20 @@ class OnlineAutoencoderEnsemble(BaseModel):
         """Accumulate first/second moments for online correlation estimates."""
         if self._sum is None or self._sum_sq is None or self._sum_cross is None:
             n_features = x_vec.size
-            self._sum = np.zeros(n_features, dtype=np.float64)
-            self._sum_sq = np.zeros(n_features, dtype=np.float64)
-            self._sum_cross = np.zeros((n_features, n_features), dtype=np.float64)
+            previous_sum = np.zeros(n_features, dtype=np.float64)
+            previous_sq = np.zeros(n_features, dtype=np.float64)
+            previous_cross = np.zeros((n_features, n_features), dtype=np.float64)
+        else:
+            previous_sum, previous_sq = self._sum, self._sum_sq
+            previous_cross = self._sum_cross
 
-        self._sum += x_vec
-        self._sum_sq += x_vec * x_vec
-        self._sum_cross += np.outer(x_vec, x_vec)
+        with np.errstate(over="ignore", invalid="ignore"):
+            total = _finite_array(previous_sum + x_vec, "feature sum")
+            squared = _finite_array(previous_sq + x_vec * x_vec, "feature moment")
+            cross = _finite_array(
+                previous_cross + np.outer(x_vec, x_vec), "feature cross moment"
+            )
+        self._sum, self._sum_sq, self._sum_cross = total, squared, cross
         self._feature_map_samples += 1
 
     def _build_feature_groups(self) -> list[np.ndarray]:

@@ -192,11 +192,18 @@ class StreamingRSHash(BaseModel):
         delta2 = vector - self._mean
         self._m2 += delta * delta2
 
-    def _preview_scale(self, current_time: float) -> float:
+    def _preview_scale(self, current_time: int | float) -> float:
         """Preview fading relative to the boundary's last committed timestamp."""
         if self._samples_seen == 0 or self.decay == 0.0:
             return self._scale
         delta = current_time - self._boundary.clock.max_time
+        if delta > 745.0:
+            # Comparing logs also handles integer timestamps beyond float64
+            # and tiny fading rates, without converting their product first.
+            log_elapsed_decay = math.log(delta) + math.log(self.decay)
+            if log_elapsed_decay > math.log(745.0):
+                return 0.0
+            return self._scale * math.exp(-math.exp(log_elapsed_decay))
         return self._scale * float(np.exp(-self.decay * delta))
 
     def _bucket_indices(self, normalized: np.ndarray) -> np.ndarray:
@@ -234,7 +241,9 @@ class StreamingRSHash(BaseModel):
         if self._counts is None:
             return 0.0
 
-        normalizer = float(np.log1p(max(self._samples_seen, 1)))
+        # NumPy treats Python integers beyond uint64 as objects, for which its
+        # log1p ufunc fails. math.log accepts arbitrary-size integer counters.
+        normalizer = math.log(1 + max(self._samples_seen, 1))
         if normalizer <= 0.0:
             return 0.0
 

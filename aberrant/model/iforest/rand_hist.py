@@ -354,12 +354,18 @@ class StreamRandomHistogramForest(BaseModel):
             raise ValueError("n_estimators must be positive")
         if max_depth <= 0:
             raise ValueError("max_depth must be positive")
-        if window_size <= 1:
-            raise ValueError("window_size must be greater than 1")
+        if (
+            isinstance(window_size, bool)
+            or not isinstance(window_size, int | np.integer)
+            or window_size <= 1
+        ):
+            raise ValueError(
+                "window_size must be greater than 1 (integer capacity required)"
+            )
 
         self.n_estimators = n_estimators
         self.max_depth = max_depth
-        self.window_size = window_size
+        self.window_size = int(window_size)
         self.seed = seed
         self._schema = FeatureSchema()
 

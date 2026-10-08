@@ -2,6 +2,8 @@
 
 import math
 
+import numpy as np
+
 from aberrant.drift.base import BaseDriftDetector, _finite_observation
 
 
@@ -27,6 +29,10 @@ class ADWIN(BaseDriftDetector):
             Default is 5.
         grace_period: Number of samples before drift detection starts.
             Default is 10.
+        max_window_size: Optional hard bound on represented observations.
+            Oldest whole buckets are discarded when the bound is exceeded,
+            which can leave fewer observations than the bound. None preserves
+            the adaptive algorithm's O(log n) storage on stationary streams.
 
     Examples:
         ```python
@@ -56,23 +62,43 @@ class ADWIN(BaseDriftDetector):
         max_buckets: int = 5,
         min_window_length: int = 5,
         grace_period: int = 10,
+        *,
+        max_window_size: int | None = None,
     ) -> None:
-        if delta <= 0 or delta >= 1:
+        if not 0 < delta < 1:
             raise ValueError("delta must be in (0, 1)")
-        if clock <= 0:
-            raise ValueError("clock must be positive")
-        if max_buckets <= 0:
-            raise ValueError("max_buckets must be positive")
-        if min_window_length <= 0:
-            raise ValueError("min_window_length must be positive")
-        if grace_period < 0:
-            raise ValueError("grace_period must be non-negative")
+        for name, value in (
+            ("clock", clock),
+            ("max_buckets", max_buckets),
+            ("min_window_length", min_window_length),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int | np.integer)
+                or value <= 0
+            ):
+                raise ValueError(f"{name} must be positive integer")
+        if (
+            isinstance(grace_period, bool)
+            or not isinstance(grace_period, int | np.integer)
+            or grace_period < 0
+        ):
+            raise ValueError("grace_period must be non-negative integer")
+        if max_window_size is not None and (
+            isinstance(max_window_size, bool)
+            or not isinstance(max_window_size, int | np.integer)
+            or max_window_size < 2 * min_window_length
+        ):
+            raise ValueError(
+                "max_window_size must be an integer at least 2 * min_window_length or None"
+            )
 
         self.delta = delta
-        self.clock = clock
-        self.max_buckets = max_buckets
-        self.min_window_length = min_window_length
-        self.grace_period = grace_period
+        self.clock = int(clock)
+        self.max_buckets = int(max_buckets)
+        self.min_window_length = int(min_window_length)
+        self.grace_period = int(grace_period)
+        self.max_window_size = None if max_window_size is None else int(max_window_size)
 
         self._reset_state()
 
@@ -148,6 +174,13 @@ class ADWIN(BaseDriftDetector):
             self._soft_reset()
         self._drift_detected = False
         self._samples_since_reset += 1
+
+        if self.max_window_size is not None:
+            while self._width >= self.max_window_size:
+                # Remove a complete oldest bucket to preserve its exact moments.
+                # Expire before insertion so compression cannot merge the new
+                # observation into one oversized bucket and discard it as well.
+                self._remove_oldest(2 ** (len(self._bucket_count) - 1))
 
         # Add new element to the window
         self._insert_element(x)
@@ -319,6 +352,11 @@ class ADWIN(BaseDriftDetector):
             )
         else:
             self._variance = 0.0
+
+        while self._bucket_count and self._bucket_count[-1] == 0:
+            self._bucket_count.pop()
+            self._bucket_sum.pop()
+            self._bucket_variance.pop()
 
     def __repr__(self) -> str:
         return (

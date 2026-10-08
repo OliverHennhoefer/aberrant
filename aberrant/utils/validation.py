@@ -23,6 +23,8 @@ def coerce_finite_number(value: object, *, label: str) -> float:
 
 def coerce_integer_feature(value: object, key: str) -> int:
     """Return an integer-like finite feature value."""
+    if isinstance(value, int | np.integer):
+        return int(value)
     as_float = coerce_finite_number(value, label=f"Feature '{key}'")
     as_int = int(round(as_float))
     if not np.isclose(as_float, float(as_int), rtol=0.0, atol=1e-9):
@@ -140,7 +142,7 @@ class FeatureSchema:
 class PreparedTimestamp:
     """Validated timestamp awaiting an optional clock commit."""
 
-    value: float
+    value: int | float
     implicit: bool
     arrival_index: int
     revision: int
@@ -152,7 +154,7 @@ class MonotonicClock:
     def __init__(self, *, integer_like: bool = False) -> None:
         self._integer_like = integer_like
         self._arrival_index = 0
-        self._max_time = float("-inf")
+        self._max_time: int | float = float("-inf")
         self._revision = 0
 
     @property
@@ -161,7 +163,7 @@ class MonotonicClock:
         return self._arrival_index
 
     @property
-    def max_time(self) -> float:
+    def max_time(self) -> int | float:
         """Return the greatest committed timestamp."""
         return self._max_time
 
@@ -173,8 +175,11 @@ class MonotonicClock:
     ) -> PreparedTimestamp:
         """Resolve and validate a timestamp without advancing the clock."""
         arrival_index = self._arrival_index + 1 if implicit else self._arrival_index
+        current_time: int | float
         if implicit:
-            current_time = float(arrival_index)
+            current_time = arrival_index
+        elif isinstance(value, int | np.integer):
+            current_time = int(value)
         else:
             current_time = coerce_finite_number(value, label="Timestamp value")
             if self._integer_like:
@@ -186,12 +191,12 @@ class MonotonicClock:
                     atol=1e-9,
                 ):
                     raise ValueError("Timestamp value must be integer-like")
-                current_time = float(rounded)
+                current_time = rounded
 
         if current_time < self._max_time:
             raise ValueError(
-                f"Non-monotonic timestamp: received {current_time:g}, "
-                f"current {self._max_time:g}"
+                f"Non-monotonic timestamp: received {current_time}, "
+                f"current {self._max_time}"
             )
         return PreparedTimestamp(
             value=current_time,
