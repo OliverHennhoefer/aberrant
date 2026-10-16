@@ -35,8 +35,10 @@ jobs:
           uv run --locked python - <<'PY'
           import aberrant
           from aberrant.base import Pipeline
+          from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
           from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
           from aberrant.model.iforest import OnlineIsolationForest
+          from aberrant.model.stat import MovingCovariance
           from aberrant.transform.preprocessing import StandardScaler
 
           assert isinstance(aberrant.__version__, str)
@@ -48,6 +50,20 @@ jobs:
           _ = q.score_one({"score": 0.1})
           p = StandardScaler() | OnlineIsolationForest()
           assert isinstance(p, Pipeline)
+          graph = GraphPipeline(
+              [
+                  GraphNode("left", Select(["x"])),
+                  GraphNode("right", Select(["y"])),
+                  MergeNode("features", ("left", "right")),
+              ],
+              MovingCovariance(window_size=8),
+              output="features",
+              model_minimum_updates=2,
+          )
+          graph.learn_one({"x": 1.0, "y": 2.0})
+          graph.learn_one({"x": 2.0, "y": 3.0})
+          assert graph.readiness.ready
+          assert isinstance(graph.score_one({"x": 3.0, "y": 4.0}), float)
           PY
 
   lint-type-test:
