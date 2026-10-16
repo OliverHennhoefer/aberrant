@@ -1,6 +1,6 @@
 <h1 align="center">
   <a href="https://oliverhennhoefer.github.io/aberrant/">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/aberrant.png" alt="ABERRANT" width="900">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/aberrant.png" alt="aberrant" width="900">
   </a>
 </h1>
 
@@ -35,13 +35,7 @@ document their required keys explicitly. Detector state, warm-up behavior,
 memory policy, and score scale remain model-specific rather than being hidden
 behind a batch-estimator abstraction.
 
-> [!NOTE]
-> ABERRANT 1.x preserves compatibility for its documented public APIs.
-> Private implementation details and exact numeric score sequences are outside
-> that guarantee. See the [compatibility policy](https://oliverhennhoefer.github.io/aberrant/api/#compatibility-policy)
-> before upgrading or relying on persisted model state.
-
-## Why ABERRANT?
+## Why `aberrant`?
 
 - **Use one streaming contract** across isolation forests, distance methods,
   sketches, graph detectors, online statistics, SVMs, time-series methods, and
@@ -62,7 +56,7 @@ behind a batch-estimator abstraction.
 
 ## Installation
 
-ABERRANT requires Python 3.10 or newer and is continuously tested on CPython
+`aberrant` requires Python 3.10 or newer and is continuously tested on CPython
 3.10, 3.11, and 3.12.
 
 ```bash
@@ -188,7 +182,7 @@ detector = (
 ```
 
 Any custom object satisfying `TransformerProtocol` or `ModelProtocol` can join
-a pipeline; subclassing an ABERRANT base class is optional. Read the
+a pipeline; subclassing an `aberrant` base class is optional. Read the
 [pipeline guide](https://oliverhennhoefer.github.io/aberrant/user_guide/pipelines/)
 for lifecycle and composition rules.
 
@@ -254,29 +248,3 @@ for event, label in islice(dataset.stream(), 100):
 Labels are provided for evaluation; unsupervised detectors learn only from the
 event mapping. Cache location and download behavior are configurable through
 the [streaming guide](https://oliverhennhoefer.github.io/aberrant/user_guide/streaming/).
-
-## Update and scoring semantics
-
-> [!IMPORTANT]
-> For an honest prequential evaluation, call `score_one(event)` before
-> `learn_one(event)`. Scoring does not call any component's `learn_one` or
-> incorporate the candidate into learned reference state. During
-> `Pipeline.learn_one`, each transformer first learns the event and then passes
-> its post-update transform to the next stage. Score scales and warm-up behavior
-> are model-specific, so a single numeric threshold is not portable across
-> detector families.
-
-The [evaluation guide](https://oliverhennhoefer.github.io/aberrant/user_guide/evaluation/)
-covers warm-up separation, label leakage, and useful metrics for imbalanced
-anomaly streams.
-
-## Project
-
-Read the [documentation](https://oliverhennhoefer.github.io/aberrant/), browse
-the [examples](https://github.com/OliverHennhoefer/aberrant/tree/main/examples),
-or report a problem in the [issue tracker](https://github.com/OliverHennhoefer/aberrant/issues).
-Contributions are welcome; start with the
-[contributing guide](https://github.com/OliverHennhoefer/aberrant/blob/main/CONTRIBUTING.md).
-
-ABERRANT is distributed under the
-[MIT License](https://github.com/OliverHennhoefer/aberrant/blob/main/LICENSE).
