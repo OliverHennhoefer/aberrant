@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from aberrant.base.readiness import Readiness
 from aberrant.model.stat._univariate_base import (
     _BaseMovingUnivariate,
     _extract_univariate_value,
@@ -30,6 +31,15 @@ class MovingAverage(_BaseMovingUnivariate):
 
 class MovingHarmonicAverage(_BaseMovingUnivariate):
     """Score harmonic-mean change, ignoring zero values during learning."""
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(
+            bool(self.window),
+            len(self.window),
+            1,
+            None if self.window else "Waiting for a nonzero retained value",
+        )
 
     def learn_one(self, x: dict[str, float]) -> None:
         self.feature_name, value = _extract_univariate_value(x, self.feature_name)
@@ -64,6 +74,18 @@ class MovingHarmonicAverage(_BaseMovingUnivariate):
 
 class MovingGeometricAverage(_BaseMovingUnivariate):
     """Score geometric-mean changes for values or successive growth factors."""
+
+    @property
+    def readiness(self) -> Readiness:
+        required = 3 if self.absoluteValues else 2
+        return Readiness(
+            len(self.window) >= required,
+            len(self.window),
+            required,
+            None
+            if len(self.window) >= required
+            else "Waiting for positive retained values",
+        )
 
     def __init__(
         self,

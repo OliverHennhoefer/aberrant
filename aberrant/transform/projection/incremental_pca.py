@@ -6,6 +6,7 @@ from copy import copy
 
 import numpy as np
 
+from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.transform.projection._schema import ProjectionSchema
 from aberrant.utils.validation import coerce_feature_values, coerce_integer_count
@@ -102,6 +103,10 @@ class IncrementalPCA(BaseTransformer):
         self.vectors: np.ndarray = np.array([])  # Eigenvectors (loadings)
 
     @property
+    def readiness(self) -> Readiness:
+        return Readiness(self.n0_reached, self.n_samples_seen, self.n0)
+
+    @property
     def feature_names(self) -> list[str] | None:
         """Established feature names in projection order."""
         return self._schema.feature_names
@@ -168,7 +173,9 @@ class IncrementalPCA(BaseTransformer):
 
         # Compute eigendecomposition of updated covariance matrix
         matrix_to_decompose = np.diag(lambda_updated) + np.outer(xhat, xhat)
-        eigenvalues, eigenvectors = np.linalg.eig(matrix_to_decompose)
+        # This update is real symmetric. The Hermitian solver preserves a real,
+        # orthogonal basis even for repeated or nearly repeated eigenvalues.
+        eigenvalues, eigenvectors = np.linalg.eigh(matrix_to_decompose)
 
         # Sort in descending order
         idx = np.argsort(eigenvalues)[::-1]

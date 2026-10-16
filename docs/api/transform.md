@@ -14,6 +14,12 @@ not learn.
 
 ::: aberrant.transform.preprocessing.RollingRobustScaler
 
+::: aberrant.transform.preprocessing.Select
+
+::: aberrant.transform.preprocessing.Rename
+
+::: aberrant.transform.preprocessing.Passthrough
+
 ## Projection
 
 ::: aberrant.transform.projection.IncrementalPCA

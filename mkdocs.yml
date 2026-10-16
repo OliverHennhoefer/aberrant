@@ -34,6 +34,7 @@ nav:
     - Transformers: user_guide/transformers.md
     - Streaming Datasets: user_guide/streaming.md
     - Pipelines: user_guide/pipelines.md
+    - Branched Pipelines: user_guide/graph_pipelines.md
     - Application Integration: user_guide/integrations.md
     - Drift Detection: user_guide/drift.md
     - Evaluation: user_guide/evaluation.md
@@ -43,6 +44,7 @@ nav:
     - Overview: api/index.md
     - Base: api/base.md
     - Catalog: api/catalog.md
+    - Composition: api/compose.md
     - Models:
       - Overview: api/models/index.md
       - Core Models: api/models/core.md

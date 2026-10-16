@@ -6,6 +6,7 @@ from collections.abc import Iterator, MutableMapping
 from contextlib import contextmanager
 from typing import TypeVar
 
+from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.validation import coerce_feature_values
 
@@ -32,6 +33,8 @@ class MinMaxScaler(BaseTransformer):
 
     Args:
         feature_range: Target range for scaled features.
+        clip: Bound transformed values to ``feature_range``. False preserves
+            extrapolation beyond the extrema learned so far.
 
     Examples:
         ```python
@@ -43,12 +46,15 @@ class MinMaxScaler(BaseTransformer):
         ```
     """
 
-    def __init__(self, feature_range: tuple[float, float] = (0, 1)) -> None:
+    def __init__(
+        self, feature_range: tuple[float, float] = (0, 1), clip: bool = False
+    ) -> None:
         """
         Initialize the MinMaxScaler.
 
         Args:
             feature_range: The desired range of transformed features (default is (0, 1)).
+            clip: Whether transformed values are clipped to the target range.
         """
         super().__init__()
         if len(feature_range) != 2:
@@ -59,8 +65,19 @@ class MinMaxScaler(BaseTransformer):
         if lower >= upper:
             raise ValueError("feature_range lower bound must be less than upper bound")
         self.feature_range = (lower, upper)
+        if not isinstance(clip, bool):
+            raise ValueError("clip must be a boolean")
+        self.clip = clip
         self.min: dict[str, float] = {}
         self.max: dict[str, float] = {}
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        """Older trusted checkpoints predate the additive clipping option."""
+        self.__dict__.update({"clip": False, **state})
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(bool(self.min), int(bool(self.min)), 1)
 
     @contextmanager
     def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
@@ -121,13 +138,18 @@ class MinMaxScaler(BaseTransformer):
                     scaled_value * (self.feature_range[1] - self.feature_range[0])
                     + self.feature_range[0]
                 )
+                if self.clip:
+                    scaled_value = min(
+                        self.feature_range[1], max(self.feature_range[0], scaled_value)
+                    )
                 scaled_x[feature] = float(scaled_value)
 
         return scaled_x
 
     def __repr__(self) -> str:
         """Return string representation of the scaler."""
-        return f"MinMaxScaler(feature_range={self.feature_range})"
+        suffix = ", clip=True" if self.clip else ""
+        return f"MinMaxScaler(feature_range={self.feature_range}{suffix})"
 
 
 class StandardScaler(BaseTransformer):
@@ -163,6 +185,11 @@ class StandardScaler(BaseTransformer):
         self.counts: Counter[str] = Counter()
         self.means: defaultdict[str, float] = defaultdict(float)
         self.sum_sq_diffs: defaultdict[str, float] = defaultdict(float)
+
+    @property
+    def readiness(self) -> Readiness:
+        observed = min(self.counts.values(), default=0)
+        return Readiness(observed >= 1, observed, 1)
 
     @contextmanager
     def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:

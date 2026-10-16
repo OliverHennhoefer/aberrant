@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from copy import copy
 
 from aberrant.base.exceptions import ValidationError
+from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.validation import FeatureSchema, PreparedFeatures
 
@@ -37,6 +38,11 @@ class FeatureSchemaGuard(BaseTransformer):
             names=self.features,
             sort_names=sort_features,
         )
+
+    @property
+    def readiness(self) -> Readiness:
+        ready = self._schema.is_established
+        return Readiness(ready, int(ready), 1)
 
     @property
     def feature_names(self) -> tuple[str, ...] | None:

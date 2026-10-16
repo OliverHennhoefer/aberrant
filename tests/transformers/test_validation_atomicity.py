@@ -52,7 +52,7 @@ def test_online_pca_decomposition_failure_keeps_previous_components():
         model.learn_one(sample)
     before = pickle.dumps(model)
     with (
-        patch("numpy.linalg.eig", side_effect=np.linalg.LinAlgError("failed")),
+        patch("numpy.linalg.eigh", side_effect=np.linalg.LinAlgError("failed")),
         pytest.raises(np.linalg.LinAlgError),
     ):
         model.learn_one({"a": 1.0, "b": 1.0})

@@ -7,6 +7,26 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-16
+
+### Added
+
+- Standalone programmatic `GraphPipeline` for feature branching/merging with
+  staged post-update readiness, one update per node, detached branch values,
+  transformer rollback through terminal learning, explicit uncertain-state
+  failures, and optional detached execution observations.
+- Public `Select`, `Rename`, and `Passthrough` transformers and catalog entries;
+  catalog output-name resolution; optional component readiness descriptions.
+- `MinMaxScaler(clip=False)` preserves extrapolation by default and offers
+  explicit clipping for bounded-input applications.
+
+Existing linear `Pipeline` behaviour and `DetectorConfig` version 1 are retained.
+
+### Fixed
+
+- Use the symmetric eigensolver for online PCA covariance updates, avoiding
+  complex round-off bases and implicit imaginary-value truncation.
+
 ## [1.2.0] - 2026-10-08
 
 ### Added

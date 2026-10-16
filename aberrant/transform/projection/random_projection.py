@@ -6,6 +6,7 @@ from copy import copy
 
 import numpy as np
 
+from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.transform.projection._schema import ProjectionSchema
 from aberrant.utils.validation import coerce_feature_values
@@ -50,6 +51,11 @@ class RandomProjection(BaseTransformer):
         if keys is not None:
             self.random_matrix = self._create_random_matrix(len(keys))
             self.n_dimensions = len(keys)
+
+    @property
+    def readiness(self) -> Readiness:
+        ready = self._schema.is_established
+        return Readiness(ready, int(ready), 1)
 
     @property
     def feature_names(self) -> list[str] | None:

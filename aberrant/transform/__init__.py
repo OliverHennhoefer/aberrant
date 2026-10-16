@@ -3,7 +3,10 @@
 from aberrant.transform.preprocessing import (
     FeatureSchemaGuard,
     MinMaxScaler,
+    Passthrough,
+    Rename,
     RollingRobustScaler,
+    Select,
     StandardScaler,
 )
 from aberrant.transform.projection import IncrementalPCA, RandomProjection
@@ -15,4 +18,7 @@ __all__ = [
     "RandomProjection",
     "RollingRobustScaler",
     "StandardScaler",
+    "Select",
+    "Rename",
+    "Passthrough",
 ]

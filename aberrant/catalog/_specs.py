@@ -471,6 +471,9 @@ class ComponentSpec:
 
 CapabilityResolver = Callable[[Mapping[str, object]], ModelCapabilities]
 FeatureCountResolver = Callable[[Mapping[str, object], int | None], int | None]
+FeatureNamesResolver = Callable[
+    [Mapping[str, object], tuple[str, ...] | None], tuple[str, ...] | None
+]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -514,6 +517,25 @@ class TransformerSpec(ComponentSpec):
         repr=False,
         compare=False,
     )
+    _feature_names_resolver: FeatureNamesResolver | None = field(
+        default=None, repr=False, compare=False
+    )
+
+    def output_feature_names(
+        self,
+        params: Mapping[str, object] | None,
+        input_feature_names: tuple[str, ...] | None,
+    ) -> tuple[str, ...] | None:
+        """Resolve public output names without learning any observations."""
+        resolved = self.resolved_parameters(params)
+        if self._feature_names_resolver is None:
+            return input_feature_names
+        try:
+            return self._feature_names_resolver(resolved, input_feature_names)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                f"Cannot resolve feature names for transformer '{self.id}': {exc}"
+            ) from exc
 
     def output_feature_count(
         self,

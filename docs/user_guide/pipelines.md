@@ -153,6 +153,10 @@ Subclassing remains optional for explicitly constructed pipelines.
 
 ## Keep score policy outside the pipeline
 
+For branching, explicit merging and staged transformer initialization, use the
+standalone [numeric graph API](graph_pipelines.md). Its readiness-aware learning
+is additive; linear pipelines retain the behaviour described above.
+
 `ThresholdModel` and `QuantileThreshold` are models, not transformers. They
 cannot be appended after another model. Score the detector, pass the resulting
 scalar in a new mapping to the threshold model, and update each component in

@@ -25,6 +25,10 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.FeatureMap
 
+::: aberrant.base.Readiness
+
+::: aberrant.base.ReadinessProtocol
+
 ## Exceptions
 
 ::: aberrant.base.AberrantError
