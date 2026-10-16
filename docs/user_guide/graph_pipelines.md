@@ -97,9 +97,10 @@ configured range. Its default remains `False`, preserving extrapolation.
 Custom nodes satisfy `TransformerProtocol`. Supply `minimum_updates` explicitly
 when a transformer has no `readiness: Readiness` property, including zero for a
 stateless transform. Inputs and outputs are detached finite mappings; one
-component cannot mutate a sibling branch's input. Feature schemas become fixed
-after a successful learning pass. Reordered mappings retain their established
-feature order.
+component cannot mutate a sibling branch's input. The first successful learning
+pass preserves the caller's input mapping order and fixes each feature schema.
+Reordered mappings retain their established feature order. A terminal model may
+apply its own documented feature ordering, as it does outside a graph.
 
 Implement `learning_transaction(x)` to restore transformer state if any later
 component fails. All participating contexts remain open through terminal

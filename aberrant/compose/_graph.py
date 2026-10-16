@@ -225,8 +225,7 @@ class GraphPipeline:
             ) from self._failure
 
     def _input(self, x: dict[str, float]) -> dict[str, float]:
-        expected = self._schemas.get(INPUT)
-        return checked_features(x, expected or tuple(sorted(x)))
+        return checked_features(x, self._schemas.get(INPUT))
 
     def _transform(
         self,

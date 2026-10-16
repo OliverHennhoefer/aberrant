@@ -21,6 +21,7 @@ from aberrant.compose import (
     Rename,
     Select,
 )
+from aberrant.model.iforest import OnlineIsolationForest
 from aberrant.model.stat import (
     MovingAverage,
     MovingCovariance,
@@ -306,6 +307,43 @@ def test_input_schema_and_nonfinite_values_reject_before_learning():
         with pytest.raises(ValueError):
             graph.learn_one(sample)
         assert pickle.dumps(graph) == before
+
+
+@pytest.mark.parametrize("passthrough", [False, True])
+def test_first_input_order_is_frozen_through_learning_scoring_and_checkpoint(
+    passthrough,
+):
+    observations = []
+    terminal = OnlineIsolationForest(num_trees=2, max_leaf_samples=4, seed=42)
+    reference = OnlineIsolationForest(num_trees=2, max_leaf_samples=4, seed=42)
+    nodes = [GraphNode("raw", Passthrough())] if passthrough else []
+    graph = GraphPipeline(
+        nodes, terminal, "raw" if passthrough else INPUT, observer=observations.append
+    )
+    for index in range(12):
+        sample = {"z": float(index * 3), "a": float(index % 5)}
+        graph.learn_one(sample)
+        reference.learn_one(sample)
+    assert all(
+        tuple(name for name, _ in event.inputs) == ("z", "a") for event in observations
+    )
+
+    # A differently ordered caller mapping cannot change the established order.
+    observations.clear()
+    candidate = {"a": 2.0, "z": 40.0}
+    assert graph.score_one(candidate) == reference.score_one(candidate)
+    assert all(
+        tuple(name for name, _ in event.inputs) == ("z", "a") for event in observations
+    )
+    restored = pickle.loads(pickle.dumps(graph))
+    restored.observer = observations.append
+    observations.clear()
+    restored.learn_one(candidate)
+    reference.learn_one(candidate)
+    assert all(
+        tuple(name for name, _ in event.inputs) == ("z", "a") for event in observations
+    )
+    assert restored.score_one(candidate) == reference.score_one(candidate)
 
 
 def test_select_rename_and_clip_are_public_catalog_components():
