@@ -881,12 +881,59 @@ def _projected_features(
     return output
 
 
+def _projected_names(
+    params: Parameters, _inputs: tuple[str, ...] | None
+) -> tuple[str, ...]:
+    return tuple(
+        f"component_{index}" for index in range(_as_int(params["n_components"]))
+    )
+
+
+def _selected_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...]:
+    features = params["features"]
+    if not isinstance(features, (tuple, list)) or not features:
+        raise ValueError("features must be a non-empty sequence")
+    if any(not isinstance(name, str) or not name for name in features):
+        raise ValueError("features must contain non-empty names")
+    if len(set(features)) != len(features):
+        raise ValueError("features cannot contain duplicates")
+    if inputs is not None and not set(features).issubset(inputs):
+        raise ValueError("Selected features must exist in the input")
+    return tuple(features)
+
+
+def _selected_count(params: Parameters, _inputs: int | None) -> int:
+    return len(_selected_names(params, None))
+
+
+def _renamed_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    mapping = params["mapping"]
+    if not isinstance(mapping, Mapping):
+        raise TypeError("mapping must be an object")
+    if inputs is None:
+        return None
+    if not set(mapping).issubset(inputs):
+        raise ValueError("Renamed features must exist in the input")
+    names = tuple(str(mapping.get(name, name)) for name in inputs)
+    if len(names) != len(set(names)):
+        raise ValueError("Renaming produces duplicate features")
+    return names
+
+
 def _transformer(
     component_id: str,
     class_name: str,
     module: str,
     family: str,
     resolver: Callable[[Parameters, int | None], int | None],
+    names_resolver: Callable[
+        [Parameters, tuple[str, ...] | None], tuple[str, ...] | None
+    ]
+    | None = None,
 ) -> TransformerSpec:
     return TransformerSpec(
         id=component_id,
@@ -895,10 +942,34 @@ def _transformer(
         family=family,
         import_path=f"{module}.{class_name}",
         _feature_count_resolver=resolver,
+        _feature_names_resolver=names_resolver,
     )
 
 
 _TRANSFORMER_SPECS = (
+    _transformer(
+        "select",
+        "Select",
+        "aberrant.transform.preprocessing",
+        "composition",
+        _selected_count,
+        _selected_names,
+    ),
+    _transformer(
+        "rename",
+        "Rename",
+        "aberrant.transform.preprocessing",
+        "composition",
+        _preserve_features,
+        _renamed_names,
+    ),
+    _transformer(
+        "passthrough",
+        "Passthrough",
+        "aberrant.transform.preprocessing",
+        "composition",
+        _preserve_features,
+    ),
     _transformer(
         "feature_schema_guard",
         "FeatureSchemaGuard",
@@ -933,6 +1004,7 @@ _TRANSFORMER_SPECS = (
         "aberrant.transform.projection",
         "projection",
         _projected_features,
+        _projected_names,
     ),
     _transformer(
         "random_projection",
@@ -940,6 +1012,7 @@ _TRANSFORMER_SPECS = (
         "aberrant.transform.projection",
         "projection",
         _projected_features,
+        _projected_names,
     ),
 )
 

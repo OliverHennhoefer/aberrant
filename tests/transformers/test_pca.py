@@ -144,7 +144,11 @@ class TestIncrementalPCA(unittest.TestCase):
                 [-0.4771219, -0.4290828, -0.1729495, 0.4036324, 0.6288179],
             ]
         ).T
-        self.assertTrue(np.allclose(ipca.vectors, vectors_R))
+        for actual, expected in zip(ipca.vectors.T, vectors_R.T, strict=True):
+            # Eigenvector signs are arbitrary; each rank-one axis must agree.
+            self.assertTrue(
+                np.allclose(np.outer(actual, actual), np.outer(expected, expected))
+            )
 
     def test_learn_after_initialization(
         self,
@@ -166,7 +170,10 @@ class TestIncrementalPCA(unittest.TestCase):
                 [0.5038719, 0.4439442, 0.2912170, -0.4938852, -0.4693579],
             ]
         ).T
-        self.assertTrue(np.allclose(ipca.vectors, vectors_R))
+        for actual, expected in zip(ipca.vectors.T, vectors_R.T, strict=True):
+            self.assertTrue(
+                np.allclose(np.outer(actual, actual), np.outer(expected, expected))
+            )
 
         # learn y
         ipca.learn_one(y)
@@ -178,7 +185,10 @@ class TestIncrementalPCA(unittest.TestCase):
                 [-0.3990229, -0.3074019, -0.4358383, 0.5795662, 0.4695027],
             ]
         ).T
-        self.assertTrue(np.allclose(ipca.vectors, vectors_R))
+        for actual, expected in zip(ipca.vectors.T, vectors_R.T, strict=True):
+            self.assertTrue(
+                np.allclose(np.outer(actual, actual), np.outer(expected, expected))
+            )
 
     def test_transform_one(self):
         q = 2  # subspace

@@ -4,6 +4,7 @@ import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.statistics import linear_quantile
 from aberrant.utils.validation import coerce_feature_values, coerce_finite_number
@@ -56,6 +57,12 @@ class RollingRobustScaler(BaseTransformer):
         self._windows: dict[str, tuple[float, ...]] = {}
         self._statistics: dict[str, tuple[float, float]] = {}
         self._frozen = False
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(
+            self.is_ready, min(self.sample_counts.values(), default=0), self.min_samples
+        )
 
     @property
     def sample_counts(self) -> dict[str, int]:
