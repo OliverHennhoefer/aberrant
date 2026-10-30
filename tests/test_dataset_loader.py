@@ -264,6 +264,29 @@ def test_metadata_snapshot_is_immutable() -> None:
             snapshot.datasets["shuttle"] = _cache_entry(b"payload")  # type: ignore[index]
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Unix file-lock backend regression")
+@pytest.mark.parametrize("lock_entry", ["rename", "hardlink"])
+def test_cache_lock_preserves_unrelated_file_contents(
+    tmp_path: Path, lock_entry: str
+) -> None:
+    store = DatasetCacheStore(tmp_path / "cache")
+    unrelated = tmp_path / "unrelated.txt"
+    payload = b"unrelated file contents must survive cache locking"
+    unrelated.write_bytes(payload)
+    lock_path = store.cache_dir / ".aberrant-cache.lock"
+    if lock_entry == "rename":
+        unrelated.replace(lock_path)
+    else:
+        lock_path.hardlink_to(unrelated)
+
+    store.clear({})
+
+    assert lock_path.read_bytes() == payload
+    if lock_entry == "hardlink":
+        assert unrelated.read_bytes() == payload
+    assert dict(store.read().datasets) == {}
+
+
 def test_metadata_publication_is_atomic_and_leaves_no_temporary_file() -> None:
     with TemporaryDirectory(dir=".") as temp_dir:
         cache_dir = Path(temp_dir)

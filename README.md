@@ -56,8 +56,8 @@ behind a batch-estimator abstraction.
 
 ## Installation
 
-`aberrant` requires Python 3.10 or newer and is continuously tested on CPython
-3.10, 3.11, and 3.12.
+`aberrant` requires Python 3.11 or newer and is continuously tested on CPython
+3.11 and 3.12.
 
 ```bash
 pip install aberrant
