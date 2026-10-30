@@ -123,6 +123,7 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "PLR0913", # too many arguments
+    "PLR0917", # preserve existing positional constructor APIs
     "PLR2004", # magic value used in comparison
 ]
 
@@ -134,6 +135,10 @@ line-ending = "auto"
 
 [tool.ruff.lint.isort]
 known-first-party = ["aberrant"]
+
+[tool.ruff.lint.per-file-ignores]
+# StrEnum changes the string representation of these public catalog enums.
+"aberrant/catalog/_specs.py" = ["UP042"]
 
 # MyPy configuration
 [tool.mypy]

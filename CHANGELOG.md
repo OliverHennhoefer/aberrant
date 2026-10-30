@@ -16,6 +16,8 @@ Semantic Versioning.
 
 - Require filelock 4.2.4 or newer for dataset cache locking and update the locked
   certifi, msgpack, setuptools, and virtualenv dependencies to patched releases.
+- Align Ruff's pre-commit hooks with version 0.17.2 and preserve the existing
+  positional constructor APIs when enabling its new lint rules.
 
 ## [1.3.0] - 2026-10-16
 

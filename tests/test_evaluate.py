@@ -310,8 +310,9 @@ def test_geometric_catalog_warmup_excludes_unready_scores(absolute_values, warmu
         PrequentialEvaluator(config)
     evaluator = PrequentialEvaluator(
         config,
-        readiness=lambda model: isinstance(model, MovingGeometricAverage)
-        and len(model.window) >= warmup,
+        readiness=lambda model: (
+            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
+        ),
         measure_time=False,
     )
     for index in range(warmup):
@@ -336,8 +337,9 @@ def test_geometric_ranking_metrics_begin_after_readiness(absolute_values, warmup
                 {"window_size": 10, "absoluteValues": absolute_values},
             )
         ),
-        readiness=lambda model: isinstance(model, MovingGeometricAverage)
-        and len(model.window) >= warmup,
+        readiness=lambda model: (
+            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
+        ),
         metrics=True,
         measure_time=False,
     )
@@ -362,8 +364,9 @@ def test_geometric_readiness_counts_retained_positive_values(absolute_values, wa
                 {"window_size": 10, "absoluteValues": absolute_values},
             )
         ),
-        readiness=lambda model: isinstance(model, MovingGeometricAverage)
-        and len(model.window) >= warmup,
+        readiness=lambda model: (
+            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
+        ),
     )
     for value in [-1.0, 0.0, *range(1, warmup + 1)]:
         record = evaluator.update({"x": float(value)}, 1)
@@ -384,8 +387,9 @@ def test_geometric_undersized_window_never_scores(absolute_values, warmup):
                 {"window_size": warmup - 1, "absoluteValues": absolute_values},
             )
         ),
-        readiness=lambda model: isinstance(model, MovingGeometricAverage)
-        and len(model.window) >= warmup,
+        readiness=lambda model: (
+            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
+        ),
     )
     records = list(evaluator.iter_evaluate([({"x": float(i)}, 1) for i in range(1, 6)]))
     assert all(
@@ -404,8 +408,9 @@ def test_harmonic_readiness_ignores_zero_learning_calls():
         PrequentialEvaluator(config)
     evaluator = PrequentialEvaluator(
         config,
-        readiness=lambda model: isinstance(model, MovingHarmonicAverage)
-        and bool(model.window),
+        readiness=lambda model: (
+            isinstance(model, MovingHarmonicAverage) and bool(model.window)
+        ),
     )
     for value in [0.0, 0.0, 2.0]:
         record = evaluator.update({"x": value}, 1)

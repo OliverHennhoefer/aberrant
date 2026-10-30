@@ -30,10 +30,10 @@ repos:
   # Ruff for linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Check for updates: https://github.com/astral-sh/ruff-pre-commit/releases
-    rev: v0.14.7
+    rev: v0.17.2
     hooks:
       # Run the linter
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
         stages: [pre-commit]
       # Run the formatter (replaces Black)
