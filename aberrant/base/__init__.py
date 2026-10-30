@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from aberrant.base.exceptions import (
     AberrantError,
     ConfigurationError,
+    ConfigurationIssue,
     IncompatibleComponentError,
     MissingOptionalDependencyError,
     ModelNotFittedError,
@@ -26,6 +27,7 @@ from aberrant.base.protocols import (
     FeatureMap,
     LearnerProtocol,
     ModelProtocol,
+    TransactionalLearnerProtocol,
     TransactionalTransformerProtocol,
     TransformerProtocol,
 )
@@ -41,6 +43,7 @@ __all__ = [
     "BaseSimilaritySearchEngine",
     "BaseTransformer",
     "ConfigurationError",
+    "ConfigurationIssue",
     "FeatureMap",
     "IncompatibleComponentError",
     "MissingOptionalDependencyError",
@@ -56,6 +59,7 @@ __all__ = [
     "ModelProtocol",
     "TransformationError",
     "TransformerProtocol",
+    "TransactionalLearnerProtocol",
     "TransactionalTransformerProtocol",
     "UnknownComponentError",
     "UnsupportedFeatureError",

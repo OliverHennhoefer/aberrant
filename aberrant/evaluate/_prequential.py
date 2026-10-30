@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator
 from numbers import Real
 from time import perf_counter_ns
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 
@@ -70,7 +70,7 @@ class PrequentialEvaluator:
     state rollback is governed by the supplied model's own contract.
     """
 
-    def __init__(  # noqa: PLR0912
+    def __init__(  # noqa: PLR0912, PLR0915
         self,
         model: ModelProtocol | DetectorConfig,
         *,
@@ -109,10 +109,12 @@ class PrequentialEvaluator:
 
         self._config: DetectorConfig | None = None
         self._fingerprint: str | None = None
+        resolved = None
         if isinstance(model, DetectorConfig):
-            self._config = model.normalized()
-            self._fingerprint = self._config.fingerprint()
-            capabilities = self._config.capabilities()
+            resolved = model.resolve()
+            self._config = resolved.config
+            self._fingerprint = resolved.fingerprint
+            capabilities = resolved.capabilities
             if warmup is None and readiness is None:
                 requirement = capabilities.warmup
                 if (
@@ -136,7 +138,7 @@ class PrequentialEvaluator:
         self._ranking = RankingMetrics(enabled=metrics, window_size=metric_window_size)
         self._metrics_enabled = metrics
         self.model: ModelProtocol = (
-            model.build() if isinstance(model, DetectorConfig) else model
+            resolved.build() if resolved is not None else cast(ModelProtocol, model)
         )
         self._warmup = 0 if warmup is None else warmup
         self._readiness = readiness

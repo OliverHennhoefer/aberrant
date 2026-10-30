@@ -87,7 +87,7 @@ class GraphPipeline:
         return state
 
     def learn_one(self, x: dict[str, float]) -> None:
-        """Commit one staged pass, or roll back every transactional transformer.
+        """Commit one staged pass, or roll back every transactional learner.
 
         Transactions remain open through the model's update. A failure after
         touching any nontransactional learner is uncertain and permanently

@@ -9,7 +9,7 @@ from .exceptions import IncompatibleComponentError, PipelineError
 from .protocols import (
     FeatureMap,
     ModelProtocol,
-    TransactionalTransformerProtocol,
+    TransactionalLearnerProtocol,
     TransformerProtocol,
 )
 
@@ -105,11 +105,11 @@ class Pipeline:
         with ExitStack() as transaction:
             current = x
             for transformer in self._prefix:
-                if isinstance(transformer, TransactionalTransformerProtocol):
+                if isinstance(transformer, TransactionalLearnerProtocol):
                     transaction.enter_context(transformer.learning_transaction(current))
                 transformer.learn_one(current)
                 current = self._checked_transform(transformer, current)
-            if isinstance(self._terminal, TransactionalTransformerProtocol):
+            if isinstance(self._terminal, TransactionalLearnerProtocol):
                 transaction.enter_context(self._terminal.learning_transaction(current))
             self._terminal.learn_one(current)
 

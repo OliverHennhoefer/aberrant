@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import inspect
-import json
-import types
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from aberrant.base.exceptions import (
     ConfigurationError,
     MissingOptionalDependencyError,
 )
+
+from ._parameters import ConstructorParameters
 
 
 class ComponentKind(str, Enum):
@@ -166,161 +164,6 @@ class ComponentDependency:
     kind: ComponentKind
 
 
-def _qualified_name(value: object) -> str:
-    module = getattr(value, "__module__", None)
-    name = getattr(value, "__qualname__", None) or getattr(value, "__name__", None)
-    if module and name:
-        return f"{module}.{name}"
-    return repr(value)
-
-
-def _annotation_schema(  # noqa: PLR0911, PLR0912
-    annotation: object,
-) -> dict[str, object]:
-    if annotation is inspect.Parameter.empty or annotation is Any:
-        return {}
-    if annotation is None or annotation is types.NoneType:
-        return {"type": "null"}
-
-    origin = get_origin(annotation)
-    arguments = get_args(annotation)
-
-    if origin in (Union, types.UnionType):
-        return {"anyOf": [_annotation_schema(argument) for argument in arguments]}
-    if origin is Literal:
-        return {"enum": list(arguments)}
-    if origin is tuple:
-        if len(arguments) == 2 and arguments[1] is Ellipsis:
-            return {"type": "array", "items": _annotation_schema(arguments[0])}
-        return {
-            "type": "array",
-            "prefixItems": [_annotation_schema(argument) for argument in arguments],
-            "minItems": len(arguments),
-            "maxItems": len(arguments),
-        }
-    if origin in (list, set, frozenset, Sequence):
-        item_schema = _annotation_schema(arguments[0]) if arguments else {}
-        return {"type": "array", "items": item_schema}
-    if origin in (dict, Mapping):
-        key_type, value_type = arguments if len(arguments) == 2 else (Any, Any)
-        schema: dict[str, object] = {
-            "type": "object",
-            "additionalProperties": _annotation_schema(value_type),
-        }
-        if key_type not in (str, Any):
-            schema["x-python-key-type"] = _qualified_name(key_type)
-        return schema
-
-    if annotation is str:
-        return {"type": "string"}
-    if annotation is bool:
-        return {"type": "boolean"}
-    if annotation is int:
-        return {"type": "integer"}
-    if annotation is float:
-        return {"type": "number"}
-    return {"x-python-type": _qualified_name(annotation)}
-
-
-def _json_default(value: object) -> tuple[bool, object]:
-    try:
-        encoded = json.dumps(value, allow_nan=False)
-    except (TypeError, ValueError):
-        return False, repr(value)
-    return True, json.loads(encoded)
-
-
-def _coerce_mapping_key(value: object, annotation: object) -> object:
-    if annotation is int and isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError as exc:
-            raise TypeError(f"expected an integer object key, got {value!r}") from exc
-    return _coerce_json_value(value, annotation)
-
-
-def _coerce_json_value(  # noqa: PLR0911, PLR0912, PLR0915
-    value: object,
-    annotation: object,
-) -> object:
-    """Validate JSON primitives and restore annotated Python container types."""
-    if annotation is inspect.Parameter.empty or annotation is Any:
-        return value
-    if annotation is None or annotation is types.NoneType:
-        if value is not None:
-            raise TypeError("expected null")
-        return None
-
-    origin = get_origin(annotation)
-    arguments = get_args(annotation)
-    if origin in (Union, types.UnionType):
-        for argument in arguments:
-            try:
-                return _coerce_json_value(value, argument)
-            except (TypeError, ValueError):
-                continue
-        raise TypeError("value does not match any accepted type")
-    if origin is Literal:
-        if value not in arguments:
-            choices = ", ".join(repr(choice) for choice in arguments)
-            raise ValueError(f"expected one of {choices}")
-        return value
-    if origin is tuple:
-        if not isinstance(value, list | tuple):
-            raise TypeError("expected an array")
-        if len(arguments) == 2 and arguments[1] is Ellipsis:
-            return tuple(_coerce_json_value(item, arguments[0]) for item in value)
-        if len(value) != len(arguments):
-            raise ValueError(f"expected an array with {len(arguments)} items")
-        return tuple(
-            _coerce_json_value(item, argument)
-            for item, argument in zip(value, arguments, strict=True)
-        )
-    if origin in (list, set, frozenset, Sequence):
-        if not isinstance(value, list | tuple):
-            raise TypeError("expected an array")
-        item_type = arguments[0] if arguments else Any
-        items = [_coerce_json_value(item, item_type) for item in value]
-        if origin is set:
-            return set(items)
-        if origin is frozenset:
-            return frozenset(items)
-        return items
-    if origin in (dict, Mapping):
-        if not isinstance(value, Mapping):
-            raise TypeError("expected an object")
-        key_type, item_type = arguments if len(arguments) == 2 else (Any, Any)
-        return {
-            _coerce_mapping_key(key, key_type): _coerce_json_value(item, item_type)
-            for key, item in value.items()
-        }
-
-    if annotation is bool:
-        if not isinstance(value, bool):
-            raise TypeError("expected a boolean")
-        return value
-    if annotation is int:
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise TypeError("expected an integer")
-        return value
-    if annotation is float:
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            raise TypeError("expected a number")
-        return float(value)
-    if annotation is str:
-        if not isinstance(value, str):
-            raise TypeError("expected a string")
-        return value
-    if isinstance(annotation, type):
-        try:
-            matches = isinstance(value, annotation)
-        except TypeError:
-            return value
-        if not matches:
-            raise TypeError(f"expected {_qualified_name(annotation)}")
-    return value
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ComponentSpec:
     """Public metadata and construction entry point for one built-in component."""
@@ -362,90 +205,28 @@ class ComponentSpec:
         params: Mapping[str, object] | None = None,
         *,
         require_all: bool = False,
+        _constructor: ConstructorParameters | None = None,
     ) -> dict[str, object]:
         """Bind parameters to the public constructor and apply its defaults."""
-        signature = inspect.signature(self.load())
-        values = dict(params or {})
-        try:
-            bound = (
-                signature.bind(**values)
-                if require_all
-                else signature.bind_partial(**values)
-            )
-        except TypeError as exc:
-            raise ConfigurationError(
-                f"Invalid parameters for {self.kind.value} '{self.id}': {exc}"
-            ) from exc
-        bound.apply_defaults()
-        try:
-            type_hints = get_type_hints(self.load().__init__)
-        except (NameError, TypeError):
-            type_hints = {}
-        resolved: dict[str, object] = {}
-        dependency_parameters = {item.parameter for item in self.dependencies}
-        for name, value in bound.arguments.items():
-            if name in dependency_parameters and isinstance(value, Mapping):
-                resolved[name] = value
-                continue
-            try:
-                resolved[name] = _coerce_json_value(
-                    value,
-                    type_hints.get(name, inspect.Parameter.empty),
-                )
-            except (TypeError, ValueError) as exc:
-                raise ConfigurationError(
-                    f"Invalid parameter '{name}' for {self.kind.value} "
-                    f"'{self.id}': {exc}"
-                ) from exc
-        return resolved
+        constructor = _constructor or ConstructorParameters.inspect(self.load())
+        return constructor.resolve(
+            dict(params or {}),
+            require_all=require_all,
+            dependencies={item.parameter for item in self.dependencies},
+            label=f"{self.kind.value} '{self.id}'",
+        )
 
     def parameter_schema(self) -> dict[str, object]:
-        """Inspect constructor parameters, loading the component's runtime."""
-        component = self.load()
-        signature = inspect.signature(component)
-        try:
-            type_hints = get_type_hints(component.__init__)
-        except (NameError, TypeError):
-            type_hints = {}
+        """Inspect constructor parameters, loading the component's runtime.
 
-        dependency_by_parameter = {
-            dependency.parameter: dependency for dependency in self.dependencies
-        }
-        properties: dict[str, object] = {}
-        required: list[str] = []
-        for name, parameter in signature.parameters.items():
-            annotation = type_hints.get(name, parameter.annotation)
-            dependency = dependency_by_parameter.get(name)
-            if dependency is None:
-                property_schema = _annotation_schema(annotation)
-            else:
-                property_schema = {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "string"},
-                        "params": {"type": "object", "default": {}},
-                    },
-                    "required": ["id"],
-                    "additionalProperties": False,
-                    "x-aberrant-component-kind": dependency.kind.value,
-                }
-            if parameter.default is inspect.Parameter.empty:
-                required.append(name)
-            else:
-                serializable, default = _json_default(parameter.default)
-                property_schema["default" if serializable else "x-python-default"] = (
-                    default
-                )
-            properties[name] = property_schema
-
-        schema: dict[str, object] = {
-            "type": "object",
-            "properties": properties,
-            "additionalProperties": False,
-        }
-        if required:
-            schema["required"] = required
-        return schema
+        Each call returns detached metadata that applications may constrain.
+        """
+        return ConstructorParameters.inspect(self.load()).schema(
+            {
+                dependency.parameter: dependency.kind.value
+                for dependency in self.dependencies
+            }
+        )
 
     def as_dict(self) -> dict[str, object]:
         """Return catalog metadata, deferring optional-runtime inspection."""
@@ -489,6 +270,11 @@ class ModelSpec(ComponentSpec):
         resolved = (
             self.resolved_parameters(params) if self.available else dict(params or {})
         )
+        return self._resolved_capabilities(resolved)
+
+    def _resolved_capabilities(
+        self, resolved: Mapping[str, object]
+    ) -> ModelCapabilities:
         try:
             return self._capability_resolver(resolved)
         except (KeyError, TypeError, ValueError) as exc:
@@ -544,6 +330,13 @@ class TransformerSpec(ComponentSpec):
     ) -> int | None:
         """Resolve the transformer's output width when it can be known."""
         resolved = self.resolved_parameters(params)
+        return self._resolved_output_feature_count(resolved, input_feature_count)
+
+    def _resolved_output_feature_count(
+        self,
+        resolved: Mapping[str, object],
+        input_feature_count: int | None,
+    ) -> int | None:
         try:
             return self._feature_count_resolver(resolved, input_feature_count)
         except (KeyError, TypeError, ValueError) as exc:

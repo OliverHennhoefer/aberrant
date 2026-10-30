@@ -7,7 +7,22 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-30
+
+### Added
+
+- Reusable `DetectorConfig.resolve()` and `resolve_detector_config()` plans with
+  canonical configuration, capabilities, fingerprints and fresh detector builds.
+- Immutable `ConfigurationIssue` records on configuration errors, including
+  complete nested parameter locations and independent field diagnostics.
+
 ### Changed
+
+- Learning transactions are a learner capability shared by transformers and
+  terminal models in both linear and graph pipelines.
+- Constructor parameter descriptors now share coercion, defaults, schema output
+  and error locations. Detector construction and evaluator initialization resolve
+  parameters once per component occurrence, without a process-wide cache.
 
 - Require Python 3.11 or newer to use patched filelock releases; continuously
   tested Python versions are now 3.11 and 3.12 on Windows and Linux.

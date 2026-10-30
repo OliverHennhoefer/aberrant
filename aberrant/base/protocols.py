@@ -24,12 +24,24 @@ class TransformerProtocol(LearnerProtocol, Protocol):
 
 
 @runtime_checkable
-class TransactionalTransformerProtocol(TransformerProtocol, Protocol):
-    """A transformer that restores learned state when a downstream update fails."""
+class TransactionalLearnerProtocol(LearnerProtocol, Protocol):
+    """A learner that can restore its state when a learning pass fails.
+
+    The context remains open through downstream learning. Implementations must
+    restore their own state when the context raises; the pipeline cannot make
+    nontransactional components atomic.
+    """
 
     def learning_transaction(self, x: FeatureMap) -> AbstractContextManager[None]:
         """Keep updates on success and restore prior state when the context raises."""
         ...
+
+
+@runtime_checkable
+class TransactionalTransformerProtocol(
+    TransformerProtocol, TransactionalLearnerProtocol, Protocol
+):
+    """A transformer with the transactional learner capability."""
 
 
 @runtime_checkable
