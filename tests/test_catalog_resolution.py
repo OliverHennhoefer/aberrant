@@ -289,6 +289,20 @@ def test_unknown_component_keeps_its_subclass_and_location():
     assert error.value.issues[0].loc == ("model", "id")
 
 
+def test_collecting_other_errors_preserves_the_first_exception_subclass():
+    config = DetectorConfig(
+        ComponentConfig("online_isolation_forest", {"num_trees": "many"}),
+        (ComponentConfig("no-such-transformer"),),
+    )
+    with pytest.raises(UnknownComponentError) as error:
+        config.resolve()
+    assert error.value.component_id == "no-such-transformer"
+    assert {issue.code for issue in error.value.issues} == {
+        "unknown_component",
+        "invalid_type",
+    }
+
+
 def test_missing_dependency_keeps_its_subclass_and_nested_location(monkeypatch):
     monkeypatch.setattr(
         ComponentSpec, "available", property(lambda self: self.id != "faiss")

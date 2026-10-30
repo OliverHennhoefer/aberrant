@@ -38,13 +38,15 @@ def _invalid(code: str, loc: Location, message: str) -> ConfigurationError:
 
 
 def _raise_errors(errors: list[ConfigurationError]) -> None:
-    if len(errors) == 1:
-        raise errors[0]
-    if errors:
-        raise ConfigurationError(
-            "; ".join(str(error) for error in errors),
-            issues=tuple(issue for error in errors for issue in error.issues),
-        )
+    if not errors:
+        return
+    first = errors[0]
+    if len(errors) > 1:
+        # Keep the first failure's subclass and attributes, as fail-fast callers
+        # previously observed, while exposing every independent diagnostic.
+        first.args = ("; ".join(str(error) for error in errors),)
+        first._issues = tuple(issue for error in errors for issue in error.issues)
+    raise first
 
 
 @dataclass(frozen=True, slots=True)
