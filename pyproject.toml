@@ -18,15 +18,14 @@ maintainers = [
 license = { file = "LICENSE" }
 readme = { file = "README.md", content-type = "text/markdown" }
 classifiers = [
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "filelock>=3.20.0,<4.0.0",
+    "filelock>=4.2.4,<5.0.0",
     "numpy>=2.2.3,<3.0.0",
     "tqdm>=4.67.1,<5.0.0",
     "scipy>=1.15.2,<2.0.0"
@@ -87,11 +86,17 @@ path = "aberrant/__init__.py"
 
 [tool.uv]
 required-version = ">=0.12.18"
-constraint-dependencies = ["virtualenv>=21.7.13"]
+# Keep development and audit tooling above their patched dependency floors.
+constraint-dependencies = [
+    "certifi>=2026.10.19",
+    "msgpack>=1.2.3",
+    "setuptools>=84.1.0",
+    "virtualenv>=21.14.10",
+]
 
 # Ruff configuration
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 exclude = [
     ".git",
@@ -118,6 +123,7 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "PLR0913", # too many arguments
+    "PLR0917", # preserve existing positional constructor APIs
     "PLR2004", # magic value used in comparison
 ]
 
@@ -130,9 +136,13 @@ line-ending = "auto"
 [tool.ruff.lint.isort]
 known-first-party = ["aberrant"]
 
+[tool.ruff.lint.per-file-ignores]
+# StrEnum changes the string representation of these public catalog enums.
+"aberrant/catalog/_specs.py" = ["UP042"]
+
 # MyPy configuration
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

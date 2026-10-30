@@ -26,7 +26,10 @@ config = DetectorConfig(
     transformers=(ComponentConfig("standard_scaler"),),
 )
 evaluator = PrequentialEvaluator(
-    config, warmup=64, metrics=True, metric_window_size=1000,
+    config,
+    warmup=64,
+    metrics=True,
+    metric_window_size=1000,
 )
 
 # Substitute any ordered iterable of (feature dictionary, binary label).
@@ -68,8 +71,9 @@ minimum = config.capabilities().warmup.minimum
 assert minimum is not None
 evaluator = PrequentialEvaluator(
     config,
-    readiness=lambda model: isinstance(model, MovingGeometricAverage)
-    and len(model.window) >= minimum,
+    readiness=lambda model: (
+        isinstance(model, MovingGeometricAverage) and len(model.window) >= minimum
+    ),
 )
 ```
 
