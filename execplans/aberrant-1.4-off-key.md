@@ -65,8 +65,14 @@ offline catalog remains the control plane's dependency boundary.
 - 2026-10-30: created an isolated off-key checkout on
   `codex/aberrant-configuration-integration`, preserving the existing checkout
   and local runtime data.
-- Transaction implementation and tests are in progress. No release has been
-  published and no deployment has been changed.
+- Transaction capability is delivered in PR #103. Local focused tests (74),
+  Ruff and mypy passed. Linux/Windows Python 3.11/3.12 CI, core/extras/integration,
+  Security and Docs are green for commit `5d46f1512f3b179fce6e6c34f819147fd48da5f2`.
+- Catalog resolution and structured diagnostics are implemented. Targeted tests
+  verify one resolution per component, operation-local inspection reuse, fresh
+  builds, unchanged core schemas and representative canonical fingerprints,
+  nested FAISS diagnostics and independent engine state. Full gates in progress.
+- No release has been published and no deployment has been changed.
 
 ## Deliberately deferred
 

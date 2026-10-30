@@ -5,6 +5,53 @@ Applications can discover supported models, generate configuration forms,
 validate deployment configuration, and build pipelines without maintaining
 class import paths or model-specific warm-up formulas.
 
+## Reuse resolved configuration
+
+Resolve once when initializing a service or evaluator. Resolution applies
+constructor defaults, validates types and feature widths, and resolves
+capabilities without constructing or learning any algorithms.
+
+```python
+from aberrant.catalog import DetectorConfig
+
+resolved = DetectorConfig.from_mapping({
+    "transformers": [{"id": "standard_scaler"}],
+    "model": {"id": "online_isolation_forest", "params": {"seed": 42}},
+}).resolve()
+canonical = resolved.config.as_dict()
+capabilities = resolved.capabilities.as_dict()
+fingerprint = resolved.fingerprint
+first = resolved.build()
+second = resolved.build()  # Independent components and learned state.
+```
+
+`resolve_detector_config(mapping_or_config)` is the equivalent module function.
+Constructor inspection is shared within one resolution; parameters resolve once
+per component occurrence. Builds reuse the construction plan, never a learned
+model. Persist canonical configuration and learned detector state using the
+application's checkpoint policy; keep resolved plans as process-local metadata.
+Caller-supplied runtime dependencies retain their own ownership and lifetime.
+
+`normalized()` and `fingerprint()` keep their narrower validation boundary:
+they do not construct algorithms or require compatible pipeline feature counts.
+Fingerprints use the existing canonical JSON representation and reject non-JSON
+values, including Python runtime dependencies, even when those are buildable.
+Algorithm constructor invariants are checked when building.
+
+Configuration exceptions retain their messages and subclasses and expose an
+immutable tuple of `ConfigurationIssue` records through `error.issues`. A record
+contains a stable `code`, a tuple `loc` of object keys and array indexes, and a
+`message`. A nested engine field can have location
+`("model", "params", "similarity_engine", "params", "warm_up")`.
+Independent parameter failures are collected. Constructor-only invariants use
+the component's `params` location when a field cannot be identified reliably.
+Use these locations directly in forms; do not parse human-readable messages.
+The stable codes are documented on `aberrant.base.ConfigurationIssue`.
+
+Public schemas and default parameters are detached containers. Applications may
+constrain them for resource limits or presentation without modifying the library
+catalog or changing executable fingerprints.
+
 ## Inspect the catalog
 
 `MODEL_CATALOG`, `TRANSFORMER_CATALOG`, and `SIMILARITY_ENGINE_CATALOG` are

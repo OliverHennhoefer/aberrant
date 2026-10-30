@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from aberrant.base.exceptions import (
     AberrantError,
     ConfigurationError,
+    ConfigurationIssue,
     IncompatibleComponentError,
     MissingOptionalDependencyError,
     ModelNotFittedError,
@@ -42,6 +43,7 @@ __all__ = [
     "BaseSimilaritySearchEngine",
     "BaseTransformer",
     "ConfigurationError",
+    "ConfigurationIssue",
     "FeatureMap",
     "IncompatibleComponentError",
     "MissingOptionalDependencyError",

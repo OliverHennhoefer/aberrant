@@ -4,12 +4,14 @@ from aberrant.catalog._config import (
     CONFIG_FORMAT_VERSION,
     ComponentConfig,
     DetectorConfig,
+    ResolvedDetectorConfig,
     build_detector,
     create_model,
     create_similarity_engine,
     create_transformer,
     detector_capabilities,
     normalize_detector_config,
+    resolve_detector_config,
 )
 from aberrant.catalog._registry import (
     CATALOG_FORMAT_VERSION,
@@ -48,6 +50,7 @@ __all__ = [
     "ComponentKind",
     "ComponentSpec",
     "DetectorConfig",
+    "ResolvedDetectorConfig",
     "EventKind",
     "FeatureCount",
     "FeatureSchemaKind",
@@ -68,4 +71,5 @@ __all__ = [
     "get_similarity_engine_spec",
     "get_transformer_spec",
     "normalize_detector_config",
+    "resolve_detector_config",
 ]

@@ -11,6 +11,10 @@ configuration format and ownership boundary.
 
 ::: aberrant.catalog.DetectorConfig
 
+::: aberrant.catalog.ResolvedDetectorConfig
+
+::: aberrant.catalog.resolve_detector_config
+
 ::: aberrant.catalog.build_detector
 
 ::: aberrant.catalog.create_model

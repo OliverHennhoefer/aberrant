@@ -45,6 +45,8 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.ConfigurationError
 
+::: aberrant.base.ConfigurationIssue
+
 ::: aberrant.base.UnknownComponentError
 
 ::: aberrant.base.MissingOptionalDependencyError
