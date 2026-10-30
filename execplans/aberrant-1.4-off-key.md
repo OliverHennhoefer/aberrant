@@ -72,7 +72,8 @@ offline catalog remains the control plane's dependency boundary.
   verify one resolution per component, operation-local inspection reuse, fresh
   builds, unchanged core schemas and representative canonical fingerprints,
   nested FAISS diagnostics and independent engine state. Full gates in progress.
-- No release has been published and no deployment has been changed.
+- At the initial catalog handoff, no release had been published and no deployment
+  had been changed.
 - Catalog PR #104 passed Linux/Windows Python 3.11/3.12 CI, Security and Docs.
   The local full suite passed 1,995 tests (3 existing skips, 5 expected failures,
   109 subtests); Ruff, mypy and the candidate wheel build passed.
@@ -80,6 +81,40 @@ offline catalog remains the control plane's dependency boundary.
   reuse, shared field metadata, generated contracts, the shared editor and
   structured diagnostics are implemented; candidate integration and migration
   gates remain in progress. The browser production build passes.
+- The user explicitly approved the library merges and publication. Dependency
+  PRs #95, #96, #97, #99, #100, #101 and #102 landed with catalog PR #104. GitHub
+  closed transaction PR #103 when its dependency base branch was removed; its
+  complete commit is included in #104. PR #105 aligns the documentation example
+  with the merged Ruff version. Linux/Windows Python 3.11/3.12, core/extras,
+  integration, Security and Docs checks passed.
+- ABERRANT 1.4.0 was published from `c61114f368400da910d0187925ff55e8ad6d454a`.
+  [Release workflow](https://github.com/OliverHennhoefer/aberrant/actions/runs/41053480790)
+  succeeded. The candidate wheel had already passed 206 real off-key RADAR tests
+  with zero skips, including database recovery, MQTT and Swarm lifecycle checks.
+- The coordinated platform implementation is
+  [off-key PR #384](https://github.com/DataDrivenSustainabilitySolutions/off-key/pull/384).
+  It installs the published exact pin, frozen lock and regenerated offline catalog.
+  Its first complete CI run passed backend 3.12/3.14, frontend, generated contracts,
+  all production images, collection and RADAR. Infrastructure documentation
+  navigation and rehearsal evidence fixes are included in the updated run.
+- A checkpoint captured from off-key's actual 1.3.0 production image verifies
+  authentication followed by rejection before deserialization. Saved launch
+  normalization preserves its source configuration; the new detector performs
+  fresh warm-up and calibration. Historical records and predecessor links remain
+  governed by the existing real database/release tests.
+- Backend readiness now fences activation of a changed browser bundle. The
+  binary rollback reference is previous platform code with reviewed 1.4.0
+  numerics and additive browser field metadata at
+  `ab080c999591da03b0a7d75574bb0db4051037b9`; strict migration,
+  catalog and numerical-version guards remain enabled. A numerical rollback to
+  1.3.0 is outside this reviewed binary rollback floor.
+- Final platform verification is tracked by
+  [CI run 41059193050](https://github.com/DataDrivenSustainabilitySolutions/off-key/actions/runs/41059193050)
+  for commit `0cdcb6dde9b564d1352fba2306718e7c7d118131`, including required
+  production browser, staged rollout and binary rollback gates. Current evidence
+  and migration details continue in
+  [off-key's execution record](https://github.com/DataDrivenSustainabilitySolutions/off-key/blob/codex/aberrant-configuration-integration/docs/development/aberrant-1.4-integration.md).
+  No production deployment has been changed.
 
 ## Deliberately deferred
 
