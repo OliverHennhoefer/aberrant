@@ -108,11 +108,15 @@ offline catalog remains the control plane's dependency boundary.
   `ab080c999591da03b0a7d75574bb0db4051037b9`; strict migration,
   catalog and numerical-version guards remain enabled. A numerical rollback to
   1.3.0 is outside this reviewed binary rollback floor.
-- Final platform verification is tracked by
-  [CI run 41059193050](https://github.com/DataDrivenSustainabilitySolutions/off-key/actions/runs/41059193050)
-  for commit `0cdcb6dde9b564d1352fba2306718e7c7d118131`, including required
-  production browser, staged rollout and binary rollback gates. Current evidence
-  and migration details continue in
+- Platform verification passed 210 real RADAR tests with zero skips, 827 frontend
+  tests and all 16 real graph browser journeys, including desktop/mobile nested
+  KNN correction/publication, adjacency and null/default editing. Visual review
+  also caught and corrected shared-editor theme token rendering; browser checks
+  now require visible input borders.
+- The authoritative final platform gate is the current CI run attached to
+  [off-key PR #384](https://github.com/DataDrivenSustainabilitySolutions/off-key/pull/384/checks),
+  including production browser, staged rollout and binary rollback checks.
+  Current retained evidence and migration details continue in
   [off-key's execution record](https://github.com/DataDrivenSustainabilitySolutions/off-key/blob/codex/aberrant-configuration-integration/docs/development/aberrant-1.4-integration.md).
   No production deployment has been changed.
 
