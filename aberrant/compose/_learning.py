@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Literal
 
+from aberrant.base.protocols import TransactionalLearnerProtocol
 from aberrant.compose._types import INPUT, NodeState
 
 
@@ -27,12 +28,13 @@ class LearningTransactions(ExitStack):
         self.uncertain = False
 
     def enter_learner(self, component: object, current: dict[str, float]) -> None:
-        transaction = getattr(component, "learning_transaction", None)
-        if not callable(transaction):
+        if not isinstance(component, TransactionalLearnerProtocol) or not callable(
+            component.learning_transaction
+        ):
             self.uncertain = True
             return
         try:
-            self.enter_context(transaction(dict(current)))
+            self.enter_context(component.learning_transaction(dict(current)))
         except BaseException:
             self.uncertain = True
             raise

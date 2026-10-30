@@ -26,6 +26,7 @@ from aberrant.base.protocols import (
     FeatureMap,
     LearnerProtocol,
     ModelProtocol,
+    TransactionalLearnerProtocol,
     TransactionalTransformerProtocol,
     TransformerProtocol,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "ModelProtocol",
     "TransformationError",
     "TransformerProtocol",
+    "TransactionalLearnerProtocol",
     "TransactionalTransformerProtocol",
     "UnknownComponentError",
     "UnsupportedFeatureError",

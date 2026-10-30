@@ -9,6 +9,9 @@ Semantic Versioning.
 
 ### Changed
 
+- Learning transactions are a learner capability shared by transformers and
+  terminal models in both linear and graph pipelines.
+
 - Require Python 3.11 or newer to use patched filelock releases; continuously
   tested Python versions are now 3.11 and 3.12 on Windows and Linux.
 

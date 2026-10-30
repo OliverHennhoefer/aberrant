@@ -34,15 +34,24 @@ state learned from earlier events.
 All built-in transformers restore their learned state if a later stage rejects
 the event or transformation fails. For example, a model rejecting an unexpected
 feature count does not leave its upstream scaler trained on that rejected event.
-The terminal model remains responsible for its own failed-update behavior.
+Terminal models can participate in the same transaction contract.
 
-Custom transformers can provide a `learning_transaction(event)` context manager to
+Custom learners can provide a `learning_transaction(event)` context manager to
 participate in this rollback contract, as described by
-`TransactionalTransformerProtocol`. The context keeps state on success and
+`TransactionalLearnerProtocol`. `TransactionalTransformerProtocol` remains its
+transformer specialization. Both linear and graph pipelines open the context
+before learning and keep it open through the terminal model's update.
+The context keeps state on success and
 restores its snapshot when an exception leaves it. Snapshot only the state that
 learning this event can change to keep sparse updates efficient. Custom components without
 this optional method retain the normal sequential learning contract; external
 side effects are the component's responsibility.
+
+Cancellation such as `KeyboardInterrupt` also unwinds the contexts and propagates
+to the caller. A graph disables further execution after a failure that touches a
+nontransactional learner or whose rollback fails, because its state is uncertain.
+A graph whose transactional learners all roll back remains usable. Linear
+pipelines retain their eager learning and exception propagation behavior.
 
 !!! important "Prequential order"
 
