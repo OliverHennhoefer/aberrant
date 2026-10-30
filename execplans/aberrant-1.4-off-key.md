@@ -73,6 +73,13 @@ offline catalog remains the control plane's dependency boundary.
   builds, unchanged core schemas and representative canonical fingerprints,
   nested FAISS diagnostics and independent engine state. Full gates in progress.
 - No release has been published and no deployment has been changed.
+- Catalog PR #104 passed Linux/Windows Python 3.11/3.12 CI, Security and Docs.
+  The local full suite passed 1,995 tests (3 existing skips, 5 expected failures,
+  109 subtests); Ruff, mypy and the candidate wheel build passed.
+- off-key now uses the candidate wheel in its isolated environment. Resolution
+  reuse, shared field metadata, generated contracts, the shared editor and
+  structured diagnostics are implemented; candidate integration and migration
+  gates remain in progress. The browser production build passes.
 
 ## Deliberately deferred
 

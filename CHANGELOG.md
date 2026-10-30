@@ -7,6 +7,8 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-30
+
 ### Added
 
 - Reusable `DetectorConfig.resolve()` and `resolve_detector_config()` plans with
