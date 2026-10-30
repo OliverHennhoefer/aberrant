@@ -14,10 +14,12 @@ capabilities without constructing or learning any algorithms.
 ```python
 from aberrant.catalog import DetectorConfig
 
-resolved = DetectorConfig.from_mapping({
-    "transformers": [{"id": "standard_scaler"}],
-    "model": {"id": "online_isolation_forest", "params": {"seed": 42}},
-}).resolve()
+resolved = DetectorConfig.from_mapping(
+    {
+        "transformers": [{"id": "standard_scaler"}],
+        "model": {"id": "online_isolation_forest", "params": {"seed": 42}},
+    }
+).resolve()
 canonical = resolved.config.as_dict()
 capabilities = resolved.capabilities.as_dict()
 fingerprint = resolved.fingerprint
