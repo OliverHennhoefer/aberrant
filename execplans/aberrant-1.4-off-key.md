@@ -104,7 +104,8 @@ offline catalog remains the control plane's dependency boundary.
   governed by the existing real database/release tests.
 - Backend readiness now fences activation of a changed browser bundle. The
   binary rollback reference is previous platform code with reviewed 1.4.0
-  numerics at `9c010bda9831648f1db8c395dc0633f1302df757`; strict migration,
+  numerics and additive browser field metadata at
+  `ab080c999591da03b0a7d75574bb0db4051037b9`; strict migration,
   catalog and numerical-version guards remain enabled. A numerical rollback to
   1.3.0 is outside this reviewed binary rollback floor.
 - Required production browser, staged rollout and binary rollback gates are
