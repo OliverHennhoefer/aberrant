@@ -105,7 +105,7 @@ implementation.
 | Class | Default score | Built-in warm-up | State policy |
 | --- | --- | --- | --- |
 | `KNN` | Engine-defined; the FAISS engine returns mean Euclidean distance to the `k` nearest retained points | Engine-defined; FAISS returns `0.0` before `warm_up` | Engine-defined; FAISS uses a `window_size` sliding window |
-| `LocalOutlierFactor` | Non-negative LOF; values near `1` indicate density comparable to neighbors, larger values indicate lower local density | Returns `0.0` until more than `k` points are learned | At most `window_size` retained points |
+| `LocalOutlierFactor` | Non-negative LOF; values near `1` indicate density comparable to neighbors, larger values indicate lower local density | Returns `0.0` until more than `k` points are learned | At most `window_size` retained points, each with a list of at most `2 * k` nearest neighbors |
 | `CellNeighborhoodDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up_slides * slide_size` events and `k + 1` retained points | At most `window_size` points plus cell indexes |
 | `SDOStream` | Non-negative median distance to nearest active observers | `warm_up_observers`, defaulting to at least `x_neighbors` | Exactly up to `k` observers with exponentially faded activity |
 | `StationaryRegionNeighborDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up_slides * slide_size` events and `k + 1` retained points | At most `window_size` points plus cells and query caches |

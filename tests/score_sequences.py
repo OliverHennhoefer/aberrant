@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 import aberrant
+from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
 from aberrant.model.sketch import StreamingLODA
 
@@ -125,6 +126,28 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_features": 2,
                     "kind": "unit",
                 },
+            },
+        ],
+    ),
+    # The streams are continuous, so no two distances tie and the neighbor
+    # order does not depend on the platform's sorting algorithm.
+    "local_outlier_factor": (
+        LocalOutlierFactor,
+        [
+            {
+                "name": "euclidean_k10",
+                "params": {"k": 10, "window_size": 150},
+                "stream": {"seed": 41, "n_events": 400, "n_features": 4},
+            },
+            {
+                "name": "manhattan_k3",
+                "params": {"k": 3, "window_size": 40, "distance": "manhattan"},
+                "stream": {"seed": 42, "n_events": 300, "n_features": 3},
+            },
+            {
+                "name": "window_one_above_k",
+                "params": {"k": 2, "window_size": 3},
+                "stream": {"seed": 43, "n_events": 100, "n_features": 2},
             },
         ],
     ),

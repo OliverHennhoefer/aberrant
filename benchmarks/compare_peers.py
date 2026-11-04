@@ -22,6 +22,10 @@ every side, and aberrant's default LODA configuration is reported separately.
 SHUTTLE is min-max scaled with its global feature ranges before streaming,
 because both Half-Space Trees implementations expect inputs in ``[0, 1]``. The
 synthetic stream is generated inside ``[0, 1]`` for the same reason.
+
+LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
+keeps every point it learns and slows down with each one, while aberrant keeps
+its default window of 1,000 points, so both stream only the first 2,000 events.
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ import numpy as np
 from scipy.stats import rankdata
 
 import aberrant
+from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
 from aberrant.model.sketch import StreamingLODA
 from aberrant.stream.dataset import Dataset, load
@@ -61,6 +66,7 @@ else:
         PySADLODA = None
 
 MODEL_SEED = 42
+LOF_EVENTS = 2_000
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,7 @@ class Case:
     parameters: str
     factory: Callable[[], Any]
     input_kind: str = "dict"  # "dict" for score_one/learn_one, "row" for PySAD
+    max_events: int | None = None  # stream only this many events when set
 
 
 def synthetic_stream(n_events: int, n_features: int = 8, seed: int = 7) -> Stream:
@@ -143,6 +150,13 @@ def build_cases() -> list[Case]:
             "defaults (100 trees, window 2048)",
             lambda: OnlineIsolationForest(seed=MODEL_SEED),
         ),
+        Case(
+            "LocalOutlierFactor",
+            "aberrant",
+            f"10 neighbors, first {LOF_EVENTS:,} events",
+            lambda: LocalOutlierFactor(k=10),
+            max_events=LOF_EVENTS,
+        ),
     ]
     if river_anomaly is None:
         print("river is not installed; skipping river cases", file=sys.stderr)
@@ -163,6 +177,13 @@ def build_cases() -> list[Case]:
                 lambda: river_anomaly.LODA(
                     n_bins=10, n_random_cuts=100, seed=MODEL_SEED
                 ),
+            ),
+            Case(
+                "LocalOutlierFactor",
+                "river",
+                f"10 neighbors, first {LOF_EVENTS:,} events",
+                lambda: river_anomaly.LocalOutlierFactor(n_neighbors=10),
+                max_events=LOF_EVENTS,
             ),
         ]
     if PySADLODA is None:
@@ -187,6 +208,13 @@ def build_cases() -> list[Case]:
 
 def run_once(case: Case, stream: Stream) -> tuple[float, np.ndarray]:
     """Score then learn every event with a fresh model; return events/s, scores."""
+    if case.max_events is not None:
+        stream = Stream(
+            name=stream.name,
+            dicts=stream.dicts[: case.max_events],
+            rows=stream.rows[: case.max_events],
+            labels=stream.labels[: case.max_events],
+        )
     model = case.factory()
     scores = [0.0] * len(stream.labels)
     if case.input_kind == "row":
@@ -235,13 +263,13 @@ def measure(
             assert first_scores is not None
             row = {
                 "stream": stream.name,
-                "events": len(stream.labels),
+                "events": len(first_scores),
                 "detector": case.group,
                 "library": case.library,
                 "parameters": case.parameters,
                 "events_per_second": statistics.median(throughputs),
                 "runs": throughputs,
-                "roc_auc": roc_auc(stream.labels, first_scores),
+                "roc_auc": roc_auc(stream.labels[: len(first_scores)], first_scores),
             }
             results.append(row)
             print(
