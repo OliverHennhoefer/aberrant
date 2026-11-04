@@ -28,6 +28,16 @@ xStream uses 100 projected dimensions, 100 chains of depth 15 and windows of
 in count-min sketches of 4 rows of 1,024 counters and spends its first 256
 events on fitting the bin widths, while PySAD counts bins exactly.
 
+Random Cut Forest uses 40 trees over 256 points on both sides. aberrant keeps
+the latest 256 points in every tree, while each PySAD tree keeps its own
+weighted reservoir sample; ``time_decay=1.0`` makes those samples favor the
+latest events so strongly that they come closest to that window. Both stream
+only the first 3,000 events, since PySAD learns fewer than 100 events per
+second there.
+
+OnlineIsolationForest and StreamRandomHistogramForest have no matched peer and
+run at their defaults.
+
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
 its default window of 1,000 points, so both stream only the first 2,000 events.
@@ -53,7 +63,13 @@ from scipy.stats import rankdata
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest, XStream
+from aberrant.model.iforest import (
+    HalfSpaceTrees,
+    OnlineIsolationForest,
+    RandomCutForest,
+    StreamRandomHistogramForest,
+    XStream,
+)
 from aberrant.model.sketch import StreamingLODA
 from aberrant.stream.dataset import Dataset, load
 
@@ -64,6 +80,7 @@ except ImportError:
 
 try:
     from pysad.models import LODA as PySADLODA
+    from pysad.models import RobustRandomCutForest as PySADRobustRandomCutForest
     from pysad.models import xStream as PySADxStream
 except ImportError:
     PySADLODA = None
@@ -73,6 +90,8 @@ else:
 
 MODEL_SEED = 42
 LOF_EVENTS = 2_000
+RCF_EVENTS = 3_000
+RCF_PARAMETERS = f"40 trees, 256 points, first {RCF_EVENTS:,} events"
 XSTREAM_PARAMETERS = "100 projections, 100 chains, depth 15, window 256"
 
 
@@ -158,6 +177,19 @@ def build_cases() -> list[Case]:
             lambda: OnlineIsolationForest(seed=MODEL_SEED),
         ),
         Case(
+            "Random Cut Forest",
+            "aberrant",
+            RCF_PARAMETERS,
+            lambda: RandomCutForest(n_trees=40, sample_size=256, seed=MODEL_SEED),
+            max_events=RCF_EVENTS,
+        ),
+        Case(
+            "StreamRandomHistogramForest",
+            "aberrant",
+            "defaults (25 trees, depth 5, window 256)",
+            lambda: StreamRandomHistogramForest(seed=MODEL_SEED),
+        ),
+        Case(
             "xStream",
             "aberrant",
             XSTREAM_PARAMETERS,
@@ -213,6 +245,19 @@ def build_cases() -> list[Case]:
                     num_bins=10, num_random_cuts=100, random_state=MODEL_SEED
                 ),
                 input_kind="row",
+            ),
+            Case(
+                "Random Cut Forest",
+                "PySAD",
+                RCF_PARAMETERS,
+                lambda: PySADRobustRandomCutForest(
+                    num_trees=40,
+                    tree_size=256,
+                    time_decay=1.0,
+                    random_state=MODEL_SEED,
+                ),
+                input_kind="row",
+                max_events=RCF_EVENTS,
             ),
             Case(
                 "xStream",
