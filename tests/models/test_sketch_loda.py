@@ -2,10 +2,12 @@
 
 import time
 import unittest
+from unittest import mock
 
 import numpy as np
 
 from aberrant.model.sketch import StreamingLODA as LODA
+from aberrant.model.sketch import loda as loda_module
 from tests import score_sequences
 
 
@@ -257,6 +259,22 @@ class TestLODA(unittest.TestCase):
                 # The tolerance only absorbs last-bit BLAS and libm differences
                 # between platforms; the recording platform reproduces every bit.
                 np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_warm_up_batches_count_every_row_once(self) -> None:
+        events = score_sequences.make_stream(seed=7, n_events=200, n_features=5)
+        params = {"n_projections": 12, "n_bins": 9, "warm_up_samples": 100, "seed": 4}
+        reference = LODA(**params)
+        reference_scores = score_sequences.score_then_learn(reference, events)
+        # A row needs 8 * 12 comparisons. Bounds below that still take one row
+        # per batch, 1,000 takes 10 rows and 3,000 takes 31 with a shorter last
+        # batch.
+        for bound in (5, 1_000, 3_000):
+            with self.subTest(bound=bound):
+                model = LODA(**params)
+                with mock.patch.object(loda_module, "_WARM_UP_COMPARISONS", bound):
+                    scores = score_sequences.score_then_learn(model, events)
+                self.assertEqual(scores, reference_scores)
+                np.testing.assert_array_equal(model._bin_counts, reference._bin_counts)
 
     def test_default_model_processes_two_thousand_events_quickly(self) -> None:
         events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)

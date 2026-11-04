@@ -31,7 +31,8 @@ Semantic Versioning.
   by the reproducible `docs/scripts/discord_figure.py`.
 - `benchmarks/compare_peers.py` measures score-then-learn throughput and
   ROC-AUC of the hot detectors against river and PySAD with matched parameters.
-  It is a manual benchmark and not part of CI.
+  It is a manual benchmark and not part of CI, and it needs PySAD 0.7 or later,
+  whose `fit_score_partial` scores an event before learning it.
 
 ### Changed
 
@@ -68,7 +69,9 @@ Semantic Versioning.
   comparison instead of one `np.searchsorted` call per projection, fixes the
   bin widths when warm-up ends and fits the warm-up histograms in one pass.
   Score sequences are unchanged, and it scores and learns about 45 times more
-  events per second.
+  events per second. The warm-up histograms are fitted in row batches of at
+  most about a million edge comparisons, so large warm-ups with many bins need
+  no more memory than before.
 - `HalfSpaceTrees` walks its complete trees with flat loops instead of
   recursion, pivots the window masses over one list of all nodes and scores
   from the validated values without building an array. `HSTNode` and `HSTLeaf`
