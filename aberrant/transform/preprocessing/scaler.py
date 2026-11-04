@@ -116,11 +116,17 @@ class MinMaxScaler(BaseTransformer):
         Returns:
             The scaled feature-value pairs.
 
+        Before the first learned event every feature maps to the lower bound of
+        ``feature_range``, so score-before-learn loops can start cold.
+
         Raises:
-            ValueError: If feature hasn't been seen during learning.
+            ValueError: If a feature was not seen once learning has started.
         """
+        values = coerce_feature_values(x)
+        if not self.min:
+            return dict.fromkeys(values, self.feature_range[0])
         scaled_x = {}
-        for feature, numeric_value in coerce_feature_values(x).items():
+        for feature, numeric_value in values.items():
             if feature not in self.min or feature not in self.max:
                 raise ValueError(
                     f"Feature '{feature}' has not been seen during learning."
@@ -239,11 +245,17 @@ class StandardScaler(BaseTransformer):
         Returns:
             The standardized feature-value pairs.
 
+        Before the first learned event every feature maps to ``0.0``, the
+        standardized mean, so score-before-learn loops can start cold.
+
         Raises:
-            ValueError: If feature hasn't been seen during learning.
+            ValueError: If a feature was not seen once learning has started.
         """
+        values = coerce_feature_values(x)
+        if not self.counts:
+            return dict.fromkeys(values, 0.0)
         scaled_x = {}
-        for feature, numeric_value in coerce_feature_values(x).items():
+        for feature, numeric_value in values.items():
             if feature not in self.means:
                 raise ValueError(
                     f"Feature '{feature}' has not been seen during learning."

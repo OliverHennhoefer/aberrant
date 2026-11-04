@@ -142,9 +142,16 @@ class RollingRobustScaler(BaseTransformer):
         self._statistics.update(statistics)
 
     def transform_one(self, x: dict[str, float]) -> dict[str, float]:
-        """Scale without learning; reject unseen features or non-finite output."""
+        """Scale without learning; reject unseen features or non-finite output.
+
+        Before the first learned event every feature maps to ``0.0``, the
+        robust center, so score-before-learn loops can start cold.
+        """
+        values = coerce_feature_values(x)
+        if not self._statistics:
+            return dict.fromkeys(values, 0.0)
         transformed = {}
-        for feature, value in coerce_feature_values(x).items():
+        for feature, value in values.items():
             self._require_seen(feature)
             median, scale = self._statistics[feature]
             scaled = (value - median) / scale
