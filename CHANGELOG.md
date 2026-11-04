@@ -7,6 +7,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Three executed example notebooks with Open in Colab badges: a prequential
+  quickstart on Shuttle, MIDAS on a graph stream, and quantile-threshold
+  alerts with Page-Hinkley drift detection.
+- A "Coming from river or PySAD" guide that maps their loops and components to
+  aberrant.
+
 ## [1.4.0] - 2026-10-30
 
 ### Added
