@@ -360,7 +360,10 @@ class TestMondrianForestExactness(unittest.TestCase):
             with self.subTest(case=case["name"]):
                 model = MondrianForest(**case["params"])
                 scores = score_sequences.replay(model, case)
-                self.assertEqual(scores, case["scores"])
+                # The tolerance only absorbs last-bit libm differences in log
+                # and pow between platforms; the recording platform reproduces
+                # every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
 
     def test_scaled_standard_exponential_matches_exponential(self):
         rng = np.random.default_rng(3)
