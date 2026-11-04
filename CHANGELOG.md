@@ -53,6 +53,9 @@ Semantic Versioning.
   before their first learned event instead of raising `ValueError`, so a
   score-before-learn loop can start on the first event. A feature that was
   not seen after learning has started still raises `ValueError`.
+- The README quickstart scores each event before learning it and adds a
+  `RollingRobustScaler` in front of `MinMaxScaler`; the migration guide's
+  aberrant loop uses the same score-then-learn order.
 
 ## [1.4.0] - 2026-10-30
 

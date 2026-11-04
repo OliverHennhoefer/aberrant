@@ -15,8 +15,8 @@ changing imports. PySAD code needs one extra step: events become
     detector = MinMaxScaler() | HalfSpaceTrees(seed=42)
 
     for event in [{"x": 0.1, "y": 0.4}, {"x": 0.2, "y": 0.5}, {"x": 0.9, "y": 0.1}]:
-        detector.learn_one(event)
         score = detector.score_one(event)
+        detector.learn_one(event)
     ```
 
 === "river"
@@ -47,8 +47,8 @@ changing imports. PySAD code needs one extra step: events become
 Higher scores mean more anomalous in all three libraries. aberrant keeps
 `score_one` and `learn_one` separate: for prequential (test-then-train)
 evaluation, call `score_one` first, which is what PySAD's
-`fit_score_partial` does internally. Note that a scaler cannot transform a
-feature before it has learned one event; see the
+`fit_score_partial` does internally. Scalers return neutral values before
+their first learned event, so this order works from the first event; see the
 [transformer guide](transformers.md).
 
 ## Rows to events
