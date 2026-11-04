@@ -9,9 +9,8 @@ Semantic Versioning.
 
 ### Added
 
-- A README figure in which `XLagDAMP` finds the one anomalous heartbeat in a
-  noisy 30,000-sample ECG from the UCR Time Series Anomaly Archive, rendered
-  by the reproducible `docs/scripts/discord_figure.py`.
+- A weekly OpenSSF Scorecard analysis that publishes its results to
+  scorecard.dev and code scanning, and a Scorecard badge in the README.
 - A README figure of three sensor streams scored event by event, rendered in
   light and dark variants by the reproducible `docs/scripts/stream_figure.py`.
 - `docs/img/social-preview.png` for the repository's social preview card.
@@ -26,6 +25,9 @@ Semantic Versioning.
   alerts with Page-Hinkley drift detection.
 - A "Coming from river or PySAD" guide that maps their loops and components to
   aberrant.
+- A README figure in which `XLagDAMP` finds the one anomalous heartbeat in a
+  noisy 30,000-sample ECG from the UCR Time Series Anomaly Archive, rendered
+  by the reproducible `docs/scripts/discord_figure.py`.
 
 ### Changed
 
