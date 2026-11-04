@@ -56,6 +56,11 @@ Semantic Versioning.
   sample takes the complete validation path and is accepted or rejected as
   before. Numeric coercion no longer calls NumPy per value. Half-Space Trees
   scores and learns about 45% more events per second.
+- `StreamingLODA` finds the bins of all projections with one vectorized
+  comparison instead of one `np.searchsorted` call per projection, fixes the
+  bin widths when warm-up ends and fits the warm-up histograms in one pass.
+  Score sequences are unchanged, and it scores and learns about 45 times more
+  events per second.
 
 ## [1.4.0] - 2026-10-30
 

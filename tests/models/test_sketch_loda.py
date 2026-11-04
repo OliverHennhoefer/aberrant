@@ -1,10 +1,12 @@
 """Unit tests for the LODA sketch-based anomaly detector."""
 
+import time
 import unittest
 
 import numpy as np
 
 from aberrant.model.sketch import StreamingLODA as LODA
+from tests import score_sequences
 
 
 class TestLODA(unittest.TestCase):
@@ -245,6 +247,26 @@ class TestLODA(unittest.TestCase):
         self.assertIsNone(model._boundary.schema.names)
         self.assertIsNone(model._projection_matrix)
         self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
+
+    def test_score_sequences_match_recorded_reference(self) -> None:
+        for case in score_sequences.load("streaming_loda"):
+            with self.subTest(case=case["name"]):
+                model = LODA(**case["params"])
+                events = score_sequences.make_stream(**case["stream"])
+                scores = score_sequences.score_then_learn(model, events)
+                # The tolerance only absorbs last-bit BLAS and libm differences
+                # between platforms; the recording platform reproduces every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_default_model_processes_two_thousand_events_quickly(self) -> None:
+        events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
+        model = LODA(seed=1)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.05 s.
+        self.assertLess(time.perf_counter() - start, 1.0)
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(n_projections=18, n_bins=14, sparsity=0.25)

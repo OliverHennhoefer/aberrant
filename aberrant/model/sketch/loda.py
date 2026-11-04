@@ -103,6 +103,14 @@ class StreamingLODA(BaseModel):
         self._bin_edges: np.ndarray | None = None
         self._bin_counts: np.ndarray | None = None
         self._bin_totals: np.ndarray | None = None
+        # Fixed with the edges after warm-up: the interior edges transposed to
+        # (n_bins - 1, n_projections), each bin's floored width, and the index
+        # of each projection's last bin in the flattened (C-order) histograms.
+        self._inner_edges: np.ndarray | None = None
+        self._bin_widths: np.ndarray | None = None
+        self._last_bins: np.ndarray = (
+            np.arange(self.n_projections, dtype=np.intp) * self.n_bins + self.n_bins - 1
+        )
         self._warmup_buffer: list[np.ndarray] = []
         self._ready = False
 
@@ -151,19 +159,18 @@ class StreamingLODA(BaseModel):
             raise RuntimeError("Projection matrix is not initialized")
         return cast(np.ndarray, self._projection_matrix @ vector)
 
-    def _bin_indices_from_edges(
-        self,
-        projected: np.ndarray,
-        edges: np.ndarray,
-    ) -> np.ndarray:
-        indices = np.empty(self.n_projections, dtype=np.intp)
-        for projection in range(self.n_projections):
-            edge_row = edges[projection]
-            index = (
-                int(np.searchsorted(edge_row, projected[projection], side="right")) - 1
-            )
-            indices[projection] = int(np.clip(index, 0, self.n_bins - 1))
-        return indices
+    def _flat_bins(self, projected: np.ndarray, inner_edges: np.ndarray) -> np.ndarray:
+        """Return each projection's bin as an index into the flattened histograms.
+
+        Bin ``j`` covers ``[edges[j], edges[j + 1])`` and the outer bins also take
+        values outside the fitted range. A value therefore lands in its
+        projection's last bin, minus one bin for every interior edge above it.
+        That is the bin ``np.searchsorted(edges, value, side="right") - 1`` finds
+        after clipping, here for all projections at once. ``projected`` has
+        shape ``(n_projections,)``, or ``(rows, 1, n_projections)`` for a batch.
+        """
+        above = np.add.reduce(projected < inner_edges, axis=-2)
+        return cast(np.ndarray, self._last_bins - above)
 
     def _fit_histograms_from_buffer(self) -> None:
         if len(self._warmup_buffer) < self.warm_up_samples:
@@ -187,24 +194,26 @@ class StreamingLODA(BaseModel):
                 num=self.n_bins + 1,
                 dtype=np.float64,
             )
+        inner_edges = np.ascontiguousarray(edges[:, 1:-1].T)
 
-        counts = np.zeros((self.n_projections, self.n_bins), dtype=np.float64)
-        totals = np.zeros(self.n_projections, dtype=np.float64)
-        row_indices = np.arange(self.n_projections, dtype=np.intp)
-        for projected in warmup:
-            bins = self._bin_indices_from_edges(projected, edges)
-            counts[row_indices, bins] += 1.0
-            totals += 1.0
+        bins = self._flat_bins(warmup[:, np.newaxis, :], inner_edges)
+        counts = np.bincount(bins.ravel(), minlength=self.n_projections * self.n_bins)
 
         self._bin_edges = edges
-        self._bin_counts = counts
-        self._bin_totals = totals
+        self._inner_edges = inner_edges
+        self._bin_widths = np.maximum(np.diff(edges, axis=1), self.eps)
+        self._bin_counts = counts.astype(np.float64).reshape(
+            self.n_projections, self.n_bins
+        )
+        self._bin_totals = np.full(
+            self.n_projections, float(len(warmup)), dtype=np.float64
+        )
         self._warmup_buffer.clear()
         self._ready = True
 
     def _update_histograms(self, projected: np.ndarray) -> None:
         if (
-            self._bin_edges is None
+            self._inner_edges is None
             or self._bin_counts is None
             or self._bin_totals is None
         ):
@@ -214,33 +223,32 @@ class StreamingLODA(BaseModel):
             self._bin_counts *= self.decay
             self._bin_totals *= self.decay
 
-        bins = self._bin_indices_from_edges(projected, self._bin_edges)
-        row_indices = np.arange(self.n_projections, dtype=np.intp)
-        self._bin_counts[row_indices, bins] += 1.0
+        bins = self._flat_bins(projected, self._inner_edges)
+        # The counts are allocated C-contiguous and only updated in place, so
+        # the flat reshape is a view. Each projection owns distinct bins.
+        self._bin_counts.reshape(-1)[bins] += 1.0
         self._bin_totals += 1.0
 
     def _score_projected(self, projected: np.ndarray) -> float:
         if (
-            self._bin_edges is None
+            self._inner_edges is None
+            or self._bin_widths is None
             or self._bin_counts is None
             or self._bin_totals is None
         ):
             return 0.0
 
-        bins = self._bin_indices_from_edges(projected, self._bin_edges)
-        row_indices = np.arange(self.n_projections, dtype=np.intp)
-
-        counts = self._bin_counts[row_indices, bins]
-        totals = self._bin_totals
-        left_edges = self._bin_edges[row_indices, bins]
-        right_edges = self._bin_edges[row_indices, bins + 1]
-        widths = np.maximum(right_edges - left_edges, self.eps)
+        bins = self._flat_bins(projected, self._inner_edges)
+        counts = self._bin_counts.take(bins)
+        widths = self._bin_widths.take(bins)
 
         mass = (counts + self.pseudocount) / (
-            totals + self.pseudocount * float(self.n_bins)
+            self._bin_totals + self.pseudocount * float(self.n_bins)
         )
         density = mass / widths
-        score = float(np.mean(-np.log(density + self.eps)))
+        # The mean of the negative log-densities; np.add.reduce is the sum that
+        # np.mean takes, without its Python-level overhead.
+        score = float(np.add.reduce(-np.log(density + self.eps))) / self.n_projections
         return float(max(score, 0.0))
 
     def learn_one(self, x: dict[str, float]) -> None:
