@@ -489,6 +489,28 @@ def test_single_rows_reject_float32_overflow():
     assert model.data_size == 1
 
 
+@pytest.mark.parametrize("dtype", [np.uint8, np.int8, np.uint64, np.int64])
+def test_integer_batches_score_like_float_batches(dtype):
+    info = np.iinfo(dtype)
+    rng = np.random.default_rng(3)
+    data = rng.integers(0, 50, size=(120, 2)).astype(dtype)
+    # Extreme values, whose negation wraps in the input dtype.
+    data[::9] = info.min
+    data[4::9] = info.max
+    typed = OnlineIsolationForest(
+        num_trees=5, max_leaf_samples=2, window_size=40, seed=2
+    )
+    floats = OnlineIsolationForest(
+        num_trees=5, max_leaf_samples=2, window_size=40, seed=2
+    )
+    for row in data:
+        typed_score = typed.score_batch(row[np.newaxis, :])
+        float_row = row[np.newaxis, :].astype(np.float64)
+        np.testing.assert_array_equal(typed_score, floats.score_batch(float_row))
+        typed.learn_batch(row[np.newaxis, :])
+        floats.learn_batch(float_row)
+
+
 def test_model_processes_two_thousand_events_quickly():
     events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
     model = OnlineIsolationForest(num_trees=25, window_size=256, seed=1)

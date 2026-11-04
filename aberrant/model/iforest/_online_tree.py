@@ -17,15 +17,19 @@ class _Bounds:
 
     ``box`` stacks the minimum over the negated maximum, shape
     ``(2, n_features)``, so the union of bounds is one elementwise minimum.
-    Negation is exact, and the array is never modified in place, so bounds may
-    share it.
+    The box is float64, so negating an unsigned or extreme integer maximum
+    cannot wrap, and sampling inside the bounds converts them to float64
+    anyway. Negation is exact, and the array is never modified in place, so
+    bounds may share it.
     """
 
     box: np.ndarray
 
     @classmethod
     def from_data(cls, data: np.ndarray) -> _Bounds:
-        return cls(np.vstack((data.min(axis=0), -data.max(axis=0))))
+        minimum = data.min(axis=0).astype(np.float64)
+        maximum = data.max(axis=0).astype(np.float64)
+        return cls(np.vstack((minimum, -maximum)))
 
     @classmethod
     def union(cls, bounds: Sequence[_Bounds]) -> _Bounds:
