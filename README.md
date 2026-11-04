@@ -4,12 +4,7 @@
   </a>
 </p>
 
-<h3 align="center">Real-time anomaly detection for data streams in Python.</h3>
-
-<p align="center">
-  Score every event as it arrives and adapt as the data changes.<br>
-  Forests, sketches, graph and time-series detectors that learn as the data arrives.
-</p>
+<h3 align="center">Real-time anomaly detection for data streams.</h3>
 
 <p align="center">
   <a href="https://pypi.org/project/aberrant/"><img src="https://img.shields.io/pypi/v/aberrant.svg" alt="PyPI version"></a>
@@ -32,20 +27,9 @@
 
 <p align="center">
   <b>Running it in production?</b>
-  <a href="https://github.com/DataDrivenSustainabilitySolutions/off-key"><b>Aberration</b></a>
-  runs aberrant pipelines on live MQTT telemetry,<br>
-  and the <a href="https://oliverhennhoefer.github.io/aberrant/user_guide/integrations/">integration guide</a>
-  shows how to build detectors from configuration.
+  The <a href="https://oliverhennhoefer.github.io/aberrant/user_guide/integrations/">integration guide</a>
+  shows how to build detectors from configurations.
 </p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/stream-dark.svg">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/stream-light.svg" width="100%" alt="Three sensor streams with an injected spike, level shift and dropout. A scaled LocalOutlierFactor scores each event before learning it, and an adaptive quantile threshold raises alerts at the onset of each anomaly.">
-  </picture>
-</p>
-
-<p align="center"><sub>A scaled <code>LocalOutlierFactor</code> scores each event before learning it; an online <code>QuantileThreshold</code> raises the alerts. Reproduce it with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/stream_figure.py"><code>docs/scripts/stream_figure.py</code></a>.</sub></p>
 
 ## Quickstart
 
@@ -61,20 +45,26 @@ for event, label in load(Dataset.SHUTTLE).stream():
     score = detector.score_one(event)  # higher means more anomalous
 ```
 
-The detector sees each of the 49,096 Shuttle events once, keeps a bounded
-window of state, and needs no training set or retraining job. The loop runs
-in under 10 seconds on one CPU core and reaches a ROC-AUC of about 0.97. The
-dataset is downloaded and cached on first use.
-
 ## Why aberrant
 
 - **Broad toolbox.** Forest, density, sketch, graph, matrix-profile, SVM and autoencoder detectors.
 - **Score to alert.** Drift detectors and adaptive thresholds turn scores into decisions.
 - **Built for services.** `|` pipelines, bounded state, detectors built from plain configuration.
 - **Measured on the stream.** Prequential evaluation, benchmark streams, separate timings.
-- **Typed and extensible.** Ships `py.typed`; any protocol-conforming object joins a pipeline.
+- **Typed and extensible.** Ships `py.typed` and any protocol-conforming object joins a pipeline.
 
-### Anomalies that hide inside the normal range
+|                                                 | aberrant | river | PySAD |
+| ----------------------------------------------- | :------: | :---: | :---: |
+| Isolation forests and half-space trees          | ✓        | ✓     | ✓     |
+| Projection sketches (LODA, RS-Hash)             | ✓        | ✓     | ✓     |
+| Graph-edge streams (MIDAS, AnoEdge, ISCONNA)    | ✓        |       |       |
+| Time-series discords (matrix profile, DAMP)     | ✓        |       |       |
+| Drift detectors (ADWIN, KSWIN, Page-Hinkley)    | ✓        | ✓     |       |
+| Score thresholds or calibration                 | ✓        | ✓     | ✓     |
+| Detectors built from declarative configuration  | ✓        |       |       |
+| General online ML (classification, regression)  |          | ✓     |       |
+
+### Non-trivial detection
 
 Many anomalies have no outlying value at all. In this ECG from the UCR Time
 Series Anomaly Archive, one malformed heartbeat sits among roughly 180 normal
@@ -92,20 +82,9 @@ no outlier to find.
   </picture>
 </p>
 
-<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), scored with <code>XLagDAMP(subsequence_length=167)</code>. Reproduce it with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
+<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), with <code>XLagDAMP(subsequence_length=167)</code>. Reproduce with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
 
-## aberrant, river or PySAD?
-
-|                                                 | aberrant | river | PySAD |
-| ----------------------------------------------- | :------: | :---: | :---: |
-| Isolation forests and half-space trees          | ✓        | ✓     | ✓     |
-| Projection sketches (LODA, RS-Hash)             | ✓        | ✓     | ✓     |
-| Graph-edge streams (MIDAS, AnoEdge, ISCONNA)    | ✓        |       |       |
-| Time-series discords (matrix profile, DAMP)     | ✓        |       |       |
-| Drift detectors (ADWIN, KSWIN, Page-Hinkley)    | ✓        | ✓     |       |
-| Score thresholds or calibration                 | ✓        | ✓     | ✓     |
-| Detectors built from declarative configuration  | ✓        |       |       |
-| General online ML (classification, regression)  |          | ✓     |       |
+---
 
 ## Installation
 
@@ -191,8 +170,7 @@ detector = (
 )
 ```
 
-Any custom object satisfying `TransformerProtocol` or `ModelProtocol` can join
-a pipeline; subclassing an `aberrant` base class is optional. Read the
+Read the
 [pipeline guide](https://oliverhennhoefer.github.io/aberrant/user_guide/pipelines/)
 for lifecycle and composition rules.
 
