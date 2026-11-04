@@ -274,7 +274,8 @@ def test_isconna_pattern_counters_never_wrap_negative():
     largest = np.iinfo(np.int64).max
     group.width_time.fill(largest)
     group.gap_time.fill(largest)
-    model._record_observation(group)
+    for column in range(2):
+        model._update_group(group, np.array([column]))
     assert np.all(group.width_time == largest)
     group.busy_current.fill(False)
     group.busy_previous.fill(True)
