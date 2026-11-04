@@ -84,13 +84,13 @@ Series Anomaly Archive, one malformed heartbeat sits among roughly 180 normal
 ones, under sensor noise and baseline wander, and every one of its values lies
 inside the normal range. `XLagDAMP`, a matrix-profile discord detector, scores
 the stream in a single pass from the first sample, with no training split and
-bounded memory, and puts its highest score on that beat. A detector that looks
-at one value at a time, here `HalfSpaceTrees`, has nothing to find.
+bounded memory, and ranks that beat first. A detector that looks at one value
+at a time, here `HalfSpaceTrees`, ranks it 179th of 181.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-dark.svg">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="A 30,000-sample noisy ECG with one labelled anomalous beat. XLagDAMP's highest score falls on that beat; HalfSpaceTrees on the raw values peaks elsewhere. A zoom shows the anomalous beat stays within the series' value range.">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="A 30,000-sample noisy ECG with 181 heartbeats, one of them anomalous. Ranked by their highest score per beat, XLagDAMP puts the anomalous beat first and HalfSpaceTrees on the raw values puts it 179th. An overlay of all beats shows the anomalous beat stays within the normal value range but has a different shape.">
   </picture>
 </p>
 
