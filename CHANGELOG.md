@@ -29,6 +29,9 @@ Semantic Versioning.
 - A README figure in which `XLagDAMP` finds the one anomalous heartbeat in a
   noisy 30,000-sample ECG from the UCR Time Series Anomaly Archive, rendered
   by the reproducible `docs/scripts/discord_figure.py`.
+- `benchmarks/compare_peers.py` measures score-then-learn throughput and
+  ROC-AUC of the hot detectors against river and PySAD with matched parameters.
+  It is a manual benchmark and not part of CI.
 
 ### Changed
 
@@ -56,6 +59,21 @@ Semantic Versioning.
 - The README quickstart scores each event before learning it and adds a
   `RollingRobustScaler` in front of `MinMaxScaler`; the migration guide's
   aberrant loop uses the same score-then-learn order.
+- Feature validation checks a plain `dict` sample with the committed feature
+  names and finite `float` or `numpy.float64` values in one pass. Any other
+  sample takes the complete validation path and is accepted or rejected as
+  before. Numeric coercion no longer calls NumPy per value. Half-Space Trees
+  scores and learns about 45% more events per second.
+- `StreamingLODA` finds the bins of all projections with one vectorized
+  comparison instead of one `np.searchsorted` call per projection, fixes the
+  bin widths when warm-up ends and fits the warm-up histograms in one pass.
+  Score sequences are unchanged, and it scores and learns about 45 times more
+  events per second.
+- `HalfSpaceTrees` walks its complete trees with flat loops instead of
+  recursion, pivots the window masses over one list of all nodes and scores
+  from the validated values without building an array. `HSTNode` and `HSTLeaf`
+  are slotted dataclasses. Score sequences are unchanged, and it scores and
+  learns about 2.5 times more events per second.
 
 ## [1.4.0] - 2026-10-30
 
