@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from collections.abc import Callable
-from itertools import islice
+from collections.abc import Callable, Iterable
+from itertools import chain, islice
 from typing import Generic, TypeVar, cast
 
 import numpy as np
-from scipy.signal import fftconvolve
+from scipy import fft as sp_fft
 
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import FeatureSchema, PreparedFeatures
@@ -141,6 +141,30 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
         )
 
 
+def _valid_convolution(signal: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+    """Return ``scipy.signal.fftconvolve(signal, kernel, mode="valid")``.
+
+    The kernel must have at least two values and must not be longer than the
+    signal. This makes the same real FFT calls at the same fast length as
+    SciPy, without its general shape handling, which dominated the cost of
+    these short transforms.
+    """
+    length = sp_fft.next_fast_len(signal.size + kernel.size - 1, real=True)
+    spectrum = sp_fft.rfft(signal, length) * sp_fft.rfft(kernel, length)
+    full = sp_fft.irfft(spectrum, length)
+    return cast(np.ndarray, full[kernel.size - 1 : signal.size])
+
+
+def _statistics_array(flat: Iterable[float], shape: tuple[int, ...]) -> np.ndarray:
+    """Read flattened window statistics into a float64 array of ``shape``.
+
+    ``np.fromiter`` with a known count builds the array ``np.asarray`` would
+    build from the nested tuples, in one pass instead of a shape discovery
+    pass and a copy pass.
+    """
+    return np.fromiter(flat, dtype=np.float64, count=math.prod(shape)).reshape(shape)
+
+
 def _window_statistics(values: np.ndarray) -> tuple[int, float, float]:
     """Return a power-of-two exponent, mean offset, and population deviation.
 
@@ -205,7 +229,7 @@ def _distance_bounds(
         transformed_query = _normalized_window(query, query_statistics)
     else:
         transformed_query = np.ldexp(query, -exponent) - scaled[0]
-    products = fftconvolve(centered, transformed_query[::-1], mode="valid")
+    products = _valid_convolution(centered, transformed_query[::-1])
 
     # FFT forward/inverse error grows with transform depth and operand norms.
     # The margin also covers moment arithmetic and the subsequent subtraction.
@@ -254,7 +278,7 @@ def _nearest_match(
     """Find the exact nearest eligible window, resolving ties chronologically."""
     m = query.size
     query_statistics = _window_statistics(query)
-    stats = np.asarray(statistics, dtype=np.float64)
+    stats = _statistics_array(chain.from_iterable(statistics), (len(statistics), 3))
     constants = stats[:, 2] == 0.0
     if normalize and query_statistics[2] == 0.0:
         matches = np.flatnonzero(constants)
@@ -318,8 +342,11 @@ def _nearest_multivariate_match(
     normalize: bool,
 ) -> tuple[float, int, list[float]]:
     """Minimize the largest channel distance at a common historical start."""
-    m = query.shape[0]
-    stats = np.asarray(statistics, dtype=np.float64)
+    m, channels = query.shape
+    stats = _statistics_array(
+        chain.from_iterable(chain.from_iterable(statistics)),
+        (len(statistics), channels, 3),
+    )
     query_statistics = _multivariate_window_statistics(query)
     lower = np.zeros(len(statistics))
     upper = np.zeros(len(statistics))

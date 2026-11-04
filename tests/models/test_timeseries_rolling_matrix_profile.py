@@ -2,11 +2,19 @@
 
 import math
 import pickle
+import time
+from itertools import chain
 
 import numpy as np
 import pytest
+from scipy.signal import fftconvolve
 
 from aberrant.model.timeseries import RollingMatrixProfile
+from aberrant.model.timeseries._matrix_profile import (
+    _statistics_array,
+    _valid_convolution,
+)
+from tests import score_sequences
 
 
 def _direct_distance(left, right, normalize):
@@ -299,3 +307,47 @@ def test_unrepresentable_raw_distance_does_not_mutate_state():
     assert pickle.dumps(model) == before
     model.learn_one({"value": 1e308})
     assert model.n_samples_seen == 4
+
+
+def test_score_sequences_match_recorded_reference():
+    for case in score_sequences.load("rolling_matrix_profile"):
+        scores = score_sequences.replay(RollingMatrixProfile(**case["params"]), case)
+        # The tolerance only absorbs last-bit libm differences between
+        # platforms; the recording platform reproduces every bit.
+        np.testing.assert_allclose(
+            scores, case["scores"], rtol=1e-12, atol=0, err_msg=case["name"]
+        )
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e-300, 1e300])
+def test_valid_convolution_matches_fftconvolve(scale):
+    rng = np.random.default_rng(31)
+    for size in [*range(2, 70), 255, 256, 257, 511, 512, 1000]:
+        for kernel_size in sorted({2, 3, 7, 32, size // 2, size}):
+            if not 2 <= kernel_size <= size:
+                continue
+            signal = rng.normal(size=size) * scale
+            kernel = rng.normal(size=kernel_size)
+            expected = fftconvolve(signal, kernel, mode="valid")
+            actual = _valid_convolution(signal, kernel)
+            assert actual.shape == expected.shape
+            assert actual.tobytes() == expected.tobytes()
+
+
+def test_statistics_array_matches_asarray():
+    statistics = [(-1074, -0.0, 5e-324), (1024, 1.5, 0.25), (0, 0.1, 0.0)]
+    expected = np.asarray(statistics, dtype=np.float64)
+    actual = _statistics_array(chain.from_iterable(statistics), (3, 3))
+    assert actual.shape == expected.shape
+    assert actual.tobytes() == expected.tobytes()
+
+
+def test_default_window_speed_smoke():
+    events = score_sequences.make_series(seed=37, n_events=1500, n_channels=1)
+    model = RollingMatrixProfile(subsequence_length=32)
+
+    start = time.perf_counter()
+    score_sequences.score_then_learn(model, events)
+
+    # Generous bound against large regressions; typical runs take ~0.4 s.
+    assert time.perf_counter() - start < 6.0

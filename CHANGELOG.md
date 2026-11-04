@@ -180,6 +180,13 @@ Semantic Versioning.
   `np.allclose`, with the same threshold. Scores and counts are unchanged, and
   with the defaults it scores and learns about 1.7 times more events per
   second than 1.4.0.
+- `RollingMatrixProfile` and `MultivariateRollingMatrixProfile` compute the
+  screening convolution with SciPy's real FFTs directly, which gives the bits
+  of `scipy.signal.fftconvolve` without its general shape handling, and read
+  the stored window statistics into an array with `np.fromiter`. Scores,
+  matches and channel distances are unchanged. With a subsequence length of
+  32 and the default window, both score and learn about 1.4 times more events
+  per second.
 
 ## [1.4.0] - 2026-10-30
 
