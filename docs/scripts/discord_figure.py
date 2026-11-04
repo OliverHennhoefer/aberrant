@@ -7,10 +7,9 @@ Every value of that beat lies inside the range of the normal beats, so a
 detector that looks at one value at a time has nothing to find.
 
 ``XLagDAMP`` scores each event before learning it, in one pass, from the first
-sample, without the archive's training split and with bounded memory. For
-contrast, ``HalfSpaceTrees`` scores the same raw values the same way. Both
-score streams are summarised per heartbeat (the highest score within each
-beat) so the two detectors can be read side by side.
+sample, without the archive's training split and with bounded memory. Its
+highest score lands on the anomalous beat. An overlay of every heartbeat shows
+why a detector that scores single values has no outlier to find there.
 
 Requires matplotlib, which is not an aberrant dependency::
 
@@ -32,9 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.transforms import blended_transform_factory
 
-from aberrant.model.iforest import HalfSpaceTrees
 from aberrant.model.timeseries import XLagDAMP
-from aberrant.transform import MinMaxScaler
 
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / "img"
 SERIES = "013_UCR_Anomaly_DISTORTEDECG3"
@@ -47,6 +44,7 @@ DATA_SHA256 = "3811edc0a3dbc6b2aa4fdfb314f56fde32bb352a79cd55acfadc4be0e8485e44"
 SUBSEQUENCE_LENGTH = 167  # about one heartbeat
 R_PEAK_HEIGHT = 100.0  # normal R peaks rise far above this; the anomaly does not
 BEAT_WINDOW = (-75, 115)  # samples around each beat's peak in the overlay
+WARMUP = 4 * SUBSEQUENCE_LENGTH  # XLagDAMP's default start_index
 BUCKETS = 1600  # min/max envelope per bucket keeps the SVGs small
 THEMES = {
     "light": {
@@ -55,7 +53,7 @@ THEMES = {
         "faint": "#c9c8c2",
         "line": "#52514e",
         "beats": "#52514e17",
-        "bar": "#b7b6af",
+        "score": "#2a78d6",
         "accent": "#eb6834",
         "band": "#eb68342e",
     },
@@ -65,7 +63,7 @@ THEMES = {
         "faint": "#4a4945",
         "line": "#c3c2b7",
         "beats": "#c3c2b724",
-        "bar": "#64635d",
+        "score": "#3987e5",
         "accent": "#f07a45",
         "band": "#f07a452b",
     },
@@ -85,19 +83,15 @@ def load_series() -> tuple[np.ndarray, tuple[int, int]]:
     return values, (int(labelled[0]), int(labelled[-1]) + 1)
 
 
-def score_series(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Score every event before learning it with DAMP and with HalfSpaceTrees."""
+def score_series(values: np.ndarray) -> np.ndarray:
+    """Score every event with XLagDAMP before learning it."""
     damp = XLagDAMP(subsequence_length=SUBSEQUENCE_LENGTH)
-    point = MinMaxScaler() | HalfSpaceTrees(seed=0)
-    damp_scores = np.zeros(len(values))
-    point_scores = np.zeros(len(values))
+    scores = np.zeros(len(values))
     for index, value in enumerate(values):
         event = {"ecg": float(value)}
-        damp_scores[index] = damp.score_one(event)
+        scores[index] = damp.score_one(event)
         damp.learn_one(event)
-        point_scores[index] = point.score_one(event)
-        point.learn_one(event)
-    return damp_scores, point_scores
+    return scores
 
 
 def find_beats(values: np.ndarray, span: tuple[int, int]) -> tuple[np.ndarray, int]:
@@ -115,15 +109,6 @@ def find_beats(values: np.ndarray, span: tuple[int, int]) -> tuple[np.ndarray, i
     return np.array(peaks), peaks.index(anomaly_peak)
 
 
-def per_beat(scores: np.ndarray, peaks: np.ndarray, shift: int) -> np.ndarray:
-    """Highest score per beat; a score counts for the beat at ``index - shift``."""
-    bounds = np.concatenate(([0], (peaks[:-1] + peaks[1:]) // 2, [len(scores)]))
-    beat = np.searchsorted(bounds, np.arange(len(scores)) - shift, side="right") - 1
-    result = np.zeros(len(peaks))
-    np.maximum.at(result, np.clip(beat, 0, len(peaks) - 1), scores)
-    return result / result.max()
-
-
 def envelope(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return a min/max envelope that draws like the full-resolution line."""
     edges = np.linspace(0, len(values), BUCKETS + 1).astype(int)
@@ -135,15 +120,6 @@ def envelope(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
             xs.append(left + offset)
             ys.append(chunk[offset])
     return np.array(xs), np.array(ys)
-
-
-def ordinal(rank: int) -> str:
-    suffix = (
-        "th"
-        if 10 <= rank % 100 <= 20
-        else {1: "st", 2: "nd", 3: "rd"}.get(rank % 10, "th")
-    )
-    return f"{rank}{suffix}"
 
 
 def heading(
@@ -185,29 +161,33 @@ def draw_stream(
     )
 
 
-def draw_beat_scores(
+def draw_scores(
     ax: plt.Axes,
     colors: dict[str, str],
-    title: str,
-    beat_scores: np.ndarray,
-    anomaly: int,
+    scores: np.ndarray,
+    span: tuple[int, int],
 ) -> None:
-    """Draw the highest score per heartbeat, with the anomalous beat in orange."""
-    n_beats = len(beat_scores)
-    bar_colors = [colors["bar"]] * n_beats
-    bar_colors[anomaly] = colors["accent"]
-    ax.bar(np.arange(n_beats), beat_scores, width=0.72, color=bar_colors, linewidth=0)
-    rank = int((beat_scores > beat_scores[anomaly]).sum()) + 1
+    """Draw the XLagDAMP score stream and mark its highest score."""
+    start, stop = span
+    warm = scores[WARMUP:]
+    scaled = warm / warm.max()
+    xs, ys = envelope(scaled)
+    ax.plot(xs + WARMUP, ys, color=colors["score"], linewidth=0.7)
+    top = int(np.argmax(scores))
+    ax.scatter([top], [1.0], s=34, color=colors["accent"], zorder=3, linewidth=0)
+    ax.axvspan(start - 120, stop + 120, color=colors["band"], linewidth=0)
+    ax.set_xlim(0, len(scores))
+    ax.set_ylim(0, 1.12)
+    ax.set_yticks([])
+    ax.set_xticks([0, 10_000, 20_000, 30_000], ["0", "10k", "20k", "30k"])
+    ax.set_xlabel("sample")
     heading(
         ax,
         colors,
-        title,
-        f"anomalous beat ranks {ordinal(rank)} of {n_beats}",
+        "XLagDAMP score",
+        f"one pass, no training split  ·  peak at sample {top:,}, the anomalous beat",
         strong=True,
     )
-    ax.set_ylim(0, 1.05)
-    ax.set_yticks([])
-    ax.set_xlim(-1, n_beats)
 
 
 def draw_beats(
@@ -251,7 +231,6 @@ def render(
     values: np.ndarray,
     span: tuple[int, int],
     damp_scores: np.ndarray,
-    point_scores: np.ndarray,
     theme: str,
 ) -> None:
     """Write one themed SVG with a transparent background."""
@@ -270,38 +249,21 @@ def render(
         }
     )
     peaks, anomaly = find_beats(values, span)
-    fig = plt.figure(figsize=(12, 5.6))
+    fig = plt.figure(figsize=(12, 4.6))
     grid = fig.add_gridspec(
-        3,
+        2,
         2,
         width_ratios=[2.7, 1],
-        height_ratios=[1.15, 1, 1],
-        hspace=0.55,
+        height_ratios=[1, 1],
+        hspace=0.5,
         wspace=0.08,
     )
     stream_ax = fig.add_subplot(grid[0, 0])
     damp_ax = fig.add_subplot(grid[1, 0])
-    point_ax = fig.add_subplot(grid[2, 0], sharex=damp_ax)
     beat_ax = fig.add_subplot(grid[:, 1])
 
     draw_stream(stream_ax, colors, values, span, len(peaks))
-    draw_beat_scores(
-        damp_ax,
-        colors,
-        "XLagDAMP  ·  matrix-profile discords",
-        per_beat(damp_scores, peaks, SUBSEQUENCE_LENGTH // 2),
-        anomaly,
-    )
-    draw_beat_scores(
-        point_ax,
-        colors,
-        "HalfSpaceTrees  ·  one value at a time",
-        per_beat(point_scores, peaks, 0),
-        anomaly,
-    )
-    damp_ax.tick_params(labelbottom=False)
-    point_ax.set_xlabel("heartbeat  (bar height: highest score within the beat)")
-    point_ax.set_xticks([0, 50, 100, 150])
+    draw_scores(damp_ax, colors, damp_scores, span)
     draw_beats(beat_ax, colors, values, peaks, anomaly)
     beat_ax.text(  # aligned with the stream title
         0,
@@ -312,7 +274,7 @@ def render(
         va="bottom",
     )
 
-    for ax in (stream_ax, damp_ax, point_ax, beat_ax):
+    for ax in (stream_ax, damp_ax, beat_ax):
         for side in ("top", "right", "left"):
             ax.spines[side].set_visible(False)
         ax.patch.set_alpha(0)
@@ -330,13 +292,10 @@ def render(
 
 def main() -> None:
     values, span = load_series()
-    damp_scores, point_scores = score_series(values)
+    damp_scores = score_series(values)
     for theme in THEMES:
-        render(values, span, damp_scores, point_scores, theme)
-    print(
-        f"label {span}, DAMP top {int(np.argmax(damp_scores))}, "
-        f"HalfSpaceTrees top {int(np.argmax(point_scores))}"
-    )
+        render(values, span, damp_scores, theme)
+    print(f"label {span}, XLagDAMP top {int(np.argmax(damp_scores))}")
 
 
 if __name__ == "__main__":
