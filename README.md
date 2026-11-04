@@ -29,6 +29,15 @@
   <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/CHANGELOG.md">Changelog</a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/stream-dark.svg">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/stream-light.svg" width="100%" alt="Three sensor streams with an injected spike, level shift and dropout. A scaled LocalOutlierFactor scores each event before learning it, and an adaptive quantile threshold raises alerts at the onset of each anomaly.">
+  </picture>
+</p>
+
+<p align="center"><sub>A scaled <code>LocalOutlierFactor</code> scores each event before learning it; an online <code>QuantileThreshold</code> raises the alerts. Reproduce it with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/stream_figure.py"><code>docs/scripts/stream_figure.py</code></a>.</sub></p>
+
 ## Quickstart
 
 ```bash

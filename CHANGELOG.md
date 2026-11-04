@@ -9,6 +9,9 @@ Semantic Versioning.
 
 ### Added
 
+- A README figure of three sensor streams scored event by event, rendered in
+  light and dark variants by the reproducible `docs/scripts/stream_figure.py`.
+- `docs/img/social-preview.png` for the repository's social preview card.
 - `CITATION.cff`, so GitHub and Zenodo can offer citation metadata.
 - Tagged releases now create a GitHub release with the matching changelog
   section and the built distributions attached.
