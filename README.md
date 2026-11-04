@@ -77,6 +77,25 @@ dataset is downloaded and cached on first use.
 - **Typed and extensible.** Ships `py.typed`; any object that satisfies the
   structural model or transformer protocol can join a pipeline.
 
+### Anomalies that hide inside the normal range
+
+Many anomalies have no outlying value at all. In this ECG from the UCR Time
+Series Anomaly Archive, one malformed heartbeat sits among roughly 180 normal
+ones, under sensor noise and baseline wander, and every one of its values lies
+inside the normal range. `XLagDAMP`, a matrix-profile discord detector, scores
+the stream in a single pass from the first sample, with no training split and
+bounded memory, and puts its highest score on that beat. A detector that looks
+at one value at a time, here `HalfSpaceTrees`, has nothing to find.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-dark.svg">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="A 30,000-sample noisy ECG with one labelled anomalous beat. XLagDAMP's highest score falls on that beat; HalfSpaceTrees on the raw values peaks elsewhere. A zoom shows the anomalous beat stays within the series' value range.">
+  </picture>
+</p>
+
+<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), scored with <code>XLagDAMP(subsequence_length=167)</code>. Reproduce it with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
+
 ## aberrant, river or PySAD?
 
 |                                                 | aberrant | river | PySAD |
