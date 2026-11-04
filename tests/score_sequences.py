@@ -24,7 +24,7 @@ import numpy as np
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
+from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest, XStream
 from aberrant.model.sketch import StreamingLODA
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -37,17 +37,18 @@ def make_stream(
     *,
     kind: str = "gaussian",
     time_key: str | None = None,
+    outlier_scale: float = 8.0,
 ) -> list[dict[str, float]]:
     """Build a seeded stream of plain-float feature dictionaries.
 
     ``gaussian`` draws standard normal features and scales every 17th event by
-    eight to create outliers. ``unit`` draws two clusters inside ``[0, 1]`` and
+    ``outlier_scale`` to create outliers. ``unit`` draws two clusters inside ``[0, 1]`` and
     replaces every 23rd event with a uniform draw.
     """
     rng = np.random.default_rng(seed)
     if kind == "gaussian":
         data = rng.normal(size=(n_events, n_features))
-        data[::17] *= 8.0
+        data[::17] *= outlier_scale
     elif kind == "unit":
         centers = rng.uniform(0.2, 0.8, size=(2, n_features))
         labels = rng.integers(0, 2, size=n_events)
@@ -218,6 +219,69 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_events": 300,
                     "n_features": 5,
                     "time_key": "t",
+                },
+            },
+        ],
+    ),
+    "xstream": (
+        XStream,
+        [
+            {
+                "name": "small_chains",
+                "params": {
+                    "k": 20,
+                    "n_chains": 10,
+                    "depth": 6,
+                    "cms_width": 64,
+                    "cms_num_hashes": 3,
+                    "window_size": 32,
+                    "init_sample_size": 32,
+                    "seed": 6,
+                },
+                "stream": {"seed": 51, "n_events": 300, "n_features": 5},
+            },
+            {
+                # Four projected dimensions over twelve levels, so chains
+                # revisit dimensions and halve their intervals again.
+                "name": "revisited_dimensions",
+                "params": {
+                    "k": 4,
+                    "n_chains": 8,
+                    "depth": 12,
+                    "cms_width": 128,
+                    "cms_num_hashes": 2,
+                    "window_size": 25,
+                    "init_sample_size": 20,
+                    "density": 1.0,
+                    "seed": 7,
+                },
+                "stream": {"seed": 52, "n_events": 300, "n_features": 3},
+            },
+            {
+                "name": "defaults_short_windows",
+                "params": {"window_size": 64, "init_sample_size": 64, "seed": 8},
+                "stream": {"seed": 53, "n_events": 300, "n_features": 8},
+            },
+            {
+                # One initial point leaves every chain scale at 1, so the
+                # 1e30 outliers land in bins far beyond the int64 range.
+                "name": "huge_bins",
+                "params": {
+                    "k": 8,
+                    "n_chains": 6,
+                    "depth": 10,
+                    "cms_width": 32,
+                    "cms_num_hashes": 2,
+                    "window_size": 16,
+                    "init_sample_size": 1,
+                    "density": 0.5,
+                    "seed": 9,
+                },
+                "stream": {
+                    "seed": 54,
+                    "n_events": 200,
+                    "n_features": 4,
+                    "outlier_scale": 1e30,
                 },
             },
         ],

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 from collections import OrderedDict, deque
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 import numpy as np
@@ -14,13 +13,29 @@ from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
 
 
 @dataclass(slots=True)
-class _ScratchState:
-    """Reusable traversal buffers."""
+class _ChainLevels:
+    """Chain parameters per split, flattened as ``level * n_chains + chain``."""
 
-    z: np.ndarray
-    bins: np.ndarray
-    feature_visits: np.ndarray
-    hash_dots: np.ndarray
+    dims: np.ndarray
+    shift: np.ndarray
+    deltamax: np.ndarray
+    # The shift in units of the dimension's scale, subtracted on a revisit.
+    scaled_shift: np.ndarray
+    # Splits that revisit a dimension and the chain's previous split on it,
+    # one pair per visit count, so each round reads only finished splits.
+    revisits: list[tuple[np.ndarray, np.ndarray]]
+    # The previous split on the same dimension, or the number of splits for a
+    # first visit.
+    previous: np.ndarray
+    # Hash coefficients of each split's dimension, ``(cms_num_hashes, splits)``.
+    hash_coeffs: np.ndarray
+    # Whether bin steps and their hash terms are reduced modulo the width
+    # before summing, as int64 sums of unreduced terms could overflow.
+    reduce_terms: bool
+    # Hash offsets and the flat sketch index of each row's first counter,
+    # shaped ``(cms_num_hashes, depth, n_chains)``.
+    hash_offsets: np.ndarray
+    row_starts: np.ndarray
 
 
 @dataclass(slots=True)
@@ -34,7 +49,11 @@ class _XStreamState:
     cms_reference: np.ndarray
     hash_coeffs_mod: np.ndarray
     hash_offsets_mod: np.ndarray
-    scratch: _ScratchState
+    levels: _ChainLevels
+    # The last projected point and its sketch cells, so that learning a point
+    # right after scoring it descends the chains once.
+    last_point: bytes = b""
+    last_cells: np.ndarray | None = None
     samples_seen: int = 0
     samples_in_window: int = 0
     completed_windows: int = 0
@@ -173,11 +192,14 @@ class XStream(BaseModel):
         return mapping
 
     def _project_one(self, x: dict[str, float]) -> np.ndarray:
-        y = np.zeros(self.k, dtype=np.float64)
-        for feature, value in x.items():
-            indices, signs = self._feature_projection(feature)
-            y[indices] += float(value) * signs
-        return y
+        projections = [self._feature_projection(feature) for feature in x]
+        indices = np.concatenate([indices for indices, _ in projections])
+        signs = np.concatenate([signs for _, signs in projections])
+        values = np.array([float(value) for value in x.values()])
+        # Every feature updates the same number of coordinates, and bincount
+        # adds the weights in order, as adding each feature's terms in turn does.
+        weights = np.repeat(values, len(projections[0][0])) * signs
+        return np.bincount(indices, weights=weights, minlength=self.k)
 
     def _create_state(self) -> _XStreamState:
         projected = np.vstack(self._init_buffer)
@@ -193,11 +215,12 @@ class XStream(BaseModel):
         shift = (
             self.rng.uniform(low=0.0, high=1.0, size=(self.n_chains, self.k)) * deltamax
         )
-        # A bucket can receive every observation in a reference window. Keep
-        # compact counters for ordinary windows, widening only when necessary.
-        counter_dtype = (
-            np.int32 if self.window_size <= np.iinfo(np.int32).max else np.int64
-        )
+        # A bucket can receive every observation in a window. Use the smallest
+        # counters that hold a full window, since every learned point updates
+        # counters spread across both sketches.
+        for counter_dtype in (np.int8, np.int16, np.int32, np.int64):
+            if self.window_size <= np.iinfo(counter_dtype).max:
+                break
         cms_current = np.zeros(
             (self.n_chains, self.depth, self.cms_num_hashes, self.cms_width),
             dtype=counter_dtype,
@@ -214,20 +237,70 @@ class XStream(BaseModel):
             size=(self.n_chains, self.depth, self.cms_num_hashes),
             dtype=np.int64,
         )
+        hash_coeffs_mod = hash_coeffs % self.cms_width
+        hash_offsets_mod = hash_offsets % self.cms_width
         return _XStreamState(
             deltamax=deltamax,
             chain_dims=chain_dims,
             shift=shift,
             cms_current=cms_current,
             cms_reference=np.zeros_like(cms_current),
-            hash_coeffs_mod=hash_coeffs % self.cms_width,
-            hash_offsets_mod=hash_offsets % self.cms_width,
-            scratch=_ScratchState(
-                z=np.zeros(self.k, dtype=np.float64),
-                # Python integers prevent overflow for very large finite features.
-                bins=np.zeros(self.k, dtype=object),
-                feature_visits=np.zeros(self.k, dtype=np.int32),
-                hash_dots=np.zeros(self.cms_num_hashes, dtype=np.int64),
+            hash_coeffs_mod=hash_coeffs_mod,
+            hash_offsets_mod=hash_offsets_mod,
+            levels=self._chain_levels(
+                chain_dims, shift, deltamax, hash_coeffs_mod, hash_offsets_mod
+            ),
+        )
+
+    def _chain_levels(
+        self,
+        chain_dims: np.ndarray,
+        shift: np.ndarray,
+        deltamax: np.ndarray,
+        hash_coeffs_mod: np.ndarray,
+        hash_offsets_mod: np.ndarray,
+    ) -> _ChainLevels:
+        n_chains, depth = chain_dims.shape
+        n_splits = n_chains * depth
+        previous = np.full(n_splits, n_splits, dtype=np.intp)
+        revisits: list[tuple[list[int], list[int]]] = []
+        for chain in range(n_chains):
+            last_split: dict[int, int] = {}
+            visits: dict[int, int] = {}
+            for level, dim in enumerate(chain_dims[chain].tolist()):
+                split = level * n_chains + chain
+                count = visits.get(dim, 0)
+                if count:
+                    previous[split] = last_split[dim]
+                    if len(revisits) < count:
+                        revisits.append(([], []))
+                    revisits[count - 1][0].append(split)
+                    revisits[count - 1][1].append(last_split[dim])
+                visits[dim] = count + 1
+                last_split[dim] = split
+
+        dims = chain_dims.T.ravel()
+        level_shift = shift[np.tile(np.arange(n_chains), depth), dims]
+        level_deltamax = deltamax[dims]
+        width = self.cms_width
+        # Unreduced terms lie within (-2 * width**2, 2 * width**2).
+        reduce_terms = 2 * depth * width * width + width > np.iinfo(np.int64).max
+        rows = np.arange(n_splits * self.cms_num_hashes, dtype=np.intp) * width
+        return _ChainLevels(
+            dims=dims,
+            shift=level_shift,
+            deltamax=level_deltamax,
+            scaled_shift=level_shift / level_deltamax,
+            revisits=[
+                (np.array(splits, dtype=np.intp), np.array(earlier, dtype=np.intp))
+                for splits, earlier in revisits
+            ],
+            previous=previous,
+            hash_coeffs=hash_coeffs_mod[:, dims],
+            reduce_terms=reduce_terms,
+            hash_offsets=np.ascontiguousarray(hash_offsets_mod.transpose(2, 1, 0)),
+            row_starts=np.ascontiguousarray(
+                rows.reshape(n_chains, depth, self.cms_num_hashes).transpose(2, 1, 0)
             ),
         )
 
@@ -241,64 +314,51 @@ class XStream(BaseModel):
         self._state = state
         self._init_buffer.clear()
 
-    def _iter_chain_buckets(
-        self,
-        state: _XStreamState,
-        y: np.ndarray,
-        chain: int,
-    ) -> Iterator[tuple[int, np.ndarray]]:
-        scratch = state.scratch
-        scratch.z.fill(0.0)
-        scratch.bins.fill(0)
-        scratch.feature_visits.fill(0)
-        scratch.hash_dots.fill(0)
-        hash_offsets_mod = state.hash_offsets_mod[chain]
+    def _sketch_cells(self, state: _XStreamState, y: np.ndarray) -> np.ndarray:
+        """Return the flat sketch index of every counter that ``y`` reaches.
 
-        for level in range(self.depth):
-            feature = int(state.chain_dims[chain, level])
-            scratch.feature_visits[feature] += 1
-            if scratch.feature_visits[feature] == 1:
-                z_new = (y[feature] + state.shift[chain, feature]) / state.deltamax[
-                    feature
-                ]
-            else:
-                z_new = (
-                    2.0 * scratch.z[feature]
-                    - state.shift[chain, feature] / state.deltamax[feature]
-                )
-
-            scratch.z[feature] = z_new
-            bin_new = int(np.floor(z_new))
-            if bin_new != scratch.bins[feature]:
-                delta = bin_new - scratch.bins[feature]
-                scratch.bins[feature] = bin_new
-                delta_mod = int(delta % self.cms_width)
-                if delta_mod:
-                    scratch.hash_dots = (
-                        scratch.hash_dots
-                        + delta_mod * state.hash_coeffs_mod[:, feature]
-                    ) % self.cms_width
-
-            buckets = (scratch.hash_dots + hash_offsets_mod[level]) % self.cms_width
-            yield level, buckets.astype(np.intp)
-
-    def _update_sketch(
-        self,
-        state: _XStreamState,
-        y: np.ndarray,
-        sketch: np.ndarray,
-    ) -> None:
-        hash_index = np.arange(self.cms_num_hashes, dtype=np.intp)
-        for chain in range(self.n_chains):
-            for level, buckets in self._iter_chain_buckets(state, y, chain):
-                sketch[chain, level, hash_index, buckets] += 1
+        All chains descend together. The result is shaped
+        ``(cms_num_hashes, depth, n_chains)``.
+        """
+        point = y.tobytes()
+        if state.last_cells is not None and point == state.last_point:
+            return state.last_cells
+        levels = state.levels
+        width = self.cms_width
+        z = (y[levels.dims] + levels.shift) / levels.deltamax
+        for splits, previous in levels.revisits:
+            z[splits] = 2.0 * z[previous] - levels.scaled_shift[splits]
+        bins = np.floor(z)
+        finite = np.isfinite(bins)
+        if not finite.all():
+            # Raise what converting a chain's first such bin to int raises.
+            by_chain = bins.reshape(self.depth, -1).T
+            int(by_chain[~finite.reshape(self.depth, -1).T][0])
+        # The hashes are linear modulo the width, so each bin only matters
+        # modulo the width. ``fmod`` of an integral float is exact.
+        bins_mod = np.zeros(bins.size + 1, dtype=np.int64)
+        bins_mod[:-1] = np.fmod(bins, width)
+        steps = bins_mod[:-1] - bins_mod[levels.previous]
+        if levels.reduce_terms:
+            steps %= width
+            terms = steps * levels.hash_coeffs % width
+        else:
+            terms = steps * levels.hash_coeffs
+        dots = np.cumsum(terms.reshape(levels.hash_offsets.shape), axis=1)
+        cells: np.ndarray = levels.row_starts + (dots + levels.hash_offsets) % width
+        state.last_point = point
+        state.last_cells = cells
+        return cells
 
     def _learn_projected(self, state: _XStreamState, y: np.ndarray) -> None:
-        self._update_sketch(state, y, state.cms_current)
+        state.cms_current.reshape(-1)[self._sketch_cells(state, y)] += 1
         state.samples_seen += 1
         state.samples_in_window += 1
         if state.samples_in_window >= self.window_size:
-            state.cms_reference[...] = state.cms_current
+            state.cms_reference, state.cms_current = (
+                state.cms_current,
+                state.cms_reference,
+            )
             state.cms_current.fill(0)
             state.samples_in_window = 0
             state.completed_windows += 1
@@ -315,19 +375,17 @@ class XStream(BaseModel):
         self._learn_projected(state, y)
 
     def _score_projected(self, state: _XStreamState, y: np.ndarray) -> float:
-        hash_index = np.arange(self.cms_num_hashes, dtype=np.intp)
-        chain_scores = np.empty(self.n_chains, dtype=np.float64)
-        for chain in range(self.n_chains):
-            best_level_score = np.inf
-            for level, buckets in self._iter_chain_buckets(state, y, chain):
-                counts = state.cms_reference[chain, level, hash_index, buckets]
-                estimated_count = int(np.min(counts))
-                level_score = np.log2(1.0 + estimated_count) + (level + 1.0)
-                best_level_score = min(best_level_score, level_score)
-            chain_scores[chain] = 2.0 ** (1.0 - best_level_score)
-
+        counts = state.cms_reference.reshape(-1)[self._sketch_cells(state, y)]
+        level_scores = np.log2(1.0 + counts.min(axis=0)) + np.arange(
+            1.0, self.depth + 1.0
+        ).reshape(-1, 1)
+        # Python's power, as in a per-chain loop: NumPy's vectorized power can
+        # differ from it in the last bit.
+        chain_scores = np.array(
+            [2.0 ** (1.0 - best) for best in level_scores.min(axis=0).tolist()]
+        )
         score = float(np.mean(chain_scores))
-        return float(np.clip(score, 0.0, 1.0))
+        return min(max(score, 0.0), 1.0)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Return an anomaly score in ``[0, 1]`` without learning."""

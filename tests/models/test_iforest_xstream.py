@@ -1,10 +1,45 @@
 """Unit tests for xStream anomaly detection model."""
 
+import time
 import unittest
 
 import numpy as np
 
 from aberrant.model.iforest.xstream import XStream
+from tests import score_sequences
+
+
+def _reference_buckets(model: XStream, y: np.ndarray) -> np.ndarray:
+    """Return the buckets of ``y`` from the per-chain traversal of aberrant 1.4.0.
+
+    The result is shaped ``(cms_num_hashes, depth, n_chains)``.
+    """
+    state = model._state
+    assert state is not None
+    width = model.cms_width
+    buckets = np.empty(
+        (model.cms_num_hashes, model.depth, model.n_chains), dtype=np.int64
+    )
+    for chain in range(model.n_chains):
+        z = np.zeros(model.k)
+        bins = [0] * model.k
+        visited: set[int] = set()
+        hash_dots = np.zeros(model.cms_num_hashes, dtype=np.int64)
+        for level in range(model.depth):
+            dim = int(state.chain_dims[chain, level])
+            if dim in visited:
+                z[dim] = 2.0 * z[dim] - state.shift[chain, dim] / state.deltamax[dim]
+            else:
+                visited.add(dim)
+                z[dim] = (y[dim] + state.shift[chain, dim]) / state.deltamax[dim]
+            bin_new = int(np.floor(z[dim]))
+            step = (bin_new - bins[dim]) % width
+            bins[dim] = bin_new
+            hash_dots = (hash_dots + step * state.hash_coeffs_mod[:, dim]) % width
+            buckets[:, level, chain] = (
+                hash_dots + state.hash_offsets_mod[chain, level]
+            ) % width
+    return buckets
 
 
 class TestXStream(unittest.TestCase):
@@ -215,6 +250,146 @@ class TestXStream(unittest.TestCase):
         self.assertIn("XStream", output)
         self.assertIn("k=16", output)
         self.assertIn("n_chains=8", output)
+
+
+class TestXStreamExactness(unittest.TestCase):
+    """Descending all chains together must reproduce the per-chain traversal."""
+
+    create_model = TestXStream.create_model
+
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("xstream"):
+            with self.subTest(case=case["name"]):
+                model = XStream(**case["params"])
+                events = score_sequences.make_stream(**case["stream"])
+                scores = score_sequences.score_then_learn(model, events)
+                # The tolerance only absorbs last-bit libm differences between
+                # platforms; the recording platform reproduces every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_sketch_cells_match_the_per_chain_traversal(self):
+        configurations = [
+            # Three dimensions over twelve levels revisit every dimension.
+            {"k": 3, "n_chains": 5, "depth": 12, "cms_width": 37, "density": 1.0},
+            {"k": 16, "n_chains": 7, "depth": 9, "cms_width": 64},
+            {"k": 6, "n_chains": 4, "depth": 6, "cms_width": 1},
+        ]
+        rng = np.random.default_rng(5)
+        for params in configurations:
+            model = XStream(
+                cms_num_hashes=3, window_size=10, init_sample_size=10, seed=2, **params
+            )
+            for row in rng.normal(size=(10, 3)):
+                model.learn_one({"a": row[0], "b": row[1], "c": row[2]})
+            state = model._state
+            assert state is not None
+            rows = np.arange(model.n_chains * model.depth * model.cms_num_hashes)
+            rows = rows.reshape(model.n_chains, model.depth, -1).transpose(2, 1, 0)
+            for scale in (1.0, -3.0, 1e6, 1e30, -1e300):
+                y = rng.normal(size=model.k) * scale
+                with self.subTest(params=params, scale=scale):
+                    cells = model._sketch_cells(state, y)
+                    np.testing.assert_array_equal(cells // model.cms_width, rows)
+                    np.testing.assert_array_equal(
+                        cells % model.cms_width, _reference_buckets(model, y)
+                    )
+
+    def test_reduced_hash_terms_give_the_same_cells(self):
+        model = XStream(k=8, n_chains=6, depth=10, cms_width=97, seed=3)
+        events = score_sequences.make_stream(seed=4, n_events=300, n_features=3)
+        for event in events:
+            model.learn_one(event)
+        state = model._state
+        assert state is not None
+        self.assertFalse(state.levels.reduce_terms)
+        for event in events[:20]:
+            y = model._project_one(event)
+            state.last_cells = None
+            state.levels.reduce_terms = False
+            unreduced = model._sketch_cells(state, y)
+            state.last_cells = None
+            state.levels.reduce_terms = True
+            np.testing.assert_array_equal(model._sketch_cells(state, y), unreduced)
+
+    def test_learning_after_scoring_another_point_counts_the_learned_point(self):
+        events = score_sequences.make_stream(seed=5, n_events=80, n_features=3)
+        scored_first = self.create_model()
+        learned_only = self.create_model()
+        for event in events[:40]:
+            scored_first.learn_one(event)
+            learned_only.learn_one(event)
+        for event, other in zip(events[40:], reversed(events[40:]), strict=True):
+            scored_first.score_one(other)
+            scored_first.learn_one(event)
+            learned_only.learn_one(event)
+        assert scored_first._state is not None and learned_only._state is not None
+        np.testing.assert_array_equal(
+            scored_first._state.cms_current, learned_only._state.cms_current
+        )
+        np.testing.assert_array_equal(
+            scored_first._state.cms_reference, learned_only._state.cms_reference
+        )
+
+    def test_overflowing_bins_raise_without_counting(self):
+        model = XStream(
+            k=2,
+            n_chains=3,
+            depth=4,
+            cms_width=16,
+            cms_num_hashes=2,
+            window_size=4,
+            init_sample_size=4,
+            density=1.0,
+            seed=1,
+        )
+        for i in range(6):
+            model.learn_one({"x": 0.01 * i})
+        state = model._state
+        assert state is not None
+        current = state.cms_current.copy()
+        samples_seen = state.samples_seen
+        with np.errstate(over="ignore"):
+            # As in the per-chain traversal, an infinite bin cannot become a
+            # bucket.
+            with self.assertRaises(OverflowError):
+                model.score_one({"x": 1.7e308})
+            with self.assertRaises(OverflowError):
+                model.learn_one({"x": 1.7e308})
+        np.testing.assert_array_equal(state.cms_current, current)
+        self.assertEqual(state.samples_seen, samples_seen)
+
+    def test_counters_are_the_smallest_type_that_holds_a_window(self):
+        for window_size, dtype in [
+            (127, np.int8),
+            (128, np.int16),
+            (32_767, np.int16),
+            (32_768, np.int32),
+        ]:
+            with self.subTest(window_size=window_size):
+                model = XStream(
+                    k=2,
+                    n_chains=1,
+                    depth=1,
+                    cms_width=2,
+                    cms_num_hashes=1,
+                    window_size=window_size,
+                    init_sample_size=1,
+                    seed=1,
+                )
+                model.learn_one({"x": 1.0})
+                assert model._state is not None
+                self.assertEqual(model._state.cms_current.dtype, dtype)
+                self.assertEqual(model._state.cms_reference.dtype, dtype)
+
+    def test_default_model_processes_two_thousand_events_quickly(self):
+        events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
+        model = XStream(seed=1)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.5 s.
+        self.assertLess(time.perf_counter() - start, 5.0)
 
 
 if __name__ == "__main__":
