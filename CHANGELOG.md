@@ -32,6 +32,9 @@ Semantic Versioning.
 
 ### Changed
 
+- The README quickstart scores each event before learning it and adds a
+  `RollingRobustScaler` in front of `MinMaxScaler`; the migration guide's
+  aberrant loop uses the same score-then-learn order.
 - Shortened the README: one-line feature bullets, a production link to
   Aberration and the integration guide at the top, and the integration,
   dataset, related-project and contributing sections left to the docs.
