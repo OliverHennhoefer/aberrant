@@ -7,6 +7,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- `StandardScaler`, `MinMaxScaler` and `RollingRobustScaler` return neutral
+  values (`0.0`, or the lower bound of `feature_range` for `MinMaxScaler`)
+  before their first learned event instead of raising `ValueError`, so a
+  score-before-learn loop can start on the first event. A feature that was
+  not seen after learning has started still raises `ValueError`.
+
 ## [1.4.0] - 2026-10-30
 
 ### Added

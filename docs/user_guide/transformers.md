@@ -154,15 +154,19 @@ events = [
     {"x": 4.0, "y": 4.0},
 ]
 
-for index, event in enumerate(events):
-    score = detector.score_one(event) if index > 0 else 0.0
+for event in events:
+    score = detector.score_one(event)
     detector.learn_one(event)
     print(f"event={event}, score={score:.3f}")
 ```
 
-The explicit first-event guard is required because `StandardScaler` cannot
-transform a feature it has never learned. In a longer application, use a clear
-warm-up phase rather than treating the first event as evaluated data.
+Before its first learned event, a scaler maps every feature to a neutral value
+(`0.0` for `StandardScaler` and `RollingRobustScaler`, the lower bound of
+`feature_range` for `MinMaxScaler`), so the loop can score from the first
+event. Once learning has started, a feature the scaler has not seen still
+raises `ValueError`. Early scores reflect almost no learned state, so exclude a
+warm-up phase from evaluation and alerting rather than treating the first
+events as evaluated data.
 
 See [Pipelines](pipelines.md) for update order, valid endpoints, and custom
 structural components, or [Transform API](../api/transform.md) for exact
