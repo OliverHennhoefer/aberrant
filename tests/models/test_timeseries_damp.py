@@ -1,12 +1,15 @@
 """Unit tests for pure-online X-Lag Amnesic DAMP."""
 
 import math
+import pickle
+import time
 import unittest
 
 import numpy as np
 
 from aberrant.model.timeseries import XLagDAMP
 from aberrant.model.timeseries.damp import _mass_distance_profile, _next_power_of_two
+from tests import score_sequences
 
 
 def _brute_force_distance_profile(
@@ -372,6 +375,96 @@ class TestXLagDAMP(unittest.TestCase):
         self.assertIn("subsequence_length=8", representation)
         self.assertIn("x_lag=64", representation)
         self.assertIn("start_index=32", representation)
+
+
+def _damp_state(model: XLagDAMP) -> tuple[object, ...]:
+    return (
+        tuple(model._history),
+        model.n_samples_seen,
+        model.n_subsequences_processed,
+        model._best_so_far,
+        model.last_score,
+    )
+
+
+class TestXLagDAMPScoredSearch(unittest.TestCase):
+    def test_score_sequences_match_recorded_reference(self) -> None:
+        for case in score_sequences.load("x_lag_damp"):
+            with self.subTest(case=case["name"]):
+                scores = score_sequences.replay(XLagDAMP(**case["params"]), case)
+                # The tolerance only absorbs last-bit libm differences between
+                # platforms; the recording platform reproduces every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_learning_the_scored_value_reuses_its_search(self) -> None:
+        model = XLagDAMP(subsequence_length=4, x_lag=16, start_index=4)
+        searches: list[float] = []
+        search = model._candidate_result
+
+        def counting(value: float) -> tuple[float, float] | None:
+            searches.append(value)
+            return search(value)
+
+        model._candidate_result = counting  # type: ignore[method-assign]
+        values = np.sin(np.arange(40) / 3.0).tolist()
+        for value in values[:-2]:
+            model.score_one({"x": value})
+            model.learn_one({"x": value})
+        self.assertEqual(len(searches), len(values) - 2)
+
+        # Another value, or the same value with the other zero sign, searches
+        # again when learned.
+        model.score_one({"x": 0.5})
+        model.learn_one({"x": values[-2]})
+        model.score_one({"x": 0.0})
+        model.learn_one({"x": -0.0})
+        self.assertEqual(len(searches), len(values) + 2)
+
+    def test_scoring_does_not_change_what_learning_computes(self) -> None:
+        rng = np.random.default_rng(23)
+        values = (np.sin(np.arange(300) / 4.0) + rng.normal(0, 0.1, 300)).tolist()
+        learned_only = XLagDAMP(subsequence_length=6, x_lag=40)
+        scored = XLagDAMP(subsequence_length=6, x_lag=40)
+        for index, value in enumerate(values):
+            pattern = index % 4
+            if pattern == 0:
+                scored.score_one({"x": value})
+            elif pattern == 1:
+                scored.score_one({"x": value + 1.0})
+                scored.score_one({"x": value})
+            elif pattern == 2:
+                scored.score_one({"x": value + 1.0})
+            else:
+                # Learning the scored value twice must search again the
+                # second time, from the longer history.
+                scored.score_one({"x": value})
+                scored.learn_one({"x": value})
+                learned_only.learn_one({"x": value})
+            learned_only.learn_one({"x": value})
+            scored.learn_one({"x": value})
+            self.assertEqual(_damp_state(scored), _damp_state(learned_only))
+
+    def test_pickles_leave_out_the_scored_search(self) -> None:
+        model = XLagDAMP(subsequence_length=4, x_lag=16, start_index=4)
+        for value in np.cos(np.arange(30) / 2.0).tolist():
+            model.learn_one({"x": value})
+        before = pickle.dumps(model)
+        model.score_one({"x": 0.25})
+        self.assertIsNotNone(model._scored)
+        self.assertEqual(pickle.dumps(model), before)
+        self.assertIsNone(pickle.loads(pickle.dumps(model))._scored)
+        model.reset()
+        self.assertIsNone(model._scored)
+
+    def test_default_lag_speed_smoke(self) -> None:
+        events = score_sequences.make_series(seed=39, n_events=2000, n_channels=1)
+        model = XLagDAMP(subsequence_length=32)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.3 s.
+        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":

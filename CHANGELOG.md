@@ -187,6 +187,11 @@ Semantic Versioning.
   matches and channel distances are unchanged. With a subsequence length of
   32 and the default window, both score and learn about 1.4 times more events
   per second.
+- `XLagDAMP` learning the value it just scored reuses the backward search that
+  scoring ran from the same history, instead of searching again; pickles
+  leave that search out. Scores, the best-so-far score and the history are
+  unchanged. With a subsequence length of 32 and the default lag, scoring
+  then learning each value runs about 1.9 times more events per second.
 
 ## [1.4.0] - 2026-10-30
 
