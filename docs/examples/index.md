@@ -22,6 +22,16 @@ Most model scripts compute average precision and ROC AUC and therefore require
 the `eval` extra. Dataset-backed scripts can download and cache a registered NPZ
 artifact on first use.
 
+## Notebooks
+
+These notebooks install aberrant themselves and run in Google Colab without a local setup.
+
+| Notebook | What it shows | Run |
+| --- | --- | --- |
+| [`01_quickstart.ipynb`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/notebooks/01_quickstart.ipynb) | Quickstart: stream the Shuttle benchmark through a scaled Half-Space Trees detector and evaluate it prequentially | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/OliverHennhoefer/aberrant/blob/main/examples/notebooks/01_quickstart.ipynb) |
+| [`02_graph_streams.ipynb`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/notebooks/02_graph_streams.ipynb) | Graph streams: catch a burst of repeated edges with MIDAS | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/OliverHennhoefer/aberrant/blob/main/examples/notebooks/02_graph_streams.ipynb) |
+| [`03_scores_to_alerts.ipynb`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/notebooks/03_scores_to_alerts.ipynb) | From scores to alerts: an adaptive quantile threshold plus Page-Hinkley drift detection | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/OliverHennhoefer/aberrant/blob/main/examples/notebooks/03_scores_to_alerts.ipynb) |
+
 ## General numeric streams
 
 | Family | Example | Additional requirement |

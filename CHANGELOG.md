@@ -18,6 +18,11 @@ Semantic Versioning.
 - CI uploads branch coverage to Codecov through OIDC, without a stored token,
   and the README shows a coverage badge. Coverage status checks are
   informational and never block a pull request.
+- Three executed example notebooks with Open in Colab badges: a prequential
+  quickstart on Shuttle, MIDAS on a graph stream, and quantile-threshold
+  alerts with Page-Hinkley drift detection.
+- A "Coming from river or PySAD" guide that maps their loops and components to
+  aberrant.
 
 ### Changed
 
