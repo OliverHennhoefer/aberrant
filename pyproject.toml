@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "aberrant"
 dynamic = ["version"]
-description = "Online Anomaly Detection Models"
+description = "Real-time anomaly detection for data streams"
 authors = [
     { name = "Oliver Hennhoefer", email = "oliver.hennhoefer@mail.de" },
     { name = "Pascal Heinzelmann" },
@@ -17,11 +17,39 @@ maintainers = [
 ]
 license = { file = "LICENSE" }
 readme = { file = "README.md", content-type = "text/markdown" }
+keywords = [
+    "anomaly detection",
+    "outlier detection",
+    "streaming",
+    "data streams",
+    "online learning",
+    "real-time",
+    "time series anomaly detection",
+    "graph anomaly detection",
+    "isolation forest",
+    "half-space trees",
+    "concept drift",
+    "drift detection",
+    "unsupervised learning",
+    "iot",
+    "fraud detection",
+]
 classifiers = [
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -76,9 +104,10 @@ all = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/OliverHennhoefer/aberrant"
-"Bugs" = "https://github.com/OliverHennhoefer/aberrant/issues"
+"Homepage" = "https://oliverhennhoefer.github.io/aberrant"
 "Documentation" = "https://oliverhennhoefer.github.io/aberrant"
+"Source" = "https://github.com/OliverHennhoefer/aberrant"
+"Issues" = "https://github.com/OliverHennhoefer/aberrant/issues"
 "Changelog" = "https://github.com/OliverHennhoefer/aberrant/blob/main/CHANGELOG.md"
 
 [tool.hatch.version]
