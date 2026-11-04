@@ -268,7 +268,15 @@ class TestRandomCutForestExactness(unittest.TestCase):
         for case in score_sequences.load("random_cut_forest"):
             with self.subTest(case=case["name"]):
                 scores = score_sequences.replay(RandomCutForest(**case["params"]), case)
-                self.assertEqual(scores, case["scores"])
+                if case["params"].get("normalize_score"):
+                    # Raw CoDisp is plain arithmetic, but np.exp can differ in
+                    # the last bit between CPUs (SIMD and libm loops). The
+                    # recording platform reproduces every bit.
+                    np.testing.assert_allclose(
+                        scores, case["scores"], rtol=1e-12, atol=0
+                    )
+                else:
+                    self.assertEqual(scores, case["scores"])
 
     def test_search_right_matches_searchsorted(self):
         rng = np.random.default_rng(5)
