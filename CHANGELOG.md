@@ -32,6 +32,11 @@ Semantic Versioning.
 
 ### Changed
 
+- Workflow tokens follow least privilege: write permissions are declared only
+  on the jobs that need them, and the GitHub release is created by the PyPI
+  publishing job after a successful upload.
+- `SECURITY.md` links the private advisory form and states a 90-day
+  coordinated disclosure timeline.
 - Shortened the README: one-line feature bullets, a production link to
   Aberration and the integration guide at the top, and the integration,
   dataset, related-project and contributing sections left to the docs.
