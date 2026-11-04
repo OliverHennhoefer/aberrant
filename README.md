@@ -175,3 +175,11 @@ Any custom object satisfying `TransformerProtocol` or `ModelProtocol` can join
 a pipeline; subclassing an `aberrant` base class is optional. Read the
 [pipeline guide](https://oliverhennhoefer.github.io/aberrant/user_guide/pipelines/)
 for lifecycle and composition rules.
+
+---
+
+<p align="center">
+  <a href="https://www.dlr.de/">
+    <img src="https://www.dlr.de/de/pt-lf/aktuelles/pressematerial/logos/bmwk/vorschaubild_bmwk_logo-mit-foerderzusatz_en/@@images/image-600-ea91cd9090327104991124b30fe1de7d.png" alt="Funding acknowledgement" width="250">
+  </a>
+</p>

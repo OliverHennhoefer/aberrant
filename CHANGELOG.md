@@ -9,6 +9,7 @@ Semantic Versioning.
 
 ### Added
 
+- The README footer shows the BMWK funding acknowledgement, as in nonconform.
 - A weekly OpenSSF Scorecard analysis that publishes its results to
   scorecard.dev and code scanning, and a Scorecard badge in the README.
 - A README figure of three sensor streams scored event by event, rendered in
