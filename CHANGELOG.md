@@ -83,6 +83,14 @@ Semantic Versioning.
   unlearn, and the tree depth limit is computed only when a leaf may split.
   Score sequences are unchanged, and the default forest scores and learns
   about 40 times more events per second.
+- `LocalOutlierFactor` keeps, for every window point, a sorted list of at
+  most `2 * k` nearest window points while learning, so k-distances and the
+  neighborhoods of the query's neighbors are read from those lists instead of
+  measuring the window again for each of them. Ties keep the order of a full
+  sort of the window, and distances are summed in NumPy's order over a
+  feature-major window. Score sequences are unchanged, and with the defaults it
+  scores and learns about 200 times more events per second. Learning now
+  measures the new point against the window.
 
 ## [1.4.0] - 2026-10-30
 
