@@ -1,7 +1,7 @@
 # Pipelines
 
 A pipeline is an ordered sequence of one or more transformers followed by zero
-or one terminal anomaly model. `|` composes ABERRANT transformers left to right.
+or one terminal anomaly model. `|` composes aberrant transformers left to right.
 
 ## Valid shapes
 

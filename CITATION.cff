@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use aberrant in your work, please cite it as below."
+title: "aberrant: real-time anomaly detection for data streams"
+type: software
+abstract: >-
+  aberrant is a typed Python library for unsupervised anomaly detection on
+  data streams. Its detectors score each event as it arrives and update
+  incrementally, covering isolation forests, distance and density methods,
+  projection sketches, graph-edge detectors, time-series discords, online
+  SVMs and reconstruction models, together with online preprocessing, drift
+  detection, score thresholds and prequential evaluation.
+authors:
+  - family-names: Hennhoefer
+    given-names: Oliver
+    email: oliver.hennhoefer@mail.de
+  - family-names: Heinzelmann
+    given-names: Pascal
+  - family-names: Hoell
+    given-names: Marius
+  - family-names: Catoir
+    given-names: Marco
+repository-code: "https://github.com/OliverHennhoefer/aberrant"
+url: "https://oliverhennhoefer.github.io/aberrant/"
+license: MIT
+keywords:
+  - anomaly detection
+  - outlier detection
+  - data streams
+  - online learning
+  - real-time
+  - concept drift
+  - python
