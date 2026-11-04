@@ -369,9 +369,20 @@ class TestMovingMultivariateExactness(unittest.TestCase):
             with self.subTest(case=case["name"]):
                 model = score_sequences.moving_statistic(**case["params"])
                 scores = score_sequences.replay(model, case)
-                # The tolerance only absorbs last-bit libm differences between
-                # platforms; the recording platform reproduces every bit.
-                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+                # np.cov and the Cholesky solve run through BLAS and LAPACK,
+                # whose CPU-specific kernels round differently, so 1.4.0
+                # itself moves by a few ulps between machines (up to 4e-15
+                # absolute here). The regularized Mahalanobis covariance can
+                # have a condition number near 1e6, which scales those ulps
+                # to about 2.4e-10 relative. The recording machine
+                # reproduces every bit.
+                mahalanobis = case["params"]["statistic"] == "mahalanobis_distance"
+                np.testing.assert_allclose(
+                    scores,
+                    case["scores"],
+                    rtol=1e-8 if mahalanobis else 1e-12,
+                    atol=1e-12,
+                )
 
     def test_float_array_matches_asarray(self):
         values = [1.0, -0.0, 0.0, 5e-324, -1e-310, 1.7e308, -2.5, 1e16 + 2.0]
