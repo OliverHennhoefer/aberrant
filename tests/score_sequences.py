@@ -44,6 +44,7 @@ from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
+    XLagDAMP,
 )
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -1204,6 +1205,59 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_events": 200,
                     "n_features": 4,
                     "outlier_scale": 1e30,
+                },
+            },
+        ],
+    ),
+    "x_lag_damp": (
+        XLagDAMP,
+        [
+            {
+                "name": "defaults",
+                "params": {"subsequence_length": 16},
+                "series": {"seed": 271, "n_events": 700, "n_channels": 1},
+            },
+            {
+                "name": "short_lag_late_start",
+                "params": {"subsequence_length": 8, "x_lag": 64, "start_index": 40},
+                "series": {"seed": 272, "n_events": 500, "n_channels": 1},
+            },
+            {
+                "name": "smallest_lag",
+                "params": {"subsequence_length": 4, "x_lag": 4, "start_index": 4},
+                "series": {"seed": 273, "n_events": 300, "n_channels": 1},
+            },
+            {
+                "name": "large_offset",
+                "params": {"subsequence_length": 12, "x_lag": 100},
+                "series": {
+                    "seed": 274,
+                    "n_events": 400,
+                    "n_channels": 1,
+                    "offset": 1e9,
+                },
+            },
+            {
+                # Values beyond the safe MASS range take the direct distances.
+                "name": "huge_values",
+                "params": {"subsequence_length": 6, "x_lag": 48},
+                "series": {
+                    "seed": 275,
+                    "n_events": 300,
+                    "n_channels": 1,
+                    "scale": 1e200,
+                },
+            },
+            {
+                # Values below the safe MASS range take the direct distances;
+                # eps is absolute, so it must be smaller still.
+                "name": "tiny_values",
+                "params": {"subsequence_length": 6, "x_lag": 48, "eps": 1e-300},
+                "series": {
+                    "seed": 276,
+                    "n_events": 300,
+                    "n_channels": 1,
+                    "scale": 1e-160,
                 },
             },
         ],

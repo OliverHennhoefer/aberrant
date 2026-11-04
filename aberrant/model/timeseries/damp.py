@@ -199,6 +199,14 @@ class XLagDAMP(BaseModel):
         self._subsequences_processed = 0
         self._best_so_far = float("-inf")
         self._last_score = 0.0
+        # The search result of the value scored last, keyed by its bits.
+        self._scored: tuple[str, tuple[float, float] | None] | None = None
+
+    def __getstate__(self) -> dict[str, object]:
+        """Leave the search result of the last scored value out of pickles."""
+        state = self.__dict__.copy()
+        state["_scored"] = None
+        return state
 
     def reset(self) -> None:
         """Reset learned state while preserving hyperparameters."""
@@ -344,7 +352,12 @@ class XLagDAMP(BaseModel):
     def learn_one(self, x: dict[str, float]) -> None:
         """Process one value and update the online DAMP state."""
         value = self._extract_value(x, mutate_schema=True)
-        result = self._candidate_result(value)
+        scored, self._scored = self._scored, None
+        if scored is not None and scored[0] == value.hex():
+            # Scoring searched from the same history for the same value.
+            result = scored[1]
+        else:
+            result = self._candidate_result(value)
         if result is not None:
             self._last_score, self._best_so_far = result
             self._subsequences_processed += 1
@@ -358,6 +371,7 @@ class XLagDAMP(BaseModel):
         """Score the subsequence ending at this value without mutating state."""
         value = self._extract_value(x, mutate_schema=False)
         result = self._candidate_result(value)
+        self._scored = (value.hex(), result)
         if result is None:
             return 0.0
         score, _best_so_far = result
