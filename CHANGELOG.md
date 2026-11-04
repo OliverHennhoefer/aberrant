@@ -9,6 +9,8 @@ Semantic Versioning.
 
 ### Added
 
+- A weekly OpenSSF Scorecard analysis that publishes its results to
+  scorecard.dev and code scanning, and a Scorecard badge in the README.
 - A README figure of three sensor streams scored event by event, rendered in
   light and dark variants by the reproducible `docs/scripts/stream_figure.py`.
 - `docs/img/social-preview.png` for the repository's social preview card.
