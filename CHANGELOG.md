@@ -13,6 +13,15 @@ Semantic Versioning.
   and the README shows a coverage badge. Coverage status checks are
   informational and never block a pull request.
 
+### Changed
+
+- Rewrote the README opening around real-time stream detection, with a
+  dataset-backed quickstart, a comparison with river and PySAD, and links to
+  related projects.
+- Updated package metadata: a new summary, keywords, development-status,
+  audience, topic and typing classifiers, and Python 3.13 and 3.14 support.
+- Extended the CI test matrix to CPython 3.13 and 3.14.
+
 ## [1.4.0] - 2026-10-30
 
 ### Added
