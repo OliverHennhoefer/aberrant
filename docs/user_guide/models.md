@@ -1,6 +1,6 @@
 # Models
 
-ABERRANT groups detectors by the structure they model, not by a single shared
+aberrant groups detectors by the structure they model, not by a single shared
 score scale. Choose a family from the event shape and anomaly mechanism first;
 then compare warm-up, state growth, latency, and calibration within that family.
 
@@ -39,7 +39,7 @@ often need less scaling, but a transform can still change their geometry.
 | `StreamRandomHistogramForest` | Non-negative summed log leaf-mass score | First complete `window_size` | Bounded alternating reference/current-window forest state |
 | `XStream` | `[0, 1]`; `0.0` until ready | Projection initialization plus one complete reference window | Fixed count-min sketches, chains, and bounded feature-hash cache when configured |
 
-`MondrianIsolationForest` is an ABERRANT hybrid: it uses online Mondrian block
+`MondrianIsolationForest` is an aberrant hybrid: it uses online Mondrian block
 extension but Isolation Forest path-length scoring. The original
 [Mondrian Forest](https://proceedings.neurips.cc/paper_files/paper/2014/hash/195f15384c2a79cedf293e4a847ce85c-Abstract.html)
 is supervised and does not define this anomaly score.
@@ -451,7 +451,7 @@ raw inputs and simple NumPy autoencoders, not score- or procedure-equivalent to
 the authors' normalized denoising implementation. The source method is
 [Kitsune/KitNET](https://www.ndss-symposium.org/ndss-paper/kitsune-an-ensemble-of-autoencoders-for-online-network-intrusion-detection/).
 
-`Autoencoder` requires `aberrant[dl]`. The caller supplies an ABERRANT
+`Autoencoder` requires `aberrant[dl]`. The caller supplies an aberrant
 `Architecture`, a PyTorch optimizer, and a reconstruction loss. It has no
 built-in warm-up policy; `score_one` returns the supplied criterion's loss and
 `learn_one` performs one optimizer step.

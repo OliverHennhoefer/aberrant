@@ -1,6 +1,6 @@
 # Application Integration
 
-ABERRANT exposes its built-in components through a typed, immutable catalog.
+aberrant exposes its built-in components through a typed, immutable catalog.
 Applications can discover supported models, generate configuration forms,
 validate deployment configuration, and build pipelines without maintaining
 class import paths or model-specific warm-up formulas.
@@ -210,13 +210,13 @@ when that extra is not installed and raises `MissingOptionalDependencyError`
 when construction is attempted.
 
 Some macOS PyTorch and `faiss-cpu` wheel combinations bundle separate OpenMP
-runtimes and abort when both are activated in one process. ABERRANT does not set
+runtimes and abort when both are activated in one process. aberrant does not set
 the unsafe `KMP_DUPLICATE_LIB_OK` workaround. Use a compatible native package
 set or run FAISS-backed and PyTorch-backed detectors in separate processes.
 
 ## Ownership boundary
 
-The catalog owns facts about ABERRANT components and their construction. The
+The catalog owns facts about aberrant components and their construction. The
 application still owns message decoding, tenant or sensor routing, calibration
 policy, resource budgets, model-instance concurrency, checkpoint I/O and
 signing, alert delivery, circuit breaking, and health endpoints.

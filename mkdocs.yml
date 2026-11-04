@@ -1,6 +1,6 @@
-site_name: ABERRANT
-site_description: Online anomaly detection for streaming data
-site_author: ABERRANT contributors
+site_name: aberrant
+site_description: Real-time anomaly detection for data streams in Python. Score every event as it arrives and adapt as the data changes.
+site_author: aberrant contributors
 site_url: https://oliverhennhoefer.github.io/aberrant
 repo_url: https://github.com/OliverHennhoefer/aberrant
 repo_name: OliverHennhoefer/aberrant
