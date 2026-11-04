@@ -38,7 +38,9 @@ second there.
 OnlineIsolationForest and StreamRandomHistogramForest have no matched peer and
 run at their defaults. MondrianIsolationForest has no peer either and runs at
 its defaults over the first 3,000 events, since its trees keep every event they
-learn and slow down as they grow.
+learn and slow down as they grow. IncrementalOneClassSVMAdaptiveKernel runs at
+its defaults without a peer: river's OneClassSVM is a linear model fitted by
+stochastic gradient descent, not a budgeted RBF-kernel model.
 
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
@@ -74,6 +76,7 @@ from aberrant.model.iforest import (
     XStream,
 )
 from aberrant.model.sketch import StreamingLODA
+from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 from aberrant.stream.dataset import Dataset, load
 
 try:
@@ -212,6 +215,12 @@ def build_cases() -> list[Case]:
             f"10 neighbors, first {LOF_EVENTS:,} events",
             lambda: LocalOutlierFactor(k=10),
             max_events=LOF_EVENTS,
+        ),
+        Case(
+            "IncrementalOneClassSVMAdaptiveKernel",
+            "aberrant",
+            "defaults (100 support vectors, buffer 200)",
+            lambda: IncrementalOneClassSVMAdaptiveKernel(seed=MODEL_SEED),
         ),
     ]
     if river_anomaly is None:
