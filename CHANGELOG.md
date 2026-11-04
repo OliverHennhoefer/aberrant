@@ -154,6 +154,13 @@ Semantic Versioning.
   unchanged. With the defaults it scores and learns about 2 times more events
   per second, and about 2.5 to 3 times more with PySAD's window of 2,048
   events.
+- `StreamingRSHash` hashes a point into all of its tables with integer array
+  operations instead of a Python loop over every table and subspace feature,
+  and reads and increments its counters with one array operation each.
+  Learning a point right after scoring it reuses the buckets that scoring
+  computed; pickles leave them out. Score sequences, counts and generator
+  states are unchanged, and with the defaults it scores and learns about 9
+  times more events per second.
 
 ## [1.4.0] - 2026-10-30
 

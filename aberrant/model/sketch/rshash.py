@@ -118,6 +118,9 @@ class StreamingRSHash(BaseModel):
 
         self._scale_renorm_threshold = 1e-12
         self._std_floor = 1e-6
+        # With an array of buckets, these select one counter in every table.
+        self._components = np.arange(components_num)[:, None]
+        self._tables = np.arange(hash_num)
 
         self._reset_state()
 
@@ -137,10 +140,19 @@ class StreamingRSHash(BaseModel):
 
         self._samples_seen: int = 0
         self._scale: float = 1.0
+        # The value bytes and buckets of the last scored point. Only learning
+        # changes the buckets of a point, so learning that point reuses them.
+        self._scored: tuple[bytes, np.ndarray] | None = None
 
     def reset(self) -> None:
         """Reset learned state while keeping hyperparameters."""
         self._reset_state()
+
+    def __getstate__(self) -> dict[str, object]:
+        state = self.__dict__.copy()
+        # The buckets of the last scored point are a cache, not model state.
+        state["_scored"] = None
+        return state
 
     @property
     def n_samples_seen(self) -> int:
@@ -254,24 +266,13 @@ class StreamingRSHash(BaseModel):
 
         sub_values = normalized[self._subspace_indices]
         quantized = np.floor((sub_values + self._subspace_shifts) / self.bin_width)
-        quantized_i64 = quantized.astype(np.int64)
-
-        buckets = np.zeros((self.components_num, self.hash_num), dtype=np.intp)
-
-        for component in range(self.components_num):
-            q = quantized_i64[component]
-            for hash_index in range(self.hash_num):
-                acc = int(self._hash_b[component, hash_index])
-                for dimension_index in range(q.shape[0]):
-                    coefficient = int(
-                        self._hash_a[component, hash_index, dimension_index]
-                    )
-                    q_value = int(q[dimension_index])
-                    acc = (acc + coefficient * (q_value % int(_HASH_MODULUS))) % int(
-                        _HASH_MODULUS
-                    )
-                buckets[component, hash_index] = acc % self.bins
-
+        residues = np.remainder(quantized.astype(np.int64), _HASH_MODULUS)
+        # Every coefficient and residue lies below the modulus 2**31 - 1, so
+        # each product, and the sum of the reduced products, fits in int64.
+        # Reducing each product first leaves (b + sum(a * q)) mod p unchanged.
+        terms = np.remainder(self._hash_a * residues[:, None, :], _HASH_MODULUS)
+        hashes = np.remainder(self._hash_b + terms.sum(axis=2), _HASH_MODULUS)
+        buckets: np.ndarray = hashes % self.bins
         return buckets
 
     def _score_buckets(self, buckets: np.ndarray, query_scale: float) -> float:
@@ -284,17 +285,9 @@ class StreamingRSHash(BaseModel):
         if normalizer <= 0.0:
             return 0.0
 
-        component_scores = np.empty(self.components_num, dtype=np.float64)
-        for component in range(self.components_num):
-            occupancy_min = float("inf")
-            for hash_index in range(self.hash_num):
-                bucket = int(buckets[component, hash_index])
-                occupancy = self._counts[component, hash_index, bucket] * query_scale
-                occupancy_min = min(occupancy_min, float(occupancy))
-
-            score_component = 1.0 - (np.log1p(max(occupancy_min, 0.0)) / normalizer)
-            component_scores[component] = np.clip(score_component, 0.0, 1.0)
-
+        occupancy = self._counts[self._components, self._tables, buckets] * query_scale
+        occupancy_min = np.maximum(occupancy.min(axis=1), 0.0)
+        component_scores = np.clip(1.0 - np.log1p(occupancy_min) / normalizer, 0.0, 1.0)
         return float(np.mean(component_scores))
 
     def learn_one(self, x: dict[str, float]) -> None:
@@ -302,10 +295,13 @@ class StreamingRSHash(BaseModel):
         event = self._boundary.preview(x)
         current_time = event.timestamp.value
         vector = event.features.values
+        scored, self._scored = self._scored, None
 
         self._initialize_hash_state(n_features=vector.shape[0])
-        normalized = self._normalize(vector)
-        buckets = self._bucket_indices(normalized)
+        if scored is not None and scored[0] == vector.tobytes():
+            buckets = scored[1]
+        else:
+            buckets = self._bucket_indices(self._normalize(vector))
         scale = self._preview_scale(current_time)
 
         if self._counts is None:
@@ -319,10 +315,7 @@ class StreamingRSHash(BaseModel):
         self._scale = scale
 
         increment = 1.0 / self._scale
-        for component in range(self.components_num):
-            for hash_index in range(self.hash_num):
-                bucket = int(buckets[component, hash_index])
-                self._counts[component, hash_index, bucket] += increment
+        self._counts[self._components, self._tables, buckets] += increment
 
         self._update_running_stats(vector)
 
@@ -339,8 +332,8 @@ class StreamingRSHash(BaseModel):
 
         current_time = event.timestamp.value
         vector = event.features.values
-        normalized = self._normalize(vector)
-        buckets = self._bucket_indices(normalized)
+        buckets = self._bucket_indices(self._normalize(vector))
+        self._scored = (vector.tobytes(), buckets)
         query_scale = self._preview_scale(current_time)
         return float(max(0.0, self._score_buckets(buckets, query_scale)))
 
