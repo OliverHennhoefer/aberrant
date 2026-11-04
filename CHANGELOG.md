@@ -12,6 +12,9 @@ Semantic Versioning.
 - `CITATION.cff`, so GitHub and Zenodo can offer citation metadata.
 - Tagged releases now create a GitHub release with the matching changelog
   section and the built distributions attached.
+- CI uploads branch coverage to Codecov through OIDC, without a stored token,
+  and the README shows a coverage badge. Coverage status checks are
+  informational and never block a pull request.
 
 ### Changed
 
