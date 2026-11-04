@@ -9,6 +9,10 @@ import numpy as np
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
+# Bound on the comparisons of warm-up rows with interior bin edges held at
+# once, so fitting the histograms needs about 1 MiB of temporaries.
+_WARM_UP_COMPARISONS = 1 << 20
+
 
 class StreamingLODA(BaseModel):
     """
@@ -196,8 +200,12 @@ class StreamingLODA(BaseModel):
             )
         inner_edges = np.ascontiguousarray(edges[:, 1:-1].T)
 
-        bins = self._flat_bins(warmup[:, np.newaxis, :], inner_edges)
-        counts = np.bincount(bins.ravel(), minlength=self.n_projections * self.n_bins)
+        counts = np.zeros(self.n_projections * self.n_bins, dtype=np.int64)
+        rows = max(1, _WARM_UP_COMPARISONS // inner_edges.size)
+        for start in range(0, len(warmup), rows):
+            batch = warmup[start : start + rows, np.newaxis, :]
+            bins = self._flat_bins(batch, inner_edges)
+            counts += np.bincount(bins.ravel(), minlength=counts.size)
 
         self._bin_edges = edges
         self._inner_edges = inner_edges
