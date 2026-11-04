@@ -508,6 +508,47 @@ class TestMondrianForestExactness(unittest.TestCase):
             )
             self.assertEqual(_tree_shape(alone.root), _tree_shape(batched.root))
 
+    def test_rebuild_where_every_tree_fails_raises_the_first_error(self):
+        events = score_sequences.make_stream(seed=17, n_events=8, n_features=2)
+        model = MondrianForest(n_estimators=3, subspace_size=2, window_size=4, seed=18)
+        for event in events[:7]:
+            model.learn_one(event)
+        expected = copy.deepcopy(model)
+
+        def fail_from_the_first_rebuild_point(tree, index):
+            calls = []
+            insert = tree._extend_block
+
+            def extend_block(*args):
+                calls.append(None)
+                # The first call learns the eighth event, the next ones rebuild.
+                if len(calls) > 1:
+                    raise OverflowError(f"tree {index}")
+                insert(*args)
+
+            tree._extend_block = extend_block
+
+        for index, tree in enumerate(model.trees):
+            fail_from_the_first_rebuild_point(tree, index)
+        with self.assertRaisesRegex(OverflowError, "^tree 0$"):
+            model.learn_one(events[7])
+        for tree in model.trees:
+            del tree._extend_block
+
+        # Rebuilding one tree after another fails on the first tree's first point.
+        values = np.array([events[7][name] for name in sorted(events[7])])
+        for tree in expected.trees:
+            tree.learn_one_from_global(values)
+        expected.trees[0].root = None
+        expected.trees[0].n_samples = 0
+
+        for alone, batched in zip(expected.trees, model.trees, strict=True):
+            self.assertEqual(alone.n_samples, batched.n_samples)
+            self.assertEqual(
+                alone.rng.bit_generator.state, batched.rng.bit_generator.state
+            )
+            self.assertEqual(_tree_shape(alone.root), _tree_shape(batched.root))
+
     def test_pickles_leave_out_the_plan(self):
         events = score_sequences.make_stream(seed=15, n_events=60, n_features=3)
         model = MondrianForest(n_estimators=3, subspace_size=2, seed=16)

@@ -516,6 +516,8 @@ class MondrianIsolationForest(BaseModel):
         building = list(range(len(self.trees)))
         failures: dict[int, Exception] = {}
         for point in self._window:
+            if not building:
+                break
             trees = [self.trees[t] for t in building]
             points, rows, paths = _plan(trees, point)
             rates = _walk_rates(paths, points)
