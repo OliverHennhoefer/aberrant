@@ -400,10 +400,13 @@ def test_score_sequences_match_recorded_reference():
     for case in score_sequences.load("multivariate_rolling_matrix_profile"):
         model = MultivariateRollingMatrixProfile(**case["params"])
         scores = score_sequences.replay(model, case)
-        # The tolerance only absorbs last-bit libm differences between
-        # platforms; the recording platform reproduces every bit.
+        # Distances go through np.dot and np.linalg.norm, whose CPU-specific
+        # BLAS kernels round differently, so 1.4.0 itself moves by a few ulps
+        # between machines. Repeated plateaus are zero apart up to that
+        # rounding (up to 2.5e-16 here), which only an absolute tolerance
+        # covers. The recording machine reproduces every bit.
         np.testing.assert_allclose(
-            scores, case["scores"], rtol=1e-12, atol=0, err_msg=case["name"]
+            scores, case["scores"], rtol=1e-12, atol=1e-12, err_msg=case["name"]
         )
 
 
