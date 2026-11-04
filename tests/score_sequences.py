@@ -24,6 +24,7 @@ import numpy as np
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
+from aberrant.model.graph import ISCONNA
 from aberrant.model.iforest import (
     ASDIsolationForest,
     HalfSpaceTrees,
@@ -78,6 +79,44 @@ def make_stream(
     return events
 
 
+def make_edge_stream(
+    seed: int,
+    n_events: int,
+    n_nodes: int,
+    *,
+    bucket_size: int = 10,
+    time_key: str | None = "t",
+) -> list[dict[str, float]]:
+    """Build a seeded stream of edges between integer-valued node identifiers.
+
+    Most edges join a node to one of its next three nodes, so edges repeat.
+    Every 37th edge joins two random nodes, every 13th time bucket repeats one
+    edge as a burst, and every 7th bucket number is followed by a gap of three.
+    With ``time_key=None`` the events carry no time field.
+    """
+    rng = np.random.default_rng(seed)
+    sources = rng.integers(0, n_nodes, size=n_events)
+    destinations = (sources + rng.integers(1, 4, size=n_events)) % n_nodes
+    random_pairs = rng.integers(0, n_nodes, size=(n_events, 2))
+    sources[::37] = random_pairs[::37, 0]
+    destinations[::37] = random_pairs[::37, 1]
+    buckets = np.arange(n_events) // bucket_size
+    burst = buckets % 13 == 12
+    sources[burst] = 0
+    destinations[burst] = n_nodes - 1
+    buckets += 3 * (buckets // 7)
+
+    events = []
+    for source, destination, bucket in zip(
+        sources.tolist(), destinations.tolist(), buckets.tolist(), strict=True
+    ):
+        event = {"src": float(source), "dst": float(destination)}
+        if time_key is not None:
+            event[time_key] = float(bucket)
+        events.append(event)
+    return events
+
+
 def score_then_learn(model: Any, events: list[dict[str, float]]) -> list[float]:
     """Score each event before learning it and return the scores."""
     scores = []
@@ -102,7 +141,10 @@ def score_then_learn_batches(
 
 def replay(model: Any, case: dict[str, Any]) -> list[float]:
     """Feed a case's stream to ``model`` and return the scores."""
-    events = make_stream(**case["stream"])
+    if "edges" in case:
+        events = make_edge_stream(**case["edges"])
+    else:
+        events = make_stream(**case["stream"])
     if "batch_size" in case:
         return score_then_learn_batches(model, events, case["batch_size"])
     return score_then_learn(model, events)
@@ -272,6 +314,78 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 "name": "full_budget",
                 "params": {"nu": 1.0, "tolerance": 0.01, "seed": 103},
                 "stream": {"seed": 104, "n_events": 500, "n_features": 6},
+            },
+        ],
+    ),
+    "isconna": (
+        ISCONNA,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 41},
+                "edges": {"seed": 42, "n_events": 600, "n_nodes": 40},
+            },
+            {
+                # Three rows of seven columns collide often.
+                "name": "edges_only_small_sketch",
+                "params": {
+                    "count_min_rows": 3,
+                    "count_min_cols": 7,
+                    "time_decay_factor": 1.0,
+                    "alpha": 0.5,
+                    "beta": 2.0,
+                    "gamma": 1.0,
+                    "include_endpoints": False,
+                    "warm_up_samples": 20,
+                    "normalize_score": True,
+                    "seed": 43,
+                },
+                "edges": {"seed": 44, "n_events": 400, "n_nodes": 12},
+            },
+            {
+                # Every learned arrival opens a new time bucket.
+                "name": "internal_clock",
+                "params": {"time_key": None, "count_min_cols": 64, "seed": 45},
+                "edges": {
+                    "seed": 46,
+                    "n_events": 300,
+                    "n_nodes": 20,
+                    "time_key": None,
+                },
+            },
+            {
+                # The shared cell is busy in every bucket, so its width and gap
+                # tests are zero and only the frequency test is scored.
+                "name": "single_cell",
+                "params": {
+                    "count_min_rows": 1,
+                    "count_min_cols": 1,
+                    "time_decay_factor": 0.3,
+                    "beta": 0.0,
+                    "gamma": 0.0,
+                    "seed": 47,
+                },
+                "edges": {
+                    "seed": 48,
+                    "n_events": 200,
+                    "n_nodes": 5,
+                    "bucket_size": 3,
+                },
+            },
+            {
+                "name": "long_buckets_many_rows",
+                "params": {
+                    "count_min_rows": 6,
+                    "count_min_cols": 101,
+                    "time_decay_factor": 0.9,
+                    "seed": 49,
+                },
+                "edges": {
+                    "seed": 50,
+                    "n_events": 500,
+                    "n_nodes": 300,
+                    "bucket_size": 40,
+                },
             },
         ],
     ),

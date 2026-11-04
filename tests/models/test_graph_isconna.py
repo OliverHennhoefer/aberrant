@@ -2,6 +2,7 @@
 
 import copy
 import pickle
+import time
 import unittest
 from dataclasses import fields
 
@@ -9,6 +10,10 @@ import numpy as np
 import pytest
 
 from aberrant.model.graph import ISCONNA
+from aberrant.model.graph.isconna import _CMSGroup
+from tests import score_sequences
+
+_LARGEST = int(np.iinfo(np.int64).max)
 
 
 class TestISCONNA(unittest.TestCase):
@@ -348,9 +353,188 @@ def _reference_g_test(current: float, accumulated: float, time: int) -> float:
 def test_preview_state_copies_only_one_cell_per_sketch_row():
     model = ISCONNA(count_min_rows=3, count_min_cols=101, seed=22)
     group = model._edge
-    cells = group.select(model._row_index, model._indices(1, 2))
+    indices = model._indices(1, 2)
+    cells = group.cells(indices)
+    assert len(cells) == model.count_min_rows
     for field in fields(group):
         original = getattr(group, field.name)
-        selected = getattr(cells, field.name)
-        assert selected.shape == (model.count_min_rows,)
-        assert not np.shares_memory(selected, original)
+        for row, cell in enumerate(cells):
+            selected = getattr(cell, field.name)
+            # Plain Python numbers cannot share memory with the sketch.
+            assert type(selected) in (bool, int, float)
+            assert selected == original[row, indices[row]]
+
+
+def _reference_observe(cells: _CMSGroup, decay: float) -> None:
+    """Count one occurrence in every cell with the 1.4.0 array update."""
+    cells.frequency_current += 1.0
+    cells.frequency_accumulated += 1.0
+    first_in_timestamp = ~cells.busy_current
+    starts_new_width = first_in_timestamp & ~cells.busy_previous
+    cells.width_accumulated[starts_new_width] += cells.width_current[starts_new_width]
+    cells.width_current[starts_new_width] *= decay
+    cells.width_time[starts_new_width] = (
+        np.minimum(cells.width_time[starts_new_width], _LARGEST - 1) + 1
+    )
+    cells.width_current[first_in_timestamp] += 1.0
+    cells.busy_current.fill(True)
+
+
+def _reference_component_scores(
+    model: ISCONNA, bucket: int, src: int, dst: int
+) -> tuple[float, ...]:
+    """Preview like aberrant 1.4.0, on array copies of the queried cells."""
+    rollover = model._current_bucket is not None and bucket > model._current_bucket
+    time_index = model._time_index(bucket)
+    groups = [(model._edge, model._indices(src, dst))]
+    if model._source is not None and model._destination is not None:
+        groups += [
+            (model._source, model._indices(src, 0)),
+            (model._destination, model._indices(dst, 0)),
+        ]
+    rows = np.arange(model.count_min_rows)
+    scores = []
+    for group, indices in groups:
+        cells = _CMSGroup(
+            **{
+                field.name: getattr(group, field.name)[rows, indices]
+                for field in fields(group)
+            }
+        )
+        if rollover:
+            model._reset_group(cells)
+        _reference_observe(cells, model.time_decay_factor)
+        width_index = int(np.argmin(cells.width_time))
+        gap_index = int(np.argmin(cells.gap_time))
+        scores.append(
+            (
+                ISCONNA._g_test(
+                    float(np.min(cells.frequency_current)),
+                    float(np.min(cells.frequency_accumulated)),
+                    time_index,
+                ),
+                ISCONNA._g_test(
+                    float(cells.width_current[width_index]),
+                    float(cells.width_accumulated[width_index]),
+                    int(cells.width_time[width_index]),
+                ),
+                ISCONNA._g_test(
+                    float(cells.gap_current[gap_index]),
+                    float(cells.gap_accumulated[gap_index]),
+                    int(cells.gap_time[gap_index]),
+                ),
+            )
+        )
+    return tuple(float(value) for value in np.max(np.asarray(scores), axis=0))
+
+
+def _random_group(rng: np.random.Generator, rows: int, cols: int) -> _CMSGroup:
+    """A sketch in random states, with counters up to the int64 maximum."""
+    group = _CMSGroup.create(rows, cols)
+    shape = (rows, cols)
+    group.busy_current[:] = rng.random(shape) < 0.5
+    group.busy_previous[:] = rng.random(shape) < 0.5
+    for counter in (group.width_time, group.gap_time):
+        counter[:] = rng.choice([1, 2, 77, _LARGEST - 1, _LARGEST], size=shape)
+    for field in fields(group):
+        values = getattr(group, field.name)
+        if values.dtype == np.float64:
+            values[:] = rng.choice([0.0, 1.0, 2.5]) * 10.0 ** rng.uniform(
+                -300, 300, size=shape
+            )
+    return group
+
+
+class TestISCONNAExactness(unittest.TestCase):
+    """Plain-number cells must reproduce the 1.4.0 array transitions."""
+
+    def test_score_sequences_match_recorded_reference(self) -> None:
+        for case in score_sequences.load("isconna"):
+            with self.subTest(case=case["name"]):
+                scores = score_sequences.replay(ISCONNA(**case["params"]), case)
+                # The tolerance only absorbs last-bit libm differences in log
+                # and pow between platforms; the recording platform reproduces
+                # every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_cell_transitions_match_array_updates(self) -> None:
+        rng = np.random.default_rng(31)
+        for decay in (0.7, 1.0, 1e-300):
+            model = ISCONNA(count_min_rows=4, count_min_cols=6, time_decay_factor=decay)
+            for rollover in (False, True):
+                with self.subTest(decay=decay, rollover=rollover):
+                    group = _random_group(rng, rows=4, cols=6)
+                    reference = copy.deepcopy(group)
+                    if rollover:
+                        model._reset_group(reference)
+                    _reference_observe(reference, decay)
+                    for column in range(6):
+                        cells = group.cells(np.full(4, column))
+                        for row, cell in enumerate(cells):
+                            if rollover:
+                                cell.roll_over(decay)
+                            cell.observe(decay)
+                            for field in fields(reference):
+                                expected = getattr(reference, field.name)[row, column]
+                                value = getattr(cell, field.name)
+                                self.assertEqual(
+                                    np.asarray(value, dtype=expected.dtype).tobytes(),
+                                    expected.tobytes(),
+                                )
+
+    def test_learning_writes_the_array_update(self) -> None:
+        rng = np.random.default_rng(32)
+        model = ISCONNA(count_min_rows=3, count_min_cols=5, time_decay_factor=0.6)
+        group = _random_group(rng, rows=3, cols=5)
+        reference = copy.deepcopy(group)
+        indices = np.array([4, 0, 2])
+        model._update_group(group, indices)
+        rows = np.arange(3)
+        cells = _CMSGroup(
+            **{
+                field.name: getattr(reference, field.name)[rows, indices]
+                for field in fields(reference)
+            }
+        )
+        _reference_observe(cells, 0.6)
+        for field in fields(reference):
+            getattr(reference, field.name)[rows, indices] = getattr(cells, field.name)
+            expected = getattr(reference, field.name)
+            self.assertEqual(getattr(group, field.name).tobytes(), expected.tobytes())
+
+    def test_component_scores_match_reference_preview(self) -> None:
+        configs: tuple[dict[str, object], ...] = (
+            {"count_min_cols": 11},
+            {"count_min_rows": 3, "count_min_cols": 5, "include_endpoints": False},
+            {"count_min_rows": 1, "count_min_cols": 1, "time_decay_factor": 0.2},
+            {"time_key": None, "count_min_cols": 31},
+        )
+        for config in configs:
+            with self.subTest(config=config):
+                model = ISCONNA(**{"seed": 33, **config})
+                events = score_sequences.make_edge_stream(
+                    seed=34,
+                    n_events=250,
+                    n_nodes=9,
+                    bucket_size=4,
+                    time_key="t" if model.time_key else None,
+                )
+                for event in events:
+                    preview = model._boundary.preview(event)
+                    bucket = preview.bucket
+                    src, dst = preview.source, preview.destination
+                    self.assertEqual(
+                        model._component_scores(bucket, src, dst),
+                        _reference_component_scores(model, bucket, src, dst),
+                    )
+                    model.learn_one(event)
+
+    def test_default_model_speed_smoke(self) -> None:
+        events = score_sequences.make_edge_stream(seed=35, n_events=2000, n_nodes=50)
+        model = ISCONNA(seed=35)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.13 s.
+        self.assertLess(time.perf_counter() - start, 2.0)

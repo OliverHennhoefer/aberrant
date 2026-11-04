@@ -161,6 +161,11 @@ Semantic Versioning.
   computed; pickles leave them out. Score sequences, counts and generator
   states are unchanged, and with the defaults it scores and learns about 9
   times more events per second.
+- `ISCONNA` updates the one sketch cell per row that an edge touches as plain
+  Python numbers instead of copying the cells into small arrays and masking
+  them, and takes the minima and maxima of its scores without NumPy. Score
+  sequences and sketches are unchanged, and with the defaults it scores and
+  learns about 3.5 to 4 times more events per second.
 
 ## [1.4.0] - 2026-10-30
 

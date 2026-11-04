@@ -10,6 +10,9 @@ import numpy as np
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import EdgeEventBoundary
 
+# Width and gap occurrence counters stop growing at the signed int64 maximum.
+_COUNTER_LIMIT = int(np.iinfo(np.int64).max) - 1
+
 
 @dataclass
 class _CMSGroup:
@@ -42,33 +45,87 @@ class _CMSGroup:
             gap_accumulated=np.zeros(shape, dtype=np.float64),
         )
 
-    def select(self, rows: np.ndarray, indices: np.ndarray) -> _CMSGroup:
-        """Copy only the queried cells into the same typed transition state."""
-        return _CMSGroup(
-            busy_current=self.busy_current[rows, indices],
-            busy_previous=self.busy_previous[rows, indices],
-            width_time=self.width_time[rows, indices],
-            gap_time=self.gap_time[rows, indices],
-            frequency_current=self.frequency_current[rows, indices],
-            frequency_accumulated=self.frequency_accumulated[rows, indices],
-            width_current=self.width_current[rows, indices],
-            width_accumulated=self.width_accumulated[rows, indices],
-            gap_current=self.gap_current[rows, indices],
-            gap_accumulated=self.gap_accumulated[rows, indices],
-        )
+    def cells(self, indices: np.ndarray) -> list[_Cell]:
+        """Copy the queried cell of every row as plain Python numbers."""
+        return [_Cell(self, row, column) for row, column in enumerate(indices.tolist())]
 
-    def store(self, rows: np.ndarray, indices: np.ndarray, cells: _CMSGroup) -> None:
-        """Commit a selected-cell transition to the retained sketch."""
-        self.busy_current[rows, indices] = cells.busy_current
-        self.busy_previous[rows, indices] = cells.busy_previous
-        self.width_time[rows, indices] = cells.width_time
-        self.gap_time[rows, indices] = cells.gap_time
-        self.frequency_current[rows, indices] = cells.frequency_current
-        self.frequency_accumulated[rows, indices] = cells.frequency_accumulated
-        self.width_current[rows, indices] = cells.width_current
-        self.width_accumulated[rows, indices] = cells.width_accumulated
-        self.gap_current[rows, indices] = cells.gap_current
-        self.gap_accumulated[rows, indices] = cells.gap_accumulated
+    def store(self, indices: np.ndarray, cells: list[_Cell]) -> None:
+        """Write cells back to the queried cell of every row."""
+        for row, column in enumerate(indices.tolist()):
+            cells[row].write(self, row, column)
+
+
+class _Cell:
+    """
+    One sketch cell as plain Python numbers.
+
+    A query touches one cell per sketch row, so its transitions run on plain
+    numbers, which round exactly like the arrays they are read from.
+    """
+
+    __slots__ = (
+        "busy_current",
+        "busy_previous",
+        "frequency_accumulated",
+        "frequency_current",
+        "gap_accumulated",
+        "gap_current",
+        "gap_time",
+        "width_accumulated",
+        "width_current",
+        "width_time",
+    )
+
+    def __init__(self, group: _CMSGroup, row: int, column: int) -> None:
+        self.busy_current: bool = group.busy_current.item(row, column)
+        self.busy_previous: bool = group.busy_previous.item(row, column)
+        self.width_time: int = group.width_time.item(row, column)
+        self.gap_time: int = group.gap_time.item(row, column)
+        self.frequency_current: float = group.frequency_current.item(row, column)
+        self.frequency_accumulated: float = group.frequency_accumulated.item(
+            row, column
+        )
+        self.width_current: float = group.width_current.item(row, column)
+        self.width_accumulated: float = group.width_accumulated.item(row, column)
+        self.gap_current: float = group.gap_current.item(row, column)
+        self.gap_accumulated: float = group.gap_accumulated.item(row, column)
+
+    def write(self, group: _CMSGroup, row: int, column: int) -> None:
+        """Write the cell's values to one cell of a sketch."""
+        group.busy_current[row, column] = self.busy_current
+        group.busy_previous[row, column] = self.busy_previous
+        group.width_time[row, column] = self.width_time
+        group.gap_time[row, column] = self.gap_time
+        group.frequency_current[row, column] = self.frequency_current
+        group.frequency_accumulated[row, column] = self.frequency_accumulated
+        group.width_current[row, column] = self.width_current
+        group.width_accumulated[row, column] = self.width_accumulated
+        group.gap_current[row, column] = self.gap_current
+        group.gap_accumulated[row, column] = self.gap_accumulated
+
+    def roll_over(self, decay: float) -> None:
+        """Move the cell to a new time bucket, as ``ISCONNA._reset_group`` does."""
+        self.frequency_current *= decay
+        if not self.busy_current:
+            if self.busy_previous:
+                self.gap_accumulated += self.gap_current
+                self.gap_current *= decay
+                self.gap_time = min(self.gap_time, _COUNTER_LIMIT) + 1
+            self.gap_current += 1.0
+        self.busy_previous = self.busy_current
+        self.busy_current = False
+
+    def observe(self, decay: float) -> None:
+        """Count one occurrence of the cell's pattern in the current bucket."""
+        self.frequency_current += 1.0
+        self.frequency_accumulated += 1.0
+        if not self.busy_current:
+            if not self.busy_previous:
+                self.width_accumulated += self.width_current
+                self.width_current *= decay
+                self.width_time = min(self.width_time, _COUNTER_LIMIT) + 1
+            self.width_current += 1.0
+        self.busy_current = True
 
 
 class ISCONNA(BaseModel):
@@ -194,7 +251,13 @@ class ISCONNA(BaseModel):
             size=self.count_min_rows,
             dtype=np.uint64,
         )
-        self._row_index = np.arange(self.count_min_rows, dtype=np.intp)
+        self._hash_parameters = list(
+            zip(
+                self._hash_multipliers.tolist(),
+                self._hash_offsets.tolist(),
+                strict=True,
+            )
+        )
 
         self._edge = _CMSGroup.create(self.count_min_rows, self.count_min_cols)
         self._source = (
@@ -226,10 +289,8 @@ class ISCONNA(BaseModel):
         combined = int(a) + 347 * int(b)
         return np.asarray(
             [
-                (combined * int(multiplier) + int(offset)) % self.count_min_cols
-                for multiplier, offset in zip(
-                    self._hash_multipliers, self._hash_offsets, strict=True
-                )
+                (combined * multiplier + offset) % self.count_min_cols
+                for multiplier, offset in self._hash_parameters
             ],
             dtype=np.intp,
         )
@@ -255,7 +316,7 @@ class ISCONNA(BaseModel):
         group.gap_accumulated[gap_continues] += group.gap_current[gap_continues]
         group.gap_current[gap_continues] *= self.time_decay_factor
         group.gap_time[gap_continues] = (
-            np.minimum(group.gap_time[gap_continues], np.iinfo(np.int64).max - 1) + 1
+            np.minimum(group.gap_time[gap_continues], _COUNTER_LIMIT) + 1
         )
         group.gap_current[absent] += 1.0
 
@@ -289,56 +350,43 @@ class ISCONNA(BaseModel):
         rollover: bool,
         time_index: int,
     ) -> tuple[float, float, float]:
-        cells = group.select(self._row_index, indices)
-        if rollover:
-            self._reset_group(cells)
-        self._record_observation(cells)
+        decay = self.time_decay_factor
+        cells = group.cells(indices)
+        for cell in cells:
+            if rollover:
+                cell.roll_over(decay)
+            cell.observe(decay)
         return self._group_scores(cells, time_index)
 
     def _group_scores(
-        self, cells: _CMSGroup, time_index: int
+        self, cells: list[_Cell], time_index: int
     ) -> tuple[float, float, float]:
-        width_index = int(np.argmin(cells.width_time))
-        gap_index = int(np.argmin(cells.gap_time))
+        # min with a key returns the first minimal cell, as np.argmin does.
+        width_cell = min(cells, key=lambda cell: cell.width_time)
+        gap_cell = min(cells, key=lambda cell: cell.gap_time)
         return (
             self._g_test(
-                float(np.min(cells.frequency_current)),
-                float(np.min(cells.frequency_accumulated)),
+                min(cell.frequency_current for cell in cells),
+                min(cell.frequency_accumulated for cell in cells),
                 time_index,
             ),
             self._g_test(
-                float(cells.width_current[width_index]),
-                float(cells.width_accumulated[width_index]),
-                int(cells.width_time[width_index]),
+                width_cell.width_current,
+                width_cell.width_accumulated,
+                width_cell.width_time,
             ),
             self._g_test(
-                float(cells.gap_current[gap_index]),
-                float(cells.gap_accumulated[gap_index]),
-                int(cells.gap_time[gap_index]),
+                gap_cell.gap_current,
+                gap_cell.gap_accumulated,
+                gap_cell.gap_time,
             ),
         )
 
-    def _record_observation(self, cells: _CMSGroup) -> None:
-        """Apply the candidate update to selected learning or preview cells."""
-        cells.frequency_current += 1.0
-        cells.frequency_accumulated += 1.0
-        first_in_timestamp = ~cells.busy_current
-        starts_new_width = first_in_timestamp & ~cells.busy_previous
-        cells.width_accumulated[starts_new_width] += cells.width_current[
-            starts_new_width
-        ]
-        cells.width_current[starts_new_width] *= self.time_decay_factor
-        cells.width_time[starts_new_width] = (
-            np.minimum(cells.width_time[starts_new_width], np.iinfo(np.int64).max - 1)
-            + 1
-        )
-        cells.width_current[first_in_timestamp] += 1.0
-        cells.busy_current.fill(True)
-
     def _update_group(self, group: _CMSGroup, indices: np.ndarray) -> None:
-        cells = group.select(self._row_index, indices)
-        self._record_observation(cells)
-        group.store(self._row_index, indices, cells)
+        cells = group.cells(indices)
+        for cell in cells:
+            cell.observe(self.time_decay_factor)
+        group.store(indices, cells)
 
     def _component_scores(
         self, bucket: int, src: int, dst: int
@@ -371,9 +419,11 @@ class ISCONNA(BaseModel):
                 )
             )
 
-        score_array = np.asarray(scores, dtype=np.float64)
-        maximum = np.max(score_array, axis=0)
-        return float(maximum[0]), float(maximum[1]), float(maximum[2])
+        # Each component is the maximum over the edge and its endpoints.
+        frequency, width, gap = (
+            max(component) for component in zip(*scores, strict=True)
+        )
+        return frequency, width, gap
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""
