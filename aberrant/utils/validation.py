@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 import numpy as np
 
@@ -160,6 +160,18 @@ class FeatureSchema:
         return PreparedFeatures(
             self._names, np.array(values, dtype=np.float64), self._revision
         )
+
+    def preview_values(self, features: Mapping[str, object]) -> list[float]:
+        """Validate features like ``preview`` and return their values as a list.
+
+        This suits callers that only read the values, such as scoring in
+        pure-Python tree models, and skips building an array they would convert
+        back to a list.
+        """
+        plain_values = self._well_formed_values(features)
+        if plain_values is not None:
+            return plain_values
+        return cast(list[float], self.preview(features).values.tolist())
 
     def preview(self, features: Mapping[str, object]) -> PreparedFeatures:
         """Validate and vectorize features without mutating schema state."""

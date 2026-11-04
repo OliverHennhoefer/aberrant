@@ -1,6 +1,7 @@
 """Half-Space Trees (HST) for streaming anomaly detection."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -8,7 +9,7 @@ from aberrant.base.model import BaseModel
 from aberrant.utils.validation import FeatureSchema
 
 
-@dataclass
+@dataclass(slots=True)
 class HSTLeaf:
     """Leaf node in a Half-Space Tree."""
 
@@ -26,7 +27,7 @@ class HSTLeaf:
         self.r_mass = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class HSTNode:
     """Internal node in a Half-Space Tree."""
 
@@ -134,6 +135,8 @@ class HalfSpaceTrees(BaseModel):
         self._schema = FeatureSchema()
         self._n_features: int = 0
         self._trees: list[HSTNode | HSTLeaf] = []
+        # Every node of every tree, so a window pivot is one flat loop.
+        self._nodes: list[HSTNode | HSTLeaf] = []
         self._workspaces: list[tuple[np.ndarray, np.ndarray]] = []
         self._samples_in_window: int = 0
         self._reference_window_size: int = 0
@@ -184,7 +187,15 @@ class HalfSpaceTrees(BaseModel):
             upper = center + half_width
             workspaces.append((lower.copy(), upper.copy()))
             trees.append(self._build_tree(lower, upper))
+        nodes: list[HSTNode | HSTLeaf] = []
+        pending = list(trees)
+        while pending:
+            node = pending.pop()
+            nodes.append(node)
+            if isinstance(node, HSTNode):
+                pending += (node.left, node.right)
         self._trees = trees
+        self._nodes = nodes
         self._workspaces = workspaces
         self._initialized = True
 
@@ -207,9 +218,7 @@ class HalfSpaceTrees(BaseModel):
         if not self._initialized:
             self._initialize_trees()
 
-        # Update mass in each tree
-        for tree in self._trees:
-            self._update_mass(tree, prepared.values)
+        self._update_masses(prepared.values.tolist())
 
         self._samples_in_window += 1
 
@@ -219,27 +228,29 @@ class HalfSpaceTrees(BaseModel):
             self._samples_in_window = 0
         self._schema.commit(prepared)
 
-    def _update_mass(self, node: HSTNode | HSTLeaf, x: np.ndarray) -> None:
-        """
-        Recursively update learning mass counters along the path to leaf.
-
-        Args:
-            node: Current node.
-            x: Feature vector.
-        """
-        node.l_mass += 1
-        if isinstance(node, HSTLeaf):
-            return
-
-        if x[node.feature] < node.threshold:
-            self._update_mass(node.left, x)
-        else:
-            self._update_mass(node.right, x)
+    def _update_masses(self, x: list[float]) -> None:
+        """Increment the learning mass of every node on each tree's path to ``x``."""
+        levels = range(self.height)
+        for tree in self._trees:
+            # Every tree is complete with ``height`` internal levels, so the first
+            # ``height`` steps only meet ``HSTNode`` and end on an ``HSTLeaf``.
+            # The untyped cursor spares a per-node isinstance check.
+            node: Any = tree
+            for _ in levels:
+                node.l_mass += 1
+                # A statement instead of a conditional expression saves one jump
+                # per node, which is measurable in this loop.
+                if x[node.feature] < node.threshold:  # noqa: SIM108
+                    node = node.left
+                else:
+                    node = node.right
+            node.l_mass += 1
 
     def _reset_masses(self) -> None:
         """Pivot masses: copy learning masses to reference, reset learning masses."""
-        for tree in self._trees:
-            tree.pivot_mass()
+        for node in self._nodes:
+            node.r_mass = node.l_mass
+            node.l_mass = 0
 
     def score_one(self, x: dict[str, float]) -> float:
         """
@@ -257,43 +268,49 @@ class HalfSpaceTrees(BaseModel):
         Returns:
             Anomaly score in [0, 1]. Higher = more anomalous.
         """
-        prepared = self._schema.preview(x)
+        values = self._schema.preview_values(x)
         if not self._initialized or self._reference_window_size == 0:
             return 0.0
 
-        total_score = 0.0
-        for tree in self._trees:
-            total_score += self._compute_tree_score(
-                tree,
-                prepared.values,
-                depth=0,
-            )
+        total_score = self._total_mass_score(values)
 
-        max_score = self.n_trees * self._reference_window_size * (2**self.height)
+        max_score: int = self.n_trees * self._reference_window_size * (2**self.height)
         if max_score <= 0:
             return 0.0
 
-        return float(np.clip(1.0 - total_score / max_score, 0.0, 1.0))
+        return min(max(1.0 - total_score / max_score, 0.0), 1.0)
 
-    def _compute_tree_score(
-        self, node: HSTNode | HSTLeaf, x: np.ndarray, depth: int
-    ) -> float:
+    def _total_mass_score(self, x: list[float]) -> float:
         """
-        Compute weighted mass score for a single tree.
+        Sum the depth-weighted reference mass of each tree's scoring node.
+
+        Each tree descends towards ``x`` until it reaches a leaf or a node whose
+        reference mass is at most 10% of the window, and contributes that node's
+        ``r_mass * 2**depth``.
 
         Args:
-            node: Current node.
-            x: Feature vector.
-            depth: Current depth.
-        Returns:
-            Weighted mass contribution.
-        """
-        if isinstance(node, HSTLeaf) or node.r_mass <= 0.1 * self.window_size:
-            return float(node.r_mass * (2**depth))
+            x: Feature values in schema order.
 
-        if x[node.feature] < node.threshold:
-            return self._compute_tree_score(node.left, x, depth + 1)
-        return self._compute_tree_score(node.right, x, depth + 1)
+        Returns:
+            Weighted mass summed over the trees.
+        """
+        size_limit = 0.1 * self.window_size
+        levels = range(self.height)
+        total = 0.0
+        for tree in self._trees:
+            # As in ``_update_masses``, ``height`` steps cannot pass a leaf.
+            node: Any = tree
+            weight = 1  # 2**depth
+            for _ in levels:
+                if node.r_mass <= size_limit:
+                    break
+                if x[node.feature] < node.threshold:  # noqa: SIM108
+                    node = node.left
+                else:
+                    node = node.right
+                weight += weight
+            total += float(node.r_mass * weight)
+        return total
 
     def __repr__(self) -> str:
         return (
