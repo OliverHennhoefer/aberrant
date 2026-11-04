@@ -1,7 +1,7 @@
 # Installation
 
 aberrant requires Python 3.11 or newer and is continuously tested on CPython
-3.11 and 3.12, on Windows and Linux. Installation on other Python or
+3.11 to 3.14, on Windows and Linux. Installation on other Python or
 operating-system versions depends on wheels for the required dependencies and
 any selected optional extras; it is not part of the current CI matrix.
 
