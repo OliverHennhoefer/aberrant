@@ -7,6 +7,12 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- CI uploads branch coverage to Codecov through OIDC, without a stored token,
+  and the README shows a coverage badge. Coverage status checks are
+  informational and never block a pull request.
+
 ### Changed
 
 - Rewrote the README opening around real-time stream detection, with a
