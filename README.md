@@ -262,3 +262,11 @@ the [streaming guide](https://oliverhennhoefer.github.io/aberrant/user_guide/str
 Bug reports, detector requests and pull requests are welcome. Start with the
 [contributing guide](https://github.com/OliverHennhoefer/aberrant/blob/main/CONTRIBUTING.md).
 `aberrant` is released under the [MIT license](https://github.com/OliverHennhoefer/aberrant/blob/main/LICENSE).
+
+---
+
+<p align="center">
+  <a href="https://www.dlr.de/">
+    <img src="https://www.dlr.de/de/pt-lf/aktuelles/pressematerial/logos/bmwk/vorschaubild_bmwk_logo-mit-foerderzusatz_en/@@images/image-600-ea91cd9090327104991124b30fe1de7d.png" alt="Funding acknowledgement" width="250">
+  </a>
+</p>
