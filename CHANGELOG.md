@@ -28,6 +28,9 @@ Semantic Versioning.
 
 ### Changed
 
+- Shortened the README: one-line feature bullets, a production link to
+  Aberration and the integration guide at the top, and the integration,
+  dataset, related-project and contributing sections left to the docs.
 - Rewrote the README opening around real-time stream detection, with a
   dataset-backed quickstart, a comparison with river and PySAD, and links to
   related projects.

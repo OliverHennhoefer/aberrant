@@ -31,6 +31,14 @@
 </p>
 
 <p align="center">
+  <b>Running it in production?</b>
+  <a href="https://github.com/DataDrivenSustainabilitySolutions/off-key"><b>Aberration</b></a>
+  runs aberrant pipelines on live MQTT telemetry,<br>
+  and the <a href="https://oliverhennhoefer.github.io/aberrant/user_guide/integrations/">integration guide</a>
+  shows how to build detectors from configuration.
+</p>
+
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/stream-dark.svg">
     <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/stream-light.svg" width="100%" alt="Three sensor streams with an injected spike, level shift and dropout. A scaled LocalOutlierFactor scores each event before learning it, and an adaptive quantile threshold raises alerts at the onset of each anomaly.">
@@ -40,10 +48,6 @@
 <p align="center"><sub>A scaled <code>LocalOutlierFactor</code> scores each event before learning it; an online <code>QuantileThreshold</code> raises the alerts. Reproduce it with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/stream_figure.py"><code>docs/scripts/stream_figure.py</code></a>.</sub></p>
 
 ## Quickstart
-
-```bash
-pip install aberrant
-```
 
 ```python
 from aberrant.model.iforest import HalfSpaceTrees
@@ -64,19 +68,11 @@ dataset is downloaded and cached on first use.
 
 ## Why aberrant
 
-- **A broad streaming toolbox.** Isolation forests and half-space trees,
-  density and distance methods, projection sketches, graph-edge detectors
-  (MIDAS, AnoEdge), matrix-profile discords, online SVMs and autoencoders all
-  follow the same event-by-event contract.
-- **From score to alert.** Drift detectors (ADWIN, KSWIN, Page-Hinkley) and
-  static or adaptive thresholds turn raw scores into decisions.
-- **Built for services.** Compose online preprocessing with `|`, keep state
-  bounded with sliding windows, sketches or fading summaries, and build
-  detectors from plain configuration through a typed catalog.
-- **Measured on the stream.** A prequential evaluator, registered benchmark
-  streams, explicit warm-up, and separate timings for scoring and updating.
-- **Typed and extensible.** Ships `py.typed`; any object that satisfies the
-  structural model or transformer protocol can join a pipeline.
+- **Broad toolbox.** Forest, density, sketch, graph, matrix-profile, SVM and autoencoder detectors.
+- **Score to alert.** Drift detectors and adaptive thresholds turn scores into decisions.
+- **Built for services.** `|` pipelines, bounded state, detectors built from plain configuration.
+- **Measured on the stream.** Prequential evaluation, benchmark streams, separate timings.
+- **Typed and extensible.** Ships `py.typed`; any protocol-conforming object joins a pipeline.
 
 ## aberrant, river or PySAD?
 
@@ -90,10 +86,6 @@ dataset is downloaded and cached on first use.
 | Score thresholds or calibration                 | ✓        | ✓     | ✓     |
 | Detectors built from declarative configuration  | ✓        |       |       |
 | General online ML (classification, regression)  |          | ✓     |       |
-
-Use river for general online learning. Use aberrant when anomalies are the
-job. aberrant uses river's `learn_one` / `score_one` convention, so moving
-between the two is straightforward. Compared with river 0.26 and PySAD 0.7.
 
 ## Installation
 
@@ -183,82 +175,3 @@ Any custom object satisfying `TransformerProtocol` or `ModelProtocol` can join
 a pipeline; subclassing an `aberrant` base class is optional. Read the
 [pipeline guide](https://oliverhennhoefer.github.io/aberrant/user_guide/pipelines/)
 for lifecycle and composition rules.
-
-## Application integration
-
-`RollingRobustScaler` adds exact median/IQR scaling over bounded recent
-feature windows. Its `freeze()` and `unfreeze()` controls make calibration
-updates explicit; see the [transformer guide](https://oliverhennhoefer.github.io/aberrant/user_guide/transformers/)
-for readiness, zero-IQR behavior, and downstream coordinate considerations.
-
-The built-in catalog makes model facts and construction available to services,
-configuration UIs, and deployment tooling without duplicating import paths or
-warm-up formulas:
-
-```python
-from aberrant.catalog import DetectorConfig, get_model_spec
-
-spec = get_model_spec("online_isolation_forest")
-print(spec.parameter_schema())
-
-config = DetectorConfig.from_mapping(
-    {
-        "transformers": [
-            {
-                "id": "feature_schema_guard",
-                "params": {"features": ["temperature", "pressure"]},
-            },
-            {"id": "standard_scaler"},
-        ],
-        "model": {
-            "id": "online_isolation_forest",
-            "params": {"window_size": 512, "seed": 42},
-        },
-    }
-)
-detector = config.build()
-```
-
-See the [application integration guide](https://oliverhennhoefer.github.io/aberrant/user_guide/integrations/)
-for the catalog manifest, capability fields, KNN/FAISS configuration, and the
-boundary between package metadata and application policy.
-
-## Streaming datasets
-
-The dataset API downloads, validates, and caches registered benchmark data,
-then exposes it as feature dictionaries and evaluation labels:
-
-```python
-from itertools import islice
-
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.stream.dataset import Dataset, load
-
-dataset = load(Dataset.SHUTTLE)
-detector = OnlineIsolationForest(num_trees=25, window_size=512, seed=42)
-
-for event, label in islice(dataset.stream(), 100):
-    score = detector.score_one(event)
-    detector.learn_one(event)
-    print(f"label={label!r}, anomaly_score={score:.3f}")
-```
-
-Labels are provided for evaluation; unsupervised detectors learn only from the
-event mapping. Cache location and download behavior are configurable through
-the [streaming guide](https://oliverhennhoefer.github.io/aberrant/user_guide/streaming/).
-
-## Related projects
-
-- [nonconform](https://github.com/OliverHennhoefer/nonconform) calibrates
-  anomaly scores into conformal p-values and monitors streams for change.
-- [online-fdr](https://github.com/OliverHennhoefer/online-fdr) controls the
-  false discovery rate when alerts are raised one test at a time.
-- [Aberration](https://github.com/DataDrivenSustainabilitySolutions/off-key)
-  is an open-source platform that runs aberrant pipelines on live MQTT
-  telemetry and lets people review the evidence.
-
-## Contributing
-
-Bug reports, detector requests and pull requests are welcome. Start with the
-[contributing guide](https://github.com/OliverHennhoefer/aberrant/blob/main/CONTRIBUTING.md).
-`aberrant` is released under the [MIT license](https://github.com/OliverHennhoefer/aberrant/blob/main/LICENSE).
