@@ -25,6 +25,7 @@ import numpy as np
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
+    ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
@@ -32,7 +33,7 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.sketch import StreamingLODA
+from aberrant.model.sketch import StreamingLODA, StreamingRSHash
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -116,6 +117,76 @@ def load(name: str) -> list[dict[str, Any]]:
 # Fixture name -> (model factory, cases). Cases name the model parameters and
 # the ``make_stream`` arguments; recording adds the scores.
 CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
+    "asd_isolation_forest": (
+        ASDIsolationForest,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 111},
+                "stream": {"seed": 112, "n_events": 700, "n_features": 4},
+            },
+            {
+                "name": "small_window_fast_retrain",
+                "params": {
+                    "n_estimators": 20,
+                    "max_samples": 32,
+                    "window_size": 48,
+                    "retrain_interval": 16,
+                    "seed": 113,
+                },
+                "stream": {"seed": 114, "n_events": 400, "n_features": 3},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {"n_estimators": 30, "max_samples": 64, "seed": 115},
+                "stream": {
+                    "seed": 116,
+                    "n_events": 400,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Repeated values leave nodes whose features are all constant.
+                "name": "repeated_points",
+                "params": {
+                    "n_estimators": 25,
+                    "max_samples": 40,
+                    "window_size": 60,
+                    "retrain_interval": 20,
+                    "seed": 117,
+                },
+                "stream": {
+                    "seed": 118,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
+            },
+            {
+                "name": "two_point_samples",
+                "params": {
+                    "n_estimators": 10,
+                    "max_samples": 2,
+                    "window_size": 5,
+                    "retrain_interval": 3,
+                    "seed": 119,
+                },
+                "stream": {"seed": 120, "n_events": 150, "n_features": 1},
+            },
+            {
+                "name": "many_features",
+                "params": {
+                    "n_estimators": 15,
+                    "max_samples": 50,
+                    "window_size": 80,
+                    "retrain_interval": 30,
+                    "seed": 121,
+                },
+                "stream": {"seed": 122, "n_events": 300, "n_features": 12},
+            },
+        ],
+    ),
     "half_space_trees": (
         HalfSpaceTrees,
         [
@@ -474,6 +545,100 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_events": 300,
                     "n_features": 5,
                     "time_key": "t",
+                },
+            },
+        ],
+    ),
+    "streaming_rs_hash": (
+        StreamingRSHash,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 21},
+                "stream": {"seed": 22, "n_events": 500, "n_features": 8},
+            },
+            {
+                "name": "time_key_small_tables",
+                "params": {
+                    "components_num": 10,
+                    "hash_num": 3,
+                    "bins": 16,
+                    "subspace_size": 3,
+                    "bin_width": 0.5,
+                    "decay": 0.05,
+                    "warm_up_samples": 8,
+                    "time_key": "t",
+                    "seed": 23,
+                },
+                "stream": {
+                    "seed": 24,
+                    "n_events": 300,
+                    "n_features": 5,
+                    "time_key": "t",
+                },
+            },
+            {
+                # Counts fade below the renormalization threshold every few
+                # dozen events.
+                "name": "fast_decay",
+                "params": {"decay": 0.5, "warm_up_samples": 4, "seed": 25},
+                "stream": {"seed": 26, "n_events": 300, "n_features": 4},
+            },
+            {
+                "name": "no_decay_repeated_points",
+                "params": {
+                    "components_num": 6,
+                    "hash_num": 2,
+                    "bins": 32,
+                    "decay": 0.0,
+                    "warm_up_samples": 16,
+                    "seed": 27,
+                },
+                "stream": {
+                    "seed": 28,
+                    "n_events": 300,
+                    "n_features": 3,
+                    "kind": "grid",
+                },
+            },
+            {
+                # Quantized values far beyond the hash modulus.
+                "name": "huge_outliers",
+                "params": {"bin_width": 0.25, "warm_up_samples": 16, "seed": 29},
+                "stream": {
+                    "seed": 30,
+                    "n_events": 300,
+                    "n_features": 6,
+                    "outlier_scale": 1e15,
+                },
+            },
+            {
+                "name": "single_table_single_bin",
+                "params": {
+                    "components_num": 3,
+                    "hash_num": 1,
+                    "bins": 1,
+                    "subspace_size": 1,
+                    "warm_up_samples": 1,
+                    "seed": 31,
+                },
+                "stream": {"seed": 32, "n_events": 120, "n_features": 2},
+            },
+            {
+                "name": "unit_clusters_many_features",
+                "params": {
+                    "components_num": 40,
+                    "hash_num": 5,
+                    "bins": 64,
+                    "bin_width": 0.05,
+                    "warm_up_samples": 32,
+                    "seed": 33,
+                },
+                "stream": {
+                    "seed": 34,
+                    "n_events": 400,
+                    "n_features": 20,
+                    "kind": "unit",
                 },
             },
         ],

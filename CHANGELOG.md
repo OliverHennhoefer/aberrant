@@ -145,6 +145,22 @@ Semantic Versioning.
   the support vectors only when they change. Score sequences, support vectors,
   gamma and generator states are unchanged, and with the defaults it scores
   and learns about 18 to 20 times more events per second.
+- `ASDIsolationForest` scores a point by walking all trees at once over flat
+  node arrays, which each retraining fills while it builds the trees. Trees
+  are built from one row per feature, so every node takes the minima and
+  maxima of all features with two reductions, and draws its split feature
+  with `Generator.integers` instead of the equivalent but slower
+  `Generator.choice`. Score sequences, trees and generator states are
+  unchanged. With the defaults it scores and learns about 2 times more events
+  per second, and about 2.5 to 3 times more with PySAD's window of 2,048
+  events.
+- `StreamingRSHash` hashes a point into all of its tables with integer array
+  operations instead of a Python loop over every table and subspace feature,
+  and reads and increments its counters with one array operation each.
+  Learning a point right after scoring it reuses the buckets that scoring
+  computed; pickles leave them out. Score sequences, counts and generator
+  states are unchanged, and with the defaults it scores and learns about 9
+  times more events per second.
 
 ## [1.4.0] - 2026-10-30
 

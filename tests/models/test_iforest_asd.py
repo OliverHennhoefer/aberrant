@@ -1,10 +1,19 @@
 """Tests for ASD Isolation Forest anomaly detection model."""
 
+import math
+import time
 import unittest
+from typing import Any
 
 import numpy as np
 
-from aberrant.model.iforest.asd import ASDIsolationForest, _ASDBranch
+from aberrant.model.iforest.asd import (
+    ASDIsolationForest,
+    _ASDBranch,
+    _ASDLeaf,
+    _ASDNode,
+)
+from tests import score_sequences
 from tests.utils import DataGenerator
 
 
@@ -421,6 +430,159 @@ class TestASDIsolationForest(unittest.TestCase):
             forest.learn_one({"x": 3.0})
         with self.assertRaises(ValueError):
             forest.score_one({"x": 3.0})
+
+
+def _reference_tree(rng: np.random.Generator, data: np.ndarray) -> Any:
+    """Build a tree's shape with the recursive builder of aberrant 1.4.0."""
+    max_height = math.ceil(math.log2(max(data.shape[0], 2)))
+
+    def build(indices: np.ndarray, height: int) -> Any:
+        if len(indices) <= 1 or height >= max_height:
+            return ("leaf", ASDIsolationForest._compute_c(len(indices)))
+        variable = np.flatnonzero(np.ptp(data[indices], axis=0) > 0)
+        if len(variable) == 0:
+            return ("leaf", ASDIsolationForest._compute_c(len(indices)))
+        feature = int(rng.choice(variable))
+        values = data[indices, feature]
+        split = float(rng.uniform(np.min(values), np.max(values)))
+        left = values < split
+        return (
+            feature,
+            split,
+            build(indices[left], height + 1),
+            build(indices[~left], height + 1),
+        )
+
+    return build(np.arange(data.shape[0]), 0)
+
+
+def _shape(node: _ASDNode) -> Any:
+    if isinstance(node, _ASDLeaf):
+        return ("leaf", node.correction)
+    return (node.feature, node.threshold, _shape(node.left), _shape(node.right))
+
+
+def _walk(values: np.ndarray, node: _ASDNode) -> float:
+    """Walk one tree node by node, as aberrant 1.4.0 scored."""
+    depth = 0
+    while isinstance(node, _ASDBranch):
+        node = node.left if values[node.feature] < node.threshold else node.right
+        depth += 1
+    return float(depth + node.correction)
+
+
+class TestASDIsolationForestExactness(unittest.TestCase):
+    """Array builds and walks must reproduce the 1.4.0 trees and scores."""
+
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("asd_isolation_forest"):
+            with self.subTest(case=case["name"]):
+                model = ASDIsolationForest(**case["params"])
+                scores = score_sequences.replay(model, case)
+                # The tolerance only absorbs last-bit libm differences in log
+                # and pow between platforms; the recording platform reproduces
+                # every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_trees_match_reference_builder(self):
+        rng = np.random.default_rng(1)
+        signed_zeros = np.where(rng.random((40, 2)) < 0.5, -0.0, 0.0)
+        signed_zeros[::3, 1] = 1.0
+        datasets = {
+            "gaussian": rng.normal(size=(64, 3)),
+            "ties": np.round(rng.normal(size=(40, 2)) * 2.0) / 2.0,
+            "constant_column": np.column_stack([rng.normal(size=30), np.ones(30)]),
+            "constant": np.full((12, 3), 2.5),
+            "signed_zeros": signed_zeros,
+            "two_points": rng.normal(size=(2, 4)),
+            "one_point": rng.normal(size=(1, 2)),
+            "wide": rng.normal(size=(50, 20)) * 10.0 ** rng.integers(-5, 5, 20),
+        }
+        for name, data in datasets.items():
+            with self.subTest(data=name):
+                forest = ASDIsolationForest(seed=2)
+                reference_rng = np.random.default_rng(2)
+
+                tree = forest._build_tree(data)
+
+                self.assertEqual(_shape(tree), _reference_tree(reference_rng, data))
+                self.assertEqual(
+                    forest.rng.bit_generator.state, reference_rng.bit_generator.state
+                )
+
+    def test_points_equal_to_a_split_go_right(self):
+        class SplitAtMinimum:
+            """A generator whose uniform draws return their lower bound."""
+
+            def __init__(self, seed: int) -> None:
+                self.generator = np.random.default_rng(seed)
+
+            def integers(self, low: int, high: int) -> int:
+                return int(self.generator.integers(low, high))
+
+            def choice(self, options: np.ndarray) -> int:
+                return int(self.generator.choice(options))
+
+            def uniform(self, low: float, high: float) -> float:
+                return low
+
+        data = np.random.default_rng(8).normal(size=(16, 3))
+        forest = ASDIsolationForest(seed=9)
+        forest.rng = SplitAtMinimum(9)
+
+        tree = forest._build_tree(data)
+
+        self.assertEqual(_shape(tree), _reference_tree(SplitAtMinimum(9), data))
+
+    def test_flat_forest_walks_match_node_walks(self):
+        events = score_sequences.make_stream(seed=3, n_events=300, n_features=4)
+        forest = ASDIsolationForest(n_estimators=40, max_samples=64, seed=4)
+        for event in events:
+            forest.learn_one(event)
+        flat = forest._flat
+        assert flat is not None
+        self.assertEqual(len(flat.roots), len(forest.trees))
+
+        rng = np.random.default_rng(5)
+        queries = [*rng.normal(size=(30, 4)) * 3.0, *forest.window]
+        for tree in forest.trees[:10]:
+            # A value equal to a threshold goes right.
+            if isinstance(tree, _ASDBranch):
+                query = rng.normal(size=4)
+                query[tree.feature] = tree.threshold
+                queries.append(query)
+        for query in queries:
+            expected = [_walk(query, tree) for tree in forest.trees]
+            self.assertEqual(flat.path_lengths_of(query).tolist(), expected)
+
+    def test_choice_of_an_array_matches_indexing_with_integers(self):
+        source = np.random.default_rng(6)
+        for trial in range(500):
+            options = np.flatnonzero(source.random(1 + trial % 30) < 0.7)
+            if options.size == 0:
+                continue
+            seed = int(source.integers(0, 2**63))
+            choosing = np.random.default_rng(seed)
+            indexing = np.random.default_rng(seed)
+            for _ in range(1 + trial % 5):
+                self.assertEqual(
+                    int(choosing.choice(options)),
+                    int(options[indexing.integers(0, len(options))]),
+                )
+                self.assertEqual(
+                    choosing.uniform(-1.0, 1.0), indexing.uniform(-1.0, 1.0)
+                )
+            self.assertEqual(choosing.bit_generator.state, indexing.bit_generator.state)
+
+    def test_default_forest_speed_smoke(self):
+        events = score_sequences.make_stream(seed=7, n_events=2000, n_features=8)
+        forest = ASDIsolationForest(seed=7)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(forest, events)
+
+        # Generous bound against large regressions; typical runs take ~0.4 s.
+        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":
