@@ -156,8 +156,8 @@ def draw_stream(
     heading(
         ax,
         colors,
-        "The stream",
         f"{len(values):,} noisy ECG samples, {n_beats} heartbeats, one anomalous",
+        "",
     )
 
 
@@ -180,7 +180,6 @@ def draw_scores(
     ax.set_ylim(0, 1.12)
     ax.set_yticks([])
     ax.set_xticks([0, 10_000, 20_000, 30_000], ["0", "10k", "20k", "30k"])
-    ax.set_xlabel("sample")
     heading(
         ax,
         colors,
@@ -219,12 +218,6 @@ def draw_beats(
     ax.set_xlim(left, right)
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_xlabel(
-        f"orange, over all {len(peaks) - 1} normal beats:\n"
-        "same value range, different shape",
-        loc="left",
-        fontsize=9,
-    )
 
 
 def render(
