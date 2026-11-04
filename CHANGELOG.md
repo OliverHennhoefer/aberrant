@@ -112,6 +112,20 @@ Semantic Versioning.
   planning them again; pickles leave that preview out. Score sequences are
   unchanged, and with the defaults it scores and learns about 100 times more
   events per second.
+- `RandomCutForest` walks a point down all trees at once: each level samples
+  the cuts of every tree with array operations, while every tree still draws
+  from its own generator. Scoring walks the query as its insertion would
+  instead of inserting it, removing it and copying the generator state, and
+  learning the point that was just scored reuses those walks, walking again
+  only below the branches that removing the oldest point changed. Boxes are
+  kept as the lower corner over the negated upper corner, so one array
+  operation merges two, and removals stop updating boxes at the first one
+  that stays the same. The trees share each stored point instead of copying
+  it, and pickles leave the planned walks out. Score sequences, tree
+  structure and generator states are unchanged, and with the defaults it
+  scores and learns 4 to 5 times more events per second. Scoring a point
+  whose distance to a stored point overflows float64 no longer raises from
+  inside the trial insertion, since the walk never splits a leaf.
 
 ## [1.4.0] - 2026-10-30
 
