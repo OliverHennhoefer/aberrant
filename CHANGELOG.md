@@ -12,6 +12,12 @@ Semantic Versioning.
 - A README figure of three sensor streams scored event by event, rendered in
   light and dark variants by the reproducible `docs/scripts/stream_figure.py`.
 - `docs/img/social-preview.png` for the repository's social preview card.
+- `CITATION.cff`, so GitHub and Zenodo can offer citation metadata.
+- Tagged releases now create a GitHub release with the matching changelog
+  section and the built distributions attached.
+- CI uploads branch coverage to Codecov through OIDC, without a stored token,
+  and the README shows a coverage badge. Coverage status checks are
+  informational and never block a pull request.
 
 ### Changed
 
@@ -21,6 +27,8 @@ Semantic Versioning.
 - Updated package metadata: a new summary, keywords, development-status,
   audience, topic and typing classifiers, and Python 3.13 and 3.14 support.
 - Extended the CI test matrix to CPython 3.13 and 3.14.
+- The docs site and issue templates use the lowercase `aberrant` name and the
+  "real-time anomaly detection for data streams" tagline.
 
 ## [1.4.0] - 2026-10-30
 
