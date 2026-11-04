@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   UV_VERSION: "0.12.18"
@@ -102,8 +101,16 @@ jobs:
       name: pypi
       url: https://pypi.org/p/aberrant
     permissions:
+      # Trusted publishing to PyPI.
       id-token: write
+      # Create the GitHub release once the upload has succeeded.
+      contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
       - name: Download built artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -114,22 +121,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
           attestations: true
-
-  github-release:
-    needs: publish-pypi
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Download built artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: dist
-          path: dist
 
       - name: Extract release notes from CHANGELOG.md
         run: |
@@ -157,7 +148,7 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "Release $GITHUB_REF_NAME already exists; leaving it unchanged."
           else
-            gh release create "$GITHUB_REF_NAME" dist/* \
+            gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
               --title "$GITHUB_REF_NAME" \
               --notes-file release-notes.md \
               --verify-tag
