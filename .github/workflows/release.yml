@@ -121,6 +121,8 @@ jobs:
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
           attestations: true
+          # Lets a re-run of this job retry the GitHub release step.
+          skip-existing: true
 
       - name: Extract release notes from CHANGELOG.md
         run: |
