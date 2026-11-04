@@ -68,7 +68,7 @@ assuming transform-then-learn is equivalent.
 
 - With `time_key=None`, time-aware models use arrival order. Retries, buffering,
   and partition merges can therefore change semantics.
-- With an explicit `time_key`, ABERRANT accepts non-decreasing time. Equal
+- With an explicit `time_key`, aberrant accepts non-decreasing time. Equal
   values are valid; a later smaller value raises `ValueError`.
 - Models based on buckets require integer-like timestamps. Do not silently
   round wall-clock values in application code.
@@ -92,10 +92,10 @@ warm a replacement model in parallel, or reject an upstream release. See
 ## Reproducibility and concurrency
 
 - Set every exposed seed and record it with the constructor parameters and
-  ABERRANT version.
+  aberrant version.
 - Compare stochastic models across multiple seeds; one repeat is deterministic
   evidence, not a stability estimate.
-- ABERRANT's seeded NumPy and PyTorch initialization paths use model-owned
+- aberrant's seeded NumPy and PyTorch initialization paths use model-owned
   generators where implemented. External libraries, user-supplied
   architectures, optimizers, and hardware kernels can introduce additional
   nondeterminism.
@@ -110,7 +110,7 @@ warm a replacement model in parallel, or reject an upstream release. See
 
 ## Persistence and upgrades
 
-ABERRANT does not currently define a stable, cross-version model serialization
+aberrant does not currently define a stable, cross-version model serialization
 format. Do not document or rely on generic pickle/joblib persistence as a
 package guarantee.
 
@@ -118,7 +118,7 @@ If an application checkpoints model objects anyway:
 
 - own the serializer and storage security policy;
 - never load an untrusted pickle-like artifact;
-- record the exact Python, ABERRANT, NumPy, SciPy, and optional dependency
+- record the exact Python, aberrant, NumPy, SciPy, and optional dependency
   versions;
 - test round-trip scores and subsequent learning for every model type;
 - retain the source event offset needed to resume without gaps or duplicates;

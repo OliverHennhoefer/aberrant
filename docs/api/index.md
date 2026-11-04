@@ -22,7 +22,7 @@ paths and are excluded from wildcard exports when the dependency is absent.
 
 ## Compatibility policy
 
-Starting with 1.0.0, ABERRANT follows Semantic Versioning for the documented
+Starting with 1.0.0, aberrant follows Semantic Versioning for the documented
 public API. Within 1.x, existing public import paths, constructor parameters,
 methods, properties, return types, and documented behavior remain compatible.
 Minor releases may add compatible capabilities; incompatible public API changes

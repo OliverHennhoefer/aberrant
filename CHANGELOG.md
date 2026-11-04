@@ -7,6 +7,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `CITATION.cff`, so GitHub and Zenodo can offer citation metadata.
+- Tagged releases now create a GitHub release with the matching changelog
+  section and the built distributions attached.
+
+### Changed
+
+- The docs site and issue templates use the lowercase `aberrant` name and the
+  "real-time anomaly detection for data streams" tagline.
+
 ## [1.4.0] - 2026-10-30
 
 ### Added
