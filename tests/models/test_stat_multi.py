@@ -1,3 +1,4 @@
+import time
 import unittest
 from collections import deque
 
@@ -7,7 +8,10 @@ from aberrant.model.stat.multi import (
     MovingCorrelationCoefficient,
     MovingCovariance,
     MovingMahalanobisDistance,
+    _float_array,
+    _window_rows,
 )
+from tests import score_sequences
 
 
 class TestMovingCovariance(unittest.TestCase):
@@ -357,6 +361,62 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
 
         self.assertAlmostEqual(biased.score_one({"value": 4.0}), 6.0)
         self.assertAlmostEqual(unbiased.score_one({"value": 4.0}), 4.0)
+
+
+class TestMovingMultivariateExactness(unittest.TestCase):
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("moving_multivariate_statistics"):
+            with self.subTest(case=case["name"]):
+                model = score_sequences.moving_statistic(**case["params"])
+                scores = score_sequences.replay(model, case)
+                # np.cov and the Cholesky solve run through BLAS and LAPACK,
+                # whose CPU-specific kernels round differently, so 1.4.0
+                # itself moves by a few ulps between machines (up to 4e-15
+                # absolute here). The regularized Mahalanobis covariance can
+                # have a condition number near 1e6, which scales those ulps
+                # to about 2.4e-10 relative. The recording machine
+                # reproduces every bit.
+                mahalanobis = case["params"]["statistic"] == "mahalanobis_distance"
+                np.testing.assert_allclose(
+                    scores,
+                    case["scores"],
+                    rtol=1e-8 if mahalanobis else 1e-12,
+                    atol=1e-12,
+                )
+
+    def test_float_array_matches_asarray(self):
+        values = [1.0, -0.0, 0.0, 5e-324, -1e-310, 1.7e308, -2.5, 1e16 + 2.0]
+        for window in (values, deque(values, maxlen=8), [], deque([3.25])):
+            with self.subTest(window=window):
+                array = _float_array(window)
+                expected = np.asarray(window, dtype=np.float64)
+                self.assertEqual(array.dtype, np.float64)
+                self.assertEqual(array.shape, expected.shape)
+                self.assertEqual(array.tobytes(), expected.tobytes())
+        existing = np.arange(4.0)
+        self.assertIs(_float_array(existing), existing)
+
+    def test_window_rows_match_array_of_rows(self):
+        special = [1.0, -0.0, 5e-324, -1e-310, 1.7e308, -2.5, 1e16 + 2.0, 0.1]
+        for width in (1, 2, 4):
+            with self.subTest(width=width):
+                rows = [special[index : index + width] for index in range(5)]
+                for window in (rows, deque(rows, maxlen=5), deque(rows[:1])):
+                    array = _window_rows(window, width)
+                    expected = np.array(list(window))
+                    self.assertEqual(array.shape, expected.shape)
+                    self.assertEqual(array.dtype, expected.dtype)
+                    self.assertEqual(array.tobytes(), expected.tobytes())
+
+    def test_window_of_one_thousand_speed_smoke(self):
+        events = score_sequences.make_stream(seed=13, n_events=2000, n_features=2)
+        model = MovingCovariance(window_size=1000)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.25 s.
+        self.assertLess(time.perf_counter() - start, 5.0)
 
 
 if __name__ == "__main__":

@@ -35,6 +35,11 @@ from aberrant.model.iforest import (
     XStream,
 )
 from aberrant.model.sketch import StreamingLODA, StreamingRSHash
+from aberrant.model.stat import (
+    MovingCorrelationCoefficient,
+    MovingCovariance,
+    MovingMahalanobisDistance,
+)
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -55,6 +60,8 @@ def make_stream(
     ``outlier_scale`` to create outliers. ``unit`` draws two clusters inside ``[0, 1]`` and
     replaces every 23rd event with a uniform draw. ``grid`` rounds standard
     normal features to multiples of one half, so that events repeat.
+    ``steps`` holds rounded standard normal levels for one to eight events at
+    a time, so that short windows are often constant.
     """
     rng = np.random.default_rng(seed)
     if kind == "gaussian":
@@ -68,6 +75,10 @@ def make_stream(
         data[::23] = rng.uniform(0.0, 1.0, size=data[::23].shape)
     elif kind == "grid":
         data = np.round(rng.normal(size=(n_events, n_features)) * 2.0) / 2.0
+    elif kind == "steps":
+        levels = np.round(rng.normal(size=(n_events, n_features)))
+        starts = np.cumsum(rng.integers(1, 9, size=n_events))
+        data = levels[np.searchsorted(starts, np.arange(n_events), side="right")]
     else:
         raise ValueError(f"Unknown stream kind: {kind}")
 
@@ -137,6 +148,18 @@ def score_then_learn_batches(
         scores.extend(float(score) for score in model.score_batch(batch))
         model.learn_batch(batch)
     return scores
+
+
+_MOVING_STATISTICS: dict[str, Callable[..., Any]] = {
+    "correlation_coefficient": MovingCorrelationCoefficient,
+    "covariance": MovingCovariance,
+    "mahalanobis_distance": MovingMahalanobisDistance,
+}
+
+
+def moving_statistic(statistic: str, **params: Any) -> Any:
+    """Build the moving-window detector that a fixture case names."""
+    return _MOVING_STATISTICS[statistic](**params)
 
 
 def replay(model: Any, case: dict[str, Any]) -> list[float]:
@@ -406,6 +429,103 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 "name": "window_one_above_k",
                 "params": {"k": 2, "window_size": 3},
                 "stream": {"seed": 43, "n_events": 100, "n_features": 2},
+            },
+        ],
+    ),
+    "moving_multivariate_statistics": (
+        moving_statistic,
+        [
+            {
+                "name": "covariance",
+                "params": {"statistic": "covariance", "window_size": 50},
+                "stream": {"seed": 212, "n_events": 300, "n_features": 2},
+            },
+            {
+                "name": "covariance_sample_signed",
+                "params": {
+                    "statistic": "covariance",
+                    "window_size": 30,
+                    "bias": False,
+                    "abs_diff": False,
+                },
+                "stream": {"seed": 213, "n_events": 300, "n_features": 2},
+            },
+            {
+                "name": "covariance_held_values",
+                "params": {"statistic": "covariance", "window_size": 5},
+                "stream": {
+                    "seed": 214,
+                    "n_events": 200,
+                    "n_features": 2,
+                    "kind": "steps",
+                },
+            },
+            {
+                "name": "correlation_coefficient",
+                "params": {"statistic": "correlation_coefficient", "window_size": 50},
+                "stream": {"seed": 215, "n_events": 300, "n_features": 2},
+            },
+            {
+                "name": "correlation_coefficient_sample_signed",
+                "params": {
+                    "statistic": "correlation_coefficient",
+                    "window_size": 120,
+                    "bias": False,
+                    "abs_diff": False,
+                },
+                "stream": {
+                    "seed": 216,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Constant windows have zero deviation and score zero.
+                "name": "correlation_coefficient_constant_windows",
+                "params": {"statistic": "correlation_coefficient", "window_size": 3},
+                "stream": {
+                    "seed": 217,
+                    "n_events": 200,
+                    "n_features": 2,
+                    "kind": "steps",
+                },
+            },
+            {
+                "name": "mahalanobis_distance",
+                "params": {"statistic": "mahalanobis_distance", "window_size": 60},
+                "stream": {"seed": 218, "n_events": 300, "n_features": 3},
+            },
+            {
+                "name": "mahalanobis_distance_sample_two_features",
+                "params": {
+                    "statistic": "mahalanobis_distance",
+                    "window_size": 25,
+                    "bias": False,
+                },
+                "stream": {"seed": 219, "n_events": 300, "n_features": 2},
+            },
+            {
+                # Held values leave constant or singular windows.
+                "name": "mahalanobis_distance_singular_windows",
+                "params": {"statistic": "mahalanobis_distance", "window_size": 6},
+                "stream": {
+                    "seed": 220,
+                    "n_events": 250,
+                    "n_features": 3,
+                    "kind": "steps",
+                },
+            },
+            {
+                # Outliers near 1e308 overflow when opposite extremes are subtracted.
+                "name": "mahalanobis_distance_overflowing_offsets",
+                "params": {"statistic": "mahalanobis_distance", "window_size": 40},
+                "stream": {
+                    "seed": 221,
+                    "n_events": 300,
+                    "n_features": 4,
+                    "outlier_scale": 4e307,
+                },
             },
         ],
     ),

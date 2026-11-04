@@ -1,12 +1,33 @@
 """Statistical models for multivariate moving window analysis."""
 
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
+from itertools import chain
 
 import numpy as np
 
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import FeatureSchema
+
+
+def _float_array(values: np.ndarray | Collection[float]) -> np.ndarray:
+    """Return window values as a float64 array, reading Python floats directly.
+
+    ``np.fromiter`` builds the same array as ``np.asarray`` from a list or
+    deque of floats, without first inspecting the sequence's shape.
+    """
+    if isinstance(values, np.ndarray):
+        return values
+    return np.fromiter(values, dtype=np.float64, count=len(values))
+
+
+def _window_rows(window: Collection[list[float]], width: int) -> np.ndarray:
+    """Stack equally long rows of floats into the array ``np.array`` builds."""
+    count = len(window)
+    flat = np.fromiter(
+        chain.from_iterable(window), dtype=np.float64, count=count * width
+    )
+    return flat.reshape(count, width)
 
 
 def _covariance(
@@ -28,8 +49,8 @@ def _covariance(
     Raises:
         ValueError: If datasets have different lengths.
     """
-    x_array = np.asarray(x)
-    y_array = np.asarray(y)
+    x_array = _float_array(x)
+    y_array = _float_array(y)
 
     if len(x_array) != len(y_array):
         raise ValueError("Both datasets must have the same length.")
@@ -141,11 +162,10 @@ class MovingCovariance(BaseModel):
         if names is None or len(self.window[names[0]]) < 2:
             return 0.0
 
-        window_0 = self.window[names[0]]
-        window_1 = self.window[names[1]]
-
-        if len(window_0) != len(window_1):
+        if len(self.window[names[0]]) != len(self.window[names[1]]):
             raise ValueError("Window lengths must match.")
+        window_0 = _float_array(self.window[names[0]])
+        window_1 = _float_array(self.window[names[1]])
 
         # Create score windows efficiently using numpy
         score_0 = np.append(window_0, prepared.values[0])
@@ -323,7 +343,7 @@ class MovingMahalanobisDistance(BaseModel):
         prepared = self._schema.preview(x)
         if not self._schema.is_established or len(self.window) < 3:
             return 0.0
-        previous_points = np.array(list(self.window))
+        previous_points = _window_rows(self.window, prepared.values.size)
         if np.all(previous_points == previous_points[0]):
             # Preserve the absolute 1e-6 covariance floor for constant windows,
             # where there is no observed variance to define a relative scale.
