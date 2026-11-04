@@ -1,5 +1,11 @@
 """Tests for stateful feature and event boundaries."""
 
+from collections import defaultdict
+from collections.abc import Callable
+from types import MappingProxyType
+from typing import Any
+
+import numpy as np
 import pytest
 
 from aberrant.utils.validation import (
@@ -7,6 +13,8 @@ from aberrant.utils.validation import (
     FeatureSchema,
     MonotonicClock,
     NumericEventBoundary,
+    PreparedFeatures,
+    PreparedNumericEvent,
 )
 
 
@@ -93,3 +101,100 @@ def test_edge_event_boundary_validates_without_advancing_on_preview() -> None:
     assert boundary.clock.arrival_index == 1
     with pytest.raises(ValueError, match="integer-like"):
         boundary.preview({"src": 1.5, "dst": 2.0})
+
+
+_SCHEMA_SAMPLES = [
+    {"a": 1.0, "b": 2.0},
+    {"b": -0.0, "a": 1e308},
+    {"a": np.float64(1.5), "b": 2.0},
+    {"a": 1, "b": 2.0},
+    {"a": True, "b": 2.0},
+    {"a": np.float32(0.1), "b": 2.0},
+    {"a": np.int64(3), "b": 2.0},
+    {"a": "1.0", "b": 2.0},
+    {"a": None, "b": 2.0},
+    {"a": float("nan"), "b": 2.0},
+    {"a": 1.0, "b": float("inf")},
+    {"a": np.float64("-inf"), "b": 2.0},
+    {"a": 10**400, "b": 2.0},
+    {"a": 1.0},
+    {"a": 1.0, "b": 2.0, "c": 3.0},
+    {"a": 1.0, "c": 3.0},
+    {"a": "bad", "c": float("nan")},
+    {1: 1.0, "b": 2.0},
+    {},
+]
+
+
+def _outcome(preview: Callable[[Any], object], sample: Any) -> tuple[object, ...]:
+    """Summarize a preview result or the exception it raised."""
+    try:
+        prepared = preview(sample)
+    except Exception as exc:
+        return type(exc), str(exc)
+    if isinstance(prepared, PreparedNumericEvent):
+        return (
+            prepared.timestamp,
+            prepared.features.names,
+            prepared.features.values.dtype,
+            prepared.features.values.tolist(),
+            prepared.features.revision,
+        )
+    assert isinstance(prepared, PreparedFeatures)
+    return (
+        prepared.names,
+        prepared.values.dtype,
+        prepared.values.tolist(),
+        prepared.revision,
+    )
+
+
+@pytest.mark.parametrize("sample", _SCHEMA_SAMPLES)
+def test_feature_schema_fast_path_matches_complete_validation(
+    sample: dict[Any, Any],
+) -> None:
+    schema = FeatureSchema()
+    schema.commit(schema.preview({"b": 0.0, "a": 0.0}))
+
+    # A read-only proxy is not a plain dict, so it always takes the complete path.
+    fast = _outcome(schema.preview, sample)
+    complete = _outcome(schema.preview, MappingProxyType(sample))
+
+    assert fast == complete
+
+
+@pytest.mark.parametrize("timestamp", [None, 6.0, 4.0, float("nan"), "x"])
+@pytest.mark.parametrize("sample", _SCHEMA_SAMPLES)
+def test_numeric_boundary_fast_path_matches_complete_validation(
+    sample: dict[Any, Any], timestamp: object
+) -> None:
+    time_key = None if timestamp is None else "t"
+    boundary = NumericEventBoundary(time_key=time_key)
+    first = {"t": 5.0, "a": 0.0, "b": 0.0} if time_key else {"b": 0.0, "a": 0.0}
+    boundary.commit(boundary.preview(first))
+    event = dict(sample) if time_key is None else {**sample, time_key: timestamp}
+
+    fast = _outcome(boundary.preview, event)
+    complete = _outcome(boundary.preview, MappingProxyType(event))
+
+    assert fast == complete
+
+
+def test_feature_schema_fast_path_never_mutates_missing_key_mappings() -> None:
+    schema = FeatureSchema()
+    schema.commit(schema.preview({"a": 0.0, "b": 0.0}))
+    sample: defaultdict[str, float] = defaultdict(float, {"a": 1.0, "c": 2.0})
+
+    with pytest.raises(ValueError, match="Inconsistent feature keys"):
+        schema.preview(sample)
+    assert dict(sample) == {"a": 1.0, "c": 2.0}
+
+
+def test_feature_schema_fast_path_covers_plain_float_dicts_only() -> None:
+    schema = FeatureSchema()
+    assert schema._well_formed_values({"a": 1.0}) is None
+    schema.commit(schema.preview({"b": 0.0, "a": 0.0}))
+
+    assert schema._well_formed_values({"b": 2.0, "a": np.float64(1.0)}) == [1.0, 2.0]
+    assert schema._well_formed_values(MappingProxyType({"a": 1.0, "b": 2.0})) is None
+    assert schema._well_formed_values({"a": 1, "b": 2.0}) is None

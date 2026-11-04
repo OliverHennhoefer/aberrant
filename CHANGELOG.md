@@ -29,6 +29,9 @@ Semantic Versioning.
 - A README figure in which `XLagDAMP` finds the one anomalous heartbeat in a
   noisy 30,000-sample ECG from the UCR Time Series Anomaly Archive, rendered
   by the reproducible `docs/scripts/discord_figure.py`.
+- `benchmarks/compare_peers.py` measures score-then-learn throughput and
+  ROC-AUC of the hot detectors against river and PySAD with matched parameters.
+  It is a manual benchmark and not part of CI.
 
 ### Changed
 
@@ -48,6 +51,11 @@ Semantic Versioning.
   before their first learned event instead of raising `ValueError`, so a
   score-before-learn loop can start on the first event. A feature that was
   not seen after learning has started still raises `ValueError`.
+- Feature validation checks a plain `dict` sample with the committed feature
+  names and finite `float` or `numpy.float64` values in one pass. Any other
+  sample takes the complete validation path and is accepted or rejected as
+  before. Numeric coercion no longer calls NumPy per value. Half-Space Trees
+  scores and learns about 45% more events per second.
 
 ## [1.4.0] - 2026-10-30
 

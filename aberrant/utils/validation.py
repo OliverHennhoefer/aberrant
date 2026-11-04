@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TypeAlias
@@ -9,6 +10,14 @@ from typing import TypeAlias
 import numpy as np
 
 NumericScalar: TypeAlias = int | float | np.number
+
+# Built once: an ``int | float | np.number`` expression creates a union per call.
+_NUMERIC_TYPES = (int, float, np.number)
+# Exact value types whose float value is the value itself, so a well-formed
+# sample made of them needs only a finiteness check.
+_PLAIN_FLOAT_TYPES = (float, np.float64)
+# Largest distance to the nearest integer that still counts as integer-like.
+_INTEGER_TOLERANCE = 1e-9
 
 
 def coerce_integer_count(value: object, *, label: str, minimum: int = 1) -> int:
@@ -30,13 +39,13 @@ def coerce_integer_count(value: object, *, label: str, minimum: int = 1) -> int:
 
 def coerce_finite_number(value: object, *, label: str) -> float:
     """Return a finite float or raise a consistently worded error."""
-    if not isinstance(value, int | float | np.number):
+    if not isinstance(value, _NUMERIC_TYPES):
         raise ValueError(f"{label} must be numeric")
     try:
         result = float(value)
     except OverflowError as exc:
         raise ValueError(f"{label} must be finite") from exc
-    if not np.isfinite(result):
+    if not math.isfinite(result):
         raise ValueError(f"{label} must be finite")
     return result
 
@@ -47,7 +56,7 @@ def coerce_integer_feature(value: object, key: str) -> int:
         return int(value)
     as_float = coerce_finite_number(value, label=f"Feature '{key}'")
     as_int = int(round(as_float))
-    if not np.isclose(as_float, float(as_int), rtol=0.0, atol=1e-9):
+    if abs(as_float - float(as_int)) > _INTEGER_TOLERANCE:
         raise ValueError(f"Feature '{key}' must be integer-like")
     return as_int
 
@@ -113,8 +122,50 @@ class FeatureSchema:
         """Return whether learning has committed a schema."""
         return self._names is not None
 
+    def _well_formed_values(
+        self,
+        sample: Mapping[str, object],
+        time_key: str | None = None,
+    ) -> list[float] | None:
+        """Return feature values in schema order if ``sample`` needs no coercion.
+
+        This is the fast path for the common case once a schema is committed: a
+        plain ``dict`` holding exactly the committed names, plus ``time_key``
+        when one is given, whose feature values are finite built-in or NumPy
+        floats. Any other input returns ``None``, and the caller then runs the
+        complete validation, which coerces the values or raises the precise
+        error. ``time_key`` is never a feature name because callers remove it
+        from the features before preview.
+        """
+        names = self._names
+        if names is None or type(sample) is not dict:
+            return None
+        if time_key is None:
+            if len(sample) != len(names):
+                return None
+        elif len(sample) != len(names) + 1 or time_key not in sample:
+            return None
+        try:
+            values = [sample[name] for name in names]
+        except KeyError:
+            return None
+        for value in values:
+            if type(value) not in _PLAIN_FLOAT_TYPES or not math.isfinite(value):
+                return None
+        return values
+
+    def _prepare(self, values: list[float]) -> PreparedFeatures:
+        """Wrap values from ``_well_formed_values`` as a committable preview."""
+        assert self._names is not None
+        return PreparedFeatures(
+            self._names, np.array(values, dtype=np.float64), self._revision
+        )
+
     def preview(self, features: Mapping[str, object]) -> PreparedFeatures:
         """Validate and vectorize features without mutating schema state."""
+        plain_values = self._well_formed_values(features)
+        if plain_values is not None:
+            return self._prepare(plain_values)
         if not features:
             raise ValueError("Input dictionary cannot be empty")
 
@@ -204,12 +255,7 @@ class MonotonicClock:
             current_time = coerce_finite_number(value, label="Timestamp value")
             if self._integer_like:
                 rounded = int(round(current_time))
-                if not np.isclose(
-                    current_time,
-                    float(rounded),
-                    rtol=0.0,
-                    atol=1e-9,
-                ):
+                if abs(current_time - float(rounded)) > _INTEGER_TOLERANCE:
                     raise ValueError("Timestamp value must be integer-like")
                 current_time = rounded
 
@@ -263,6 +309,17 @@ class NumericEventBoundary:
 
     def preview(self, sample: Mapping[str, object]) -> PreparedNumericEvent:
         """Validate and vectorize a sample without mutating boundary state."""
+        plain_values = self.schema._well_formed_values(sample, self.time_key)
+        if plain_values is not None:
+            # The keys are exactly the committed features and the time key, so
+            # only the timestamp can still be rejected below, with the same
+            # error as on the complete path.
+            if self.time_key is None:
+                timestamp = self.clock.preview(implicit=True)
+            else:
+                timestamp = self.clock.preview(sample[self.time_key], implicit=False)
+            return PreparedNumericEvent(timestamp, self.schema._prepare(plain_values))
+
         if not sample:
             raise ValueError("Input dictionary cannot be empty")
         if any(not isinstance(key, str) for key in sample):
