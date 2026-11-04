@@ -3,13 +3,23 @@
 Real dataset tests are in tests/integration/test_iforest_models.py
 """
 
+import time
 import unittest
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
-from aberrant.model.iforest._online_tree import OnlineIsolationTree
+from aberrant.model.iforest._online_tree import (
+    OnlineIsolationTree,
+    _Bounds,
+    _EmptyLeaf,
+    _OnlineBranch,
+    _OnlineLeaf,
+    _OnlineNode,
+)
 from aberrant.model.iforest.online import OnlineIsolationForest
+from tests import score_sequences
 
 
 class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
@@ -337,3 +347,176 @@ def test_subsampled_forest_population_stays_within_window():
         model.learn_one({"x": float(i)})
         for tree in model.trees:
             assert 0 <= tree.data_size <= model.window_size
+
+
+def test_score_sequences_match_recorded_reference():
+    for case in score_sequences.load("online_isolation_forest"):
+        model = OnlineIsolationForest(**case["params"])
+        scores = score_sequences.replay(model, case)
+        # The tolerance only absorbs last-bit libm differences between
+        # platforms; the recording platform reproduces every bit.
+        np.testing.assert_allclose(
+            scores, case["scores"], rtol=1e-12, atol=0, err_msg=case["name"]
+        )
+
+
+def _structure(node: _OnlineNode | None) -> object:
+    """Describe a subtree completely, bounds included, for comparisons."""
+    if node is None:
+        return None
+    if isinstance(node, _EmptyLeaf):
+        return ("empty", node.depth, node.node_index)
+    if isinstance(node, _OnlineLeaf):
+        return (
+            "leaf",
+            node.data_size,
+            node.depth,
+            node.node_index,
+            node.bounds.minimum.tolist(),
+            node.bounds.maximum.tolist(),
+        )
+    return (
+        "branch",
+        node.data_size,
+        node.depth,
+        node.node_index,
+        node.feature,
+        node.split_values,
+        OnlineIsolationTree.node_bounds(node).minimum.tolist(),
+        OnlineIsolationTree.node_bounds(node).maximum.tolist(),
+        [_structure(child) for child in node.children],
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"max_leaf_samples": 4, "window_size": 30},
+        {"max_leaf_samples": 2, "tree_type": "fixed", "window_size": 25},
+        {"max_leaf_samples": 3, "subsample": 0.6, "window_size": 40},
+        {"max_leaf_samples": 1, "branching_factor": 3, "window_size": 20},
+    ],
+)
+def test_single_rows_update_trees_like_one_row_batches(params):
+    events = score_sequences.make_stream(seed=3, n_events=150, n_features=3)
+    rows = np.array([list(event.values()) for event in events], dtype=np.float32)
+    by_row = OnlineIsolationForest(num_trees=4, seed=11, **params)
+    by_batch = OnlineIsolationForest(num_trees=4, seed=11, **params)
+
+    for event, row in zip(events, rows, strict=True):
+        assert by_row.score_one(event) == by_batch.score_batch(row[np.newaxis])[0]
+        by_row.learn_one(event)
+        by_batch.learn_batch(row[np.newaxis])
+
+        assert by_row.normalization_factor == by_batch.normalization_factor
+        for tree, reference in zip(by_row.trees, by_batch.trees, strict=True):
+            assert tree.data_size == reference.data_size
+            assert tree.next_node_index == reference.next_node_index
+            assert tree._sample_membership == reference._sample_membership
+            assert _structure(tree.root) == _structure(reference.root)
+    np.testing.assert_array_equal(by_row.data_window, by_batch.data_window)
+
+
+@pytest.mark.parametrize("by_row", [True, False])
+def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn(by_row):
+    tree = OnlineIsolationTree(
+        max_leaf_samples=3,
+        tree_type="fixed",
+        subsample=1.0,
+        branching_factor=2,
+        data_size=100,
+        rng=np.random.default_rng(0),
+    )
+    leaf = _OnlineLeaf(
+        data_size=2,
+        depth=1,
+        node_index=0,
+        bounds=_Bounds.from_data(np.array([[0.0], [1.0]])),
+    )
+    far_leaf = _OnlineLeaf(
+        data_size=1,
+        depth=1,
+        node_index=1,
+        bounds=_Bounds.from_data(np.array([[7.0]])),
+    )
+    # Unlearning can leave a branch with fewer points than its children hold.
+    tree.root = _OnlineBranch(
+        data_size=2,
+        depth=0,
+        node_index=2,
+        children=[leaf, far_leaf],
+        feature=0,
+        split_values=(5.0,),
+    )
+
+    # The leaf fills up and is rebuilt from points sampled inside [0, 1].
+    if by_row:
+        point = _Bounds.from_data(np.array([[0.5]]))
+        tree.learn_point(point, [0.5])
+    else:
+        tree.learn(np.array([[0.5]]))
+    assert isinstance(tree.root, _OnlineBranch)
+    rebuilt = tree.root.children[0]
+    assert isinstance(rebuilt, _OnlineBranch)
+    sampled = OnlineIsolationTree.node_bounds(rebuilt)
+    assert sampled.minimum[0] > 0.0
+    assert sampled.maximum[0] < 1.0
+
+    # One unlearned point drops the root below the split threshold. The leaf it
+    # becomes still bounds everything the root covered, as in 1.4.0.
+    if by_row:
+        tree.unlearn_point([7.0])
+    else:
+        tree.unlearn(np.array([[7.0]]))
+    assert isinstance(tree.root, _OnlineLeaf)
+    assert tree.root.data_size == 2
+    assert tree.root.bounds.minimum.tolist() == [0.0]
+    assert tree.root.bounds.maximum.tolist() == [7.0]
+
+
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast:RuntimeWarning")
+def test_single_rows_reject_float32_overflow():
+    model = OnlineIsolationForest(num_trees=2, window_size=8, seed=1)
+    with pytest.raises(ValueError, match="only finite values"):
+        model.learn_one({"a": 1e39, "b": 0.0})
+    assert model._n_features is None
+    assert model.data_size == 0
+    assert all(len(tree._sample_membership) == 0 for tree in model.trees)
+
+    model.learn_one({"a": 1.0, "b": 0.0})
+    with pytest.raises(ValueError, match="only finite values"):
+        model.score_one({"a": -1e39, "b": 0.0})
+    assert model.data_size == 1
+
+
+@pytest.mark.parametrize("dtype", [np.uint8, np.int8, np.uint64, np.int64])
+def test_integer_batches_score_like_float_batches(dtype):
+    info = np.iinfo(dtype)
+    rng = np.random.default_rng(3)
+    data = rng.integers(0, 50, size=(120, 2)).astype(dtype)
+    # Extreme values, whose negation wraps in the input dtype.
+    data[::9] = info.min
+    data[4::9] = info.max
+    typed = OnlineIsolationForest(
+        num_trees=5, max_leaf_samples=2, window_size=40, seed=2
+    )
+    floats = OnlineIsolationForest(
+        num_trees=5, max_leaf_samples=2, window_size=40, seed=2
+    )
+    for row in data:
+        typed_score = typed.score_batch(row[np.newaxis, :])
+        float_row = row[np.newaxis, :].astype(np.float64)
+        np.testing.assert_array_equal(typed_score, floats.score_batch(float_row))
+        typed.learn_batch(row[np.newaxis, :])
+        floats.learn_batch(float_row)
+
+
+def test_model_processes_two_thousand_events_quickly():
+    events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
+    model = OnlineIsolationForest(num_trees=25, window_size=256, seed=1)
+
+    start = time.perf_counter()
+    score_sequences.score_then_learn(model, events)
+
+    # Generous bound against large regressions; typical runs take ~0.3 s.
+    assert time.perf_counter() - start < 3.0

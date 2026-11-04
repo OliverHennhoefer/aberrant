@@ -74,6 +74,15 @@ Semantic Versioning.
   from the validated values without building an array. `HSTNode` and `HSTLeaf`
   are slotted dataclasses. Score sequences are unchanged, and it scores and
   learns about 2.5 times more events per second.
+- `OnlineIsolationForest.learn_one` and `score_one` route a single row through
+  each tree with plain comparisons instead of partitioning a one-row batch at
+  every node, and they no longer start worker threads, so `n_jobs` only
+  applies to `learn_batch` and `score_batch`. Branches split on a feature
+  index instead of a one-hot projection vector, derive their bounding box from
+  their subtree when they collapse instead of updating it on every learn and
+  unlearn, and the tree depth limit is computed only when a leaf may split.
+  Score sequences are unchanged, and the default forest scores and learns
+  about 40 times more events per second.
 
 ## [1.4.0] - 2026-10-30
 

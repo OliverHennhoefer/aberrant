@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
@@ -9,7 +10,7 @@ from typing import Literal
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.model.iforest._online_tree import OnlineIsolationTree
+from aberrant.model.iforest._online_tree import OnlineIsolationTree, _Bounds
 from aberrant.utils.validation import FeatureSchema, PreparedFeatures
 
 
@@ -33,9 +34,11 @@ class OnlineIsolationForest(BaseModel):
         branching_factor: Number of children created at each split. It must be
             greater than one.
         metric: Split geometry. Only ``"axisparallel"`` is implemented.
-        n_jobs: Tree-worker count. ``1`` is sequential, ``-1`` uses all logical
-            CPUs reported by the operating system, and a positive value requests
-            that many worker threads.
+        n_jobs: Tree-worker count for batch methods. ``1`` is sequential, ``-1``
+            uses all logical CPUs reported by the operating system, and a
+            positive value requests that many worker threads. ``learn_one`` and
+            ``score_one`` always update the trees sequentially, which is faster
+            than dispatching one row to threads.
         seed: Root seed from which independent per-tree generators are spawned.
 
     References:
@@ -104,24 +107,58 @@ class OnlineIsolationForest(BaseModel):
         self._schema = FeatureSchema()
         self._n_features: int | None = None
 
-    def _dict_to_array(self, prepared: PreparedFeatures) -> np.ndarray:
+    def _point(self, prepared: PreparedFeatures) -> tuple[np.ndarray, list[float]]:
+        """Return validated features as a float32 row and as its values.
+
+        The checks and messages match ``_validate_batch`` for a one-row batch.
+        """
         if self._n_features is not None and len(prepared.names) != self._n_features:
             raise ValueError(
                 f"Expected {self._n_features} features, received {len(prepared.names)}"
             )
-        return prepared.values.astype(np.float32).reshape(1, -1)
+        point = prepared.values.astype(np.float32)
+        values: list[float] = point.tolist()
+        # Finite float64 features can still overflow float32.
+        if not all(map(math.isfinite, values)):
+            raise ValueError("data must contain only finite values")
+        return point, values
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Learn one validated feature mapping."""
         prepared = self._schema.preview(x)
-        self.learn_batch(self._dict_to_array(prepared))
+        point, values = self._point(prepared)
+        if self._n_features is None:
+            self._n_features = point.shape[0]
+
+        # The steps of ``_learn_chunk`` for a one-row chunk. The trees do not
+        # read the normalization, so it is refreshed once at the end.
+        point_bounds = _Bounds.from_data(point.astype(np.float64)[np.newaxis])
+        for tree in self.trees:
+            tree.learn_point(point_bounds, values)
+        self.data_size += 1
+        self.data_window.append(point)
+        if self.data_size > self.window_size:
+            oldest_values = self.data_window.pop(0).tolist()
+            for tree in self.trees:
+                tree.unlearn_point(oldest_values)
+            self.data_size -= 1
+        self._refresh_normalization()
         self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Score one validated feature mapping without mutating its schema."""
         prepared = self._schema.preview(x)
-        scores = self.score_batch(self._dict_to_array(prepared))
-        return float(scores[0])
+        _, values = self._point(prepared)
+        leaf_depths, leaf_sizes = zip(
+            *(tree.leaf_path(values) for tree in self.trees), strict=True
+        )
+        path_lengths = OnlineIsolationTree.get_random_path_lengths(
+            self.branching_factor,
+            self.max_leaf_samples,
+            np.array(leaf_sizes, dtype=np.float64),
+        )
+        depths = np.array(leaf_depths, dtype=np.float64) + path_lengths
+        return float(self._scores(depths[np.newaxis, :])[0])
 
     def _validate_batch(self, data: np.ndarray) -> None:
         if data.ndim != 2:
@@ -202,6 +239,10 @@ class OnlineIsolationForest(BaseModel):
                     list(executor.map(lambda function: function(data), functions))
                 ).T
 
+        return self._scores(depths)
+
+    def _scores(self, depths: np.ndarray) -> np.ndarray:
+        """Turn per-tree path depths of shape ``(rows, trees)`` into scores."""
         mean_depths = depths.mean(axis=1)
         scores = 2 ** (-mean_depths / (self.normalization_factor + np.finfo(float).eps))
         return np.asarray(scores, dtype=np.float64)

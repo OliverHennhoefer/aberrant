@@ -2,7 +2,8 @@
 
 Each JSON file under ``tests/data/score_sequences`` holds, per case, the model
 parameters, the seeded stream that was fed to it and the scores it produced
-when scoring and then learning every event. The files were recorded with
+when scoring and then learning every event, or every batch for cases that name
+a ``batch_size``. The files were recorded with
 aberrant 1.4.0, before the detectors were optimised for speed, so tests can
 check that faster implementations still produce the same score sequences.
 
@@ -22,7 +23,7 @@ from typing import Any
 import numpy as np
 
 import aberrant
-from aberrant.model.iforest import HalfSpaceTrees
+from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
 from aberrant.model.sketch import StreamingLODA
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -72,6 +73,27 @@ def score_then_learn(model: Any, events: list[dict[str, float]]) -> list[float]:
     return scores
 
 
+def score_then_learn_batches(
+    model: Any, events: list[dict[str, float]], batch_size: int
+) -> list[float]:
+    """Score each batch of event rows with ``score_batch`` before learning it."""
+    data = np.array([list(event.values()) for event in events], dtype=np.float32)
+    scores: list[float] = []
+    for start in range(0, len(data), batch_size):
+        batch = data[start : start + batch_size]
+        scores.extend(float(score) for score in model.score_batch(batch))
+        model.learn_batch(batch)
+    return scores
+
+
+def replay(model: Any, case: dict[str, Any]) -> list[float]:
+    """Feed a case's stream to ``model`` and return the scores."""
+    events = make_stream(**case["stream"])
+    if "batch_size" in case:
+        return score_then_learn_batches(model, events, case["batch_size"])
+    return score_then_learn(model, events)
+
+
 def load(name: str) -> list[dict[str, Any]]:
     """Return the recorded cases of one fixture file."""
     with (FIXTURE_DIR / f"{name}.json").open(encoding="utf-8") as handle:
@@ -103,6 +125,48 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_features": 2,
                     "kind": "unit",
                 },
+            },
+        ],
+    ),
+    # The windows stay below ``max_leaf_samples * (2 * branching_factor)**2``, so
+    # the tree depth limit, a ratio of logarithms, never sits on an integer
+    # where the last bit of a platform's ``log`` could change a split decision.
+    "online_isolation_forest": (
+        OnlineIsolationForest,
+        [
+            {
+                "name": "adaptive_binary",
+                "params": {
+                    "num_trees": 10,
+                    "max_leaf_samples": 8,
+                    "window_size": 100,
+                    "seed": 3,
+                },
+                "stream": {"seed": 31, "n_events": 400, "n_features": 4},
+            },
+            {
+                "name": "fixed_ternary_subsampled",
+                "params": {
+                    "num_trees": 8,
+                    "max_leaf_samples": 4,
+                    "tree_type": "fixed",
+                    "subsample": 0.7,
+                    "window_size": 60,
+                    "branching_factor": 3,
+                    "seed": 4,
+                },
+                "stream": {"seed": 32, "n_events": 300, "n_features": 3},
+            },
+            {
+                "name": "adaptive_batches",
+                "params": {
+                    "num_trees": 6,
+                    "max_leaf_samples": 4,
+                    "window_size": 40,
+                    "seed": 5,
+                },
+                "stream": {"seed": 33, "n_events": 300, "n_features": 5},
+                "batch_size": 7,
             },
         ],
     ),
@@ -143,8 +207,7 @@ def record(name: str) -> None:
     factory, cases = CASES[name]
     recorded = []
     for case in cases:
-        events = make_stream(**case["stream"])
-        scores = score_then_learn(factory(**case["params"]), events)
+        scores = replay(factory(**case["params"]), case)
         recorded.append({**case, "scores": scores})
     payload = {"recorded_with": f"aberrant {aberrant.__version__}", "cases": recorded}
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
