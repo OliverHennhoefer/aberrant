@@ -198,3 +198,26 @@ def test_feature_schema_fast_path_covers_plain_float_dicts_only() -> None:
     assert schema._well_formed_values({"b": 2.0, "a": np.float64(1.0)}) == [1.0, 2.0]
     assert schema._well_formed_values(MappingProxyType({"a": 1.0, "b": 2.0})) is None
     assert schema._well_formed_values({"a": 1, "b": 2.0}) is None
+
+
+def _values_or_error(preview: Callable[[Any], object], sample: Any) -> object:
+    """Return previewed values as a list, or the exception that was raised."""
+    try:
+        result = preview(sample)
+    except Exception as exc:
+        return type(exc), str(exc)
+    return result.values.tolist() if isinstance(result, PreparedFeatures) else result
+
+
+@pytest.mark.parametrize("committed", [False, True])
+@pytest.mark.parametrize("sample", _SCHEMA_SAMPLES)
+def test_feature_schema_preview_values_matches_preview(
+    sample: dict[Any, Any], committed: bool
+) -> None:
+    schema = FeatureSchema()
+    if committed:
+        schema.commit(schema.preview({"b": 0.0, "a": 0.0}))
+
+    values = _values_or_error(schema.preview_values, sample)
+
+    assert values == _values_or_error(schema.preview, sample)

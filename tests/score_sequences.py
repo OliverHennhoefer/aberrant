@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 
 import aberrant
+from aberrant.model.iforest import HalfSpaceTrees
 from aberrant.model.sketch import StreamingLODA
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -80,6 +81,31 @@ def load(name: str) -> list[dict[str, Any]]:
 # Fixture name -> (model factory, cases). Cases name the model parameters and
 # the ``make_stream`` arguments; recording adds the scores.
 CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
+    "half_space_trees": (
+        HalfSpaceTrees,
+        [
+            {
+                "name": "defaults_short_window",
+                "params": {"window_size": 50, "seed": 7},
+                "stream": {
+                    "seed": 21,
+                    "n_events": 600,
+                    "n_features": 8,
+                    "kind": "unit",
+                },
+            },
+            {
+                "name": "small_trees",
+                "params": {"n_trees": 3, "height": 3, "window_size": 7, "seed": 8},
+                "stream": {
+                    "seed": 22,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "unit",
+                },
+            },
+        ],
+    ),
     "streaming_loda": (
         StreamingLODA,
         [

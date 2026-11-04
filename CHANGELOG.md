@@ -69,6 +69,11 @@ Semantic Versioning.
   bin widths when warm-up ends and fits the warm-up histograms in one pass.
   Score sequences are unchanged, and it scores and learns about 45 times more
   events per second.
+- `HalfSpaceTrees` walks its complete trees with flat loops instead of
+  recursion, pivots the window masses over one list of all nodes and scores
+  from the validated values without building an array. `HSTNode` and `HSTLeaf`
+  are slotted dataclasses. Score sequences are unchanged, and it scores and
+  learns about 2.5 times more events per second.
 
 ## [1.4.0] - 2026-10-30
 

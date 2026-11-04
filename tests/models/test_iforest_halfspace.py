@@ -1,8 +1,10 @@
 """Tests for Half-Space Trees (HST) anomaly detection model."""
 
+import time
 import unittest
 
 from aberrant.model.iforest.halfspace import HalfSpaceTrees, HSTLeaf, HSTNode
+from tests import score_sequences
 
 
 class TestHSTDataStructures(unittest.TestCase):
@@ -268,6 +270,27 @@ class TestHalfSpaceTrees(unittest.TestCase):
         hst = HalfSpaceTrees()
         hst.learn_one({"z": 0.1, "a": 0.2, "m": 0.3})
         self.assertEqual(hst._schema.names, ("a", "m", "z"))
+
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("half_space_trees"):
+            with self.subTest(case=case["name"]):
+                model = HalfSpaceTrees(**case["params"])
+                events = score_sequences.make_stream(**case["stream"])
+                scores = score_sequences.score_then_learn(model, events)
+                # Integer masses and float division give identical bits everywhere.
+                self.assertEqual(scores, case["scores"])
+
+    def test_default_model_processes_two_thousand_events_quickly(self):
+        events = score_sequences.make_stream(
+            seed=1, n_events=2000, n_features=8, kind="unit"
+        )
+        model = HalfSpaceTrees(seed=1)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.05 s.
+        self.assertLess(time.perf_counter() - start, 1.0)
 
     def test_repr(self):
         """Test string representation."""
