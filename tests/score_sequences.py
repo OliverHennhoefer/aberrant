@@ -33,6 +33,7 @@ from aberrant.model.iforest import (
     XStream,
 )
 from aberrant.model.sketch import StreamingLODA
+from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
 
@@ -142,6 +143,67 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
     ),
     # The streams are continuous, so no two distances tie and the neighbor
     # order does not depend on the platform's sorting algorithm.
+    "incremental_one_class_svm_adaptive_kernel": (
+        IncrementalOneClassSVMAdaptiveKernel,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 91},
+                "stream": {"seed": 92, "n_events": 400, "n_features": 4},
+            },
+            {
+                "name": "small_budget_fast_adaptation",
+                "params": {
+                    "sv_budget": 12,
+                    "buffer_size": 30,
+                    "adaptation_rate": 0.5,
+                    "seed": 93,
+                },
+                "stream": {"seed": 94, "n_events": 400, "n_features": 3},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {
+                    "nu": 0.5,
+                    "initial_gamma": 0.1,
+                    "gamma_bounds": [0.01, 10.0],
+                    "seed": 95,
+                },
+                "stream": {
+                    "seed": 96,
+                    "n_events": 300,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                "name": "repeated_points",
+                "params": {"sv_budget": 40, "seed": 97},
+                "stream": {
+                    "seed": 98,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
+            },
+            {
+                "name": "loose_tolerance",
+                "params": {"nu": 0.8, "tolerance": 0.05, "seed": 99},
+                "stream": {"seed": 100, "n_events": 300, "n_features": 6},
+            },
+            {
+                # Only the first event ever becomes a support vector.
+                "name": "single_support_vector",
+                "params": {"nu": 1.0, "tolerance": 0.1, "seed": 101},
+                "stream": {"seed": 102, "n_events": 200, "n_features": 6},
+            },
+            {
+                "name": "full_budget",
+                "params": {"nu": 1.0, "tolerance": 0.01, "seed": 103},
+                "stream": {"seed": 104, "n_events": 500, "n_features": 6},
+            },
+        ],
+    ),
     "local_outlier_factor": (
         LocalOutlierFactor,
         [

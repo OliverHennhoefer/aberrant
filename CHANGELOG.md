@@ -138,6 +138,13 @@ Semantic Versioning.
   unchanged, and with the defaults it scores and learns about 5 times more
   events per second. `MondrianLeaf.from_point` now stores float64 bounds for
   any numeric point.
+- `IncrementalOneClassSVMAdaptiveKernel` computes the kernels between a point
+  and all support vectors, and the distances behind each gamma estimate, with
+  array operations instead of one pair at a time. It standardizes with the
+  running statistics once per call instead of once per vector, and restacks
+  the support vectors only when they change. Score sequences, support vectors,
+  gamma and generator states are unchanged, and with the defaults it scores
+  and learns about 18 to 20 times more events per second.
 
 ## [1.4.0] - 2026-10-30
 

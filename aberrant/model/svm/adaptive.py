@@ -81,6 +81,8 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self.birth_sample: list[int] = []
         self.rho: float = 0.0
         self.K_sv: np.ndarray | None = None
+        # The support vectors as rows, restacked only when they change.
+        self._support_matrix = np.empty((0, 0), dtype=np.float64)
 
         self.data_buffer: deque[np.ndarray] = deque(maxlen=self.buffer_size)
         self.n_samples: int = 0
@@ -107,8 +109,8 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         self,
         x: np.ndarray,
         names: tuple[str, ...],
-    ) -> None:
-        """Update population mean/variance with a valid Welford accumulator."""
+    ) -> np.ndarray:
+        """Update population mean/variance and return the new standard deviations."""
         if self._feature_mean is None or self._feature_m2 is None:
             raise RuntimeError("Feature statistics are not initialized")
 
@@ -124,6 +126,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
             feature: (float(self._feature_mean[index]), float(std[index]))
             for index, feature in enumerate(names)
         }
+        return std
 
     def _feature_std(self) -> np.ndarray:
         """Return population standard deviations with stable zero-variance scale."""
@@ -136,38 +139,29 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         std = np.sqrt(variance)
         return np.where(std > 0.0, std, 1.0)
 
-    def _standardize(self, x: np.ndarray) -> np.ndarray:
-        """Standardize a raw vector using the current running statistics."""
+    def _standardize(self, x: np.ndarray, std: np.ndarray) -> np.ndarray:
+        """Standardize raw vectors, one per row, with the current statistics."""
         if self._feature_mean is None:
             raise RuntimeError("Feature statistics are not initialized")
-        return np.asarray(
-            (x - self._feature_mean) / self._feature_std(),
-            dtype=np.float64,
-        )
+        return np.asarray((x - self._feature_mean) / std, dtype=np.float64)
 
-    def _rbf_kernel(self, x1: np.ndarray, x2: np.ndarray) -> float:
-        """Compute the RBF kernel after consistently standardizing raw vectors."""
-        difference = self._standardize(x1) - self._standardize(x2)
-        return float(np.exp(-self.gamma * float(np.dot(difference, difference))))
-
-    def _compute_kernel_row(self, x: np.ndarray) -> np.ndarray:
+    def _compute_kernel_row(self, x: np.ndarray, std: np.ndarray) -> np.ndarray:
         """Compute kernel values between a raw query and all raw support vectors."""
-        return np.fromiter(
-            (self._rbf_kernel(x, sv) for sv in self.support_vectors),
-            dtype=np.float64,
-            count=len(self.support_vectors),
+        differences = self._standardize(x, std) - self._standardize(
+            self._support_matrix, std
         )
+        # vecdot takes the same dot product of every row as np.dot of each.
+        distances: np.ndarray = np.vecdot(differences, differences)
+        return np.exp(-self.gamma * distances)
 
-    def _update_kernel_matrix(self) -> None:
+    def _update_kernel_matrix(self, std: np.ndarray) -> None:
         """Recompute the support-vector kernel matrix in current coordinates."""
         n_sv = len(self.support_vectors)
         if n_sv == 0:
             self.K_sv = None
             return
 
-        standardized = np.vstack(
-            [self._standardize(vector) for vector in self.support_vectors]
-        )
+        standardized = self._standardize(self._support_matrix, std)
         squared_norms = np.sum(standardized * standardized, axis=1)
         distances = (
             squared_norms[:, None]
@@ -186,48 +180,51 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         decision_values = self.K_sv @ np.asarray(self.alpha, dtype=np.float64)
         self.rho = float(np.median(decision_values))
 
-    def _estimate_optimal_gamma(self) -> float:
+    def _estimate_optimal_gamma(self, std: np.ndarray) -> float:
         """Estimate gamma from pairwise distances in the recent raw-data buffer."""
         if len(self.data_buffer) < 10:
             return self.gamma
 
-        data_array = np.vstack(self.data_buffer)
-        standardized = np.vstack([self._standardize(row) for row in data_array])
+        standardized = self._standardize(np.array(self.data_buffer), std)
 
         n_samples = min(50, len(standardized))
         indices = self.rng.choice(len(standardized), size=n_samples, replace=False)
         sampled_data = standardized[indices]
 
-        distances: list[float] = []
-        for i in range(n_samples):
-            for j in range(i + 1, min(i + 10, n_samples)):
-                distance = float(np.linalg.norm(sampled_data[i] - sampled_data[j]))
-                if distance > 1e-10:
-                    distances.append(distance)
+        # Each sample pairs with the next nine, in row-major order. The norm of
+        # each difference is the square root of its dot product with itself,
+        # as np.linalg.norm computes it for a vector.
+        first, second = np.triu_indices(n_samples, k=1)
+        near = second - first < 10
+        differences = sampled_data[first[near]] - sampled_data[second[near]]
+        distances = np.sqrt(np.vecdot(differences, differences))
+        distances = distances[distances > 1e-10]
 
-        if not distances:
+        if distances.size == 0:
             return self.gamma
 
         median_distance = float(np.median(distances))
         optimal_gamma = 1.0 / (2.0 * median_distance**2)
         return float(np.clip(optimal_gamma, self.gamma_min, self.gamma_max))
 
-    def _adapt_gamma(self) -> None:
+    def _adapt_gamma(self, std: np.ndarray) -> None:
         """Adapt gamma every 20 learned samples."""
         if self.n_samples % 20 != 0:
             return
 
-        target_gamma = self._estimate_optimal_gamma()
+        target_gamma = self._estimate_optimal_gamma(std)
         gamma_diff = target_gamma - self.gamma
         if abs(gamma_diff) <= 0.01 * self.gamma:
             return
 
         self.gamma += self.adaptation_rate * gamma_diff
         self.gamma = float(np.clip(self.gamma, self.gamma_min, self.gamma_max))
-        self._update_kernel_matrix()
+        self._update_kernel_matrix(std)
         self._update_rho()
 
-    def _manage_support_vectors(self, x: np.ndarray, alpha_new: float) -> None:
+    def _manage_support_vectors(
+        self, x: np.ndarray, alpha_new: float, std: np.ndarray
+    ) -> None:
         """Add a raw support vector and enforce the configured budget."""
         self.support_vectors.append(x.copy())
         self.alpha.append(float(alpha_new))
@@ -248,42 +245,43 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
             del self.alpha[remove_index]
             del self.birth_sample[remove_index]
 
-        self._update_kernel_matrix()
+        self._support_matrix = np.array(self.support_vectors)
+        self._update_kernel_matrix(std)
         self._update_rho()
 
-    def _decision_function(self, x: np.ndarray) -> float:
+    def _decision_function(self, x: np.ndarray, std: np.ndarray) -> float:
         """Compute the decision value for a raw feature vector."""
         if not self.support_vectors:
             return -self.rho
 
-        kernel_values = self._compute_kernel_row(x)
+        kernel_values = self._compute_kernel_row(x, std)
         return float(np.dot(self.alpha, kernel_values) - self.rho)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Incrementally learn from one sample."""
         prepared = self._prepare_raw_features(x)
         raw_vector = prepared.values
-        self._update_feature_stats(raw_vector, prepared.names)
+        std = self._update_feature_stats(raw_vector, prepared.names)
         self.n_samples += 1
         self.data_buffer.append(raw_vector.copy())
 
         # Running normalization changed, so existing kernel values and rho must
         # be expressed in the new common coordinate system before comparison.
         if self.support_vectors:
-            self._update_kernel_matrix()
+            self._update_kernel_matrix(std)
             self._update_rho()
 
         if not self.support_vectors:
-            self._manage_support_vectors(raw_vector, 1.0 / (self.nu * 10.0))
+            self._manage_support_vectors(raw_vector, 1.0 / (self.nu * 10.0), std)
             self._schema.commit(prepared)
             return
 
-        decision_value = self._decision_function(raw_vector)
+        decision_value = self._decision_function(raw_vector, std)
         if decision_value < -self.tolerance:
             alpha_new = min(-decision_value, 1.0 / self.nu)
-            self._manage_support_vectors(raw_vector, alpha_new)
+            self._manage_support_vectors(raw_vector, alpha_new, std)
 
-        self._adapt_gamma()
+        self._adapt_gamma(std)
         self._schema.commit(prepared)
 
     def predict_one(self, x: dict[str, float]) -> int:
@@ -292,7 +290,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         if not self.support_vectors:
             return 1
 
-        decision_value = self._decision_function(prepared.values)
+        decision_value = self._decision_function(prepared.values, self._feature_std())
         return 1 if decision_value >= -self.tolerance else -1
 
     def score_one(self, x: dict[str, float]) -> float:
@@ -301,7 +299,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         if not self.support_vectors:
             return 0.0
 
-        return -self._decision_function(prepared.values)
+        return -self._decision_function(prepared.values, self._feature_std())
 
     def get_model_info(self) -> dict[str, object]:
         """Return current model diagnostics."""

@@ -1,3 +1,5 @@
+import copy
+import time
 import unittest
 
 import numpy as np
@@ -5,6 +7,7 @@ import numpy as np
 from aberrant.model.svm.adaptive import (
     IncrementalOneClassSVMAdaptiveKernel,
 )
+from tests import score_sequences
 
 
 class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
@@ -133,6 +136,109 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
             IncrementalOneClassSVMAdaptiveKernel(buffer_size=0)
         with self.assertRaises(ValueError):
             IncrementalOneClassSVMAdaptiveKernel(sv_budget=0)
+
+
+def _pairwise_gamma_estimate(
+    model: IncrementalOneClassSVMAdaptiveKernel, std: np.ndarray
+) -> float:
+    """Estimate gamma with the pair-by-pair loop of aberrant 1.4.0."""
+    if len(model.data_buffer) < 10:
+        return model.gamma
+    mean = model._feature_mean
+    standardized = np.vstack([(row - mean) / std for row in model.data_buffer])
+    n_samples = min(50, len(standardized))
+    indices = model.rng.choice(len(standardized), size=n_samples, replace=False)
+    sampled = standardized[indices]
+    distances = []
+    for i in range(n_samples):
+        for j in range(i + 1, min(i + 10, n_samples)):
+            distance = float(np.linalg.norm(sampled[i] - sampled[j]))
+            if distance > 1e-10:
+                distances.append(distance)
+    if not distances:
+        return model.gamma
+    gamma = 1.0 / (2.0 * float(np.median(distances)) ** 2)
+    return float(np.clip(gamma, model.gamma_min, model.gamma_max))
+
+
+class TestIncrementalOneClassSVMAdaptiveKernelExactness(unittest.TestCase):
+    """Vectorized kernels must reproduce the 1.4.0 scores and generator draws."""
+
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("incremental_one_class_svm_adaptive_kernel"):
+            with self.subTest(case=case["name"]):
+                model = IncrementalOneClassSVMAdaptiveKernel(**case["params"])
+                scores = score_sequences.replay(model, case)
+                # Scores are differences of kernel sums, so last-bit exp and
+                # BLAS differences between platforms surface as absolute
+                # errors near 1e-14; the recording platform reproduces every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=0, atol=1e-12)
+
+    def test_kernel_row_matches_kernels_of_single_pairs(self):
+        events = score_sequences.make_stream(seed=1, n_events=150, n_features=5)
+        model = IncrementalOneClassSVMAdaptiveKernel(seed=2)
+        for event in events:
+            model.learn_one(event)
+        self.assertGreater(len(model.support_vectors), 10)
+        mean = model._feature_mean
+        std = model._feature_std()
+
+        for query in np.random.default_rng(3).normal(size=(20, 5)) * 3.0:
+            row = model._compute_kernel_row(query, std)
+            for vector, kernel in zip(model.support_vectors, row, strict=True):
+                # The 1.4.0 kernel of one standardized pair.
+                difference = (query - mean) / std - (vector - mean) / std
+                distance = float(np.dot(difference, difference))
+                self.assertEqual(kernel, float(np.exp(-model.gamma * distance)))
+
+    def test_row_dot_products_match_dot_of_each_row(self):
+        rng = np.random.default_rng(4)
+        for n_features in (1, 2, 3, 5, 8, 9, 16, 33, 64):
+            scales = 10.0 ** rng.integers(-150, 150, size=(30, 1))
+            rows = rng.normal(size=(30, n_features)) * scales
+            products = np.vecdot(rows, rows)
+            for row, product in zip(rows, products, strict=True):
+                self.assertEqual(product, np.dot(row, row))
+                self.assertEqual(np.sqrt(product), np.linalg.norm(row))
+
+    def test_gamma_estimate_matches_pairwise_loop(self):
+        streams = {
+            "too_short": score_sequences.make_stream(seed=5, n_events=9, n_features=3),
+            "short": score_sequences.make_stream(seed=6, n_events=23, n_features=3),
+            "repeated": score_sequences.make_stream(
+                seed=7, n_events=70, n_features=2, kind="grid"
+            ),
+            "full_buffer": score_sequences.make_stream(
+                seed=8, n_events=260, n_features=4
+            ),
+            "wide": score_sequences.make_stream(seed=11, n_events=80, n_features=24),
+            "identical": [{"x0": 1.5, "x1": -2.0}] * 30,
+        }
+        for name, events in streams.items():
+            with self.subTest(stream=name):
+                model = IncrementalOneClassSVMAdaptiveKernel(seed=9)
+                for event in events:
+                    model.learn_one(event)
+                reference = copy.deepcopy(model)
+                std = model._feature_std()
+
+                self.assertEqual(
+                    model._estimate_optimal_gamma(std),
+                    _pairwise_gamma_estimate(reference, std),
+                )
+                self.assertEqual(
+                    model.rng.bit_generator.state, reference.rng.bit_generator.state
+                )
+
+    def test_default_model_speed_smoke(self):
+        events = score_sequences.make_stream(seed=10, n_events=2000, n_features=8)
+        model = IncrementalOneClassSVMAdaptiveKernel(seed=10)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.4 s.
+        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":
