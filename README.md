@@ -1,11 +1,14 @@
-<h1 align="center">
+<p align="center">
   <a href="https://oliverhennhoefer.github.io/aberrant/">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/aberrant.png" alt="aberrant" width="900">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/aberrant.png" alt="aberrant" width="420">
   </a>
-</h1>
+</p>
+
+<h3 align="center">Real-time anomaly detection for data streams in Python.</h3>
 
 <p align="center">
-  <strong>Score events. Learn continuously. Adapt to the stream.</strong>
+  Score every event as it arrives and adapt as the data changes.<br>
+  Forests, sketches, graph and time-series detectors that learn as the data arrives.
 </p>
 
 <p align="center">
@@ -17,47 +20,74 @@
 </p>
 
 <p align="center">
-  <a href="https://oliverhennhoefer.github.io/aberrant/">Documentation</a> ·
+  <a href="https://oliverhennhoefer.github.io/aberrant/"><b>Documentation</b></a> ·
   <a href="https://oliverhennhoefer.github.io/aberrant/quickstart/">Quickstart</a> ·
   <a href="https://oliverhennhoefer.github.io/aberrant/user_guide/models/">Model guide</a> ·
+  <a href="https://oliverhennhoefer.github.io/aberrant/user_guide/evaluation/">Evaluation</a> ·
   <a href="https://oliverhennhoefer.github.io/aberrant/api/">API reference</a> ·
   <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/CHANGELOG.md">Changelog</a>
 </p>
 
-`aberrant` is a typed Python library for unsupervised anomaly detection on data
-that arrives one event at a time. Its models share a compact online interface:
-`score_one(x)` evaluates the current event and `learn_one(x)` updates the model.
-This lets an application adapt continuously without coordinating an external
-batch-retraining loop.
+## Quickstart
 
-Most models consume a `dict[str, float]`, while graph and time-aware models
-document their required keys explicitly. Detector state, warm-up behavior,
-memory policy, and score scale remain model-specific rather than being hidden
-behind a batch-estimator abstraction.
+```bash
+pip install aberrant
+```
 
-## Why `aberrant`?
+```python
+from aberrant.model.iforest import HalfSpaceTrees
+from aberrant.stream.dataset import Dataset, load
+from aberrant.transform import MinMaxScaler
 
-- **Use one streaming contract** across isolation forests, distance methods,
-  sketches, graph detectors, online statistics, SVMs, time-series methods, and
-  reconstruction models.
-- **Choose the right state strategy** from sliding windows, bounded sketches,
-  fading summaries, and model-specific incremental updates.
-- **Compose online preprocessing** with detectors using `|` pipelines.
-- **Discover and configure built-ins** through a typed catalog with
-  machine-readable capabilities and an allowlisted declarative builder.
-- **Separate detection from policy** with drift detectors and static or adaptive
-  score thresholds.
-- **Run repeatable experiments** with registry-backed benchmark streams and a
-  validated local dataset cache.
-- **Compare streaming detectors** with a catalog-aware `PrequentialEvaluator`,
-  explicit warm-up, bounded metric windows, and separate score/update timings.
-- **Extend without framework coupling** through typed, structural transformer
-  and model protocols. The distribution includes `py.typed` metadata.
+detector = MinMaxScaler() | HalfSpaceTrees(seed=42)
+
+for event, label in load(Dataset.SHUTTLE).stream():
+    detector.learn_one(event)
+    score = detector.score_one(event)  # higher means more anomalous
+```
+
+The detector sees each of the 49,096 Shuttle events once, keeps a bounded
+window of state, and needs no training set or retraining job. The loop runs
+in under 10 seconds on one CPU core and reaches a ROC-AUC of about 0.97. The
+dataset is downloaded and cached on first use.
+
+## Why aberrant
+
+- **A broad streaming toolbox.** Isolation forests and half-space trees,
+  density and distance methods, projection sketches, graph-edge detectors
+  (MIDAS, AnoEdge), matrix-profile discords, online SVMs and autoencoders all
+  follow the same event-by-event contract.
+- **From score to alert.** Drift detectors (ADWIN, KSWIN, Page-Hinkley) and
+  static or adaptive thresholds turn raw scores into decisions.
+- **Built for services.** Compose online preprocessing with `|`, keep state
+  bounded with sliding windows, sketches or fading summaries, and build
+  detectors from plain configuration through a typed catalog.
+- **Measured on the stream.** A prequential evaluator, registered benchmark
+  streams, explicit warm-up, and separate timings for scoring and updating.
+- **Typed and extensible.** Ships `py.typed`; any object that satisfies the
+  structural model or transformer protocol can join a pipeline.
+
+## aberrant, river or PySAD?
+
+|                                                 | aberrant | river | PySAD |
+| ----------------------------------------------- | :------: | :---: | :---: |
+| Isolation forests and half-space trees          | ✓        | ✓     | ✓     |
+| Projection sketches (LODA, RS-Hash)             | ✓        | ✓     | ✓     |
+| Graph-edge streams (MIDAS, AnoEdge, ISCONNA)    | ✓        |       |       |
+| Time-series discords (matrix profile, DAMP)     | ✓        |       |       |
+| Drift detectors (ADWIN, KSWIN, Page-Hinkley)    | ✓        | ✓     |       |
+| Score thresholds or calibration                 | ✓        | ✓     | ✓     |
+| Detectors built from declarative configuration  | ✓        |       |       |
+| General online ML (classification, regression)  |          | ✓     |       |
+
+Use river for general online learning. Use aberrant when anomalies are the
+job. aberrant uses river's `learn_one` / `score_one` convention, so moving
+between the two is straightforward. Compared with river 0.26 and PySAD 0.7.
 
 ## Installation
 
 `aberrant` requires Python 3.11 or newer and is continuously tested on CPython
-3.11 and 3.12.
+3.11 to 3.14 on Linux and Windows.
 
 ```bash
 pip install aberrant
@@ -83,49 +113,6 @@ pip install "aberrant[eval,faiss]"
 ```
 
 </details>
-
-## Quick start
-
-The following core-only example learns a scaled isolation forest from a
-synthetic stream. The first 64 events warm up the pipeline; every later event is
-scored before it is learned.
-
-```python
-import numpy as np
-
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.preprocessing import StandardScaler
-
-rng = np.random.default_rng(42)
-stream = np.vstack(
-    [
-        rng.normal(size=(400, 2)),
-        rng.normal(loc=5.0, size=(20, 2)),
-    ]
-)
-
-detector = StandardScaler() | OnlineIsolationForest(
-    num_trees=25,
-    window_size=256,
-    seed=42,
-)
-
-scores = []
-for step, values in enumerate(stream):
-    event = {"x": float(values[0]), "y": float(values[1])}
-
-    if step >= 64:
-        scores.append((step, detector.score_one(event)))
-
-    detector.learn_one(event)
-
-for step, score in sorted(scores, key=lambda item: item[1], reverse=True)[:5]:
-    print(f"event={step}, anomaly_score={score:.3f}")
-```
-
-Higher scores are more anomalous under the common model contract, but their
-numeric range and calibration differ by detector. Compare or threshold scores
-only according to the selected model's documented semantics.
 
 ## Choose a starting point
 
@@ -248,3 +235,19 @@ for event, label in islice(dataset.stream(), 100):
 Labels are provided for evaluation; unsupervised detectors learn only from the
 event mapping. Cache location and download behavior are configurable through
 the [streaming guide](https://oliverhennhoefer.github.io/aberrant/user_guide/streaming/).
+
+## Related projects
+
+- [nonconform](https://github.com/OliverHennhoefer/nonconform) calibrates
+  anomaly scores into conformal p-values and monitors streams for change.
+- [online-fdr](https://github.com/OliverHennhoefer/online-fdr) controls the
+  false discovery rate when alerts are raised one test at a time.
+- [Aberration](https://github.com/DataDrivenSustainabilitySolutions/off-key)
+  is an open-source platform that runs aberrant pipelines on live MQTT
+  telemetry and lets people review the evidence.
+
+## Contributing
+
+Bug reports, detector requests and pull requests are welcome. Start with the
+[contributing guide](https://github.com/OliverHennhoefer/aberrant/blob/main/CONTRIBUTING.md).
+`aberrant` is released under the [MIT license](https://github.com/OliverHennhoefer/aberrant/blob/main/LICENSE).
