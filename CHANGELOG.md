@@ -7,6 +7,12 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- A README figure of three sensor streams scored event by event, rendered in
+  light and dark variants by the reproducible `docs/scripts/stream_figure.py`.
+- `docs/img/social-preview.png` for the repository's social preview card.
+
 ### Changed
 
 - Rewrote the README opening around real-time stream detection, with a
