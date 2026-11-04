@@ -1,11 +1,13 @@
 """Unit tests for the MStream sketch-based anomaly detector."""
 
 import math
+import time
 import unittest
 
 import numpy as np
 
 from aberrant.model.sketch import MStream
+from tests import score_sequences
 
 
 class TestMStream(unittest.TestCase):
@@ -328,6 +330,71 @@ class TestMStream(unittest.TestCase):
         self.assertIn("rows=3", output)
         self.assertIn("buckets=256", output)
         self.assertIn("categorical_features=('category',)", output)
+
+
+class TestMStreamExactness(unittest.TestCase):
+    def test_score_sequences_match_recorded_reference(self) -> None:
+        for case in score_sequences.load("m_stream"):
+            with self.subTest(case=case["name"]):
+                scores = score_sequences.replay(MStream(**case["params"]), case)
+                # The tolerance only absorbs last-bit libm differences in log
+                # between platforms; the recording platform reproduces every bit.
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_integer_check_matches_allclose(self) -> None:
+        model = MStream(buckets=16, categorical_features=("c",))
+        offsets = [0.0, -0.0, 5e-10, -5e-10, 9.9e-10, 1e-9, -1e-9, 1.01e-9, 2e-9]
+        for base in (0.0, 3.0, -7.0, 2.0**40, -(2.0**52), 1e15, 0.5):
+            for offset in offsets:
+                value = base + offset
+                with self.subTest(value=value):
+                    values = np.array([1.0, value])
+                    expected = np.allclose(value, np.rint(value), rtol=0.0, atol=1e-9)
+                    try:
+                        model._split_values(values, np.array([0]), np.array([1]))
+                    except ValueError:
+                        accepted = False
+                    else:
+                        accepted = True
+                    self.assertEqual(accepted, expected)
+
+    def test_numeric_only_events_have_no_categorical_hashes(self) -> None:
+        model = MStream()
+        numeric, categorical = model._split_values(
+            np.array([0.5, 2.0]), np.array([0, 1]), np.array([], dtype=np.intp)
+        )
+        np.testing.assert_array_equal(numeric, [0.5, 2.0])
+        self.assertEqual(categorical.shape, (0,))
+        self.assertEqual(categorical.dtype, np.int64)
+
+    def test_learning_increments_one_cell_per_feature_and_row(self) -> None:
+        model = MStream(
+            rows=3, buckets=8, time_key="t", categorical_features=("a", "b"), seed=4
+        )
+        model.learn_one({"x": 1.0, "y": 0.0, "a": 2.0, "b": 2.0, "t": 0})
+        model.learn_one({"x": 4.0, "y": 0.5, "a": 2.0, "b": 9.0, "t": 0})
+        state = model._state
+        assert state is not None
+        for counts in (state.numeric.counts, state.categorical.counts):
+            # Each learned event adds one count per feature (and row).
+            self.assertEqual(counts.total.sum(axis=-1).max(), 2.0)
+            self.assertEqual(counts.total.sum(), 2.0 * counts.total[..., 0].size)
+            np.testing.assert_array_equal(counts.current, counts.total)
+        categorical_total = state.categorical.counts.total
+        # Both events hash category 2 of feature ``a`` to the same cells.
+        self.assertEqual(categorical_total[0].max(), 2.0)
+
+    def test_default_model_speed_smoke(self) -> None:
+        events = score_sequences.make_multi_aspect_stream(
+            seed=17, n_events=2000, n_numeric=8, n_categorical=0
+        )
+        model = MStream(seed=17)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~0.3 s.
+        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":

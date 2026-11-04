@@ -10,6 +10,10 @@ import numpy as np
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import NumericEventBoundary, PreparedFeatures
 
+# Categorical hashes of an event without categorical features.
+_NO_CATEGORIES = np.empty(0, dtype=np.int64)
+_NO_CATEGORIES.flags.writeable = False
+
 
 @dataclass(slots=True)
 class _CountState:
@@ -180,10 +184,13 @@ class MStream(BaseModel):
         numeric = values[numeric_indices]
         if np.any(numeric <= -1.0):
             raise ValueError("Numeric MStream features must be greater than -1")
+        if categorical_indices.size == 0:
+            return numeric, _NO_CATEGORIES
 
         categorical_values = values[categorical_indices]
         rounded = np.rint(categorical_values)
-        if not np.allclose(categorical_values, rounded, rtol=0.0, atol=1e-9):
+        # Values are finite, so this is np.allclose with rtol=0 and atol=1e-9.
+        if not np.all(np.abs(categorical_values - rounded) <= 1e-9):
             raise ValueError("Configured categorical features must be integer-like")
         # All categorical hashes are modulo buckets. Reduce before converting
         # to int64, allowing long-lived streams to keep introducing large IDs.
@@ -303,6 +310,18 @@ class MStream(BaseModel):
     def _numeric_bins(self, normalized: np.ndarray) -> np.ndarray:
         return np.floor(normalized * float(self.buckets - 1)).astype(np.intp)
 
+    def _numeric_cells(self, normalized: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Index the histogram cell of every numeric feature."""
+        bins = self._numeric_bins(normalized)
+        return np.arange(bins.size), bins
+
+    def _categorical_cells(
+        self, state: _CategoricalState, categorical: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Index the hashed cell of every categorical feature in every row."""
+        bins = self._categorical_bins(state, categorical)
+        return np.arange(len(bins))[:, np.newaxis], self._row_index, bins
+
     def _categorical_bins(
         self,
         state: _CategoricalState,
@@ -380,32 +399,31 @@ class MStream(BaseModel):
         time_index = self._time_index(state, bucket)
         log_statistics: list[float] = []
 
-        numeric_bins = self._numeric_bins(normalized)
-        numeric_decay = self.alpha if rollover else 1.0
-        for feature_index, bin_index in enumerate(numeric_bins):
-            current = (
-                state.numeric.counts.current[feature_index, bin_index] * numeric_decay
-                + 1.0
-            )
-            total = state.numeric.counts.total[feature_index, bin_index] + 1.0
+        decay = self.alpha if rollover else 1.0
+        numeric_cells = self._numeric_cells(normalized)
+        numeric_currents = state.numeric.counts.current[numeric_cells] * decay + 1.0
+        numeric_totals = state.numeric.counts.total[numeric_cells] + 1.0
+        for total, current in zip(
+            numeric_totals.tolist(), numeric_currents.tolist(), strict=True
+        ):
             log_statistics.append(
                 self._counts_to_log_anomaly(total, current, time_index)
             )
 
-        categorical_bins = self._categorical_bins(state.categorical, categorical)
-        for feature_index, indices in enumerate(categorical_bins):
-            counts = _CountState(
-                current=state.categorical.counts.current[feature_index],
-                total=state.categorical.counts.total[feature_index],
-            )
-            current, total = self._candidate_counts(
-                counts,
-                indices,
-                rollover=rollover,
-            )
-            log_statistics.append(
-                self._counts_to_log_anomaly(total, current, time_index)
-            )
+        if categorical.size:
+            # Each feature takes its smallest count over the hash rows.
+            categorical_cells = self._categorical_cells(state.categorical, categorical)
+            counts = state.categorical.counts
+            categorical_currents = counts.current[categorical_cells].min(axis=1)
+            categorical_totals = counts.total[categorical_cells].min(axis=1)
+            for total, current in zip(
+                (categorical_totals + 1.0).tolist(),
+                (categorical_currents * decay + 1.0).tolist(),
+                strict=True,
+            ):
+                log_statistics.append(
+                    self._counts_to_log_anomaly(total, current, time_index)
+                )
 
         record_bins = self._record_bins(state.record, normalized, categorical)
         current, total = self._candidate_counts(
@@ -444,18 +462,15 @@ class MStream(BaseModel):
             self._rollover_for_learning(state, bucket)
 
         normalized = self._normalize_numeric(state.numeric, numeric, update=True)
-        for feature_index, bin_index in enumerate(self._numeric_bins(normalized)):
-            state.numeric.counts.current[feature_index, bin_index] += 1.0
-            state.numeric.counts.total[feature_index, bin_index] += 1.0
+        # Every cell below is distinct, so each is incremented exactly once.
+        numeric_cells = self._numeric_cells(normalized)
+        state.numeric.counts.current[numeric_cells] += 1.0
+        state.numeric.counts.total[numeric_cells] += 1.0
 
-        categorical_bins = self._categorical_bins(state.categorical, categorical)
-        for feature_index, indices in enumerate(categorical_bins):
-            state.categorical.counts.current[
-                feature_index, self._row_index, indices
-            ] += 1.0
-            state.categorical.counts.total[feature_index, self._row_index, indices] += (
-                1.0
-            )
+        if categorical.size:
+            categorical_cells = self._categorical_cells(state.categorical, categorical)
+            state.categorical.counts.current[categorical_cells] += 1.0
+            state.categorical.counts.total[categorical_cells] += 1.0
 
         record_bins = self._record_bins(state.record, normalized, categorical)
         state.record.counts.current[self._row_index, record_bins] += 1.0
