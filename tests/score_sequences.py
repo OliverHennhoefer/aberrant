@@ -34,7 +34,7 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.sketch import StreamingLODA, StreamingRSHash
+from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 from aberrant.model.stat import (
     MovingCorrelationCoefficient,
     MovingCovariance,
@@ -128,6 +128,40 @@ def make_edge_stream(
     return events
 
 
+def make_multi_aspect_stream(
+    seed: int,
+    n_events: int,
+    n_numeric: int,
+    n_categorical: int,
+    *,
+    bucket_size: int = 1,
+    time_key: str | None = None,
+) -> list[dict[str, float]]:
+    """Build a seeded stream of non-negative numbers and integer categories.
+
+    Numeric features ``x0, x1, ...`` are log-normal, and every 19th event
+    multiplies them by 1,000. Categorical features ``c0, c1, ...`` draw one of
+    six identifiers, and every 29th event uses a new identifier near ``1e12``.
+    With a ``time_key``, events carry the integer bucket ``index //
+    bucket_size``.
+    """
+    rng = np.random.default_rng(seed)
+    numeric = rng.lognormal(size=(n_events, n_numeric))
+    numeric[::19] *= 1000.0
+    categories = rng.integers(0, 6, size=(n_events, n_categorical)).astype(float)
+    categories[::29] = rng.integers(10**12, 10**12 + 10**6, size=categories[::29].shape)
+    events = []
+    for index in range(n_events):
+        event = {f"x{j}": float(numeric[index, j]) for j in range(n_numeric)}
+        event.update(
+            {f"c{j}": float(categories[index, j]) for j in range(n_categorical)}
+        )
+        if time_key is not None:
+            event[time_key] = float(index // bucket_size)
+        events.append(event)
+    return events
+
+
 def score_then_learn(model: Any, events: list[dict[str, float]]) -> list[float]:
     """Score each event before learning it and return the scores."""
     scores = []
@@ -166,6 +200,8 @@ def replay(model: Any, case: dict[str, Any]) -> list[float]:
     """Feed a case's stream to ``model`` and return the scores."""
     if "edges" in case:
         events = make_edge_stream(**case["edges"])
+    elif "multi_aspect" in case:
+        events = make_multi_aspect_stream(**case["multi_aspect"])
     else:
         events = make_stream(**case["stream"])
     if "batch_size" in case:
@@ -568,6 +604,85 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 },
                 "stream": {"seed": 33, "n_events": 300, "n_features": 5},
                 "batch_size": 7,
+            },
+        ],
+    ),
+    "m_stream": (
+        MStream,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 231},
+                "multi_aspect": {
+                    "seed": 232,
+                    "n_events": 500,
+                    "n_numeric": 6,
+                    "n_categorical": 0,
+                },
+            },
+            {
+                "name": "time_buckets_with_categories",
+                "params": {
+                    "rows": 3,
+                    "buckets": 64,
+                    "alpha": 0.8,
+                    "time_key": "t",
+                    "categorical_features": ["c0", "c1"],
+                    "seed": 233,
+                },
+                "multi_aspect": {
+                    "seed": 234,
+                    "n_events": 500,
+                    "n_numeric": 4,
+                    "n_categorical": 2,
+                    "bucket_size": 5,
+                    "time_key": "t",
+                },
+            },
+            {
+                "name": "warm_up_one_row",
+                "params": {
+                    "rows": 1,
+                    "buckets": 16,
+                    "time_key": "t",
+                    "categorical_features": ["c0"],
+                    "warm_up_buckets": 3,
+                    "seed": 235,
+                },
+                "multi_aspect": {
+                    "seed": 236,
+                    "n_events": 300,
+                    "n_numeric": 2,
+                    "n_categorical": 1,
+                    "bucket_size": 7,
+                    "time_key": "t",
+                },
+            },
+            {
+                # Without numeric features the record hash uses categories only.
+                "name": "categories_only",
+                "params": {
+                    "buckets": 32,
+                    "categorical_features": ["c0", "c1", "c2"],
+                    "seed": 237,
+                },
+                "multi_aspect": {
+                    "seed": 238,
+                    "n_events": 300,
+                    "n_numeric": 0,
+                    "n_categorical": 3,
+                },
+            },
+            {
+                # One bucket leaves the record hash without bits.
+                "name": "single_bucket_no_decay",
+                "params": {"rows": 2, "buckets": 1, "alpha": 1.0, "seed": 239},
+                "multi_aspect": {
+                    "seed": 240,
+                    "n_events": 200,
+                    "n_numeric": 1,
+                    "n_categorical": 0,
+                },
             },
         ],
     ),

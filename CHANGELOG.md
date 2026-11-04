@@ -173,6 +173,13 @@ Semantic Versioning.
   window of 1,000 events, `MovingCovariance` scores and learns about 2 times
   more events per second, `MovingMahalanobisDistance` about 1.6 times and
   `MovingCorrelationCoefficient` about 1.1 times.
+- `MStream` reads and increments the counts of all numeric and categorical
+  features with one array operation each instead of a Python loop, and skips
+  the integer check when no feature is categorical. The integer check compares
+  the distance to the nearest integer directly instead of calling
+  `np.allclose`, with the same threshold. Scores and counts are unchanged, and
+  with the defaults it scores and learns about 1.7 times more events per
+  second than 1.4.0.
 
 ## [1.4.0] - 2026-10-30
 
