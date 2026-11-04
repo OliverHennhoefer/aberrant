@@ -48,6 +48,13 @@ PySAD fits scikit-learn's ``IsolationForest`` and scores one event per call to
 it, so both stream only the first 5,000 events. aberrant's defaults, with a
 window of 256 events, run separately over the whole stream.
 
+RS-Hash uses 24 components and 4 hash tables on both sides, aberrant's
+defaults. aberrant standardizes features online and gives every component its
+own tables of 256 counters, while PySAD scales features with bounds given up
+front, here the ``[0, 1]`` range of both streams, and its components share one
+sketch of 10,000 counters per table. PySAD's default fading of 0.015 per event
+in base 2 is close to aberrant's default of 0.01 per event in base e.
+
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
 its default window of 1,000 points, so both stream only the first 2,000 events.
@@ -82,7 +89,7 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.sketch import StreamingLODA
+from aberrant.model.sketch import StreamingLODA, StreamingRSHash
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 from aberrant.stream.dataset import Dataset, load
 
@@ -95,6 +102,7 @@ try:
     from pysad.models import LODA as PySADLODA
     from pysad.models import IForestASD as PySADIForestASD
     from pysad.models import RobustRandomCutForest as PySADRobustRandomCutForest
+    from pysad.models import RSHash as PySADRSHash
     from pysad.models import xStream as PySADxStream
 except ImportError:
     PySADLODA = None
@@ -109,6 +117,7 @@ RCF_EVENTS = 3_000
 ASD_EVENTS = 5_000
 ASD_PARAMETERS = f"100 trees, 256 samples, window 2,048, first {ASD_EVENTS:,} events"
 RCF_PARAMETERS = f"40 trees, 256 points, first {RCF_EVENTS:,} events"
+RSHASH_PARAMETERS = "24 components, 4 hash tables"
 XSTREAM_PARAMETERS = "100 projections, 100 chains, depth 15, window 256"
 
 
@@ -129,8 +138,10 @@ class Case:
     group: str
     library: str
     parameters: str
-    factory: Callable[[], Any]
+    factory: Callable[..., Any]
     input_kind: str = "dict"  # "dict" for score_one/learn_one, "row" for PySAD
+    # Pass the factory the stream's feature minima and maxima, which are 0 and 1.
+    unit_bounds: bool = False
     max_events: int | None = None  # stream only this many events when set
 
 
@@ -219,6 +230,12 @@ def build_cases() -> list[Case]:
             RCF_PARAMETERS,
             lambda: RandomCutForest(n_trees=40, sample_size=256, seed=MODEL_SEED),
             max_events=RCF_EVENTS,
+        ),
+        Case(
+            "RS-Hash",
+            "aberrant",
+            RSHASH_PARAMETERS,
+            lambda: StreamingRSHash(seed=MODEL_SEED),
         ),
         Case(
             "StreamRandomHistogramForest",
@@ -313,6 +330,20 @@ def build_cases() -> list[Case]:
                 max_events=RCF_EVENTS,
             ),
             Case(
+                "RS-Hash",
+                "PySAD",
+                RSHASH_PARAMETERS,
+                lambda low, high: PySADRSHash(
+                    low,
+                    high,
+                    num_components=24,
+                    num_hash_fns=4,
+                    random_state=MODEL_SEED,
+                ),
+                input_kind="row",
+                unit_bounds=True,
+            ),
+            Case(
                 "xStream",
                 "PySAD",
                 XSTREAM_PARAMETERS,
@@ -339,7 +370,11 @@ def run_once(case: Case, stream: Stream) -> tuple[float, np.ndarray]:
             rows=stream.rows[: case.max_events],
             labels=stream.labels[: case.max_events],
         )
-    model = case.factory()
+    if case.unit_bounds:
+        n_features = len(stream.rows[0])
+        model = case.factory(np.zeros(n_features), np.ones(n_features))
+    else:
+        model = case.factory()
     scores = [0.0] * len(stream.labels)
     if case.input_kind == "row":
         step = model.fit_score_partial
