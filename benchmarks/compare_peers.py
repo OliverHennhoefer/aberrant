@@ -4,7 +4,7 @@ This script is not part of CI. Run it from a scratch environment that has the
 peer libraries installed next to aberrant, for example::
 
     python -m venv /tmp/peers
-    /tmp/peers/bin/pip install -e . river pysad
+    /tmp/peers/bin/pip install -e . river "pysad>=0.7"
     /tmp/peers/bin/python benchmarks/compare_peers.py
 
 Every case processes the same stream one event at a time: it scores the event
@@ -12,8 +12,10 @@ and then learns it, with warm-up events included in the timing. Each library
 receives its native input (``dict[str, float]`` for aberrant and river, a
 float64 row for PySAD), prepared before the clock starts. PySAD runs through
 ``fit_score_partial``, its own score-then-learn call, which projects each event
-once. Throughput is the median over ``--runs`` fresh models with the same seed,
-and ROC-AUC comes from the first run so speed never hides a quality regression.
+once. PySAD releases before 0.7 learn an event before scoring it there and
+cannot seed LODA, so the PySAD cases are skipped for them. Throughput is the
+median over ``--runs`` fresh models with the same seed, and ROC-AUC comes from
+the first run so speed never hides a quality regression.
 
 Peer pairs use matched parameters. LODA uses 100 projections and 10 bins on
 every side, and aberrant's default LODA configuration is reported separately.
@@ -59,6 +61,9 @@ try:
     from pysad.models import LODA as PySADLODA
 except ImportError:
     PySADLODA = None
+else:
+    if tuple(int(part) for part in metadata.version("pysad").split(".")[:2]) < (0, 7):
+        PySADLODA = None
 
 MODEL_SEED = 42
 LOF_EVENTS = 2_000
@@ -182,7 +187,9 @@ def build_cases() -> list[Case]:
             ),
         ]
     if PySADLODA is None:
-        print("PySAD is not installed; skipping PySAD cases", file=sys.stderr)
+        print(
+            "PySAD 0.7 or later is not installed; skipping PySAD cases", file=sys.stderr
+        )
     else:
         cases.append(
             Case(
