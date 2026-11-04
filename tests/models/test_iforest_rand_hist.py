@@ -4,15 +4,46 @@ Real dataset tests are in tests/integration/test_iforest_models.py
 """
 
 import copy
+import pickle
 import random
+import time
 import unittest
+import warnings
 
 import numpy as np
 
 from aberrant.model.iforest.rand_hist import (
     StreamRandomHistogramForest,
+    _fold_moments,
+    _moments_with,
     _RandomHistogramTree,
+    _RHFBranch,
+    _RHFNode,
+    _selected_feature,
+    _selected_features,
 )
+from tests import score_sequences
+
+
+def _tree_shape(node: _RHFNode | None) -> tuple:
+    """Return everything that defines a tree, with arrays as bytes."""
+    if node is None:
+        return ()
+    if isinstance(node, _RHFBranch):
+        return (
+            node.depth,
+            node.node_id,
+            node.split_feature,
+            node.split_value,
+            node.moments.tobytes(),
+            _tree_shape(node.left),
+            _tree_shape(node.right),
+        )
+    return (node.depth, node.node_id, [point.tobytes() for point in node.points])
+
+
+def _forest_shape(model: StreamRandomHistogramForest) -> list[tuple]:
+    return [(_tree_shape(tree.root), tree._node_random) for tree in model._trees]
 
 
 class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
@@ -311,6 +342,114 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
             model.learn_one({"x": 0.1})
         with self.assertRaises(ValueError):
             model.score_one({"x": 0.1})
+
+
+class TestStreamRandomHistogramForestExactness(unittest.TestCase):
+    """Planned insertions must reproduce the 1.4.0 trees and scores."""
+
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("stream_random_histogram_forest"):
+            with self.subTest(case=case["name"]), warnings.catch_warnings():
+                # The overflowing case warns where NumPy moments overflow.
+                warnings.simplefilter("ignore", RuntimeWarning)
+                scores = score_sequences.replay(
+                    StreamRandomHistogramForest(**case["params"]), case
+                )
+                np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
+
+    def test_moments_with_matches_folding_one_value_at_a_time(self):
+        rng = np.random.default_rng(3)
+        for scale in (1.0, 1e-160, 1e80):
+            columns = (rng.standard_cauchy(size=(12, 3, 9)) * scale).tolist()
+            point = rng.normal(size=3) * scale
+            moments = np.array(
+                [[_fold_moments(values) for values in branch] for branch in columns]
+            )
+            expected = np.array(
+                [
+                    [
+                        _fold_moments([*values, value])
+                        for values, value in zip(branch, point.tolist(), strict=True)
+                    ]
+                    for branch in columns
+                ]
+            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                updated = _moments_with(moments, point)
+            np.testing.assert_array_equal(updated, expected)
+
+    def test_selected_features_match_the_scalar_selection(self):
+        rng = np.random.default_rng(4)
+        weights = rng.exponential(size=(64, 7))
+        weights[rng.random(weights.shape) < 0.2] = 0.0
+        weights[1] = 0.0
+        weights[2, 3] = np.inf
+        weights[3, [1, 5]] = np.nan
+        weights[4, 0] = np.nan
+        weights[5, 6] = np.nan
+        weights[6] = [np.inf, 0.0, np.nan, 1.0, 0.0, np.inf, 2.0]
+        randoms = rng.uniform(np.nextafter(0.0, 1.0), 1.0, size=len(weights))
+        randoms[7] = np.nextafter(1.0, 0.0)
+
+        selected = _selected_features(weights, randoms).tolist()
+
+        for row, (row_weights, row_random) in enumerate(
+            zip(weights, randoms.tolist(), strict=True)
+        ):
+            total = float(np.sum(row_weights))
+            expected = (
+                -1
+                if total <= 0.0
+                else _selected_feature(row_weights, total, row_random)
+            )
+            self.assertEqual(selected[row], expected, msg=f"row {row}")
+
+    def test_learning_a_scored_point_matches_learning_it_directly(self):
+        events = score_sequences.make_stream(seed=7, n_events=260, n_features=3)
+        params = {"n_estimators": 4, "max_depth": 6, "window_size": 40, "seed": 8}
+        scored = StreamRandomHistogramForest(**params)
+        learned = StreamRandomHistogramForest(**params)
+        scored_elsewhere = StreamRandomHistogramForest(**params)
+        for index, event in enumerate(events):
+            scored.score_one(event)
+            scored.learn_one(event)
+            learned.learn_one(event)
+            # A preview of another point must not be applied to this one.
+            scored_elsewhere.score_one(events[-1 - index])
+            scored_elsewhere.learn_one(event)
+
+        self.assertEqual(_forest_shape(scored), _forest_shape(learned))
+        self.assertEqual(_forest_shape(scored_elsewhere), _forest_shape(learned))
+
+    def test_pickles_leave_out_the_preview(self):
+        events = score_sequences.make_stream(seed=9, n_events=80, n_features=2)
+        model = StreamRandomHistogramForest(
+            n_estimators=3, max_depth=5, window_size=30, seed=10
+        )
+        for event in events[:60]:
+            model.learn_one(event)
+        before = pickle.dumps(model)
+
+        score = model.score_one(events[60])
+
+        self.assertEqual(pickle.dumps(model), before)
+        restored = pickle.loads(pickle.dumps(model))
+        self.assertIsNone(restored._previewed)
+        self.assertEqual(restored.score_one(events[60]), score)
+        model.learn_one(events[60])
+        restored.learn_one(events[60])
+        self.assertEqual(_forest_shape(restored), _forest_shape(model))
+
+    def test_default_forest_speed_smoke(self):
+        events = score_sequences.make_stream(seed=1, n_events=1000, n_features=8)
+        model = StreamRandomHistogramForest(seed=1)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~1 s.
+        self.assertLess(time.perf_counter() - start, 10.0)
 
 
 if __name__ == "__main__":

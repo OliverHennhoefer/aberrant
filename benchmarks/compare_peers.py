@@ -28,6 +28,9 @@ xStream uses 100 projected dimensions, 100 chains of depth 15 and windows of
 in count-min sketches of 4 rows of 1,024 counters and spends its first 256
 events on fitting the bin widths, while PySAD counts bins exactly.
 
+OnlineIsolationForest and StreamRandomHistogramForest have no matched peer and
+run at their defaults.
+
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
 its default window of 1,000 points, so both stream only the first 2,000 events.
@@ -53,7 +56,12 @@ from scipy.stats import rankdata
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest, XStream
+from aberrant.model.iforest import (
+    HalfSpaceTrees,
+    OnlineIsolationForest,
+    StreamRandomHistogramForest,
+    XStream,
+)
 from aberrant.model.sketch import StreamingLODA
 from aberrant.stream.dataset import Dataset, load
 
@@ -156,6 +164,12 @@ def build_cases() -> list[Case]:
             "aberrant",
             "defaults (100 trees, window 2048)",
             lambda: OnlineIsolationForest(seed=MODEL_SEED),
+        ),
+        Case(
+            "StreamRandomHistogramForest",
+            "aberrant",
+            "defaults (25 trees, depth 5, window 256)",
+            lambda: StreamRandomHistogramForest(seed=MODEL_SEED),
         ),
         Case(
             "xStream",

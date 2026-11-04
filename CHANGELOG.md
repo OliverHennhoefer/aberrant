@@ -103,6 +103,15 @@ Semantic Versioning.
   are unchanged, and with the defaults it scores and learns about 80 times
   more events per second. A sample whose bins overflow still raises
   `OverflowError`, now before any counter changes.
+- `StreamRandomHistogramForest` plans an insertion into all trees at once:
+  the moments and selected attributes of every branch on the point's path are
+  updated together with array operations, and only the node that must be
+  rebuilt is folded again, value by value. Leaves keep no moments, since
+  inserting into a leaf rebuilds it from its points. Learning the point that
+  was just scored applies the insertions that scoring planned instead of
+  planning them again; pickles leave that preview out. Score sequences are
+  unchanged, and with the defaults it scores and learns about 100 times more
+  events per second.
 
 ## [1.4.0] - 2026-10-30
 

@@ -24,7 +24,12 @@ import numpy as np
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest, XStream
+from aberrant.model.iforest import (
+    HalfSpaceTrees,
+    OnlineIsolationForest,
+    StreamRandomHistogramForest,
+    XStream,
+)
 from aberrant.model.sketch import StreamingLODA
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -191,6 +196,63 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 },
                 "stream": {"seed": 33, "n_events": 300, "n_features": 5},
                 "batch_size": 7,
+            },
+        ],
+    ),
+    "stream_random_histogram_forest": (
+        StreamRandomHistogramForest,
+        [
+            {
+                "name": "small_forest",
+                "params": {
+                    "n_estimators": 6,
+                    "max_depth": 5,
+                    "window_size": 32,
+                    "seed": 61,
+                },
+                "stream": {"seed": 62, "n_events": 250, "n_features": 4},
+            },
+            {
+                "name": "deep_single_feature",
+                "params": {
+                    "n_estimators": 3,
+                    "max_depth": 8,
+                    "window_size": 20,
+                    "seed": 63,
+                },
+                "stream": {"seed": 64, "n_events": 150, "n_features": 1},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {
+                    "n_estimators": 4,
+                    "max_depth": 4,
+                    "window_size": 50,
+                    "seed": 65,
+                },
+                "stream": {
+                    "seed": 66,
+                    "n_events": 300,
+                    "n_features": 6,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Outliers near 1e80 overflow the fourth moments, so some
+                # kurtosis weights are NaN.
+                "name": "overflowing_moments",
+                "params": {
+                    "n_estimators": 4,
+                    "max_depth": 5,
+                    "window_size": 24,
+                    "seed": 67,
+                },
+                "stream": {
+                    "seed": 68,
+                    "n_events": 200,
+                    "n_features": 3,
+                    "outlier_scale": 1e80,
+                },
             },
         ],
     ),
