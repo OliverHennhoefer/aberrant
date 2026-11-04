@@ -36,13 +36,17 @@
 ```python
 from aberrant.model.iforest import HalfSpaceTrees
 from aberrant.stream.dataset import Dataset, load
-from aberrant.transform import MinMaxScaler
+from aberrant.transform import MinMaxScaler, RollingRobustScaler
 
-detector = MinMaxScaler() | HalfSpaceTrees(seed=42)
+detector = (
+    RollingRobustScaler(window_size=100)  # rolling median/IQR, robust to outliers
+    | MinMaxScaler()  # map features to [0, 1] for the trees
+    | HalfSpaceTrees(seed=42)
+)
 
 for event, label in load(Dataset.SHUTTLE).stream():
-    detector.learn_one(event)
-    score = detector.score_one(event)  # higher means more anomalous
+    score = detector.score_one(event)  # score first: higher means more anomalous
+    detector.learn_one(event)  # then learn from the event
 ```
 
 ## Why aberrant

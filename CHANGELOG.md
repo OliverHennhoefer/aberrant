@@ -35,6 +35,11 @@ Semantic Versioning.
 
 ### Changed
 
+- Workflow tokens follow least privilege: write permissions are declared only
+  on the jobs that need them, and the GitHub release is created by the PyPI
+  publishing job after a successful upload.
+- `SECURITY.md` links the private advisory form and states a 90-day
+  coordinated disclosure timeline.
 - Shortened the README: one-line feature bullets, a production link to
   Aberration and the integration guide at the top, and the integration,
   dataset, related-project and contributing sections left to the docs.
@@ -51,6 +56,9 @@ Semantic Versioning.
   before their first learned event instead of raising `ValueError`, so a
   score-before-learn loop can start on the first event. A feature that was
   not seen after learning has started still raises `ValueError`.
+- The README quickstart scores each event before learning it and adds a
+  `RollingRobustScaler` in front of `MinMaxScaler`; the migration guide's
+  aberrant loop uses the same score-then-learn order.
 - Feature validation checks a plain `dict` sample with the committed feature
   names and finite `float` or `numpy.float64` values in one pass. Any other
   sample takes the complete validation path and is accepted or rejected as
