@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem in ABERRANT
+about: Report a reproducible problem in aberrant
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -12,7 +12,7 @@ Describe the bug clearly.
 
 ## Reproduction
 
-1. Environment (OS, Python version, ABERRANT version)
+1. Environment (OS, Python version, aberrant version)
 2. Exact steps
 3. Minimal code snippet
 
