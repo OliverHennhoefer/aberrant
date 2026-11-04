@@ -23,6 +23,11 @@ SHUTTLE is min-max scaled with its global feature ranges before streaming,
 because both Half-Space Trees implementations expect inputs in ``[0, 1]``. The
 synthetic stream is generated inside ``[0, 1]`` for the same reason.
 
+xStream uses 100 projected dimensions, 100 chains of depth 15 and windows of
+256 events on both sides, the defaults of both libraries. aberrant counts bins
+in count-min sketches of 4 rows of 1,024 counters and spends its first 256
+events on fitting the bin widths, while PySAD counts bins exactly.
+
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
 its default window of 1,000 points, so both stream only the first 2,000 events.
@@ -48,7 +53,7 @@ from scipy.stats import rankdata
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
+from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest, XStream
 from aberrant.model.sketch import StreamingLODA
 from aberrant.stream.dataset import Dataset, load
 
@@ -59,6 +64,7 @@ except ImportError:
 
 try:
     from pysad.models import LODA as PySADLODA
+    from pysad.models import xStream as PySADxStream
 except ImportError:
     PySADLODA = None
 else:
@@ -67,6 +73,7 @@ else:
 
 MODEL_SEED = 42
 LOF_EVENTS = 2_000
+XSTREAM_PARAMETERS = "100 projections, 100 chains, depth 15, window 256"
 
 
 @dataclass(frozen=True)
@@ -151,6 +158,12 @@ def build_cases() -> list[Case]:
             lambda: OnlineIsolationForest(seed=MODEL_SEED),
         ),
         Case(
+            "xStream",
+            "aberrant",
+            XSTREAM_PARAMETERS,
+            lambda: XStream(seed=MODEL_SEED),
+        ),
+        Case(
             "LocalOutlierFactor",
             "aberrant",
             f"10 neighbors, first {LOF_EVENTS:,} events",
@@ -191,7 +204,7 @@ def build_cases() -> list[Case]:
             "PySAD 0.7 or later is not installed; skipping PySAD cases", file=sys.stderr
         )
     else:
-        cases.append(
+        cases += [
             Case(
                 "LODA",
                 "PySAD",
@@ -200,8 +213,21 @@ def build_cases() -> list[Case]:
                     num_bins=10, num_random_cuts=100, random_state=MODEL_SEED
                 ),
                 input_kind="row",
-            )
-        )
+            ),
+            Case(
+                "xStream",
+                "PySAD",
+                XSTREAM_PARAMETERS,
+                lambda: PySADxStream(
+                    num_components=100,
+                    n_chains=100,
+                    depth=15,
+                    window_size=256,
+                    random_state=MODEL_SEED,
+                ),
+                input_kind="row",
+            ),
+        ]
     order = {"aberrant": 0, "river": 1, "PySAD": 2}
     return sorted(cases, key=lambda case: (case.group, order[case.library]))
 

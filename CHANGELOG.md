@@ -94,6 +94,15 @@ Semantic Versioning.
   feature-major window. Score sequences are unchanged, and with the defaults it
   scores and learns about 200 times more events per second. Learning now
   measures the new point against the window.
+- `XStream` descends all chains at once with array operations instead of
+  walking every chain level by level, reuses the chain paths when it learns
+  the point it has just scored, and projects a sample with one weighted
+  `np.bincount`. Window swaps exchange the current and reference sketches
+  instead of copying them, and counters use the smallest integer type that
+  holds a full window, `int16` for the default window of 256. Score sequences
+  are unchanged, and with the defaults it scores and learns about 80 times
+  more events per second. A sample whose bins overflow still raises
+  `OverflowError`, now before any counter changes.
 
 ## [1.4.0] - 2026-10-30
 
