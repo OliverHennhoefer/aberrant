@@ -27,6 +27,7 @@ from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
     HalfSpaceTrees,
     OnlineIsolationForest,
+    RandomCutForest,
     StreamRandomHistogramForest,
     XStream,
 )
@@ -48,7 +49,8 @@ def make_stream(
 
     ``gaussian`` draws standard normal features and scales every 17th event by
     ``outlier_scale`` to create outliers. ``unit`` draws two clusters inside ``[0, 1]`` and
-    replaces every 23rd event with a uniform draw.
+    replaces every 23rd event with a uniform draw. ``grid`` rounds standard
+    normal features to multiples of one half, so that events repeat.
     """
     rng = np.random.default_rng(seed)
     if kind == "gaussian":
@@ -60,6 +62,8 @@ def make_stream(
         noise = rng.normal(0.0, 0.05, size=(n_events, n_features))
         data = np.clip(centers[labels] + noise, 0.0, 1.0)
         data[::23] = rng.uniform(0.0, 1.0, size=data[::23].shape)
+    elif kind == "grid":
+        data = np.round(rng.normal(size=(n_events, n_features)) * 2.0) / 2.0
     else:
         raise ValueError(f"Unknown stream kind: {kind}")
 
@@ -196,6 +200,77 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 },
                 "stream": {"seed": 33, "n_events": 300, "n_features": 5},
                 "batch_size": 7,
+            },
+        ],
+    ),
+    "random_cut_forest": (
+        RandomCutForest,
+        [
+            {
+                "name": "small_forest",
+                "params": {
+                    "n_trees": 10,
+                    "sample_size": 64,
+                    "warmup_samples": 32,
+                    "seed": 71,
+                },
+                "stream": {"seed": 72, "n_events": 300, "n_features": 4},
+            },
+            {
+                "name": "shingled_normalized",
+                "params": {
+                    "n_trees": 6,
+                    "sample_size": 32,
+                    "shingle_size": 3,
+                    "warmup_samples": 8,
+                    "normalize_score": True,
+                    "score_scale": 4.0,
+                    "seed": 73,
+                },
+                "stream": {"seed": 74, "n_events": 250, "n_features": 2},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {
+                    "n_trees": 8,
+                    "sample_size": 48,
+                    "warmup_samples": 16,
+                    "seed": 75,
+                },
+                "stream": {
+                    "seed": 76,
+                    "n_events": 300,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Repeated points share leaves, and removing one of them
+                # leaves its leaf in place.
+                "name": "repeated_points",
+                "params": {
+                    "n_trees": 8,
+                    "sample_size": 40,
+                    "warmup_samples": 10,
+                    "seed": 77,
+                },
+                "stream": {
+                    "seed": 78,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
+            },
+            {
+                # Two stored points, so every removal replaces the root.
+                "name": "two_point_sample",
+                "params": {
+                    "n_trees": 5,
+                    "sample_size": 2,
+                    "warmup_samples": 1,
+                    "seed": 79,
+                },
+                "stream": {"seed": 80, "n_events": 150, "n_features": 1},
             },
         ],
     ),

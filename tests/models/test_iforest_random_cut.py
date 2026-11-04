@@ -1,10 +1,51 @@
 """Unit tests for Random Cut Forest anomaly detection model."""
 
+import pickle
+import time
 import unittest
 
 import numpy as np
 
-from aberrant.model.iforest.random_cut import RandomCutForest, _RandomCutTree
+from aberrant.model.iforest.random_cut import (
+    RandomCutForest,
+    _RandomCutTree,
+    _RCFBranch,
+    _RCFLeaf,
+    _RCFNode,
+    _search_right,
+    _weighted_choice,
+)
+from tests import score_sequences
+
+
+def _tree_shape(node: _RCFNode | None) -> object:
+    """Return a comparable description of a tree's nodes."""
+    if node is None:
+        return None
+    if isinstance(node, _RCFBranch):
+        return (
+            node.cut_dim,
+            node.cut_value,
+            node.size,
+            node.box.tolist(),
+            _tree_shape(node.left),
+            _tree_shape(node.right),
+        )
+    return (node.point.tolist(), list(node.point_ids), node.size)
+
+
+def _forest_shape(model: RandomCutForest) -> list[object]:
+    """Return every tree's shape with its generator state."""
+    return [
+        (_tree_shape(tree.root), tree.rng.bit_generator.state) for tree in model._trees
+    ]
+
+
+def _leaf_points(node: _RCFNode) -> list[np.ndarray]:
+    """Return the points stored under ``node``."""
+    if isinstance(node, _RCFLeaf):
+        return [node.point]
+    return _leaf_points(node.left) + _leaf_points(node.right)
 
 
 class TestRandomCutForest(unittest.TestCase):
@@ -218,6 +259,128 @@ class TestRandomCutForest(unittest.TestCase):
         self.assertIn("RandomCutForest", output)
         self.assertIn("n_trees=8", output)
         self.assertIn("sample_size=32", output)
+
+
+class TestRandomCutForestExactness(unittest.TestCase):
+    """Planned walks must reproduce the 1.4.0 trees, generators and scores."""
+
+    def test_score_sequences_match_recorded_reference(self):
+        for case in score_sequences.load("random_cut_forest"):
+            with self.subTest(case=case["name"]):
+                scores = score_sequences.replay(RandomCutForest(**case["params"]), case)
+                self.assertEqual(scores, case["scores"])
+
+    def test_search_right_matches_searchsorted(self):
+        rng = np.random.default_rng(5)
+        spans = rng.exponential(size=(40, 6))
+        spans[rng.random(spans.shape) < 0.3] = 0.0
+        spans[1] = 0.0
+        spans[2, 4] = np.inf
+        spans[3, [0, 5]] = np.inf
+        cumulative = np.cumsum(spans, axis=1)
+        targets = rng.random(len(spans)) * cumulative[:, -1]
+        targets[4] = cumulative[4, 2]
+        targets[5] = 0.0
+        targets[2] = np.nan
+        targets[3] = np.inf
+
+        found = _search_right(cumulative, targets).tolist()
+
+        for row, (values, target) in enumerate(zip(cumulative, targets, strict=True)):
+            expected = int(np.searchsorted(values, target, side="right"))
+            self.assertEqual(found[row], expected, msg=f"row {row}")
+
+    def test_weighted_choice_matches_generator_choice(self):
+        source = np.random.default_rng(6)
+        for trial in range(300):
+            first = source.normal(size=1 + trial % 9)
+            second = first + source.normal(size=first.size) * 10.0 ** (trial % 7 - 3)
+            if trial % 5 == 0:
+                second[: first.size // 2] = first[: first.size // 2]
+            if trial % 11 == 0:
+                first, second = first * 1e-310, second * 1e-310
+            diffs = np.abs(first - second)
+            total = float(diffs.sum())
+            if total <= 0.0:
+                continue
+            seed = int(source.integers(2**32))
+            reference = np.random.default_rng(seed)
+            emulated = np.random.default_rng(seed)
+
+            expected = int(reference.choice(diffs.size, p=diffs / total))
+            chosen = _weighted_choice(emulated, diffs / total)
+
+            self.assertEqual(chosen, expected)
+            self.assertEqual(
+                emulated.bit_generator.state, reference.bit_generator.state
+            )
+
+    def test_learning_a_scored_point_matches_learning_it_directly(self):
+        for kind in ("gaussian", "grid"):
+            with self.subTest(kind=kind):
+                events = score_sequences.make_stream(
+                    seed=7, n_events=260, n_features=3, kind=kind
+                )
+                params = {"n_trees": 6, "sample_size": 24, "warmup_samples": 4}
+                scored = RandomCutForest(**params, seed=8)
+                learned = RandomCutForest(**params, seed=8)
+                scored_elsewhere = RandomCutForest(**params, seed=8)
+                for index, event in enumerate(events):
+                    scored.score_one(event)
+                    scored.learn_one(event)
+                    learned.learn_one(event)
+                    # Walks planned for another point must not be reused.
+                    scored_elsewhere.score_one(events[-1 - index])
+                    scored_elsewhere.learn_one(event)
+
+                self.assertEqual(_forest_shape(scored), _forest_shape(learned))
+                self.assertEqual(
+                    _forest_shape(scored_elsewhere), _forest_shape(learned)
+                )
+
+    def test_branch_boxes_bound_their_points(self):
+        events = score_sequences.make_stream(seed=11, n_events=400, n_features=3)
+        model = RandomCutForest(n_trees=3, sample_size=30, warmup_samples=5, seed=12)
+        for event in events:
+            model.score_one(event)
+            model.learn_one(event)
+            for tree in model._trees:
+                branches = [tree.root]
+                while branches:
+                    node = branches.pop()
+                    if not isinstance(node, _RCFBranch):
+                        continue
+                    points = np.array(_leaf_points(node))
+                    np.testing.assert_array_equal(node.box[0], points.min(axis=0))
+                    np.testing.assert_array_equal(-node.box[1], points.max(axis=0))
+                    branches.extend((node.left, node.right))
+
+    def test_pickles_leave_out_the_plan(self):
+        events = score_sequences.make_stream(seed=9, n_events=80, n_features=2)
+        model = RandomCutForest(n_trees=4, sample_size=20, warmup_samples=5, seed=10)
+        for event in events[:60]:
+            model.learn_one(event)
+        before = pickle.dumps(model)
+
+        score = model.score_one(events[60])
+
+        self.assertEqual(pickle.dumps(model), before)
+        restored = pickle.loads(pickle.dumps(model))
+        self.assertIsNone(restored._planned)
+        self.assertEqual(restored.score_one(events[60]), score)
+        model.learn_one(events[60])
+        restored.learn_one(events[60])
+        self.assertEqual(_forest_shape(restored), _forest_shape(model))
+
+    def test_default_forest_speed_smoke(self):
+        events = score_sequences.make_stream(seed=1, n_events=600, n_features=8)
+        model = RandomCutForest(seed=1)
+
+        start = time.perf_counter()
+        score_sequences.score_then_learn(model, events)
+
+        # Generous bound against large regressions; typical runs take ~2 s.
+        self.assertLess(time.perf_counter() - start, 20.0)
 
 
 if __name__ == "__main__":
