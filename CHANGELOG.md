@@ -166,6 +166,13 @@ Semantic Versioning.
   them, and takes the minima and maxima of its scores without NumPy. Score
   sequences and sketches are unchanged, and with the defaults it scores and
   learns about 3.5 to 4 times more events per second.
+- `MovingCovariance`, `MovingCorrelationCoefficient` and
+  `MovingMahalanobisDistance` read their windows of Python floats into arrays
+  with `np.fromiter` instead of `np.asarray` and `np.array`, which first walk
+  the whole window to find its shape and type. Scores are unchanged. With a
+  window of 1,000 events, `MovingCovariance` scores and learns about 2 times
+  more events per second, `MovingMahalanobisDistance` about 1.6 times and
+  `MovingCorrelationCoefficient` about 1.1 times.
 
 ## [1.4.0] - 2026-10-30
 
