@@ -1,16 +1,16 @@
 ---
-title: Online Anomaly Detection
+title: Real-time anomaly detection for data streams
 hide:
   - title
 ---
 
 <p align="center">
-  <img src="img/aberrant.png" alt="Aberrant" width="760">
+  <img src="img/aberrant.png" alt="aberrant" width="420">
 </p>
 
-<h1 align="center">Aberrant — Online Anomaly Detection</h1>
+<h1 align="center">aberrant — real-time anomaly detection for data streams</h1>
 
-ABERRANT is a typed Python library for unsupervised anomaly detection on data
+aberrant is a typed Python library for unsupervised anomaly detection on data
 streams. A detector evaluates one event with `score_one(event)` and updates
 itself with `learn_one(event)`, so applications can score and adapt without a
 separate batch-retraining interface.
@@ -21,7 +21,7 @@ the [model guide](user_guide/models.md).
 
 !!! note "API compatibility"
 
-    ABERRANT 1.x preserves compatibility for its documented public APIs.
+    aberrant 1.x preserves compatibility for its documented public APIs.
     Private implementation details and exact numeric score sequences are
     outside this guarantee. Read the [compatibility policy](api/index.md#compatibility-policy)
     when upgrading.
@@ -30,7 +30,7 @@ the [model guide](user_guide/models.md).
 
 <div class="grid cards" markdown>
 
--   **Install ABERRANT**
+-   **Install aberrant**
 
     Choose the base package or only the optional dependencies your detector
     requires.
@@ -61,7 +61,7 @@ the [model guide](user_guide/models.md).
 
 ## Complete minimal example
 
-The following program uses only ABERRANT's base dependencies. It deliberately
+The following program uses only aberrant's base dependencies. It deliberately
 scores each evaluated event before learning it.
 
 ```python

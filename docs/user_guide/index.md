@@ -1,6 +1,6 @@
 # User Guide
 
-The user guide documents ABERRANT's behavioral contracts: what an event must
+The user guide documents aberrant's behavioral contracts: what an event must
 contain, when state changes, what a score means, how long a detector needs to
 warm up, and which state-growth policy it uses. Constructor signatures and
 individual method parameters live in the [API reference](../api/index.md).
@@ -62,7 +62,7 @@ threshold or comparing results.
 ## State and warm-up are part of the model
 
 “Online” means a model accepts incremental updates; it does not imply bounded
-memory. ABERRANT includes several state policies:
+memory. aberrant includes several state policies:
 
 - fixed sliding windows and explicit unlearning;
 - periodic replacement from a recent window;

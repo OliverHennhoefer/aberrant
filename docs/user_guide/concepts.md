@@ -1,6 +1,6 @@
 # Concepts and Terminology
 
-This page fixes the vocabulary used throughout ABERRANT. The distinctions are
+This page fixes the vocabulary used throughout aberrant. The distinctions are
 operational: they describe what the library does and prevent similar terms
 from silently acquiring different meanings across model families.
 
@@ -25,7 +25,7 @@ from silently acquiring different meanings across model families.
 
 **Anomaly** or **outlier**
 :   An event judged unusual relative to a reference distribution, neighborhood,
-    learned representation, rule, or temporal pattern. ABERRANT uses these
+    learned representation, rule, or temporal pattern. aberrant uses these
     words descriptively; an unsupervised score alone does not establish that an
     event is erroneous, harmful, or semantically abnormal.
 
@@ -42,7 +42,7 @@ from silently acquiring different meanings across model families.
 **Alert**
 :   An application action triggered from a score or prediction. Alert policy
     includes thresholds, suppression, grouping, rate limits, and business cost;
-    it is intentionally outside most ABERRANT detectors.
+    it is intentionally outside most aberrant detectors.
 
 ## Learning and evaluation
 
@@ -65,7 +65,7 @@ from silently acquiring different meanings across model families.
 
 **Candidate-inclusive score**
 :   A score whose mathematical definition includes a provisional insertion of
-    the query event. ABERRANT implementations that need this behavior preview
+    the query event. aberrant implementations that need this behavior preview
     the insertion without committing it to learned reference state.
 
 ## Schema and time
@@ -78,11 +78,11 @@ from silently acquiring different meanings across model families.
 
 **Arrival order**
 :   The sequence in which the process receives events. When a time-aware model
-    has `time_key=None`, ABERRANT uses a one-based arrival index as its implicit
+    has `time_key=None`, aberrant uses a one-based arrival index as its implicit
     clock.
 
 **Event time**
-:   A timestamp carried by the event under the configured `time_key`. ABERRANT's
+:   A timestamp carried by the event under the configured `time_key`. aberrant's
     shared clock accepts non-decreasing values, so equal timestamps are allowed
     and a smaller later value is rejected. Models that use integer time buckets
     require integer-like timestamps.
