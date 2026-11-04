@@ -33,6 +33,82 @@ class _ASDBranch:
 _ASDNode: TypeAlias = _ASDLeaf | _ASDBranch
 
 
+@dataclass(frozen=True, slots=True)
+class _FlatForest:
+    """
+    Every tree of a forest in flat arrays, to walk all trees at once.
+
+    Node ``i`` splits on ``features[i]`` at ``thresholds[i]``. Its child for a
+    value below the threshold is ``children[2 * i + 1]`` and otherwise
+    ``children[2 * i]``. A leaf is its own child, so ``height`` steps take
+    every walk to its leaf, where ``path_lengths`` holds the leaf's depth plus
+    its correction.
+    """
+
+    roots: np.ndarray
+    features: np.ndarray
+    thresholds: np.ndarray
+    children: np.ndarray
+    path_lengths: np.ndarray
+    height: int
+
+    def path_lengths_of(self, values: np.ndarray) -> np.ndarray:
+        """Return the path length of ``values`` through every tree."""
+        nodes = self.roots
+        for _ in range(self.height):
+            below = values[self.features[nodes]] < self.thresholds[nodes]
+            nodes = self.children[2 * nodes + below]
+        path_lengths: np.ndarray = self.path_lengths[nodes]
+        return path_lengths
+
+
+class _FlatNodes:
+    """Collect the nodes of growing trees in preorder for a ``_FlatForest``."""
+
+    __slots__ = ("children", "features", "height", "path_lengths", "thresholds")
+
+    def __init__(self) -> None:
+        self.features: list[int] = []
+        self.thresholds: list[float] = []
+        self.children: list[int] = []
+        self.path_lengths: list[float] = []
+        self.height = 0
+
+    def add_leaf(self, depth: int, correction: float) -> None:
+        """Append a leaf at ``depth`` that points to itself."""
+        index = len(self.features)
+        self.features.append(0)
+        self.thresholds.append(0.0)
+        self.children += (index, index)
+        self.path_lengths.append(float(depth + correction))
+        self.height = max(self.height, depth)
+
+    def add_branch(self, feature: int, threshold: float) -> int:
+        """Append a branch whose children ``link`` sets later; return its index."""
+        index = len(self.features)
+        self.features.append(feature)
+        self.thresholds.append(threshold)
+        self.children += (index, index)
+        self.path_lengths.append(0.0)
+        return index
+
+    def link(self, index: int, left: int, right: int) -> None:
+        """Set the children of the branch at ``index``."""
+        self.children[2 * index] = right
+        self.children[2 * index + 1] = left
+
+    def freeze(self, roots: list[int]) -> _FlatForest:
+        """Return the collected trees, rooted at ``roots``, as arrays."""
+        return _FlatForest(
+            roots=np.array(roots, dtype=np.intp),
+            features=np.array(self.features, dtype=np.intp),
+            thresholds=np.array(self.thresholds, dtype=np.float64),
+            children=np.array(self.children, dtype=np.intp),
+            path_lengths=np.array(self.path_lengths, dtype=np.float64),
+            height=self.height,
+        )
+
+
 class ASDIsolationForest(BaseModel):
     """
     Isolation Forest for streaming data using a sliding reference window.
@@ -102,6 +178,7 @@ class ASDIsolationForest(BaseModel):
         self._schema = FeatureSchema()
         self.window: deque[np.ndarray] = deque(maxlen=self.window_size)
         self.trees: list[_ASDNode] = []
+        self._flat: _FlatForest | None = None
         self.c_n = self._compute_c(min(self.max_samples, self.window_size))
 
         self._samples_since_retrain = 0
@@ -141,90 +218,84 @@ class ASDIsolationForest(BaseModel):
 
         sample_size = min(self.max_samples, len(data))
         trees: list[_ASDNode] = []
+        nodes = _FlatNodes()
+        roots: list[int] = []
         for _ in range(self.n_estimators):
             indices = self.rng.choice(len(data), size=sample_size, replace=False)
-            trees.append(self._build_tree(data[indices]))
+            roots.append(len(nodes.features))
+            trees.append(self._build_tree(data[indices], nodes))
 
         self.trees = trees
+        self._flat = nodes.freeze(roots)
         self.c_n = self._compute_c(sample_size)
         self._samples_since_retrain = 0
         self._fits_completed += 1
         self._last_fit_window = data.copy()
 
-    def _build_tree(self, data_arr: np.ndarray) -> _ASDNode:
-        """Build one isolation tree from a sampled window."""
-        indices = np.arange(data_arr.shape[0])
+    def _build_tree(
+        self, data_arr: np.ndarray, nodes: _FlatNodes | None = None
+    ) -> _ASDNode:
+        """Build one isolation tree from a sampled window, also into ``nodes``."""
         max_height = math.ceil(math.log2(max(data_arr.shape[0], 2)))
-        return self._build_tree_recursive(data_arr, indices, max_height)
+        # One row per feature, so that per-feature reductions run along rows.
+        return self._build_tree_recursive(
+            np.ascontiguousarray(data_arr.T),
+            max_height,
+            0,
+            _FlatNodes() if nodes is None else nodes,
+        )
 
     def _build_tree_recursive(
         self,
-        data_arr: np.ndarray,
-        indices: np.ndarray,
+        columns: np.ndarray,
         max_height: int,
-        current_height: int = 0,
+        current_height: int,
+        nodes: _FlatNodes,
     ) -> _ASDNode:
-        """Recursively build an isolation tree."""
-        n_samples = len(indices)
+        """Recursively build an isolation tree from a node's feature columns."""
+        n_samples = columns.shape[1]
         if n_samples <= 1 or current_height >= max_height:
-            return _ASDLeaf(correction=self._compute_c(n_samples))
+            return self._leaf(n_samples, current_height, nodes)
 
-        node_values = data_arr[indices]
-        variable_features = np.flatnonzero(np.ptp(node_values, axis=0) > 0)
+        # A feature varies exactly when its peak-to-peak range is positive.
+        lows = np.minimum.reduce(columns, axis=1)
+        highs = np.maximum.reduce(columns, axis=1)
+        variable_features = (highs > lows).nonzero()[0]
         if len(variable_features) == 0:
-            return _ASDLeaf(correction=self._compute_c(n_samples))
+            return self._leaf(n_samples, current_height, nodes)
 
-        feature_index = int(self.rng.choice(variable_features))
-        feature_values = data_arr[indices, feature_index]
-        split_value = float(
-            self.rng.uniform(np.min(feature_values), np.max(feature_values))
+        # Generator.choice draws one uniform index into the array.
+        feature_index = int(
+            variable_features[self.rng.integers(0, len(variable_features))]
         )
-        left_mask = feature_values < split_value
+        split_value = float(self.rng.uniform(lows[feature_index], highs[feature_index]))
+        left_mask = columns[feature_index] < split_value
+        index = nodes.add_branch(feature_index, split_value)
+        left = self._build_tree_recursive(
+            columns.compress(left_mask, axis=1), max_height, current_height + 1, nodes
+        )
+        right_index = len(nodes.features)
+        right = self._build_tree_recursive(
+            columns.compress(~left_mask, axis=1), max_height, current_height + 1, nodes
+        )
+        nodes.link(index, left=index + 1, right=right_index)
         return _ASDBranch(
-            feature=feature_index,
-            threshold=split_value,
-            left=self._build_tree_recursive(
-                data_arr,
-                indices[left_mask],
-                max_height,
-                current_height + 1,
-            ),
-            right=self._build_tree_recursive(
-                data_arr,
-                indices[~left_mask],
-                max_height,
-                current_height + 1,
-            ),
+            feature=feature_index, threshold=split_value, left=left, right=right
         )
 
-    @staticmethod
-    def _compute_path_length(values: np.ndarray, tree: _ASDNode) -> float:
-        """Compute one sample's path length through an isolation tree."""
-        depth = 0
-        current_node = tree
-        while isinstance(current_node, _ASDBranch):
-            feature_value = values[current_node.feature]
-            if feature_value < current_node.threshold:
-                current_node = current_node.left
-            else:
-                current_node = current_node.right
-            depth += 1
-        return float(depth + current_node.correction)
+    def _leaf(self, n_samples: int, depth: int, nodes: _FlatNodes) -> _ASDLeaf:
+        """Build a leaf for ``n_samples`` samples at ``depth``."""
+        correction = self._compute_c(n_samples)
+        nodes.add_leaf(depth, correction)
+        return _ASDLeaf(correction=correction)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute the current replacement forest's anomaly score."""
         prepared = self._schema.preview(x)
-        if not self.trees or self.c_n <= 0.0:
+        if self._flat is None or self.c_n <= 0.0:
             return 0.0
 
-        average_path = float(
-            np.mean(
-                [
-                    self._compute_path_length(prepared.values, tree)
-                    for tree in self.trees
-                ]
-            )
-        )
+        average_path = float(np.mean(self._flat.path_lengths_of(prepared.values)))
         return float(2.0 ** (-average_path / self.c_n))
 
     def __repr__(self) -> str:

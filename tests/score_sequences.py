@@ -25,6 +25,7 @@ import numpy as np
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
+    ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
@@ -116,6 +117,76 @@ def load(name: str) -> list[dict[str, Any]]:
 # Fixture name -> (model factory, cases). Cases name the model parameters and
 # the ``make_stream`` arguments; recording adds the scores.
 CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
+    "asd_isolation_forest": (
+        ASDIsolationForest,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 111},
+                "stream": {"seed": 112, "n_events": 700, "n_features": 4},
+            },
+            {
+                "name": "small_window_fast_retrain",
+                "params": {
+                    "n_estimators": 20,
+                    "max_samples": 32,
+                    "window_size": 48,
+                    "retrain_interval": 16,
+                    "seed": 113,
+                },
+                "stream": {"seed": 114, "n_events": 400, "n_features": 3},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {"n_estimators": 30, "max_samples": 64, "seed": 115},
+                "stream": {
+                    "seed": 116,
+                    "n_events": 400,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Repeated values leave nodes whose features are all constant.
+                "name": "repeated_points",
+                "params": {
+                    "n_estimators": 25,
+                    "max_samples": 40,
+                    "window_size": 60,
+                    "retrain_interval": 20,
+                    "seed": 117,
+                },
+                "stream": {
+                    "seed": 118,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
+            },
+            {
+                "name": "two_point_samples",
+                "params": {
+                    "n_estimators": 10,
+                    "max_samples": 2,
+                    "window_size": 5,
+                    "retrain_interval": 3,
+                    "seed": 119,
+                },
+                "stream": {"seed": 120, "n_events": 150, "n_features": 1},
+            },
+            {
+                "name": "many_features",
+                "params": {
+                    "n_estimators": 15,
+                    "max_samples": 50,
+                    "window_size": 80,
+                    "retrain_interval": 30,
+                    "seed": 121,
+                },
+                "stream": {"seed": 122, "n_events": 300, "n_features": 12},
+            },
+        ],
+    ),
     "half_space_trees": (
         HalfSpaceTrees,
         [

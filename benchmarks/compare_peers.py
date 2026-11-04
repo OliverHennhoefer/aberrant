@@ -42,6 +42,12 @@ learn and slow down as they grow. IncrementalOneClassSVMAdaptiveKernel runs at
 its defaults without a peer: river's OneClassSVM is a linear model fitted by
 stochastic gradient descent, not a budgeted RBF-kernel model.
 
+iForestASD uses 100 trees over samples of 256 points from a window of 2,048
+events on both sides, PySAD's defaults, and both retrain on every full window.
+PySAD fits scikit-learn's ``IsolationForest`` and scores one event per call to
+it, so both stream only the first 5,000 events. aberrant's defaults, with a
+window of 256 events, run separately over the whole stream.
+
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
 its default window of 1,000 points, so both stream only the first 2,000 events.
@@ -68,6 +74,7 @@ from scipy.stats import rankdata
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
+    ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
@@ -86,6 +93,7 @@ except ImportError:
 
 try:
     from pysad.models import LODA as PySADLODA
+    from pysad.models import IForestASD as PySADIForestASD
     from pysad.models import RobustRandomCutForest as PySADRobustRandomCutForest
     from pysad.models import xStream as PySADxStream
 except ImportError:
@@ -98,6 +106,8 @@ MODEL_SEED = 42
 LOF_EVENTS = 2_000
 MONDRIAN_EVENTS = 3_000
 RCF_EVENTS = 3_000
+ASD_EVENTS = 5_000
+ASD_PARAMETERS = f"100 trees, 256 samples, window 2,048, first {ASD_EVENTS:,} events"
 RCF_PARAMETERS = f"40 trees, 256 points, first {RCF_EVENTS:,} events"
 XSTREAM_PARAMETERS = "100 projections, 100 chains, depth 15, window 256"
 
@@ -157,6 +167,19 @@ def _stream(name: str, data: np.ndarray, labels: np.ndarray) -> Stream:
 def build_cases() -> list[Case]:
     """Return the matched peer pairs plus aberrant-only configurations."""
     cases = [
+        Case(
+            "iForestASD",
+            "aberrant",
+            ASD_PARAMETERS,
+            lambda: ASDIsolationForest(window_size=2048, seed=MODEL_SEED),
+            max_events=ASD_EVENTS,
+        ),
+        Case(
+            "iForestASD",
+            "aberrant",
+            "defaults (100 trees, 256 samples, window 256)",
+            lambda: ASDIsolationForest(seed=MODEL_SEED),
+        ),
         Case(
             "Half-Space Trees",
             "aberrant",
@@ -257,6 +280,16 @@ def build_cases() -> list[Case]:
         )
     else:
         cases += [
+            Case(
+                "iForestASD",
+                "PySAD",
+                ASD_PARAMETERS,
+                lambda: PySADIForestASD(
+                    window_size=2048, n_estimators=100, random_state=MODEL_SEED
+                ),
+                input_kind="row",
+                max_events=ASD_EVENTS,
+            ),
             Case(
                 "LODA",
                 "PySAD",
