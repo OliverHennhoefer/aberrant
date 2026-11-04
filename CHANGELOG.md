@@ -26,6 +26,9 @@ Semantic Versioning.
   alerts with Page-Hinkley drift detection.
 - A "Coming from river or PySAD" guide that maps their loops and components to
   aberrant.
+- A README figure in which `XLagDAMP` finds the one anomalous heartbeat in a
+  noisy 30,000-sample ECG from the UCR Time Series Anomaly Archive, rendered
+  by the reproducible `docs/scripts/discord_figure.py`.
 
 ### Changed
 
