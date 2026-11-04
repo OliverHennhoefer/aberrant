@@ -36,7 +36,9 @@ only the first 3,000 events, since PySAD learns fewer than 100 events per
 second there.
 
 OnlineIsolationForest and StreamRandomHistogramForest have no matched peer and
-run at their defaults.
+run at their defaults. MondrianIsolationForest has no peer either and runs at
+its defaults over the first 3,000 events, since its trees keep every event they
+learn and slow down as they grow.
 
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
@@ -65,6 +67,7 @@ import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
     HalfSpaceTrees,
+    MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
     StreamRandomHistogramForest,
@@ -90,6 +93,7 @@ else:
 
 MODEL_SEED = 42
 LOF_EVENTS = 2_000
+MONDRIAN_EVENTS = 3_000
 RCF_EVENTS = 3_000
 RCF_PARAMETERS = f"40 trees, 256 points, first {RCF_EVENTS:,} events"
 XSTREAM_PARAMETERS = "100 projections, 100 chains, depth 15, window 256"
@@ -169,6 +173,13 @@ def build_cases() -> list[Case]:
             "aberrant",
             "defaults (100 projections, 32 bins)",
             lambda: StreamingLODA(seed=MODEL_SEED),
+        ),
+        Case(
+            "MondrianIsolationForest",
+            "aberrant",
+            f"defaults (100 trees, lifetime), first {MONDRIAN_EVENTS:,} events",
+            lambda: MondrianIsolationForest(seed=MODEL_SEED),
+            max_events=MONDRIAN_EVENTS,
         ),
         Case(
             "OnlineIsolationForest",

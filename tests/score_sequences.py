@@ -26,6 +26,7 @@ import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
     HalfSpaceTrees,
+    MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
     StreamRandomHistogramForest,
@@ -200,6 +201,61 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 },
                 "stream": {"seed": 33, "n_events": 300, "n_features": 5},
                 "batch_size": 7,
+            },
+        ],
+    ),
+    "mondrian_isolation_forest": (
+        MondrianIsolationForest,
+        [
+            {
+                "name": "small_forest",
+                "params": {
+                    "n_estimators": 10,
+                    "subspace_size": 3,
+                    "seed": 81,
+                },
+                "stream": {"seed": 82, "n_events": 300, "n_features": 4},
+            },
+            {
+                # Rebuilds every tree from the latest 32 points every 32
+                # events after the first 64.
+                "name": "windowed",
+                "params": {
+                    "n_estimators": 8,
+                    "subspace_size": 2,
+                    "lambda_": 2.0,
+                    "window_size": 32,
+                    "seed": 83,
+                },
+                "stream": {"seed": 84, "n_events": 300, "n_features": 3},
+            },
+            {
+                # A long lifetime keeps splitting, so the trees grow deep.
+                "name": "long_lifetime",
+                "params": {"n_estimators": 6, "lambda_": 50.0, "seed": 85},
+                "stream": {"seed": 86, "n_events": 250, "n_features": 2},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {"n_estimators": 12, "seed": 87},
+                "stream": {
+                    "seed": 88,
+                    "n_events": 300,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Repeated points fall inside existing blocks and only add
+                # to their counts.
+                "name": "repeated_points",
+                "params": {"n_estimators": 8, "lambda_": 4.0, "seed": 89},
+                "stream": {
+                    "seed": 90,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
             },
         ],
     ),

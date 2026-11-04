@@ -126,6 +126,18 @@ Semantic Versioning.
   scores and learns 4 to 5 times more events per second. Scoring a point
   whose distance to a stored point overflows float64 no longer raises from
   inside the trial insertion, since the walk never splits a leaf.
+- `MondrianIsolationForest` inserts a point into all trees at once. Boxes
+  nest along a walk, so only the blocks near the leaf that the point lies
+  outside sample a split time; one array operation computes their extension
+  rates for every tree, and the blocks above a change only count the point and
+  grow the bounds it lies beyond. Scoring keeps the walks of every tree, so
+  learning the point that was just scored reuses them; pickles leave them out.
+  Window rebuilds insert each window point into all trees at once, and a tree
+  that fails during a rebuild leaves the trees after it as a tree-by-tree
+  rebuild would. Score sequences, tree structure and generator states are
+  unchanged, and with the defaults it scores and learns about 5 times more
+  events per second. `MondrianLeaf.from_point` now stores float64 bounds for
+  any numeric point.
 
 ## [1.4.0] - 2026-10-30
 
