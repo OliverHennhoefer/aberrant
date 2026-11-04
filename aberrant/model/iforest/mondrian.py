@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -28,7 +29,7 @@ def _average_path_length(n: int) -> float:
 
 @dataclass(slots=True)
 class _MondrianBlock:
-    """Bounds and population shared by every non-empty block."""
+    """Float64 bounds and population shared by every non-empty block."""
 
     min: np.ndarray
     max: np.ndarray
@@ -43,7 +44,12 @@ class MondrianLeaf(_MondrianBlock):
 
     @classmethod
     def from_point(cls, point: np.ndarray, split_time: float) -> MondrianLeaf:
-        return cls(point.copy(), point.copy(), 1, split_time)
+        return cls(
+            np.array(point, dtype=np.float64),
+            np.array(point, dtype=np.float64),
+            1,
+            split_time,
+        )
 
     def is_leaf(self) -> bool:
         return True
@@ -95,6 +101,31 @@ class MondrianBranch(_MondrianBlock):
 MondrianNode = MondrianLeaf | MondrianBranch
 
 
+# Bottom levels of each walk whose extension rates one batch computes. Points
+# usually leave the nested boxes only a few levels above their leaf.
+_RATE_WINDOW = 12
+
+
+@dataclass(slots=True)
+class _Rates:
+    """Extension weights and rates of the bottom levels of one walk.
+
+    Entry ``level + offset`` of each field belongs to ``level`` of the walk, for
+    every level from ``low`` down. Boxes nest along a walk, so the point lies
+    outside exactly the boxes from ``first`` down, and only those have a
+    positive rate. ``below`` and ``above`` tell whether the point lies below a
+    box's lower or above its upper bound in some feature.
+    """
+
+    weights: np.ndarray
+    sums: list[float]
+    below: list[bool]
+    above: list[bool]
+    offset: int
+    low: int
+    first: int
+
+
 class MondrianTree:
     """
     One online Mondrian tree.
@@ -115,90 +146,118 @@ class MondrianTree:
 
     def learn_one(self, x_projected: np.ndarray) -> None:
         """Insert one projected point with online Mondrian extension."""
-        if self.root is None:
-            self.root = MondrianLeaf.from_point(x_projected, self.lambda_)
-        else:
-            self.root = self._extend_block(
-                self.root, x_projected, parent_split_time=0.0
-            )
-        self.n_samples += 1
+        points = np.asarray(x_projected, dtype=np.float64).reshape(1, -1)
+        rows = points.tolist()
+        _extend_all((self,), points, rows, [self._walk(rows[0])])
 
     def learn_one_from_global(self, global_features: np.ndarray) -> None:
         """Project one global feature vector and update this tree."""
         np.take(global_features, self.selected_indices, out=self._projected_buffer)
         self.learn_one(self._projected_buffer)
 
+    def _walk(self, x_values: Sequence[float] | np.ndarray) -> list[MondrianNode]:
+        """Return the blocks from the root down to the leaf that holds a point."""
+        node = self.root
+        if node is None:
+            return []
+        # Expanding ranges can create arbitrarily deep trees. Keep the walk
+        # explicit rather than consuming one Python frame per branch.
+        path: list[MondrianNode] = [node]
+        while isinstance(node, MondrianBranch):
+            node = (
+                node.left_child
+                if x_values[node.split_feature] <= node.split_threshold
+                else node.right_child
+            )
+            path.append(node)
+        return path
+
     def _extend_block(
         self,
-        node: MondrianNode,
-        x_values: np.ndarray,
-        parent_split_time: float,
-    ) -> MondrianNode:
+        point: np.ndarray,
+        x_values: list[float],
+        path: list[MondrianNode],
+        rates: _Rates,
+    ) -> None:
         """
-        Extend one Mondrian block with a point.
+        Extend the blocks along the walk of a point.
 
-        If a sampled split time occurs before the node's own split time, create
-        a new parent above this node; otherwise recurse or absorb into leaf.
+        Top-down, every block that the point lies outside samples a split time.
+        The first one that occurs before the block's own split time creates a
+        new parent above that block; otherwise the leaf absorbs the point. A
+        block that already bounds the point has a zero extension rate and
+        samples nothing.
         """
-        # Expanding ranges can create arbitrarily deep trees. Keep the update
-        # path explicitly rather than consuming one Python frame per branch.
-        path: list[tuple[MondrianBranch, bool]] = []
-        while True:
-            lower_extension = np.maximum(node.min - x_values, 0.0)
-            upper_extension = np.maximum(x_values - node.max, 0.0)
-            extension_weights = lower_extension + upper_extension
-            extension_rate = float(np.sum(extension_weights))
-            sampled_time = self._sample_exponential(extension_rate)
+        if not path:
+            self.root = MondrianLeaf.from_point(point, self.lambda_)
+            self.n_samples += 1
+            return
 
-            if parent_split_time + sampled_time < node.split_time:
-                split_feature = self._sample_split_feature(extension_weights)
-                split_threshold = self._sample_split_threshold(
-                    x_values=x_values,
-                    node=node,
-                    split_feature=split_feature,
+        rng = self.rng
+        sums = rates.sums
+        offset = rates.offset
+        first = rates.first
+        stop = len(path) - 1
+        parent_split_time = path[first - 1].split_time if first else 0.0
+        for level in range(first, len(path)):
+            node = path[level]
+            extension_rate = sums[level + offset]
+            # Generator.exponential(scale) returns scale times one standard
+            # exponential draw, and these rates are all positive.
+            split_time = (
+                parent_split_time + (1.0 / extension_rate) * rng.standard_exponential()
+            )
+            if split_time < node.split_time:
+                split_feature = self._sample_split_feature(
+                    rates.weights[level + offset].tolist(), extension_rate
                 )
-                new_leaf = MondrianLeaf.from_point(x_values, self.lambda_)
+                split_threshold = self._sample_split_threshold(
+                    x_values=x_values, node=node, split_feature=split_feature
+                )
+                new_leaf = MondrianLeaf.from_point(point, self.lambda_)
                 left, right = (
                     (new_leaf, node)
                     if x_values[split_feature] <= split_threshold
                     else (node, new_leaf)
                 )
-                node = MondrianBranch.join(
-                    left,
-                    right,
-                    split_feature,
-                    split_threshold,
-                    parent_split_time + sampled_time,
+                branch = MondrianBranch.join(
+                    left, right, split_feature, split_threshold, split_time
                 )
+                if level == 0:
+                    self.root = branch
+                else:
+                    parent = path[level - 1]
+                    assert isinstance(parent, MondrianBranch)
+                    if x_values[parent.split_feature] <= parent.split_threshold:
+                        parent.left_child = branch
+                    else:
+                        parent.right_child = branch
+                stop = level
                 break
-
-            if isinstance(node, MondrianLeaf):
-                node.update_stats(x_values)
-                break
-
-            go_left = x_values[node.split_feature] <= node.split_threshold
-            path.append((node, go_left))
             parent_split_time = node.split_time
-            node = node.left_child if go_left else node.right_child
+        else:
+            leaf = path[stop]
+            assert isinstance(leaf, MondrianLeaf)
+            leaf.update_stats(point)
 
-        for parent, go_left in reversed(path):
-            if go_left:
-                parent.left_child = node
-            else:
-                parent.right_child = node
-            parent.recompute_from_children()
-            node = parent
-        return node
+        # Every block above the change gains the point. Only the bounds that
+        # the point lies beyond move.
+        for node in path[:stop]:
+            node.count += 1
+        below = rates.below
+        above = rates.above
+        for level in range(first, stop):
+            node = path[level]
+            if below[level + offset]:
+                np.minimum(node.min, point, out=node.min)
+            if above[level + offset]:
+                np.maximum(node.max, point, out=node.max)
+        self.n_samples += 1
 
-    def _sample_exponential(self, rate: float) -> float:
-        """Sample `Exp(rate)` and return `inf` when the rate is zero."""
-        if rate <= 0.0:
-            return math.inf
-        return float(self.rng.exponential(scale=1.0 / rate))
-
-    def _sample_split_feature(self, extension_weights: np.ndarray) -> int:
+    def _sample_split_feature(
+        self, extension_weights: Sequence[float], total: float
+    ) -> int:
         """Sample split dimension proportional to extension magnitudes."""
-        total = float(np.sum(extension_weights))
         if total <= 0.0:
             return 0
         offset = float(self.rng.random()) * total
@@ -211,7 +270,7 @@ class MondrianTree:
 
     def _sample_split_threshold(
         self,
-        x_values: np.ndarray,
+        x_values: Sequence[float],
         node: MondrianNode,
         split_feature: int,
     ) -> float:
@@ -228,25 +287,127 @@ class MondrianTree:
 
     def score_one(self, x_projected: np.ndarray) -> float:
         """Return path length plus leaf-size adjustment for one point."""
-        if self.root is None:
-            return 0.0
-
-        path_length = 0
-        current_node = self.root
-
-        while isinstance(current_node, MondrianBranch):
-            path_length += 1
-            if x_projected[current_node.split_feature] <= current_node.split_threshold:
-                current_node = current_node.left_child
-            else:
-                current_node = current_node.right_child
-
-        return float(path_length + _average_path_length(current_node.count))
+        return _path_length(self._walk(x_projected))
 
     def score_one_from_global(self, global_features: np.ndarray) -> float:
         """Project one global feature vector and score against this tree."""
         np.take(global_features, self.selected_indices, out=self._projected_buffer)
         return self.score_one(self._projected_buffer)
+
+
+def _path_length(path: list[MondrianNode]) -> float:
+    """Return path length plus leaf-size adjustment for one walk."""
+    if not path:
+        return 0.0
+    return float(len(path) - 1 + _average_path_length(path[-1].count))
+
+
+def _plan(
+    trees: Sequence[MondrianTree], values: np.ndarray
+) -> tuple[np.ndarray, list[list[float]], list[list[MondrianNode]]]:
+    """Project a point into the subspace of each tree and walk each tree."""
+    points = values[np.array([tree.selected_indices for tree in trees])]
+    rows = points.tolist()
+    paths = [tree._walk(row) for tree, row in zip(trees, rows, strict=True)]
+    return points, rows, paths
+
+
+def _extend_all(
+    trees: Sequence[MondrianTree],
+    points: np.ndarray,
+    rows: list[list[float]],
+    paths: list[list[MondrianNode]],
+) -> None:
+    """
+    Insert ``points[t]`` into ``trees[t]`` along its walk, for all trees at once.
+
+    The trees share no state and each draws from its own generator in the
+    order of a lone insertion, so batching leaves every tree the same.
+    """
+    for tree, point, row, path, rates in zip(
+        trees, points, rows, paths, _walk_rates(paths, points), strict=True
+    ):
+        tree._extend_block(point, row, path, rates)
+
+
+def _walk_rates(
+    paths: Sequence[list[MondrianNode]], points: np.ndarray
+) -> list[_Rates]:
+    """Return the extension rates of every box each point lies outside."""
+    lows = [max(len(path) - _RATE_WINDOW, 0) for path in paths]
+    rates = _bottom_rates(paths, points, lows)
+    # A point outside every box of a window may also leave higher boxes.
+    again = [t for t, r in enumerate(rates) if 0 < r.low == r.first]
+    if again:
+        retried = _bottom_rates(
+            [paths[t] for t in again], points[again], [0] * len(again)
+        )
+        for t, r in zip(again, retried, strict=True):
+            rates[t] = r
+    return rates
+
+
+def _stack(rows: list[np.ndarray], shape: tuple[int, ...]) -> np.ndarray:
+    """
+    Stack float64 bounds into a new writable array.
+
+    Blocks always hold contiguous float64 bounds. Joining their raw buffers is
+    about three times faster than ``np.concatenate`` for this many small rows.
+    """
+    # Arrays expose their memory through the buffer protocol.
+    joined = bytearray().join(rows)  # type: ignore[arg-type]
+    return np.frombuffer(joined, dtype=np.float64).reshape(shape)
+
+
+def _bottom_rates(
+    paths: Sequence[list[MondrianNode]], points: np.ndarray, lows: Sequence[int]
+) -> list[_Rates]:
+    """
+    Return the extension weights and rates of each ``path[low:]`` at once.
+
+    Elementwise operations and row sums of the stacked blocks round exactly
+    like the same operations on each block alone.
+    """
+    sizes = [len(path) - low for path, low in zip(paths, lows, strict=True)]
+    nodes = [node for path, low in zip(paths, lows, strict=True) for node in path[low:]]
+    if not nodes:
+        empty = np.empty((0, points.shape[1]))
+        return [
+            _Rates(empty, [], [], [], 0, low, len(path))
+            for path, low in zip(paths, lows, strict=True)
+        ]
+
+    x = np.repeat(points, sizes, axis=0)
+    lower = _stack([node.min for node in nodes], x.shape)
+    upper = _stack([node.max for node in nodes], x.shape)
+    np.subtract(lower, x, out=lower)
+    np.maximum(lower, 0.0, out=lower)
+    np.subtract(x, upper, out=upper)
+    np.maximum(upper, 0.0, out=upper)
+    below: list[bool] = (lower.max(axis=1) > 0.0).tolist()
+    above: list[bool] = (upper.max(axis=1) > 0.0).tolist()
+    weights = np.add(lower, upper, out=lower)
+    sums = weights.sum(axis=1)
+    outside = np.concatenate(([0], np.cumsum(sums > 0.0))).tolist()
+    sum_list = sums.tolist()
+
+    result = []
+    base = 0
+    for path, low, size in zip(paths, lows, sizes, strict=True):
+        first = len(path) - (outside[base + size] - outside[base])
+        result.append(_Rates(weights, sum_list, below, above, base - low, low, first))
+        base += size
+    return result
+
+
+@dataclass(slots=True)
+class _Plan:
+    """The projections and walks of the last scored point, kept for learning."""
+
+    key: bytes
+    points: np.ndarray
+    rows: list[list[float]]
+    paths: list[list[MondrianNode]]
 
 
 class MondrianIsolationForest(BaseModel):
@@ -308,26 +469,75 @@ class MondrianIsolationForest(BaseModel):
         self.n_samples = 0
         self._schema = FeatureSchema()
         self._window: deque[np.ndarray] = deque(maxlen=window_size)
+        self._planned: _Plan | None = None
+
+    def __getstate__(self) -> dict[str, object]:
+        state = self.__dict__.copy()
+        # Planned walks are a cache of the trees, not part of the model.
+        state["_planned"] = None
+        return state
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update all trees with one feature dictionary."""
         prepared = self._schema.preview(x)
+        planned, self._planned = self._planned, None
         if not self._schema.is_established:
             self._initialize_features(len(prepared.names))
 
-        for tree in self.trees:
-            tree.learn_one_from_global(prepared.values)
+        values = prepared.values
+        if planned is not None and planned.key == values.tobytes():
+            _extend_all(self.trees, planned.points, planned.rows, planned.paths)
+        else:
+            _extend_all(self.trees, *_plan(self.trees, values))
 
         self.n_samples += 1
         if self.window_size is not None:
-            self._window.append(prepared.values.copy())
+            self._window.append(values.copy())
             if self.trees[0].n_samples >= 2 * self.window_size:
-                for tree in self.trees:
-                    tree.root = None
-                    tree.n_samples = 0
-                    for point in self._window:
-                        tree.learn_one_from_global(point)
+                self._rebuild()
         self._schema.commit(prepared)
+
+    def _rebuild(self) -> None:
+        """
+        Rebuild every tree from the latest window.
+
+        Every tree draws from its own generator, so inserting the window point
+        by point into all trees matches rebuilding one tree after another. A
+        tree that fails stops there, and the trees after the first failing one
+        keep their previous state, as they would after a tree-by-tree rebuild.
+        """
+        kept = [
+            (tree.root, tree.n_samples, tree.rng.bit_generator.state)
+            for tree in self.trees
+        ]
+        for tree in self.trees:
+            tree.root = None
+            tree.n_samples = 0
+        building = list(range(len(self.trees)))
+        failures: dict[int, Exception] = {}
+        for point in self._window:
+            if not building:
+                break
+            trees = [self.trees[t] for t in building]
+            points, rows, paths = _plan(trees, point)
+            rates = _walk_rates(paths, points)
+            for t, tree, x_values, row, path, path_rates in zip(
+                list(building), trees, points, rows, paths, rates, strict=True
+            ):
+                try:
+                    tree._extend_block(x_values, row, path, path_rates)
+                except Exception as error:
+                    failures[t] = error
+                    building.remove(t)
+        if failures:
+            first = min(failures)
+            for tree, (root, n_samples, rng_state) in zip(
+                self.trees[first + 1 :], kept[first + 1 :], strict=True
+            ):
+                tree.root = root
+                tree.n_samples = n_samples
+                tree.rng.bit_generator.state = rng_state
+            raise failures[first]
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute normalized anomaly score in [0, 1]."""
@@ -337,9 +547,12 @@ class MondrianIsolationForest(BaseModel):
         if not self.trees:
             return 0.0
 
+        values = prepared.values
+        points, rows, paths = _plan(self.trees, values)
+        self._planned = _Plan(values.tobytes(), points, rows, paths)
         path_length_sum = 0.0
-        for tree in self.trees:
-            path_length_sum += tree.score_one_from_global(prepared.values)
+        for path in paths:
+            path_length_sum += _path_length(path)
         avg_path_length = path_length_sum / len(self.trees)
         c_factor = self._compute_c_factor()
         if c_factor <= 0.0:

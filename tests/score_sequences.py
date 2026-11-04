@@ -26,12 +26,14 @@ import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
     HalfSpaceTrees,
+    MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
     StreamRandomHistogramForest,
     XStream,
 )
 from aberrant.model.sketch import StreamingLODA
+from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
 
@@ -141,6 +143,67 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
     ),
     # The streams are continuous, so no two distances tie and the neighbor
     # order does not depend on the platform's sorting algorithm.
+    "incremental_one_class_svm_adaptive_kernel": (
+        IncrementalOneClassSVMAdaptiveKernel,
+        [
+            {
+                "name": "defaults",
+                "params": {"seed": 91},
+                "stream": {"seed": 92, "n_events": 400, "n_features": 4},
+            },
+            {
+                "name": "small_budget_fast_adaptation",
+                "params": {
+                    "sv_budget": 12,
+                    "buffer_size": 30,
+                    "adaptation_rate": 0.5,
+                    "seed": 93,
+                },
+                "stream": {"seed": 94, "n_events": 400, "n_features": 3},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {
+                    "nu": 0.5,
+                    "initial_gamma": 0.1,
+                    "gamma_bounds": [0.01, 10.0],
+                    "seed": 95,
+                },
+                "stream": {
+                    "seed": 96,
+                    "n_events": 300,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                "name": "repeated_points",
+                "params": {"sv_budget": 40, "seed": 97},
+                "stream": {
+                    "seed": 98,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
+            },
+            {
+                "name": "loose_tolerance",
+                "params": {"nu": 0.8, "tolerance": 0.05, "seed": 99},
+                "stream": {"seed": 100, "n_events": 300, "n_features": 6},
+            },
+            {
+                # Only the first event ever becomes a support vector.
+                "name": "single_support_vector",
+                "params": {"nu": 1.0, "tolerance": 0.1, "seed": 101},
+                "stream": {"seed": 102, "n_events": 200, "n_features": 6},
+            },
+            {
+                "name": "full_budget",
+                "params": {"nu": 1.0, "tolerance": 0.01, "seed": 103},
+                "stream": {"seed": 104, "n_events": 500, "n_features": 6},
+            },
+        ],
+    ),
     "local_outlier_factor": (
         LocalOutlierFactor,
         [
@@ -200,6 +263,61 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 },
                 "stream": {"seed": 33, "n_events": 300, "n_features": 5},
                 "batch_size": 7,
+            },
+        ],
+    ),
+    "mondrian_isolation_forest": (
+        MondrianIsolationForest,
+        [
+            {
+                "name": "small_forest",
+                "params": {
+                    "n_estimators": 10,
+                    "subspace_size": 3,
+                    "seed": 81,
+                },
+                "stream": {"seed": 82, "n_events": 300, "n_features": 4},
+            },
+            {
+                # Rebuilds every tree from the latest 32 points every 32
+                # events after the first 64.
+                "name": "windowed",
+                "params": {
+                    "n_estimators": 8,
+                    "subspace_size": 2,
+                    "lambda_": 2.0,
+                    "window_size": 32,
+                    "seed": 83,
+                },
+                "stream": {"seed": 84, "n_events": 300, "n_features": 3},
+            },
+            {
+                # A long lifetime keeps splitting, so the trees grow deep.
+                "name": "long_lifetime",
+                "params": {"n_estimators": 6, "lambda_": 50.0, "seed": 85},
+                "stream": {"seed": 86, "n_events": 250, "n_features": 2},
+            },
+            {
+                "name": "unit_clusters",
+                "params": {"n_estimators": 12, "seed": 87},
+                "stream": {
+                    "seed": 88,
+                    "n_events": 300,
+                    "n_features": 5,
+                    "kind": "unit",
+                },
+            },
+            {
+                # Repeated points fall inside existing blocks and only add
+                # to their counts.
+                "name": "repeated_points",
+                "params": {"n_estimators": 8, "lambda_": 4.0, "seed": 89},
+                "stream": {
+                    "seed": 90,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
             },
         ],
     ),

@@ -36,7 +36,11 @@ only the first 3,000 events, since PySAD learns fewer than 100 events per
 second there.
 
 OnlineIsolationForest and StreamRandomHistogramForest have no matched peer and
-run at their defaults.
+run at their defaults. MondrianIsolationForest has no peer either and runs at
+its defaults over the first 3,000 events, since its trees keep every event they
+learn and slow down as they grow. IncrementalOneClassSVMAdaptiveKernel runs at
+its defaults without a peer: river's OneClassSVM is a linear model fitted by
+stochastic gradient descent, not a budgeted RBF-kernel model.
 
 LocalOutlierFactor uses 10 neighbors on both sides. river's incremental LOF
 keeps every point it learns and slows down with each one, while aberrant keeps
@@ -65,12 +69,14 @@ import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.iforest import (
     HalfSpaceTrees,
+    MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
     StreamRandomHistogramForest,
     XStream,
 )
 from aberrant.model.sketch import StreamingLODA
+from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 from aberrant.stream.dataset import Dataset, load
 
 try:
@@ -90,6 +96,7 @@ else:
 
 MODEL_SEED = 42
 LOF_EVENTS = 2_000
+MONDRIAN_EVENTS = 3_000
 RCF_EVENTS = 3_000
 RCF_PARAMETERS = f"40 trees, 256 points, first {RCF_EVENTS:,} events"
 XSTREAM_PARAMETERS = "100 projections, 100 chains, depth 15, window 256"
@@ -171,6 +178,13 @@ def build_cases() -> list[Case]:
             lambda: StreamingLODA(seed=MODEL_SEED),
         ),
         Case(
+            "MondrianIsolationForest",
+            "aberrant",
+            f"defaults (100 trees, lifetime), first {MONDRIAN_EVENTS:,} events",
+            lambda: MondrianIsolationForest(seed=MODEL_SEED),
+            max_events=MONDRIAN_EVENTS,
+        ),
+        Case(
             "OnlineIsolationForest",
             "aberrant",
             "defaults (100 trees, window 2048)",
@@ -201,6 +215,12 @@ def build_cases() -> list[Case]:
             f"10 neighbors, first {LOF_EVENTS:,} events",
             lambda: LocalOutlierFactor(k=10),
             max_events=LOF_EVENTS,
+        ),
+        Case(
+            "IncrementalOneClassSVMAdaptiveKernel",
+            "aberrant",
+            "defaults (100 support vectors, buffer 200)",
+            lambda: IncrementalOneClassSVMAdaptiveKernel(seed=MODEL_SEED),
         ),
     ]
     if river_anomaly is None:
