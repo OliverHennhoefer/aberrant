@@ -41,6 +41,10 @@ from aberrant.model.stat import (
     MovingMahalanobisDistance,
 )
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.timeseries import (
+    MultivariateRollingMatrixProfile,
+    RollingMatrixProfile,
+)
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
 
@@ -162,6 +166,40 @@ def make_multi_aspect_stream(
     return events
 
 
+def make_series(
+    seed: int,
+    n_events: int,
+    n_channels: int,
+    *,
+    kind: str = "seasonal",
+    scale: float = 1.0,
+    offset: float = 0.0,
+) -> list[dict[str, float]]:
+    """Build a seeded multichannel time series as ``x0, x1, ...`` dictionaries.
+
+    ``seasonal`` adds noise to sines with a period of 24 events and a phase per
+    channel, and every 97th event jumps by three. ``plateaus`` holds rounded
+    normal levels for one to twelve events, so windows are often constant.
+    Every value is then multiplied by ``scale`` and shifted by ``offset``.
+    """
+    rng = np.random.default_rng(seed)
+    if kind == "seasonal":
+        phases = rng.uniform(0.0, 2.0 * np.pi, size=n_channels)
+        steps = np.arange(n_events)[:, np.newaxis]
+        data = np.sin(2.0 * np.pi * steps / 24.0 + phases)
+        data = data + rng.normal(0.0, 0.1, size=(n_events, n_channels))
+        data[::97] += 3.0
+    elif kind == "plateaus":
+        levels = np.round(rng.normal(size=(n_events, n_channels)))
+        starts = np.cumsum(rng.integers(1, 13, size=n_events))
+        data = levels[np.searchsorted(starts, np.arange(n_events), side="right")]
+    else:
+        raise ValueError(f"Unknown series kind: {kind}")
+    data = data * scale + offset
+    names = [f"x{index}" for index in range(n_channels)]
+    return [dict(zip(names, row, strict=True)) for row in data.tolist()]
+
+
 def score_then_learn(model: Any, events: list[dict[str, float]]) -> list[float]:
     """Score each event before learning it and return the scores."""
     scores = []
@@ -202,6 +240,8 @@ def replay(model: Any, case: dict[str, Any]) -> list[float]:
         events = make_edge_stream(**case["edges"])
     elif "multi_aspect" in case:
         events = make_multi_aspect_stream(**case["multi_aspect"])
+    elif "series" in case:
+        events = make_series(**case["series"])
     else:
         events = make_stream(**case["stream"])
     if "batch_size" in case:
@@ -565,6 +605,50 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
         ],
     ),
+    "multivariate_rolling_matrix_profile": (
+        MultivariateRollingMatrixProfile,
+        [
+            {
+                "name": "three_channels",
+                "params": {"subsequence_length": 10, "window_size": 120},
+                "series": {"seed": 261, "n_events": 500, "n_channels": 3},
+            },
+            {
+                "name": "raw_two_channels",
+                "params": {
+                    "subsequence_length": 6,
+                    "window_size": 50,
+                    "normalize": False,
+                },
+                "series": {"seed": 262, "n_events": 400, "n_channels": 2},
+            },
+            {
+                # Held levels leave constant channels.
+                "name": "plateaus",
+                "params": {"subsequence_length": 5, "window_size": 30},
+                "series": {
+                    "seed": 263,
+                    "n_events": 300,
+                    "n_channels": 3,
+                    "kind": "plateaus",
+                },
+            },
+            {
+                "name": "large_offset",
+                "params": {
+                    "subsequence_length": 8,
+                    "window_size": 60,
+                    "exclusion_zone": 0,
+                },
+                "series": {
+                    "seed": 264,
+                    "n_events": 300,
+                    "n_channels": 2,
+                    "offset": 1000000000.0,
+                },
+            },
+        ],
+    ),
     # The windows stay below ``max_leaf_samples * (2 * branching_factor)**2``, so
     # the tree depth limit, a ratio of logarithms, never sits on an integer
     # where the last bit of a platform's ``log`` could change a split decision.
@@ -809,6 +893,75 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "seed": 79,
                 },
                 "stream": {"seed": 80, "n_events": 150, "n_features": 1},
+            },
+        ],
+    ),
+    "rolling_matrix_profile": (
+        RollingMatrixProfile,
+        [
+            {
+                "name": "defaults_window",
+                "params": {"subsequence_length": 16},
+                "series": {"seed": 251, "n_events": 600, "n_channels": 1},
+            },
+            {
+                "name": "raw_no_exclusion",
+                "params": {
+                    "subsequence_length": 8,
+                    "window_size": 64,
+                    "normalize": False,
+                    "exclusion_zone": 0,
+                },
+                "series": {"seed": 252, "n_events": 400, "n_channels": 1},
+            },
+            {
+                # Held levels leave constant windows, which match each other exactly.
+                "name": "plateaus",
+                "params": {"subsequence_length": 6, "window_size": 40},
+                "series": {
+                    "seed": 253,
+                    "n_events": 300,
+                    "n_channels": 1,
+                    "kind": "plateaus",
+                },
+            },
+            {
+                "name": "raw_plateaus",
+                "params": {
+                    "subsequence_length": 4,
+                    "window_size": 30,
+                    "normalize": False,
+                },
+                "series": {
+                    "seed": 254,
+                    "n_events": 300,
+                    "n_channels": 1,
+                    "kind": "plateaus",
+                },
+            },
+            {
+                "name": "large_offset",
+                "params": {"subsequence_length": 12, "window_size": 100},
+                "series": {
+                    "seed": 255,
+                    "n_events": 400,
+                    "n_channels": 1,
+                    "offset": 1000000000.0,
+                },
+            },
+            {
+                "name": "raw_huge_values",
+                "params": {
+                    "subsequence_length": 5,
+                    "window_size": 30,
+                    "normalize": False,
+                },
+                "series": {
+                    "seed": 256,
+                    "n_events": 300,
+                    "n_channels": 1,
+                    "scale": 1e290,
+                },
             },
         ],
     ),

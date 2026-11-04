@@ -2,6 +2,8 @@
 
 import math
 import pickle
+import time
+from itertools import chain
 
 import numpy as np
 import pytest
@@ -10,6 +12,8 @@ from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
 )
+from aberrant.model.timeseries._matrix_profile import _statistics_array
+from tests import score_sequences
 
 
 def _event(values):
@@ -390,3 +394,38 @@ def test_unrepresentable_joint_raw_distance_does_not_mutate_state():
         assert pickle.dumps(model) == before
     model.learn_one({"large": 1e308, "normal": 1.0})
     assert model.n_samples_seen == 4
+
+
+def test_score_sequences_match_recorded_reference():
+    for case in score_sequences.load("multivariate_rolling_matrix_profile"):
+        model = MultivariateRollingMatrixProfile(**case["params"])
+        scores = score_sequences.replay(model, case)
+        # The tolerance only absorbs last-bit libm differences between
+        # platforms; the recording platform reproduces every bit.
+        np.testing.assert_allclose(
+            scores, case["scores"], rtol=1e-12, atol=0, err_msg=case["name"]
+        )
+
+
+def test_channel_statistics_array_matches_asarray():
+    statistics = [
+        [(-1074, -0.0, 5e-324), (3, 0.5, 2.0)],
+        [(1024, 1.5, 0.25), (0, 0.1, 0.0)],
+        [(-3, -2.5, 1e-300), (7, 1e300, 3.0)],
+    ]
+    expected = np.asarray(statistics, dtype=np.float64)
+    flat = chain.from_iterable(chain.from_iterable(statistics))
+    actual = _statistics_array(flat, (3, 2, 3))
+    assert actual.shape == expected.shape
+    assert actual.tobytes() == expected.tobytes()
+
+
+def test_default_window_speed_smoke():
+    events = score_sequences.make_series(seed=38, n_events=1000, n_channels=2)
+    model = MultivariateRollingMatrixProfile(subsequence_length=32)
+
+    start = time.perf_counter()
+    score_sequences.score_then_learn(model, events)
+
+    # Generous bound against large regressions; typical runs take ~0.65 s.
+    assert time.perf_counter() - start < 8.0
