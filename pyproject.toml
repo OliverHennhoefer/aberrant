@@ -67,7 +67,7 @@ dev = [
     "pytest-cov>=6.0.0,<8.0.0",
     "hypothesis>=6.0.0,<7.0.0",
     "mypy>=1.13.0,<3.0.0",
-    "scikit-learn>=1.6.1,<2.0.0",
+    "scikit-learn>=1.9.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",
 ]
 docs = [
@@ -76,7 +76,7 @@ docs = [
     "pygments>=2.20.0",
 ]
 security = ["pip-audit==2.10.1"]
-eval = ["scikit-learn>=1.6.1,<2.0.0"]
+eval = ["scikit-learn>=1.9.1,<2.0.0"]
 dl = ["torch>=2.6.0,<3.0.0"]
 benchmark = [
     "river>=0.22.0,<1.0.0",
@@ -94,7 +94,7 @@ all = [
     # Keep docs stack aligned with the `docs` extra above.
     "mkdocstrings-python>=2.0.7,<3.0.0",
     "pygments>=2.20.0",
-    "scikit-learn>=1.6.1,<2.0.0",
+    "scikit-learn>=1.9.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",
     "river>=0.22.0,<1.0.0",
     "pytest-benchmark>=5.0.0,<6.0.0",
