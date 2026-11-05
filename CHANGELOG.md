@@ -57,9 +57,12 @@ Semantic Versioning.
   before their first learned event instead of raising `ValueError`, so a
   score-before-learn loop can start on the first event. A feature that was
   not seen after learning has started still raises `ValueError`.
-- The README quickstart scores each event before learning it and adds a
-  `RollingRobustScaler` in front of `MinMaxScaler`; the migration guide's
-  aberrant loop uses the same score-then-learn order.
+- The README quickstart scores each event before learning it; the migration
+  guide's aberrant loop uses the same score-then-learn order.
+- The README quickstart runs `OnlineIsolationForest` on raw Shuttle features
+  instead of two scalers in front of `HalfSpaceTrees`, since its splits do not
+  depend on feature scale. The pipeline example notes that its
+  `StandardScaler` is there for `IncrementalPCA`.
 - Feature validation checks a plain `dict` sample with the committed feature
   names and finite `float` or `numpy.float64` values in one pass. Any other
   sample takes the complete validation path and is accepted or rejected as
