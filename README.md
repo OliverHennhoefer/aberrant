@@ -34,15 +34,10 @@
 ## Quickstart
 
 ```python
-from aberrant.model.iforest import HalfSpaceTrees
+from aberrant.model.iforest import OnlineIsolationForest
 from aberrant.stream.dataset import Dataset, load
-from aberrant.transform import MinMaxScaler, RollingRobustScaler
 
-detector = (
-    RollingRobustScaler(window_size=100)  # rolling median/IQR, robust to outliers
-    | MinMaxScaler()  # map features to [0, 1] for the trees
-    | HalfSpaceTrees(seed=42)
-)
+detector = OnlineIsolationForest(seed=42)  # no scaler: trees split on raw values
 
 for event, label in load(Dataset.SHUTTLE).stream():
     score = detector.score_one(event)  # score first: higher means more anomalous
@@ -168,7 +163,7 @@ from aberrant.model.iforest import OnlineIsolationForest
 from aberrant.transform import IncrementalPCA, StandardScaler
 
 detector = (
-    StandardScaler()
+    StandardScaler()  # PCA needs features on comparable scales
     | IncrementalPCA(n_components=3, n0=100)
     | OnlineIsolationForest(window_size=512, seed=42)
 )
