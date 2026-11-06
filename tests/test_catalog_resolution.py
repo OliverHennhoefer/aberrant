@@ -148,6 +148,10 @@ def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
         config.fingerprint()
 
 
+# Components added after the baseline below; their schemas are new, not changed.
+_ADDED_AFTER_BASELINE = frozenset({"model/online_copod", "model/online_ecod"})
+
+
 def test_existing_core_schema_contract_is_unchanged():
     # Captured from the reviewed 1.3.0/Python 3.11 baseline before this refactor.
     schemas = {
@@ -155,6 +159,7 @@ def test_existing_core_schema_contract_is_unchanged():
         for catalog in (MODEL_CATALOG, TRANSFORMER_CATALOG, SIMILARITY_ENGINE_CATALOG)
         for spec in catalog.values()
         if spec.dependency_module is None
+        and f"{spec.kind.value}/{spec.id}" not in _ADDED_AFTER_BASELINE
     }
     digest = hashlib.sha256(
         json.dumps(schemas, sort_keys=True, allow_nan=False).encode()

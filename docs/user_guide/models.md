@@ -421,6 +421,46 @@ accepts a fixed multivariate schema and returns **squared** Mahalanobis distance
 from the current window mean; it returns `0.0` with fewer than three learned
 points.
 
+#### Online ECOD and COPOD
+
+`OnlineECOD` and `OnlineCOPOD` score a sample by how far into the tails of
+each feature's reference distribution its values fall, and learn the sample
+afterwards. They need no scaler, since only ranks matter, and treat features
+as independent, as the batch methods do. Scores are non-negative and `0.0`
+until `min_samples` samples have been learned. A tail probability counts the
+candidate itself, `(#{r <= x} + 1) / (n + 1)`, so it is never zero and each
+feature contributes at most `log(n + 1)`.
+
+| `memory` | Reference | Forgetting | State |
+| --- | --- | --- | --- |
+| `"sketch"` (default) | t-digest per feature plus a 128-value exact buffer | none, or `half_life` samples per halving | bounded by `compression` |
+| `"window"` | exact last `window_size` values | hard, after `window_size` samples | `window_size` values per feature |
+| `"hybrid"` | exact window plus a sketch of evicted values (ESOD) | window, plus the sketch's `half_life` | both |
+
+With `memory="window"` the score equals batch ECOD or COPOD fitted on the
+window plus the candidate. The hybrid's score is the smaller of its window and
+history scores, so a sample must be unusual against both. `tail="pareto"`
+fits a generalized Pareto tail beyond the reference's `tail_quantile`
+quantile, as SPOT does, so scores keep growing past the observed range instead
+of saturating. `aggregation="paper"` (default) follows both papers, which
+share one final formula, so the two classes then score identically;
+`aggregation="pyod"` reproduces PyOD's differing ECOD and COPOD.
+
+```python
+import random
+
+from aberrant.model.stat import OnlineECOD
+
+detector = OnlineECOD(half_life=2_000)  # a sample's weight halves every 2,000
+for _ in range(500):
+    event = {"cpu": random.gauss(0.3, 0.05), "latency_ms": random.gauss(12.0, 1.5)}
+    score = detector.score_one(event)  # score first
+    detector.learn_one(event)  # then learn
+
+# Per-feature contributions sum to the score; here "cpu" dominates.
+print(detector.explain_one({"cpu": 0.95, "latency_ms": 11.5}))
+```
+
 ### SVM detectors
 
 `IncrementalOneClassSVMAdaptiveKernel` is a custom, budgeted RBF-kernel

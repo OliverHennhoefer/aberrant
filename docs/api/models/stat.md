@@ -49,3 +49,13 @@ the geometric mean of successive ratios.
 ::: aberrant.model.stat.MovingCorrelationCoefficient
 
 ::: aberrant.model.stat.MovingMahalanobisDistance
+
+## Tail probability
+
+`OnlineECOD` and `OnlineCOPOD` share their constructor and memories; see the
+[model guide](../../user_guide/models.md#online-ecod-and-copod) for how to
+choose between them.
+
+::: aberrant.model.stat.OnlineECOD
+
+::: aberrant.model.stat.OnlineCOPOD
