@@ -9,6 +9,14 @@ Semantic Versioning.
 
 ### Added
 
+- `OnlineECOD` and `OnlineCOPOD` in `aberrant.model.stat`: truly online
+  ECOD and COPOD that score each sample against per-feature reference
+  distributions before learning it. A bounded t-digest per feature (with an
+  optional half-life), an exact sliding window, or an ESOD-style hybrid of
+  the two holds the reference; an optional SPOT-style generalized Pareto
+  tail keeps scoring values past the observed range; `explain_one` returns
+  each feature's contribution. Window scores equal the batch methods, and
+  `aggregation="pyod"` reproduces PyOD's ECOD and COPOD exactly.
 - The README footer shows the BMWK funding acknowledgement, as in nonconform.
 - A weekly OpenSSF Scorecard analysis that publishes its results to
   scorecard.dev and code scanning, and a Scorecard badge in the README.
