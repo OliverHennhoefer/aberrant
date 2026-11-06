@@ -28,7 +28,7 @@ def _shuttle_pr_auc(model) -> float:
 @pytest.mark.parametrize(
     ("model", "expected"),
     [
-        # Measured at 0.866, 0.925, 0.911, 0.869 and 0.922; the ranges leave
+        # Measured at 0.864, 0.925, 0.911, 0.868 and 0.922; the ranges leave
         # room for platform rounding but catch a broken reference or tail.
         (OnlineECOD(), (0.80, 0.93)),
         (OnlineECOD(memory="window"), (0.86, 0.98)),

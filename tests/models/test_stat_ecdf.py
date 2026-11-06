@@ -253,6 +253,35 @@ def test_decayed_sketch_tracks_the_exponentially_weighted_ecdf() -> None:
     assert max(errors) < 0.35
 
 
+def test_decayed_sketch_stays_accurate_on_a_long_stationary_stream() -> None:
+    # Stored weights inflate as the stream ages; neither the compression nor
+    # the centroids' ranges may coarsen because of it.
+    rng = np.random.default_rng(21)
+    n, half_life = 60_000, 500.0
+    data = rng.normal(size=n)
+    reference = _SketchReference(1, compression=100.0, half_life=half_life)
+    for value in data:
+        reference.learn(np.array([value]))
+    weights = 0.5 ** (np.arange(n)[::-1] / half_life)
+    recent = data[-3_000:]
+    for probe in np.quantile(recent, [0.0005, 0.005, 0.05, 0.5, 0.95, 0.995, 0.9995]):
+        left, right = reference.tail_log_probabilities(np.array([probe]))
+        exact_left, exact_right = _exact_log_tails(
+            data[:, np.newaxis], weights, np.array([probe])
+        )
+        assert left[0] == pytest.approx(exact_left[0], abs=0.1)
+        assert right[0] == pytest.approx(exact_right[0], abs=0.1)
+
+
+def test_weights_that_decay_to_zero_are_dropped() -> None:
+    # A tiny half-life underflows old weights to zero after renormalization.
+    model = OnlineECOD(half_life=0.1, min_samples=1)
+    for _ in range(1_000):
+        model.learn_one({"x": 1.0})
+    assert model.score_one({"x": 1.0}) == pytest.approx(0.0, abs=1e-9)
+    assert math.isfinite(model.score_one({"x": 2.0}))
+
+
 def test_decay_survives_weight_renormalization() -> None:
     rng = np.random.default_rng(15)
     # A half-life of one sample doubles the stored weight per learn, which

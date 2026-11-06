@@ -338,11 +338,12 @@ class _SketchReference(_BaseReference):
     buffer of exact points that is merged into the digests once it is full;
     queries count the buffer exactly, so a learned value is never invisible.
 
-    Besides its mean and weight, every centroid keeps the smallest and largest
-    value merged into it and the weight of the points equal to each. Its mass
-    is read as those two atoms plus the rest spread uniformly in between, so
-    single points, pairs, repeated discrete values and the extremes of the
-    reference are exact, which is where the tail scores live.
+    Besides its mean and weight, every centroid keeps its sum of squared
+    deviations, the smallest and largest value merged into it and the weight
+    of the points equal to each. Its mass is read as those two atoms plus the
+    rest spread uniformly with the matching mean and variance, so single
+    points, pairs, repeated discrete values and the extremes of the reference
+    are exact, which is where the tail scores live.
 
     With a ``half_life``, all weights decay by ``0.5 ** (1 / half_life)`` per
     learned vector. Scaling every weight by the same factor leaves each
@@ -436,13 +437,21 @@ class _SketchReference(_BaseReference):
                 self._buffer[:count, feature],
                 buffer_weights,
                 self.compression,
+                weight_scale=self._inflation,
                 descending=descending,
             )
         self._buffered = 0
         self._rebuild_query()
 
     def _rebuild_query(self) -> None:
-        """Lay the centroids out as zero-weight-padded arrays for queries."""
+        """Lay the centroids out as zero-weight-padded arrays for queries.
+
+        A centroid's mass is its two endpoint atoms, which are exact, plus an
+        interior spread uniformly over the interval whose mean and variance
+        match the interior's, clipped to the centroid's range. Matching the
+        variance rather than spanning the whole range matters under decay: an
+        old extreme keeps the range wide long after its weight has gone.
+        """
         width = max(1, *(len(c.means) for c in self._centroids))
         shape = (self.n_features, width)
         lows = np.zeros(shape, dtype=np.float64)
@@ -450,46 +459,74 @@ class _SketchReference(_BaseReference):
         low_atoms = np.zeros(shape, dtype=np.float64)
         high_atoms = np.zeros(shape, dtype=np.float64)
         interiors = np.zeros(shape, dtype=np.float64)
-        for feature, centroids in enumerate(self._centroids):
-            size = len(centroids.means)
+        starts = np.zeros(shape, dtype=np.float64)
+        ends = np.zeros(shape, dtype=np.float64)
+        for feature, c in enumerate(self._centroids):
+            size = len(c.means)
             if size == 0:
                 continue
             # A point mass is held entirely by its low atom.
-            high = np.where(
-                centroids.lows == centroids.highs, 0.0, centroids.high_weights
+            high_atom = np.where(c.lows == c.highs, 0.0, c.high_weights)
+            interior = np.maximum(c.weights - c.low_weights - high_atom, 0.0)
+            has_interior = interior > 1e-12 * c.weights
+            safe = np.where(has_interior, interior, 1.0)
+            center = np.where(
+                has_interior,
+                (c.weights * c.means - c.low_weights * c.lows - high_atom * c.highs)
+                / safe,
+                c.means,
             )
-            lows[feature, :size] = centroids.lows
-            highs[feature, :size] = centroids.highs
-            low_atoms[feature, :size] = centroids.low_weights
-            high_atoms[feature, :size] = high
-            interiors[feature, :size] = np.maximum(
-                centroids.weights - centroids.low_weights - high, 0.0
+            spread = (
+                c.m2s
+                - c.low_weights * (c.lows - c.means) ** 2
+                - high_atom * (c.highs - c.means) ** 2
+                - interior * (center - c.means) ** 2
             )
+            half_width = np.sqrt(3.0 * np.maximum(spread, 0.0) / safe)
+            lows[feature, :size] = c.lows
+            highs[feature, :size] = c.highs
+            low_atoms[feature, :size] = c.low_weights
+            high_atoms[feature, :size] = high_atom
+            interiors[feature, :size] = np.where(has_interior, interior, 0.0)
+            starts[feature, :size] = np.clip(center - half_width, c.lows, c.highs)
+            ends[feature, :size] = np.clip(center + half_width, c.lows, c.highs)
         self._query_lows = lows
         self._query_highs = highs
         self._query_low_atoms = low_atoms
         self._query_high_atoms = high_atoms
         self._query_interiors = interiors
-        self._query_spans = np.where(highs > lows, highs - lows, 1.0)
+        self._query_starts = starts
+        self._query_ends = ends
+        self._query_spread = ends > starts
+        self._query_spans = np.where(self._query_spread, ends - starts, 1.0)
 
     def _masses(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         column = x[:, np.newaxis]
         lows = self._query_lows
         highs = self._query_highs
+        starts = self._query_starts
+        ends = self._query_ends
+        spans = self._query_spans
+        spread = self._query_spread
+        below = np.where(
+            spread, np.clip((column - starts) / spans, 0.0, 1.0), starts <= column
+        )
+        above = np.where(
+            spread, np.clip((ends - column) / spans, 0.0, 1.0), starts >= column
+        )
         low_atoms = self._query_low_atoms
         high_atoms = self._query_high_atoms
         interiors = self._query_interiors
-        position = np.clip((column - lows) / self._query_spans, 0.0, 1.0)
         at_most = np.add.reduce(
             low_atoms * (lows <= column)
             + high_atoms * (highs <= column)
-            + interiors * position,
+            + interiors * below,
             axis=1,
         )
         at_least = np.add.reduce(
             low_atoms * (lows >= column)
             + high_atoms * (highs >= column)
-            + interiors * (1.0 - position),
+            + interiors * above,
             axis=1,
         )
         buffered = self._buffered
@@ -513,7 +550,15 @@ class _SketchReference(_BaseReference):
 class _Centroids:
     """One feature's t-digest centroids in ascending order of their means."""
 
-    __slots__ = ("high_weights", "highs", "low_weights", "lows", "means", "weights")
+    __slots__ = (
+        "high_weights",
+        "highs",
+        "low_weights",
+        "lows",
+        "m2s",
+        "means",
+        "weights",
+    )
 
     def __init__(
         self,
@@ -523,6 +568,7 @@ class _Centroids:
         highs: np.ndarray,
         low_weights: np.ndarray,
         high_weights: np.ndarray,
+        m2s: np.ndarray,
     ) -> None:
         self.means = means
         self.weights = weights
@@ -530,11 +576,13 @@ class _Centroids:
         self.highs = highs
         self.low_weights = low_weights
         self.high_weights = high_weights
+        # Weighted sum of squared deviations from the mean, per centroid.
+        self.m2s = m2s
 
     @classmethod
     def empty(cls) -> _Centroids:
         nothing = np.empty(0, dtype=np.float64)
-        return cls(nothing, nothing, nothing, nothing, nothing, nothing)
+        return cls(nothing, nothing, nothing, nothing, nothing, nothing, nothing)
 
     def arrays(self) -> tuple[np.ndarray, ...]:
         return (
@@ -544,6 +592,7 @@ class _Centroids:
             self.highs,
             self.low_weights,
             self.high_weights,
+            self.m2s,
         )
 
     def scaled(self, factor: float) -> _Centroids:
@@ -554,6 +603,7 @@ class _Centroids:
             self.highs,
             self.low_weights * factor,
             self.high_weights * factor,
+            self.m2s * factor,
         )
 
     def merged(
@@ -562,21 +612,31 @@ class _Centroids:
         weights: np.ndarray,
         compression: float,
         *,
+        weight_scale: float,
         descending: bool,
     ) -> _Centroids:
-        """Merge new points into these centroids with one compression pass."""
-        means = np.concatenate((self.means, values))
-        order = np.argsort(means, kind="stable")
+        """Merge new points into these centroids with one compression pass.
+
+        ``weight_scale`` converts stored weights to effective ones. Entries
+        whose stored weight has decayed to zero are dropped: they no longer
+        contribute mass, and merging two of them would divide by zero.
+        """
+        all_weights = np.concatenate((self.weights, weights))
+        kept = np.flatnonzero(all_weights > 0.0)
+        means = np.concatenate((self.means, values))[kept]
+        order = kept[np.argsort(means, kind="stable")]
         if descending:
             order = order[::-1]
         merged = _compress(
-            means[order],
-            np.concatenate((self.weights, weights))[order],
+            np.concatenate((self.means, values))[order],
+            all_weights[order],
             np.concatenate((self.lows, values))[order],
             np.concatenate((self.highs, values))[order],
             np.concatenate((self.low_weights, weights))[order],
             np.concatenate((self.high_weights, weights))[order],
+            np.concatenate((self.m2s, np.zeros(len(values))))[order],
             compression,
+            weight_scale,
         )
         if descending:
             merged = _Centroids(*(array[::-1] for array in merged.arrays()))
@@ -590,7 +650,9 @@ def _compress(
     highs: np.ndarray,
     low_weights: np.ndarray,
     high_weights: np.ndarray,
+    m2s: np.ndarray,
     compression: float,
+    weight_scale: float = 1.0,
 ) -> _Centroids:
     """Merge sorted centroids greedily under the ``k2`` scale function.
 
@@ -601,12 +663,16 @@ def _compress(
     + 24`` limits a centroid to a fixed fraction of its distance from the
     nearer end, so tail ranks carry a relative rather than an absolute error,
     which is what a negative log tail probability needs. The input may run in
-    either direction; the scale function is symmetric.
+    either direction; the scale function is symmetric. ``weight_scale``
+    converts the stored ``weights`` to effective sample weights for ``Z(n)``.
     """
     total = float(np.sum(weights))
     if total <= 0.0 or len(means) <= 1:
-        return _Centroids(means, weights, lows, highs, low_weights, high_weights)
-    normalizer = 4.0 * math.log(max(total / compression, 1.0)) + 24.0
+        return _Centroids(means, weights, lows, highs, low_weights, high_weights, m2s)
+    # Z(n) uses the effective sample size; stored weights carry the lazy decay
+    # inflation, which must not make the digest coarser over time.
+    effective = total / weight_scale
+    normalizer = 4.0 * math.log(max(effective / compression, 1.0)) + 24.0
     step = normalizer / compression
 
     def q_limit(q: float) -> float:
@@ -618,7 +684,7 @@ def _compress(
         odds = q / (1.0 - q) * math.exp(step)
         return odds / (1.0 + odds)
 
-    out: list[tuple[float, float, float, float, float, float]] = []
+    out: list[tuple[float, float, float, float, float, float, float]] = []
     items = zip(
         means.tolist(),
         weights.tolist(),
@@ -626,16 +692,28 @@ def _compress(
         highs.tolist(),
         low_weights.tolist(),
         high_weights.tolist(),
+        m2s.tolist(),
         strict=True,
     )
-    mean, weight, low, high, low_weight, high_weight = next(items)
+    mean, weight, low, high, low_weight, high_weight, m2 = next(items)
     done = 0.0
     limit = 0.0
     for item in items:
-        next_mean, next_weight, next_low, next_high, next_low_w, next_high_w = item
+        (
+            next_mean,
+            next_weight,
+            next_low,
+            next_high,
+            next_low_w,
+            next_high_w,
+            next_m2,
+        ) = item
         if done + weight + next_weight <= limit:
-            weight += next_weight
-            mean += (next_mean - mean) * next_weight / weight
+            delta = next_mean - mean
+            combined = weight + next_weight
+            m2 += next_m2 + delta * delta * weight * next_weight / combined
+            weight = combined
+            mean += delta * next_weight / weight
             if next_low < low:
                 low, low_weight = next_low, next_low_w
             elif next_low == low:
@@ -645,10 +723,10 @@ def _compress(
             elif next_high == high:
                 high_weight += next_high_w
         else:
-            out.append((mean, weight, low, high, low_weight, high_weight))
+            out.append((mean, weight, low, high, low_weight, high_weight, m2))
             done += weight
             limit = q_limit(done / total) * total
-            mean, weight, low, high, low_weight, high_weight = item
-    out.append((mean, weight, low, high, low_weight, high_weight))
+            mean, weight, low, high, low_weight, high_weight, m2 = item
+    out.append((mean, weight, low, high, low_weight, high_weight, m2))
     columns = np.array(out, dtype=np.float64).T
     return _Centroids(*(np.ascontiguousarray(column) for column in columns))
