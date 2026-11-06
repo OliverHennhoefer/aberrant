@@ -439,12 +439,17 @@ feature contributes at most `log(n + 1)`.
 
 With `memory="window"` the score equals batch ECOD or COPOD fitted on the
 window plus the candidate. The hybrid's score is the smaller of its window and
-history scores, so a sample must be unusual against both. `tail="pareto"`
+history scores, so a sample must be unusual against both. The history starts
+contributing after `min_samples` evictions, even when decay keeps its effective
+weight below that count. `tail="pareto"`
 fits a generalized Pareto tail beyond the reference's `tail_quantile`
 quantile, as SPOT does, so scores keep growing past the observed range instead
 of saturating. `aggregation="paper"` (default) follows both papers, which
 share one final formula, so the two classes then score identically;
 `aggregation="pyod"` reproduces PyOD's differing ECOD and COPOD.
+The paper aggregation remains the default for reproducibility. The PyOD
+aggregation is available for comparison; a gain on one dataset alone does
+not establish a better general default.
 
 ```python
 import random

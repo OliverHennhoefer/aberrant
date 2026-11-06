@@ -116,6 +116,7 @@ class _OnlineTailDetector(BaseModel):
         self._boundary = NumericEventBoundary(time_key=self.time_key)
         self._primary: _BaseReference | None = None
         self._history: _SketchReference | None = None
+        self._history_samples_seen = 0
         self._samples_seen = 0
 
     def reset(self) -> None:
@@ -174,6 +175,7 @@ class _OnlineTailDetector(BaseModel):
         evicted = self._primary.learn(vector)
         if evicted is not None and self._history is not None:
             self._history.learn(evicted)
+            self._history_samples_seen += 1
         self._samples_seen += 1
         self._boundary.commit(event)
 
@@ -203,7 +205,7 @@ class _OnlineTailDetector(BaseModel):
         assert self._primary is not None
         score, terms = self._aggregate(self._primary, vector)
         history = self._history
-        if history is not None and history.size >= self.min_samples:
+        if history is not None and self._history_samples_seen >= self.min_samples:
             # ESOD flags a point only when it is an outlier against both the
             # recent window and the long-run history; as a single score that
             # is the smaller of the two.
@@ -278,7 +280,8 @@ class OnlineECOD(_OnlineTailDetector):
     - ``"hybrid"``: an exact window plus a sketch of the values it evicts, as
       in ESOD. The score is the smaller of the window and history scores, the
       single-score form of ESOD's rule that a point must be an outlier against
-      both; the history joins once it holds ``min_samples`` weight.
+      both; the history joins after learning ``min_samples`` evicted samples,
+      independently of how quickly their weights decay.
 
     ``tail="pareto"`` replaces the empirical probability beyond each
     reference's ``tail_quantile`` quantile with a generalized Pareto tail
@@ -371,7 +374,8 @@ class OnlineCOPOD(_OnlineTailDetector):
     - ``"hybrid"``: an exact window plus a sketch of the values it evicts, as
       in ESOD. The score is the smaller of the window and history scores, the
       single-score form of ESOD's rule that a point must be an outlier against
-      both; the history joins once it holds ``min_samples`` weight.
+      both; the history joins after learning ``min_samples`` evicted samples,
+      independently of how quickly their weights decay.
 
     ``tail="pareto"`` replaces the empirical probability beyond each
     reference's ``tail_quantile`` quantile with a generalized Pareto tail

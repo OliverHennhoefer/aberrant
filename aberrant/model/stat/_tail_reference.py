@@ -200,8 +200,11 @@ class _BaseReference:
         """Return ``log`` left and right tail probabilities with ``x`` appended."""
         total = self.size
         at_most, at_least = self._masses(x)
-        log_left = np.log((at_most + 1.0) / (total + 1.0))
-        log_right = np.log((at_least + 1.0) / (total + 1.0))
+        # Summing decayed weights through different paths can put the queried
+        # mass a few ulps above the running total. A probability cannot exceed
+        # one, and its negative log must remain a non-negative contribution.
+        log_left = np.log((np.minimum(at_most, total) + 1.0) / (total + 1.0))
+        log_right = np.log((np.minimum(at_least, total) + 1.0) / (total + 1.0))
         if self.tail_quantile is not None:
             self._apply_pareto(x, total, log_left, log_right)
         return log_left, log_right
@@ -393,9 +396,12 @@ class _SketchReference(_BaseReference):
 
     def learn(self, x: np.ndarray) -> np.ndarray | None:
         if self._decay < 1.0:
-            self._inflation /= self._decay
-            if self._inflation > _MAX_INFLATION:
-                self._renormalize()
+            # Renormalize before division can overflow or the decay factor
+            # underflows to zero. Zero decay simply forgets all previous mass.
+            if self._inflation > _MAX_INFLATION * self._decay:
+                self._renormalize(self._decay)
+            else:
+                self._inflation /= self._decay
             self._moment_weight *= self._decay
             self._m2 *= self._decay
             self._m3 *= self._decay
@@ -415,13 +421,11 @@ class _SketchReference(_BaseReference):
             self._moment_weight, self._mean, self._m2, self._m3, x
         )
 
-    def _renormalize(self) -> None:
-        scale = self._inflation
-        self._centroids = [
-            centroids.scaled(1.0 / scale) for centroids in self._centroids
-        ]
-        self._buffer_weights[: self._buffered] /= scale
-        self._stored_total /= scale
+    def _renormalize(self, decay: float) -> None:
+        factor = decay / self._inflation
+        self._centroids = [centroids.scaled(factor) for centroids in self._centroids]
+        self._buffer_weights[: self._buffered] *= factor
+        self._stored_total *= factor
         self._inflation = 1.0
         self._rebuild_query()
 

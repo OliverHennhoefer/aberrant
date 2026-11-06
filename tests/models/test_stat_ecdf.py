@@ -282,6 +282,28 @@ def test_weights_that_decay_to_zero_are_dropped() -> None:
     assert math.isfinite(model.score_one({"x": 2.0}))
 
 
+@pytest.mark.parametrize("model_type", DETECTORS)
+@pytest.mark.parametrize("half_life", [0.001, 0.0001, float(np.nextafter(0.0, 1.0))])
+def test_extremely_short_half_lives_forget_without_dividing_by_zero(
+    model_type: type, half_life: float
+) -> None:
+    model = model_type(half_life=half_life, min_samples=1)
+    for index in range(1_000):
+        value = float(index % 3)
+        model.learn_one({"x": value})
+        assert model.score_one({"x": value}) == pytest.approx(0.0, abs=1e-12)
+        assert model.score_one({"x": 3.0}) == pytest.approx(math.log(2.0))
+
+
+@pytest.mark.parametrize("model_type", DETECTORS)
+def test_decayed_constant_features_have_nonnegative_scores(model_type: type) -> None:
+    model = model_type(half_life=100.0, min_samples=1)
+    for _ in range(1_000):
+        model.learn_one({"x": 1.0})
+        assert model.score_one({"x": 1.0}) >= 0.0
+        assert model.explain_one({"x": 1.0})["x"] >= 0.0
+
+
 def test_decay_survives_weight_renormalization() -> None:
     rng = np.random.default_rng(15)
     # A half-life of one sample doubles the stored weight per learn, which
@@ -317,6 +339,28 @@ def test_hybrid_uses_window_until_history_is_ready_then_the_smaller_score() -> N
         window.learn_one(_event(row))
         if index >= 50:
             history.learn_one(_event(data[index - 50]))
+
+
+@pytest.mark.parametrize("model_type", DETECTORS)
+def test_hybrid_history_warms_up_by_learned_samples_under_fast_decay(
+    model_type: type,
+) -> None:
+    hybrid = model_type(memory="hybrid", window_size=64, half_life=10.0, min_samples=64)
+    window = model_type(memory="window", window_size=64, min_samples=64)
+    history = model_type(half_life=10.0, min_samples=64)
+    data = [0.0] * 64 + [10.0] * 64
+    for index, value in enumerate(data):
+        event = {"x": value}
+        hybrid.learn_one(event)
+        window.learn_one(event)
+        if index >= 64:
+            history.learn_one({"x": data[index - 64]})
+        if index < 127:
+            assert hybrid.score_one({"x": 0.0}) == window.score_one({"x": 0.0})
+    assert window.score_one({"x": 0.0}) > 0.0
+    assert hybrid.score_one({"x": 0.0}) == history.score_one({"x": 0.0})
+    assert hybrid.score_one({"x": 0.0}) == pytest.approx(0.0, abs=1e-12)
+    assert hybrid.explain_one({"x": 0.0}) == pytest.approx({"x": 0.0}, abs=1e-12)
 
 
 @pytest.mark.parametrize("memory", ["window", "sketch"])
@@ -357,11 +401,14 @@ def test_pareto_fit_recovers_exponential_and_heavy_tails() -> None:
 @pytest.mark.parametrize("model_type", DETECTORS)
 @pytest.mark.parametrize("aggregation", ["paper", "pyod"])
 @pytest.mark.parametrize("memory", ["window", "sketch", "hybrid"])
+@pytest.mark.parametrize("tail", ["empirical", "pareto"])
 def test_explanation_sums_to_the_score(
-    model_type: type, aggregation: str, memory: str
+    model_type: type, aggregation: str, memory: str, tail: str
 ) -> None:
     rng = np.random.default_rng(19)
-    model = model_type(memory=memory, aggregation=aggregation, min_samples=10)
+    model = model_type(
+        memory=memory, aggregation=aggregation, tail=tail, min_samples=10
+    )
     names = ["a", "b", "c"]
     assert model.explain_one(dict.fromkeys(names, 0.0)) == dict.fromkeys(names, 0.0)
     for row in rng.lognormal(size=(1_200, 3)):
