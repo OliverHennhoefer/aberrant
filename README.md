@@ -34,14 +34,47 @@
 ## Quickstart
 
 ```python
-from aberrant.model.iforest import OnlineIsolationForest
+# pip install "aberrant[eval]"
+from itertools import islice
+
+from aberrant.drift import ADWIN
+from aberrant.evaluate import PrequentialEvaluator
+from aberrant.model import QuantileThreshold
+from aberrant.model.distance import SDOStream
 from aberrant.stream.dataset import Dataset, load
+from aberrant.transform import IncrementalPCA, StandardScaler
 
-detector = OnlineIsolationForest(seed=42)  # no scaler: trees split on raw values
+stream = load(Dataset.SHUTTLE).stream()
+preprocess = StandardScaler() | IncrementalPCA(n_components=5, n0=100)
+for event, _ in islice(stream, 512):
+    preprocess.learn_one(event)
 
-for event, label in load(Dataset.SHUTTLE).stream():
-    score = detector.score_one(event)  # score first: higher means more anomalous
-    detector.learn_one(event)  # then learn from the event
+detector = SDOStream(k=128, seed=42)
+evaluator = PrequentialEvaluator(
+    detector,
+    warmup=256,
+    metrics=True,
+    metric_window_size=None,  # Retain all labeled scores for full-stream metrics.
+)
+threshold = QuantileThreshold(quantile=0.99, window_size=256)
+drift = ADWIN(max_window_size=2048)
+
+projected_stream = ((preprocess.transform_one(event), label) for event, label in stream)
+alerts = 0
+for record in evaluator.iter_evaluate(projected_stream):
+    score = record.score
+    if score is None:  # The detector is still warming up.
+        continue
+
+    score_event = {"score": score}
+    if threshold.score_one(score_event) == 1.0:
+        alerts += 1
+    threshold.learn_one(score_event)
+    drift.update(score)
+
+result = evaluator.result()
+print(f"Average precision = {result.average_precision:.3f}")
+print(f"{alerts} alerts, {drift.n_detections} score drift signals")
 ```
 
 ## Why aberrant
