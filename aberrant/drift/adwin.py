@@ -106,7 +106,6 @@ class ADWIN(BaseDriftDetector):
         self._n_detections: int = 0
         self._drift_detected: bool = False
         self._samples_since_reset: int = 0
-        self._last_bucket_idx: int = 0
 
     def reset(self) -> None:
         """Reset the detector to its initial state (clears all counters)."""
@@ -258,7 +257,6 @@ class ADWIN(BaseDriftDetector):
         # Try different split points
         n0 = 0
         sum0 = 0.0
-        var0 = 0.0
 
         # Iterate through buckets from newest to oldest
         for level in range(len(self._bucket_count)):
@@ -266,7 +264,6 @@ class ADWIN(BaseDriftDetector):
             for i in range(self._bucket_count[level] - 1, -1, -1):
                 n0 += bucket_size
                 sum0 += self._bucket_sum[level][i]
-                var0 += self._bucket_variance[level][i]
 
                 n1 = self._width - n0
                 if n0 < self.min_window_length or n1 < self.min_window_length:

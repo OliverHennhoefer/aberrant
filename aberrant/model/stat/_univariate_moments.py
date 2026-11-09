@@ -75,7 +75,6 @@ class MovingInterquartileRange(_BaseMovingUnivariate):
     """Score the change in linearly interpolated interquartile range."""
 
     def score_one(self, x: dict[str, float]) -> float:
-        self.actual_window_length = len(self.window)
         return self._score_statistic_change(x, _interquartile_range)
 
 

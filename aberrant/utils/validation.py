@@ -5,11 +5,9 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TypeAlias, cast
+from typing import cast
 
 import numpy as np
-
-NumericScalar: TypeAlias = int | float | np.number
 
 # Built once: an ``int | float | np.number`` expression creates a union per call.
 _NUMERIC_TYPES = (int, float, np.number)

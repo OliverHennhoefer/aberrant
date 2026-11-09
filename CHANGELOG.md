@@ -213,6 +213,10 @@ Semantic Versioning.
   leave that search out. Scores, the best-so-far score and the history are
   unchanged. With a subsequence length of 32 and the default lag, scoring
   then learning each value runs about 1.9 times more events per second.
+- Removed state that was written but never read: an accumulator and a
+  counter in `ADWIN`, an attribute `MovingInterquartileRange.score_one` set
+  on the model while scoring, and the unused `NumericScalar` alias in
+  `aberrant.utils.validation`. Scores and drift decisions are unchanged.
 
 ## [1.4.0] - 2026-10-30
 
