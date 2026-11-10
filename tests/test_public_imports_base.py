@@ -21,6 +21,7 @@ from aberrant.base import (
     Pipeline,
     TransformerProtocol,
 )
+from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
@@ -78,6 +79,8 @@ def test_public_imports_base_smoke() -> None:
     assert Pipeline is not None
     assert ModelProtocol is not None
     assert TransformerProtocol is not None
+    assert ScoreCalibrator is not None
+    assert len(CALIBRATORS) == 15
     assert ADWIN is not None
     assert KSWIN is not None
     assert PageHinkley is not None

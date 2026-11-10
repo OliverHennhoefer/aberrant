@@ -9,6 +9,15 @@ Semantic Versioning.
 
 ### Added
 
+- `aberrant.calibration`: online calibration of score streams with delayed
+  feedback. `ScoreCalibrator` issues a threshold with `predict(key)` and learns
+  each score with `update(key, score)` once it is known, so forecast leads and
+  late labels work. Fifteen methods are registered in `CALIBRATORS` with their
+  parameters, family and coverage guarantee: rolling split conformal, ACI,
+  DtACI, AgACI, quantile tracking, conformal PID, NexCP, ECI, SF-OGD, SAOCP,
+  Bayesian belief CP, BOCPD with and without ACI, changepoint-weighted CP and
+  discounted Bayes. They are ports of the Timestral Uncertainty Arena's
+  methods and reproduce its thresholds on fixtures generated from it.
 - `OnlineECOD` and `OnlineCOPOD` in `aberrant.model.stat`: truly online
   ECOD and COPOD that score each sample against per-feature reference
   distributions before learning it. A bounded t-digest per feature (with an
