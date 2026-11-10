@@ -7,6 +7,8 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-10
+
 ### Added
 
 - `aberrant.calibration`: online calibration of score streams with delayed
