@@ -11,6 +11,20 @@ Semantic Versioning.
 
 ### Added
 
+- `aberrant.forecast`: online forecasters and regressors for forecast-based
+  anomaly detection. A forecaster learns one series with `learn_one(y)` and
+  forecasts leads `1..horizon` with `forecast_one()`; a regressor learns a
+  target from covariates with `learn_one(x, y)` and predicts it with
+  `predict_one(x)` at lead 0. Both return a `Forecast` (in `aberrant.base`,
+  with `ForecasterProtocol` and `RegressorProtocol`) holding a point forecast
+  and a spread per lead, and optionally quantiles on any level grid. Three
+  models: `SeasonalNaive`, additive `HoltWinters` and `RLSRegressor`
+  (recursive least squares with forgetting). `ResidualDetector` turns any of
+  them into a detector that scores the target against the forecast issued
+  `lead` events earlier; around `HoltWinters` it reproduces
+  `SeasonalResidualDetector` exactly. `nonconformity` (absolute, scaled, CQR)
+  and `interval` connect forecasts to `aberrant.calibration` with the target
+  event as the delayed-feedback key.
 - `aberrant.calibration`: online calibration of score streams with delayed
   feedback. `ScoreCalibrator` issues a threshold with `predict(key)` and learns
   each score with `update(key, score)` once it is known, so forecast leads and
