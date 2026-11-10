@@ -312,7 +312,9 @@ class ECI:
         u = (score - q) / spread
         eq = 0.0
         if abs(u) > self.cutoff:
-            f = 1 / (1 + math.exp(-self.c * u))
+            z = -self.c * u
+            # Past exp's range 1 / (1 + e^z) equals e^-z to double precision.
+            f = 1 / (1 + math.exp(z)) if z < 700 else math.exp(-z)
             eq = u * self.c * f * (1 - f)
         self.q += self.lr * spread * (err - self.alpha + eq)
 

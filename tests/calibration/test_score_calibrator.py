@@ -92,3 +92,22 @@ def test_every_default_is_accepted_by_its_parameter():
         for parameter in spec.parameters:
             assert parameter.coerce(parameter.default) == parameter.default
             assert parameter.minimum <= parameter.low <= parameter.high
+
+
+@pytest.mark.parametrize("method", ["bocpd", "bocpd_aci", "cpcp"])
+def test_a_unit_changepoint_hazard_keeps_calibrating(method):
+    calibrator = ScoreCalibrator(method, alpha=0.1, **{"lambda": 1})
+    for t, score in enumerate(_scores(50)):
+        calibrator.predict(t)
+        calibrator.update(t, score)
+
+    assert not math.isnan(calibrator.predict(50))
+
+
+def test_eci_survives_a_score_far_below_its_threshold():
+    calibrator = ScoreCalibrator("eci", alpha=0.1)
+    for t, score in enumerate([1.0, 2.0, -1000.0, 1.5]):
+        calibrator.predict(t)
+        calibrator.update(t, score)
+
+    assert math.isfinite(calibrator.predict(4))

@@ -148,8 +148,10 @@ class BOCPD:
         prior = _empirical_prior(self.history)
         log_cp = math.log(hazard) + t_log_pdf(x, _predictive(prior, _Suff()))
         top = log_cp
+        # A unit hazard (lambda = 1) forces a changepoint every step.
+        log_stay = math.log1p(-hazard) if hazard < 1 else -math.inf
         for r in runs:
-            r.w = math.log(r.w) + math.log1p(-hazard) + t_log_pdf(x, r.pred)
+            r.w = math.log(r.w) + log_stay + t_log_pdf(x, r.pred)
             top = max(top, r.w)
         total = 0.0
         for r in runs:
