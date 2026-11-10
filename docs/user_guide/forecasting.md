@@ -40,10 +40,10 @@ for y in series:
     forecast = model.forecast_one()  # issued before y arrives
     model.learn_one(y)
 
-forecast.origin    # events learned when it was issued
-forecast.leads     # (1, 2, 3, 4, 5, 6)
-forecast.mean      # point forecast per lead
-forecast.scale     # spread per lead, in target units
+forecast.origin  # events learned when it was issued
+forecast.leads  # (1, 2, 3, 4, 5, 6)
+forecast.mean  # point forecast per lead
+forecast.scale  # spread per lead, in target units
 ```
 
 Lead `k` forecasts the value learned `k` events after the origin. A
@@ -78,7 +78,7 @@ from aberrant.forecast import HoltWinters, ResidualDetector, RLSRegressor
 seasonal = ResidualDetector(HoltWinters(season_length=24, horizon=3), "load", lead=3)
 virtual_sensor = ResidualDetector(RLSRegressor(), "output")
 
-for x in stream:          # {"output": 4.2, "input_a": 1.1, "input_b": 0.3}
+for x in stream:  # {"output": 4.2, "input_a": 1.1, "input_b": 0.3}
     score = virtual_sensor.score_one(x)
     virtual_sensor.learn_one(x)
 ```
