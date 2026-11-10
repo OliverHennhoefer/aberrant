@@ -79,8 +79,6 @@ def test_public_imports_base_smoke() -> None:
     assert Pipeline is not None
     assert ModelProtocol is not None
     assert TransformerProtocol is not None
-    assert ScoreCalibrator is not None
-    assert len(CALIBRATORS) == 15
     assert ADWIN is not None
     assert KSWIN is not None
     assert PageHinkley is not None
@@ -129,6 +127,11 @@ def test_public_imports_base_smoke() -> None:
     assert load is not None
     assert BatchStreamer is not None
     assert NpzStreamer is not None
+
+
+def test_calibration_public_imports_base_smoke() -> None:
+    assert ScoreCalibrator is not None
+    assert len(CALIBRATORS) == 15
 
 
 def test_rolling_robust_scaler_public_import() -> None:
