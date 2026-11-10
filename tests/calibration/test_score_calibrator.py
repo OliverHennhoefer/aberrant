@@ -111,3 +111,12 @@ def test_eci_survives_a_score_far_below_its_threshold():
         calibrator.update(t, score)
 
     assert math.isfinite(calibrator.predict(4))
+
+
+def test_only_the_rolling_split_promises_exchangeable_coverage():
+    coverage = {spec.coverage for spec in CALIBRATORS.values()}
+
+    assert coverage == {"exchangeable", "long_run", "none"}
+    assert [m for m, s in CALIBRATORS.items() if s.coverage == "exchangeable"] == [
+        "split"
+    ]

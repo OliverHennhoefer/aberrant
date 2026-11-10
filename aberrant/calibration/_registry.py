@@ -87,6 +87,7 @@ class CalibratorParameter:
         return number
 
 
+Coverage = Literal["exchangeable", "long_run", "none"]
 Factory = Callable[[ScoreHistory, float, Mapping[str, float]], OnlineCalibrator]
 
 
@@ -94,8 +95,14 @@ Factory = Callable[[ScoreHistory, float, Mapping[str, float]], OnlineCalibrator]
 class CalibratorSpec:
     """A calibration method: what it is, its parameters and its guarantee.
 
-    ``guarantee`` is True when long-run coverage holds for any score
-    sequence (or under exchangeability for the rolling split).
+    ``coverage`` says what the threshold promises about the score stream:
+
+    - ``"exchangeable"``: a new score exceeds the threshold with probability
+      at most ``alpha`` when it is exchangeable with the calibration scores.
+    - ``"long_run"``: the fraction of scores above the threshold tends to
+      ``alpha`` for any score sequence. This bounds every exceedance, normal
+      or anomalous, not the false-positive rate on normal scores alone.
+    - ``"none"``: no coverage guarantee; calibrated only in practice.
     """
 
     id: str
@@ -103,7 +110,7 @@ class CalibratorSpec:
     reference: str
     summary: str
     family: Literal["conformal", "bayesian"]
-    guarantee: bool
+    coverage: Coverage
     parameters: tuple[CalibratorParameter, ...]
     factory: Factory
 
@@ -159,21 +166,21 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "split", "Rolling split CP", "Vovk et al. 2005; rolling calibration window",
             "Empirical (1-alpha)(1+1/n) quantile of the last W scores. Valid under "
             "exchangeability, slow to react to shifts.",
-            "conformal", True, (),
+            "conformal", "exchangeable", (),
             lambda h, a, p: RollingSplit(h, a),
         ),
         CalibratorSpec(
             "aci", "ACI", "Gibbs & Candes, NeurIPS 2021",
             "Adapts the working miscoverage level alpha_t += gamma (alpha - err_t). "
             "Long-run coverage holds for any sequence.",
-            "conformal", True, (_gamma(),),
+            "conformal", "long_run", (_gamma(),),
             lambda h, a, p: ACI(h, a, p["gamma"]),
         ),
         CalibratorSpec(
             "dtaci", "DtACI", "Gibbs & Candes, JMLR 2024",
             "Runs ACI over a grid of step sizes and reweights the experts online, so "
             "the step size tunes itself.",
-            "conformal", True,
+            "conformal", "long_run",
             (
                 CalibratorParameter(
                     "interval", "Interval", 100, 10, 1000, 10, 1.0,
@@ -186,20 +193,20 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "agaci", "AgACI", "Zaffran et al., ICML 2022",
             "Aggregates ACI experts with online expert aggregation on the pinball "
             "loss.",
-            "conformal", True, (),
+            "conformal", "long_run", (),
             lambda h, a, p: AgACI(h, a, DEFAULT_GAMMAS),
         ),
         CalibratorSpec(
             "qt", "Quantile tracker", "Angelopoulos, Candes & Tibshirani, NeurIPS 2023",
             "Online gradient descent on the pinball loss of the threshold itself: "
             "q += eta (err - alpha).",
-            "conformal", True, (_lr(_RANGE),),
+            "conformal", "long_run", (_lr(_RANGE),),
             lambda h, a, p: QuantileTracker(h, a, p["lr"], 100),
         ),
         CalibratorSpec(
             "pid", "Conformal PID", "Angelopoulos, Candes & Tibshirani, NeurIPS 2023",
             "Quantile tracker plus a saturated integrator of past coverage errors.",
-            "conformal", True,
+            "conformal", "long_run",
             (
                 _lr(),
                 CalibratorParameter(
@@ -212,7 +219,7 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
         CalibratorSpec(
             "nexcp", "NexCP", "Barber, Candes, Ramdas & Tibshirani, Ann. Stat. 2023",
             "Weighted split conformal with geometric weights rho^age, robust to drift.",
-            "conformal", True,
+            "conformal", "long_run",
             (_discount("rho", "Decay", 0.99, "Weight of a score one step older."),),
             lambda h, a, p: NexCP(a, p["rho"], 500),
         ),
@@ -220,7 +227,7 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "eci", "ECI", "Wu, Hu, Bao, Xia & Zou, ICLR 2025",
             "Quantile tracker plus an error-quantification term that also weighs how "
             "far the score fell from the threshold. Trades some coverage for width.",
-            "conformal", False,
+            "conformal", "none",
             (
                 _lr(_RANGE),
                 CalibratorParameter(
@@ -240,14 +247,14 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "sfogd", "SF-OGD", "Orabona & Pal 2016; Bhatnagar et al., ICML 2023",
             "Scale-free gradient descent on the pinball loss, with no learning rate "
             "to tune.",
-            "conformal", True, (),
+            "conformal", "long_run", (),
             lambda h, a, p: SFOGD(h, a),
         ),
         CalibratorSpec(
             "saocp", "SAOCP", "Bhatnagar, Wang, Xiong & Bai, ICML 2023",
             "SF-OGD experts on geometric covering intervals, combined by coin "
             "betting: low regret on every time interval.",
-            "conformal", True,
+            "conformal", "long_run",
             (
                 CalibratorParameter(
                     "g", "Lifetime", 8, 1, 64, 1, 1.0, integer=True,
@@ -263,7 +270,7 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "Conformal Prediction, 2024",
             "Threshold = quantile of a belief: a prior mixed with the discounted "
             "empirical score distribution.",
-            "bayesian", False,
+            "bayesian", "none",
             (_discount("beta", "Discount", 0.99, "Per-step discount of past scores."),),
             lambda h, a, p: BayesianBelief(a, p["beta"]),
         ),
@@ -271,28 +278,28 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "bocpd_aci", "BOCPD + ACI", "Adams & MacKay 2007; Gibbs & Candes 2021",
             "Bayesian changepoint predictive, with its level set by ACI so long-run "
             "coverage holds.",
-            "bayesian", True, (_run_length(), _gamma()),
+            "bayesian", "long_run", (_run_length(), _gamma()),
             lambda h, a, p: BOCPDACI(h, a, p["lambda"], p["gamma"]),
         ),
         CalibratorSpec(
             "cpcp", "Changepoint CP", "Barber et al. 2023 weights from Adams & MacKay 2007",
             "Weighted split conformal; a past score's weight is the posterior "
             "probability it is in the current regime.",
-            "bayesian", False, (_run_length(),),
+            "bayesian", "none", (_run_length(),),
             lambda h, a, p: ChangepointCP(h, a, p["lambda"]),
         ),
         CalibratorSpec(
             "bocpd", "BOCPD", "Adams & MacKay 2007",
             "Bayesian online changepoint detection with a Normal-Inverse-Gamma model "
             "per regime; threshold = predictive quantile.",
-            "bayesian", False, (_run_length(),),
+            "bayesian", "none", (_run_length(),),
             lambda h, a, p: BOCPDQuantile(h, a, p["lambda"]),
         ),
         CalibratorSpec(
             "nig", "Discounted Bayes", "West & Harrison 1997, discount variance learning",
             "Gaussian score with unknown mean and variance, evidence discounted per "
             "step; Student-t predictive quantile.",
-            "bayesian", False,
+            "bayesian", "none",
             (
                 _discount(
                     "delta", "Discount", 0.98,

@@ -13,7 +13,8 @@ Semantic Versioning.
   feedback. `ScoreCalibrator` issues a threshold with `predict(key)` and learns
   each score with `update(key, score)` once it is known, so forecast leads and
   late labels work. Fifteen methods are registered in `CALIBRATORS` with their
-  parameters, family and coverage guarantee: rolling split conformal, ACI,
+  parameters, family and coverage (exchangeable, long run or none): rolling
+  split conformal, ACI,
   DtACI, AgACI, quantile tracking, conformal PID, NexCP, ECI, SF-OGD, SAOCP,
   Bayesian belief CP, BOCPD with and without ACI, changepoint-weighted CP and
   discounted Bayes. They are ports of the Timestral Uncertainty Arena's

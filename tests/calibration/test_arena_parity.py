@@ -64,5 +64,5 @@ def test_every_arena_method_is_registered_with_its_defaults():
     for identifier, spec in arena.items():
         ours = CALIBRATORS[identifier]
         assert ours.family == spec["family"]
-        assert ours.guarantee == spec["guarantee"]
+        assert (ours.coverage != "none") == spec["guarantee"]
         assert ours.defaults() == {p["key"]: p["default"] for p in spec["params"]}
