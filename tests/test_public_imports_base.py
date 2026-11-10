@@ -21,6 +21,7 @@ from aberrant.base import (
     Pipeline,
     TransformerProtocol,
 )
+from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
@@ -126,6 +127,11 @@ def test_public_imports_base_smoke() -> None:
     assert load is not None
     assert BatchStreamer is not None
     assert NpzStreamer is not None
+
+
+def test_calibration_public_imports_base_smoke() -> None:
+    assert ScoreCalibrator is not None
+    assert len(CALIBRATORS) == 15
 
 
 def test_rolling_robust_scaler_public_import() -> None:

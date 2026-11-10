@@ -12,6 +12,7 @@ public methods, properties, return types, and model-specific caveats. Use the
 - [Anomaly models](models/index.md)
 - [Transformers](transform.md)
 - [Drift detectors](drift.md)
+- [Score calibration](calibration.md)
 - [Dataset registry, cache, and streams](stream.md)
 - [Prequential evaluation](evaluate.md)
 
