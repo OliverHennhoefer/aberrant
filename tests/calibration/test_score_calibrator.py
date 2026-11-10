@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from aberrant.calibration import CALIBRATORS, ScoreCalibrator
+from aberrant.calibration import CALIBRATORS, ScoreCalibrator, ScoreHistory
 
 
 def _scores(n=400, seed=3):
@@ -120,3 +120,41 @@ def test_only_the_rolling_split_promises_exchangeable_coverage():
     assert [m for m, s in CALIBRATORS.items() if s.coverage == "exchangeable"] == [
         "split"
     ]
+
+
+@pytest.mark.parametrize("method", sorted(CALIBRATORS))
+def test_the_history_stays_bounded_on_a_long_stream(method):
+    calibrator = ScoreCalibrator(method, alpha=0.1, window=20)
+    history = calibrator.history
+    for t, score in enumerate(_scores(3000)):
+        calibrator.predict(t)
+        calibrator.update(t, score)
+
+    assert history.count == 3000
+    assert len(history.recent(history.lookback)) == history.lookback == 1024
+    assert len(history.window_sorted) == 20
+    assert len(pickle.dumps(calibrator)) < 200_000
+
+
+def test_the_history_gives_its_latest_scores_oldest_first():
+    history = ScoreHistory(window=3, lookback=5)
+    for score in (1.0, -4.0, 2.0, 3.0, 0.5, 6.0, 7.0):
+        history.push(score)
+
+    assert history.recent(3) == [0.5, 6.0, 7.0]
+    assert history.recent(5) == [2.0, 3.0, 0.5, 6.0, 7.0]
+    assert history.window_sorted == [0.5, 6.0, 7.0]
+    assert history.spread(2) == 1.0
+    assert history.recent_range(5) == 7.0
+    assert history.max_abs_score == 7.0
+    with pytest.raises(ValueError, match="keeps the last 5 scores"):
+        history.recent(6)
+
+
+def test_a_window_longer_than_the_lookback_is_kept_whole():
+    history = ScoreHistory(window=8, lookback=2)
+    for score in range(20):
+        history.push(float(score))
+
+    assert history.lookback == 8
+    assert history.window_sorted == [float(score) for score in range(12, 20)]
