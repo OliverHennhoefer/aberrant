@@ -27,6 +27,7 @@ from ._parameters import (
     copy_parameter,
 )
 from ._registry import (
+    get_forecaster_spec,
     get_model_spec,
     get_similarity_engine_spec,
     get_transformer_spec,
@@ -267,6 +268,8 @@ def _as_component_config(
 def _dependency_spec(kind: ComponentKind, component_id: str) -> ComponentSpec:
     if kind is ComponentKind.SIMILARITY_ENGINE:
         return get_similarity_engine_spec(component_id)
+    if kind is ComponentKind.FORECASTER:
+        return get_forecaster_spec(component_id)
     raise RuntimeError(f"Unsupported nested component kind: {kind.value}")
 
 
