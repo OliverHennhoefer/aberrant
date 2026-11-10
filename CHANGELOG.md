@@ -7,6 +7,12 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- `ScoreHistory` keeps the last `max(window, lookback)` scores instead of
+  every score, so a calibrator's memory and pickled size stay bounded on an
+  endless stream. `recent(n)` gives the latest scores and replaces the `all`
+  list; `count` still counts every score seen. Thresholds are unchanged.
 ### Added
 
 - Forecasters in the catalog. `FORECASTER_CATALOG` and `get_forecaster_spec`
