@@ -141,3 +141,22 @@ def test_spreads_grow_with_the_lead_on_a_random_walk() -> None:
     assert all(a < b for a, b in zip(scale, scale[1:], strict=False))
     # Mean absolute error of a random walk at lead h is sqrt(2h/pi).
     assert scale[3] == pytest.approx(math.sqrt(8 / math.pi), rel=0.25)
+
+
+@pytest.mark.parametrize(("season", "horizon"), [(1, 3), (4, 1), (5, 12), (24, 7)])
+def test_seasonal_naive_matches_the_textbook_formula(season: int, horizon: int) -> None:
+    model = SeasonalNaive(season, horizon=horizon)
+    history: list[float] = []
+    for y in _series(6 * season + 3, max(season, 2), seed=season):
+        model.learn_one(y)
+        history.append(y)
+        forecast = model.forecast_one()
+        if len(history) < 2 * season:
+            assert forecast is None
+            continue
+        # y_hat(T + h) = y(T + h - m * ceil(h / m))
+        expected = tuple(
+            history[len(history) - 1 + h - season * math.ceil(h / season)]
+            for h in range(1, horizon + 1)
+        )
+        assert forecast is not None and forecast.mean == expected

@@ -94,3 +94,15 @@ def test_input_checks_and_atomic_failure() -> None:
     model.reset()
     assert model.feature_names is None
     assert model.coefficients == {}
+
+
+@pytest.mark.parametrize("forgetting", [1.0, 0.999])
+def test_large_covariates_keep_learning(forgetting: float) -> None:
+    # The textbook update P - k (Pz)' rounds P to zero here and freezes the fit.
+    model = RLSRegressor(forgetting=forgetting, fit_intercept=False)
+    model.learn_one({"x": 1e7}, 1e7)
+    for _ in range(9):
+        model.learn_one({"x": 1e7}, 2e7)
+    weights = forgetting ** np.arange(9, -1, -1)
+    targets = np.array([1.0] + [2.0] * 9)
+    assert model.coefficients["x"] == pytest.approx(weights @ targets / weights.sum())

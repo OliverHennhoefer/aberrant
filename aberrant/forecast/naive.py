@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections import deque
-
 from aberrant.base.forecast import Forecast
 from aberrant.forecast._arithmetic import LeadErrors, fsum
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
@@ -28,7 +26,8 @@ class SeasonalNaive(BaseForecaster):
         Two cycles warm the forecaster up. The spread of every lead starts at
         the mean absolute seasonal-naive error within the second cycle, then
         each lead fades towards its own errors. State is
-        O(season_length + horizon^2) and each event costs O(horizon).
+        O(season_length + horizon^2) and each event after warm-up costs
+        O(horizon).
 
     Examples:
         ```python
@@ -64,30 +63,47 @@ class SeasonalNaive(BaseForecaster):
     def reset(self) -> None:
         """Forget every learned value and error."""
         self.n_samples_seen = 0
-        self._values: deque[float] = deque(maxlen=2 * self.season_length)
+        # Warm-up values, then the last cycle as a ring whose oldest value
+        # sits at ``_oldest``.
+        self._values: list[float] = []
+        self._oldest = 0
         self._errors = LeadErrors(self.horizon, self.residual_alpha, self.min_scale)
 
-    def _means(self, cycle: list[float]) -> tuple[float, ...]:
+    def _means(self, oldest: int, replaced: float) -> tuple[float, ...]:
+        """Forecasts once ``replaced`` overwrites the value at ``oldest``."""
         m = self.season_length
-        return tuple(cycle[(lead - 1) % m] for lead in range(1, self.horizon + 1))
+        start = (oldest + 1) % m
+        means = []
+        for lead in range(1, self.horizon + 1):
+            position = (start + (lead - 1) % m) % m
+            means.append(replaced if position == oldest else self._values[position])
+        return tuple(means)
 
     def learn_one(self, y: float) -> None:
         """Learn the next value of the series."""
         value = coerce_finite_number(y, label="y")
         m = self.season_length
-        values = [*self._values, value]
         if self.n_samples_seen + 1 < 2 * m:
             self._values.append(value)
             self.n_samples_seen += 1
             return
         if self.is_ready:
             mae = self._errors.updated(value)
+            means = self._means(self._oldest, value)
+            self._errors.publish(mae, means)
+            self._values[self._oldest] = value
+            self._oldest = (self._oldest + 1) % m
         else:
+            values = [*self._values, value]
             warmup = fsum(abs(fsum((values[m + i], -values[i]))) / m for i in range(m))
-            mae = self._errors.seeded(warmup)
-        means = self._means(values[-m:])
-        self._errors.publish(mae, means)
-        self._values.append(value)
+            self._errors.publish(
+                self._errors.seeded(warmup),
+                tuple(
+                    values[m + (lead - 1) % m] for lead in range(1, self.horizon + 1)
+                ),
+            )
+            self._values = values[m:]
+            self._oldest = 0
         self.n_samples_seen += 1
 
     def forecast_one(self) -> Forecast | None:

@@ -150,7 +150,14 @@ class RLSRegressor(BaseRegressor):
             denominator = self.forgetting + float(z @ pz)
             gain = pz / denominator
             new_weights = weights + gain * error
-            new_covariance = (covariance - np.outer(gain, pz)) / self.forgetting
+            # Joseph form (I - k z')P(I - k z')' + lambda k k', in two rank-one
+            # steps: it stays positive where P - k (Pz)' cancels to zero.
+            reduced = covariance - np.outer(gain, pz)
+            new_covariance = (
+                reduced
+                - np.outer(reduced @ z, gain)
+                + self.forgetting * np.outer(gain, gain)
+            ) / self.forgetting
             new_covariance = (new_covariance + new_covariance.T) / 2
         if not (
             math.isfinite(error)
