@@ -16,7 +16,9 @@ import pytest
 from aberrant.calibration import CALIBRATORS, ScoreHistory
 
 FIXTURE = json.loads(
-    (Path(__file__).parent / "fixtures" / "arena_thresholds.json").read_text()
+    (Path(__file__).parent / "fixtures" / "arena_thresholds.json").read_text(
+        encoding="utf-8"
+    )
 )
 _SPECIAL = {"inf": math.inf, "-inf": -math.inf, "nan": math.nan}
 
