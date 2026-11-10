@@ -2,26 +2,12 @@
 
 from __future__ import annotations
 
-import math
-from collections.abc import Iterable
-from statistics import mean
-
 from aberrant.base.model import BaseModel
+from aberrant.forecast._arithmetic import blend as _blend
+from aberrant.forecast._arithmetic import finite as _finite
+from aberrant.forecast._arithmetic import fsum as _sum
+from aberrant.forecast._arithmetic import holt_winters_initialize
 from aberrant.utils.validation import FeatureSchema, coerce_finite_number
-
-
-def _finite(value: float) -> float:
-    if not math.isfinite(value):
-        raise OverflowError("Seasonal forecast arithmetic exceeds the float range")
-    return value
-
-
-def _sum(values: Iterable[float]) -> float:
-    return _finite(math.fsum(_finite(value) for value in values))
-
-
-def _blend(previous: float, observed: float, weight: float) -> float:
-    return _sum(((1.0 - weight) * previous, weight * observed))
 
 
 class SeasonalResidualDetector(BaseModel):
@@ -127,43 +113,6 @@ class SeasonalResidualDetector(BaseModel):
         self._trend = 0.0
         self._residual_scale = 0.0
 
-    def _initialize(
-        self, values: list[float]
-    ) -> tuple[float, float, list[float], float]:
-        m = self.season_length
-        first_mean = mean(values[:m])
-        second_mean = mean(values[m:])
-        trend = _sum((second_mean / m, -first_mean / m))
-        midpoint = (m - 1) / 2
-        seasonal = [
-            _sum(
-                (
-                    values[index] / 2,
-                    values[m + index] / 2,
-                    -first_mean / 2,
-                    -second_mean / 2,
-                    -trend * (index - midpoint),
-                )
-            )
-            for index in range(m)
-        ]
-        level = _sum((second_mean, trend * midpoint))
-        errors = (
-            abs(
-                _sum(
-                    (
-                        value,
-                        -(first_mean if index < m else second_mean),
-                        -trend * (index % m - midpoint),
-                        -seasonal[index % m],
-                    )
-                )
-            )
-            / (2 * m)
-            for index, value in enumerate(values)
-        )
-        return level, trend, seasonal, _sum(errors)
-
     def explain_one(
         self, x: dict[str, float]
     ) -> tuple[float, float | None, float | None]:
@@ -196,7 +145,9 @@ class SeasonalResidualDetector(BaseModel):
         value = float(prepared.values[0])
         if not self.is_ready:
             if self.n_samples_seen + 1 == 2 * self.season_length:
-                level, trend, seasonal, scale = self._initialize([*self._warmup, value])
+                level, trend, seasonal, scale = holt_winters_initialize(
+                    [*self._warmup, value], self.season_length
+                )
                 self._level, self._trend = level, trend
                 self._seasonal, self._residual_scale = seasonal, scale
                 self._warmup = []

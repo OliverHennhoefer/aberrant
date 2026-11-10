@@ -164,6 +164,7 @@ pip install "aberrant[eval,faiss]"
 | Learned reconstruction error | [`OnlineAutoencoderEnsemble` or the optional PyTorch `Autoencoder`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#reconstruction-detectors) |
 | Detecting distribution drift | [`ADWIN`, `KSWIN`, or `PageHinkley`](https://oliverhennhoefer.github.io/aberrant/api/drift/) |
 | Turning a score into an alert signal | [`QuantileThreshold` or `ThresholdModel`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#core-utility-models) |
+| Misses of an online forecast or regression, at any lead | [`ResidualDetector` with `HoltWinters`, `SeasonalNaive` or `RLSRegressor`](https://oliverhennhoefer.github.io/aberrant/user_guide/forecasting/) |
 | An alarm threshold that adapts online, with delayed feedback | [`ScoreCalibrator` with ACI, conformal PID, SAOCP and twelve more](https://oliverhennhoefer.github.io/aberrant/user_guide/calibration/) |
 
 See the [model guide](https://oliverhennhoefer.github.io/aberrant/user_guide/models/)

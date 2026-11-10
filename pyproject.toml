@@ -25,6 +25,7 @@ keywords = [
     "online learning",
     "real-time",
     "time series anomaly detection",
+    "online forecasting",
     "graph anomaly detection",
     "isolation forest",
     "half-space trees",

@@ -38,6 +38,7 @@ nav:
     - Application Integration: user_guide/integrations.md
     - Drift Detection: user_guide/drift.md
     - Score Calibration: user_guide/calibration.md
+    - Forecast-Based Detection: user_guide/forecasting.md
     - Evaluation: user_guide/evaluation.md
     - Coming from river or PySAD: user_guide/migrating.md
     - Best Practices: user_guide/best_practices.md
@@ -61,6 +62,7 @@ nav:
     - Transform: api/transform.md
     - Drift: api/drift.md
     - Calibration: api/calibration.md
+    - Forecasting: api/forecast.md
     - Stream Datasets: api/stream.md
     - Evaluation: api/evaluate.md
   - Contributing: contributing.md

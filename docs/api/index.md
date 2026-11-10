@@ -13,6 +13,7 @@ public methods, properties, return types, and model-specific caveats. Use the
 - [Transformers](transform.md)
 - [Drift detectors](drift.md)
 - [Score calibration](calibration.md)
+- [Forecasters and regressors](forecast.md)
 - [Dataset registry, cache, and streams](stream.md)
 - [Prequential evaluation](evaluate.md)
 

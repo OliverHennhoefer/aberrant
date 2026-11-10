@@ -25,6 +25,15 @@ from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
+from aberrant.forecast import (
+    Forecast,
+    HoltWinters,
+    ResidualDetector,
+    RLSRegressor,
+    SeasonalNaive,
+    interval,
+    nonconformity,
+)
 from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
 from aberrant.model.distance import (
     KNN,
@@ -132,6 +141,15 @@ def test_public_imports_base_smoke() -> None:
 def test_calibration_public_imports_base_smoke() -> None:
     assert ScoreCalibrator is not None
     assert len(CALIBRATORS) == 15
+
+
+def test_forecast_public_imports_base_smoke() -> None:
+    assert Forecast is base_api.Forecast
+    assert base_api.ForecasterProtocol is not None
+    assert base_api.RegressorProtocol is not None
+    for component in (HoltWinters, ResidualDetector, RLSRegressor, SeasonalNaive):
+        assert component is not None
+    assert interval is not None and nonconformity is not None
 
 
 def test_rolling_robust_scaler_public_import() -> None:
