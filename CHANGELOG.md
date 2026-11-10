@@ -7,38 +7,6 @@ Semantic Versioning.
 
 ## [Unreleased]
 
-### Changed
-
-- `QuantileThreshold` keeps its score window sorted as scores arrive instead
-  of sorting the whole window on every `learn_one`. Thresholds are identical;
-  20,000 updates with a window of 10,000 take 0.04 s instead of 17.9 s.
-  Objects pickled by earlier versions cannot be loaded.
-- `RandomProjection` validates `n_components` like `IncrementalPCA`: it must
-  be a positive integer, so floats and booleans are refused. The error text
-  is now "n_components must be positive integer".
-- The `PrequentialEvaluator` docstring states that a `learn_filter` refusing
-  every unscored event never completes warm-up.
-
-### Removed
-
-- `MondrianTree.learn_one_from_global` and `score_one_from_global`. The
-  forest projects all trees at once and nothing in the package called them.
-- The unused `LossFunction` alias in `aberrant.utils.deep.loss_func`.
-- `ScoreHistory` keeps the last `max(window, lookback)` scores instead of
-  every score, so a calibrator's memory and pickled size stay bounded on an
-  endless stream. `recent(n)` gives the latest scores and replaces the `all`
-  list; `count` still counts every score seen. Thresholds are unchanged.
-### Added
-
-- Forecasters in the catalog. `FORECASTER_CATALOG` and `get_forecaster_spec`
-  list `seasonal_naive`, `holt_winters` and `rls_regressor` with their
-  constructor schemas, and the manifest has a `forecasters` section. The
-  `residual_detector` model takes its forecaster as a nested
-  `{"id", "params"}` component, so a forecast-based detector can be built,
-  validated and fingerprinted from a `DetectorConfig`. Its capabilities follow
-  the nested model: a forecaster takes one feature and warms up for two seasons
-  plus `lead - 1` events; a regressor takes the target and its covariates.
-
 ## [1.5.0] - 2026-11-10
 
 ### Added
@@ -57,6 +25,14 @@ Semantic Versioning.
   `SeasonalResidualDetector` exactly. `nonconformity` (absolute, scaled, CQR)
   and `interval` connect forecasts to `aberrant.calibration` with the target
   event as the delayed-feedback key.
+- Forecasters in the catalog. `FORECASTER_CATALOG` and `get_forecaster_spec`
+  list `seasonal_naive`, `holt_winters` and `rls_regressor` with their
+  constructor schemas, and the manifest has a `forecasters` section. The
+  `residual_detector` model takes its forecaster as a nested
+  `{"id", "params"}` component, so a forecast-based detector can be built,
+  validated and fingerprinted from a `DetectorConfig`. Its capabilities follow
+  the nested model: a forecaster takes one feature and warms up for two seasons
+  plus `lead - 1` events; a regressor takes the target and its covariates.
 - `aberrant.calibration`: online calibration of score streams with delayed
   feedback. `ScoreCalibrator` issues a threshold with `predict(key)` and learns
   each score with `update(key, score)` once it is known, so forecast leads and
@@ -67,6 +43,9 @@ Semantic Versioning.
   Bayesian belief CP, BOCPD with and without ACI, changepoint-weighted CP and
   discounted Bayes. They are ports of the Timestral Uncertainty Arena's
   methods and reproduce its thresholds on fixtures generated from it.
+  A calibrator's `ScoreHistory` keeps the last `max(window, lookback)`
+  scores, so its memory and pickled size stay bounded on an endless stream;
+  `recent(n)` gives the latest scores and `count` counts every score seen.
 - `OnlineECOD` and `OnlineCOPOD` in `aberrant.model.stat`: truly online
   ECOD and COPOD that score each sample against per-feature reference
   distributions before learning it. A bounded t-digest per feature (with an
@@ -265,6 +244,21 @@ Semantic Versioning.
   counter in `ADWIN`, an attribute `MovingInterquartileRange.score_one` set
   on the model while scoring, and the unused `NumericScalar` alias in
   `aberrant.utils.validation`. Scores and drift decisions are unchanged.
+- `QuantileThreshold` keeps its score window sorted as scores arrive instead
+  of sorting the whole window on every `learn_one`. Thresholds are identical;
+  20,000 updates with a window of 10,000 take 0.04 s instead of 17.9 s.
+  Objects pickled by earlier versions cannot be loaded.
+- `RandomProjection` validates `n_components` like `IncrementalPCA`: it must
+  be a positive integer, so floats and booleans are refused. The error text
+  is now "n_components must be positive integer".
+- The `PrequentialEvaluator` docstring states that a `learn_filter` refusing
+  every unscored event never completes warm-up.
+
+### Removed
+
+- `MondrianTree.learn_one_from_global` and `score_one_from_global`. The
+  forest projects all trees at once and nothing in the package called them.
+- The unused `LossFunction` alias in `aberrant.utils.deep.loss_func`.
 
 ## [1.4.0] - 2026-10-30
 
