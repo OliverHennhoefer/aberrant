@@ -7,6 +7,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Forecasters in the catalog. `FORECASTER_CATALOG` and `get_forecaster_spec`
+  list `seasonal_naive`, `holt_winters` and `rls_regressor` with their
+  constructor schemas, and the manifest has a `forecasters` section. The
+  `residual_detector` model takes its forecaster as a nested
+  `{"id", "params"}` component, so a forecast-based detector can be built,
+  validated and fingerprinted from a `DetectorConfig`. Its capabilities follow
+  the nested model: a forecaster takes one feature and warms up for two seasons
+  plus `lead - 1` events; a regressor takes the target and its covariates.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

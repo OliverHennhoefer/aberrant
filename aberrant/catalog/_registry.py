@@ -30,6 +30,7 @@ FeatureSchemaValue = FeatureSchemaKind | Callable[[Parameters], FeatureSchemaKin
 ScoreKindValue = ScoreKind | Callable[[Parameters], ScoreKind]
 StateKindValue = StateKind | Callable[[Parameters], StateKind]
 OrientationValue = bool | None | Callable[[Parameters], bool | None]
+EventKindValue = EventKind | Callable[[Parameters], EventKind]
 
 ANY_FEATURES = FeatureCount()
 ONE_FEATURE = FeatureCount(1, 1)
@@ -67,7 +68,7 @@ def _resolve_value(value: object, params: Parameters) -> object:
 
 def _capabilities(
     *,
-    event_kind: EventKind,
+    event_kind: EventKindValue,
     feature_count: FeatureCountValue = ANY_FEATURES,
     feature_schema: FeatureSchemaValue = FeatureSchemaKind.FIXED,
     score_kind: ScoreKindValue,
@@ -83,13 +84,15 @@ def _capabilities(
         resolved_score_kind = _resolve_value(score_kind, params)
         resolved_state = _resolve_value(state, params)
         resolved_orientation = _resolve_value(higher_is_more_anomalous, params)
+        resolved_event_kind = _resolve_value(event_kind, params)
+        assert isinstance(resolved_event_kind, EventKind)
         assert isinstance(resolved_feature_count, FeatureCount)
         assert isinstance(resolved_feature_schema, FeatureSchemaKind)
         assert isinstance(resolved_score_kind, ScoreKind)
         assert isinstance(resolved_state, StateKind)
         assert isinstance(resolved_orientation, bool) or resolved_orientation is None
         return ModelCapabilities(
-            event_kind=event_kind,
+            event_kind=resolved_event_kind,
             feature_count=resolved_feature_count,
             feature_schema=resolved_feature_schema,
             score_kind=resolved_score_kind,
@@ -155,6 +158,59 @@ def _quantile_warmup(params: Parameters) -> WarmupRequirement:
 def _seasonal_warmup(params: Parameters) -> WarmupRequirement:
     season_length = params.get("season_length")
     return _events(None if season_length is None else 2 * _as_int(season_length))
+
+
+# Forecasters that predict the target from the event's other features at lead 0
+# instead of forecasting the series ahead.
+_REGRESSORS = frozenset({"rls_regressor"})
+
+
+def _residual_model(params: Parameters) -> tuple[bool, Parameters]:
+    """Whether the residual detector wraps a regressor, and its parameters.
+
+    The model is a nested ``{"id", "params"}`` configuration, or an instance
+    when a model is created directly from Python objects.
+    """
+    model = params.get("model")
+    if isinstance(model, Mapping):
+        component_id = model.get("id")
+        if not isinstance(component_id, str):
+            raise TypeError("model needs a forecaster id")
+        nested = model.get("params") or {}
+        if not isinstance(nested, Mapping):
+            raise TypeError("model params must be a mapping")
+        resolved = get_forecaster_spec(component_id).resolved_parameters(nested)
+        return component_id in _REGRESSORS, resolved
+    if hasattr(model, "predict_one"):
+        return True, {}
+    return False, {"season_length": getattr(model, "season_length", None)}
+
+
+def _residual_event_kind(params: Parameters) -> EventKind:
+    regressor, _ = _residual_model(params)
+    return EventKind.TABULAR if regressor else EventKind.UNIVARIATE
+
+
+def _residual_features(params: Parameters) -> FeatureCount:
+    regressor, _ = _residual_model(params)
+    return FeatureCount(2) if regressor else ONE_FEATURE
+
+
+def _residual_warmup(params: Parameters) -> WarmupRequirement:
+    """Learned events before the first score that compares with a forecast.
+
+    A forecaster forecasts once it has seen two seasons, and the detector
+    scores an event against the forecast issued ``lead`` events earlier. A
+    regressor's readiness depends on how many covariates the events carry.
+    """
+    regressor, model = _residual_model(params)
+    season_length = model.get("season_length")
+    if regressor or season_length is None:
+        return _events(None)
+    lead = params.get("lead")
+    return _events(
+        2 * _as_int(season_length) + _as_int(1 if lead is None else lead) - 1
+    )
 
 
 def _kitnet_warmup(params: Parameters) -> WarmupRequirement:
@@ -833,6 +889,21 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
+        "residual_detector",
+        "ResidualDetector",
+        "aberrant.forecast",
+        "forecast",
+        _capabilities(
+            event_kind=_residual_event_kind,
+            feature_count=_residual_features,
+            score_kind=ScoreKind.NON_NEGATIVE,
+            warmup=_residual_warmup,
+            state=StateKind.BOUNDED,
+            resettable=False,
+        ),
+        dependencies=(ComponentDependency("model", ComponentKind.FORECASTER),),
+    ),
+    _model(
         "rolling_matrix_profile",
         "RollingMatrixProfile",
         "aberrant.model.timeseries",
@@ -1057,6 +1128,31 @@ _SIMILARITY_SPECS = (
 )
 
 
+_FORECASTER_SPECS = (
+    ComponentSpec(
+        id="seasonal_naive",
+        display_name="SeasonalNaive",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.SeasonalNaive",
+    ),
+    ComponentSpec(
+        id="holt_winters",
+        display_name="HoltWinters",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.HoltWinters",
+    ),
+    ComponentSpec(
+        id="rls_regressor",
+        display_name="RLSRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.RLSRegressor",
+    ),
+)
+
+
 def _index(specs: tuple[ComponentSpec, ...]) -> Mapping[str, ComponentSpec]:
     indexed = {spec.id: spec for spec in specs}
     if len(indexed) != len(specs):
@@ -1071,6 +1167,7 @@ TRANSFORMER_CATALOG: Mapping[str, TransformerSpec] = MappingProxyType(
     {spec.id: spec for spec in _TRANSFORMER_SPECS}
 )
 SIMILARITY_ENGINE_CATALOG: Mapping[str, ComponentSpec] = _index(_SIMILARITY_SPECS)
+FORECASTER_CATALOG: Mapping[str, ComponentSpec] = _index(_FORECASTER_SPECS)
 
 if len(MODEL_CATALOG) != len(_MODEL_SPECS):
     raise RuntimeError("Catalog model identifiers must be unique")
@@ -1108,6 +1205,17 @@ def get_similarity_engine_spec(component_id: str) -> ComponentSpec:
         ) from exc
 
 
+def get_forecaster_spec(component_id: str) -> ComponentSpec:
+    """Return one forecaster or regressor entry or raise ``UnknownComponentError``."""
+    try:
+        return FORECASTER_CATALOG[component_id]
+    except KeyError as exc:
+        raise UnknownComponentError(
+            ComponentKind.FORECASTER.value,
+            component_id,
+        ) from exc
+
+
 def catalog_manifest() -> dict[str, object]:
     """Describe every built-in component without importing optional runtimes."""
     return {
@@ -1118,4 +1226,5 @@ def catalog_manifest() -> dict[str, object]:
         "similarity_engines": [
             spec.as_dict() for spec in SIMILARITY_ENGINE_CATALOG.values()
         ],
+        "forecasters": [spec.as_dict() for spec in FORECASTER_CATALOG.values()],
     }

@@ -15,10 +15,12 @@ from aberrant.catalog._config import (
 )
 from aberrant.catalog._registry import (
     CATALOG_FORMAT_VERSION,
+    FORECASTER_CATALOG,
     MODEL_CATALOG,
     SIMILARITY_ENGINE_CATALOG,
     TRANSFORMER_CATALOG,
     catalog_manifest,
+    get_forecaster_spec,
     get_model_spec,
     get_similarity_engine_spec,
     get_transformer_spec,
@@ -42,6 +44,7 @@ from aberrant.catalog._specs import (
 __all__ = [
     "CATALOG_FORMAT_VERSION",
     "CONFIG_FORMAT_VERSION",
+    "FORECASTER_CATALOG",
     "MODEL_CATALOG",
     "SIMILARITY_ENGINE_CATALOG",
     "TRANSFORMER_CATALOG",
@@ -67,6 +70,7 @@ __all__ = [
     "create_similarity_engine",
     "create_transformer",
     "detector_capabilities",
+    "get_forecaster_spec",
     "get_model_spec",
     "get_similarity_engine_spec",
     "get_transformer_spec",

@@ -22,6 +22,7 @@ class ComponentKind(str, Enum):
     MODEL = "model"
     TRANSFORMER = "transformer"
     SIMILARITY_ENGINE = "similarity_engine"
+    FORECASTER = "forecaster"
 
 
 class EventKind(str, Enum):

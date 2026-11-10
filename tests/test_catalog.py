@@ -54,6 +54,7 @@ def test_model_catalog_covers_every_public_builtin() -> None:
         for name in importlib.import_module(module_name).__all__
     }
     public_paths.add("aberrant.model.deep.Autoencoder")
+    public_paths.add("aberrant.forecast.ResidualDetector")
 
     assert {spec.import_path for spec in MODEL_CATALOG.values()} == public_paths
 
