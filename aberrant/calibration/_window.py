@@ -4,32 +4,47 @@ from __future__ import annotations
 
 import bisect
 import math
+from collections import deque
+from itertools import islice
 
 from aberrant.utils.validation import coerce_integer_count
 
+# The longest lookback a method asks of the history, beyond its window.
+LOOKBACK = 1024
+
 
 class ScoreHistory:
-    """Scores in arrival order, and the last ``window`` of them sorted.
+    """The latest scores in arrival order, and the last ``window`` of them sorted.
 
     Every calibrator of one score stream reads the same history. A calibrator
     learns a score in :meth:`~aberrant.calibration.OnlineCalibrator.update`
     before the score joins the history, so it adapts against the window it
     predicted from.
 
+    The history keeps the last ``max(window, lookback)`` scores, so its memory
+    stays bounded on an endless stream.
+
     Args:
         window: Number of recent scores in the calibration window.
+        lookback: Number of recent scores that :meth:`recent`,
+            :meth:`recent_range` and :meth:`spread` can reach.
     """
 
-    def __init__(self, window: int) -> None:
+    def __init__(self, window: int, lookback: int = LOOKBACK) -> None:
         self.window = coerce_integer_count(window, label="window")
-        self.all: list[float] = []
+        self.lookback = max(
+            self.window, coerce_integer_count(lookback, label="lookback")
+        )
+        # One more than the window, so the score leaving it is still at hand.
+        self._recent: deque[float] = deque(maxlen=self.lookback + 1)
         self._sorted: list[float] = []
+        self._count = 0
         self._max_abs = 0.0
 
     @property
     def count(self) -> int:
         """Number of scores seen."""
-        return len(self.all)
+        return self._count
 
     @property
     def window_sorted(self) -> list[float]:
@@ -43,19 +58,28 @@ class ScoreHistory:
 
     def push(self, score: float) -> None:
         """Add a score, dropping the oldest one from the window when full."""
-        self.all.append(score)
+        self._recent.append(score)
+        self._count += 1
         bisect.insort_left(self._sorted, score)
         if len(self._sorted) > self.window:
-            _remove_sorted(self._sorted, self.all[-1 - self.window])
+            _remove_sorted(self._sorted, self._recent[-1 - self.window])
         self._max_abs = max(self._max_abs, abs(score))
+
+    def recent(self, n: int) -> list[float]:
+        """The last ``n`` scores, oldest first."""
+        if n > self.lookback:
+            raise ValueError(
+                f"The history keeps the last {self.lookback} scores; {n} were asked for"
+            )
+        return list(islice(reversed(self._recent), n))[::-1]
 
     def recent_range(self, n: int) -> float:
         """Largest absolute score among the last ``n`` scores."""
-        return max((abs(s) for s in self.all[max(0, len(self.all) - n) :]), default=0.0)
+        return max((abs(s) for s in self.recent(n)), default=0.0)
 
     def spread(self, n: int) -> float:
         """Range (max - min) of the last ``n`` scores, 0 for fewer than two values."""
-        recent = self.all[max(0, len(self.all) - n) :]
+        recent = self.recent(n)
         if not recent:
             return 0.0
         low, high = min(recent), max(recent)
@@ -67,7 +91,7 @@ class ScoreHistory:
         This also makes infinite thresholds finite. A threshold is unchanged
         before the first score, and NaN becomes the largest absolute score.
         """
-        if not self.all:
+        if not self._count:
             return q
         if math.isnan(q):
             return self._max_abs

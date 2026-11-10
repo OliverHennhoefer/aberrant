@@ -149,7 +149,9 @@ def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
 
 
 # Components added after the baseline below; their schemas are new, not changed.
-_ADDED_AFTER_BASELINE = frozenset({"model/online_copod", "model/online_ecod"})
+_ADDED_AFTER_BASELINE = frozenset(
+    {"model/online_copod", "model/online_ecod", "model/residual_detector"}
+)
 
 
 def test_existing_core_schema_contract_is_unchanged():

@@ -24,6 +24,20 @@ Semantic Versioning.
 - `MondrianTree.learn_one_from_global` and `score_one_from_global`. The
   forest projects all trees at once and nothing in the package called them.
 - The unused `LossFunction` alias in `aberrant.utils.deep.loss_func`.
+- `ScoreHistory` keeps the last `max(window, lookback)` scores instead of
+  every score, so a calibrator's memory and pickled size stay bounded on an
+  endless stream. `recent(n)` gives the latest scores and replaces the `all`
+  list; `count` still counts every score seen. Thresholds are unchanged.
+### Added
+
+- Forecasters in the catalog. `FORECASTER_CATALOG` and `get_forecaster_spec`
+  list `seasonal_naive`, `holt_winters` and `rls_regressor` with their
+  constructor schemas, and the manifest has a `forecasters` section. The
+  `residual_detector` model takes its forecaster as a nested
+  `{"id", "params"}` component, so a forecast-based detector can be built,
+  validated and fingerprinted from a `DetectorConfig`. Its capabilities follow
+  the nested model: a forecaster takes one feature and warms up for two seasons
+  plus `lead - 1` events; a regressor takes the target and its covariates.
 
 ## [1.5.0] - 2026-11-10
 

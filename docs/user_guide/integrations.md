@@ -56,8 +56,8 @@ catalog or changing executable fingerprints.
 
 ## Inspect the catalog
 
-`MODEL_CATALOG`, `TRANSFORMER_CATALOG`, and `SIMILARITY_ENGINE_CATALOG` are
-read-only mappings keyed by stable component identifiers. Each entry exposes
+`MODEL_CATALOG`, `TRANSFORMER_CATALOG`, `SIMILARITY_ENGINE_CATALOG`, and
+`FORECASTER_CATALOG` are read-only mappings keyed by stable component identifiers. Each entry exposes
 its public import path, family, optional extra, availability in the current
 environment, constructor parameter schema, and operational capabilities.
 Identifiers and the versioned configuration shape are part of the public API;
@@ -213,6 +213,39 @@ Some macOS PyTorch and `faiss-cpu` wheel combinations bundle separate OpenMP
 runtimes and abort when both are activated in one process. aberrant does not set
 the unsafe `KMP_DUPLICATE_LIB_OK` workaround. Use a compatible native package
 set or run FAISS-backed and PyTorch-backed detectors in separate processes.
+
+## Configure a forecast-based detector
+
+`residual_detector` scores a target against a forecast. Its `model` is a nested
+forecaster from `FORECASTER_CATALOG`: `seasonal_naive`, `holt_winters`, or
+`rls_regressor`.
+
+```python
+from aberrant.catalog import DetectorConfig
+
+config = DetectorConfig.from_mapping(
+    {
+        "model": {
+            "id": "residual_detector",
+            "params": {
+                "target": "load",
+                "model": {
+                    "id": "holt_winters",
+                    "params": {"season_length": 24, "horizon": 6},
+                },
+                "lead": 6,
+            },
+        }
+    }
+)
+config.capabilities().warmup.minimum  # 53: two seasons, then the lead
+detector = config.build()
+```
+
+A forecaster takes one feature, the target, and its warm-up is two seasons plus
+`lead - 1` events. A regressor takes the target and at least one covariate; its
+warm-up depends on how many covariates the events carry, so the catalog reports
+no minimum. See [forecast-based detection](forecasting.md) for the models.
 
 ## Ownership boundary
 

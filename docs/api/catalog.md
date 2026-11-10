@@ -1,7 +1,7 @@
 # Catalog API
 
 The catalog is the machine-readable public inventory of built-in models,
-transformers, and similarity engines. See the
+transformers, similarity engines, and forecasters. See the
 [application integration guide](../user_guide/integrations.md) for the
 configuration format and ownership boundary.
 
@@ -48,6 +48,8 @@ configuration format and ownership boundary.
 ::: aberrant.catalog.get_transformer_spec
 
 ::: aberrant.catalog.get_similarity_engine_spec
+
+::: aberrant.catalog.get_forecaster_spec
 
 ## Enumerations
 
