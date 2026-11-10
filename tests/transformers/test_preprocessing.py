@@ -415,7 +415,7 @@ class TestRandomProjections(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             RandomProjection(n_components=0, keys=self.feature_keys[:5])
 
-        expected_msg_zero = "n_components must be greater than 0"
+        expected_msg_zero = "n_components must be positive integer"
         self.assertTrue(
             expected_msg_zero in str(context.exception),
             f"Expected error message '{expected_msg_zero}' but got {context.exception}",
@@ -424,11 +424,28 @@ class TestRandomProjections(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             RandomProjection(n_components=-3, keys=self.feature_keys[:5])
 
-        expected_msg_negative = "n_components must be greater than 0"
+        expected_msg_negative = "n_components must be positive integer"
         self.assertTrue(
             expected_msg_negative in str(context.exception),
             f"Expected error message '{expected_msg_negative}' but got {context.exception}",
         )
+
+    def test_error_with_non_integer_n_components(self):
+        for value in (2.5, 2.0, True, "2", None):
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
+                    ValueError, "n_components must be positive integer"
+                ),
+            ):
+                RandomProjection(n_components=value, keys=self.feature_keys[:5])
+
+    def test_numpy_integer_n_components_is_normalized(self):
+        projection = RandomProjection(
+            n_components=np.int64(2), keys=self.feature_keys[:5]
+        )
+        self.assertIs(type(projection.n_components), int)
+        self.assertEqual(projection.random_matrix.shape, (5, 2))
 
     def test_duplicate_feature_names_initialization(self):
         duplicate_keys = ["feature_1", "feature_1"]

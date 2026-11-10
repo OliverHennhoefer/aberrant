@@ -9,6 +9,21 @@ Semantic Versioning.
 
 ### Changed
 
+- `QuantileThreshold` keeps its score window sorted as scores arrive instead
+  of sorting the whole window on every `learn_one`. Thresholds are identical;
+  20,000 updates with a window of 10,000 take 0.04 s instead of 17.9 s.
+  Objects pickled by earlier versions cannot be loaded.
+- `RandomProjection` validates `n_components` like `IncrementalPCA`: it must
+  be a positive integer, so floats and booleans are refused. The error text
+  is now "n_components must be positive integer".
+- The `PrequentialEvaluator` docstring states that a `learn_filter` refusing
+  every unscored event never completes warm-up.
+
+### Removed
+
+- `MondrianTree.learn_one_from_global` and `score_one_from_global`. The
+  forest projects all trees at once and nothing in the package called them.
+- The unused `LossFunction` alias in `aberrant.utils.deep.loss_func`.
 - `ScoreHistory` keeps the last `max(window, lookback)` scores instead of
   every score, so a calibrator's memory and pickled size stay bounded on an
   endless stream. `recent(n)` gives the latest scores and replaces the `all`

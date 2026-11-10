@@ -9,7 +9,7 @@ import numpy as np
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.transform.projection._schema import ProjectionSchema
-from aberrant.utils.validation import coerce_feature_values
+from aberrant.utils.validation import coerce_feature_values, coerce_integer_count
 
 
 class RandomProjection(BaseTransformer):
@@ -39,8 +39,7 @@ class RandomProjection(BaseTransformer):
         """Initialize the projection and, when possible, its random matrix."""
         super().__init__()
 
-        if n_components < 1:
-            raise ValueError("n_components must be greater than 0")
+        n_components = coerce_integer_count(n_components, label="n_components")
         self.n_components = n_components
         self._schema = ProjectionSchema(n_components, keys)
         self.seed = seed
