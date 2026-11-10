@@ -140,7 +140,6 @@ class MondrianTree:
         self.selected_indices = selected_indices
         self.lambda_ = lambda_
         self.rng = rng
-        self._projected_buffer = np.empty(len(selected_indices), dtype=np.float64)
         self.root: MondrianNode | None = None
         self.n_samples = 0
 
@@ -149,11 +148,6 @@ class MondrianTree:
         points = np.asarray(x_projected, dtype=np.float64).reshape(1, -1)
         rows = points.tolist()
         _extend_all((self,), points, rows, [self._walk(rows[0])])
-
-    def learn_one_from_global(self, global_features: np.ndarray) -> None:
-        """Project one global feature vector and update this tree."""
-        np.take(global_features, self.selected_indices, out=self._projected_buffer)
-        self.learn_one(self._projected_buffer)
 
     def _walk(self, x_values: Sequence[float] | np.ndarray) -> list[MondrianNode]:
         """Return the blocks from the root down to the leaf that holds a point."""
@@ -288,11 +282,6 @@ class MondrianTree:
     def score_one(self, x_projected: np.ndarray) -> float:
         """Return path length plus leaf-size adjustment for one point."""
         return _path_length(self._walk(x_projected))
-
-    def score_one_from_global(self, global_features: np.ndarray) -> float:
-        """Project one global feature vector and score against this tree."""
-        np.take(global_features, self.selected_indices, out=self._projected_buffer)
-        return self.score_one(self._projected_buffer)
 
 
 def _path_length(path: list[MondrianNode]) -> float:

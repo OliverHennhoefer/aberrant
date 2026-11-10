@@ -1,8 +1,13 @@
 """Tests for QuantileThreshold adaptive threshold model."""
 
+import copy
+import math
+import pickle
+import random
 import unittest
 
 from aberrant.model.quantile_threshold import QuantileThreshold
+from aberrant.utils.statistics import linear_quantile
 
 
 class TestQuantileThreshold(unittest.TestCase):
@@ -243,6 +248,75 @@ class TestQuantileThresholdEdgeCases(unittest.TestCase):
         # Score equal to threshold should be anomaly (>=)
         score = qt.score_one({"score": 5.0})
         self.assertEqual(score, 1.0)
+
+
+class TestQuantileThresholdSortedWindow(unittest.TestCase):
+    """The incrementally sorted window must equal sorting the window each time."""
+
+    @staticmethod
+    def _bits(value):
+        return None if value is None else (value, math.copysign(1.0, value))
+
+    def _assert_matches_resorting(self, model, scores):
+        window = []
+        for score in scores:
+            model.learn_one({"score": score})
+            window = [*window, score][-model.window_size :]
+            self.assertEqual(model._sorted, sorted(window))
+            self.assertEqual(
+                [math.copysign(1.0, value) for value in model._sorted],
+                [math.copysign(1.0, value) for value in sorted(window)],
+            )
+            expected = (
+                linear_quantile(sorted(window), model.quantile)
+                if len(window) >= model._min_samples
+                else None
+            )
+            self.assertEqual(self._bits(model.threshold), self._bits(expected))
+        return window
+
+    def test_random_streams_with_ties_and_signed_zeros(self):
+        rng = random.Random(7)
+        pool = [0.0, -0.0, 1.0, 1.0, -1.0, 2.5, 1e308, -1e308, 5e-324]
+        for window_size, quantile in ((1, 0.5), (3, 0.9), (10, 0.95), (37, 0.2)):
+            with self.subTest(window_size=window_size):
+                scores = [
+                    rng.choice(pool) if rng.random() < 0.5 else rng.gauss(0.0, 1.0)
+                    for _ in range(400)
+                ]
+                self._assert_matches_resorting(
+                    QuantileThreshold(quantile=quantile, window_size=window_size),
+                    scores,
+                )
+
+    def test_copies_and_reset_keep_the_window_consistent(self):
+        rng = random.Random(11)
+        model = QuantileThreshold(quantile=0.8, window_size=12)
+        head = [rng.gauss(0.0, 1.0) for _ in range(30)]
+        tail = [rng.gauss(0.0, 1.0) for _ in range(30)]
+        self._assert_matches_resorting(model, head)
+
+        for clone in (copy.deepcopy(model), pickle.loads(pickle.dumps(model))):
+            self.assertEqual(clone._sorted, model._sorted)
+            reference = copy.deepcopy(model)
+            for score in tail:
+                clone.learn_one({"score": score})
+                reference.learn_one({"score": score})
+                self.assertEqual(clone.threshold, reference.threshold)
+            self.assertEqual(clone._sorted, sorted(clone._scores))
+
+        model.reset()
+        self.assertEqual(model._sorted, [])
+        self._assert_matches_resorting(model, tail)
+
+    def test_rejected_score_leaves_the_sorted_window_untouched(self):
+        model = QuantileThreshold(quantile=0.5, window_size=3)
+        for score in (3.0, 1.0, 2.0):
+            model.learn_one({"score": score})
+        with self.assertRaises(ValueError):
+            model.learn_one({"score": float("nan")})
+        self.assertEqual(model._sorted, [1.0, 2.0, 3.0])
+        self.assertEqual(list(model._scores), [3.0, 1.0, 2.0])
 
 
 if __name__ == "__main__":

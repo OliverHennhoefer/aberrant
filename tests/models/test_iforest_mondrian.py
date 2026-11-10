@@ -435,7 +435,7 @@ class TestMondrianForestExactness(unittest.TestCase):
             forest.learn_one(event)
             values = np.array([event[name] for name in sorted(event)])
             for tree in trees:
-                tree.learn_one_from_global(values)
+                tree.learn_one(values[tree.selected_indices])
 
         for alone, batched in zip(trees, forest.trees, strict=True):
             self.assertEqual(alone.n_samples, batched.n_samples)
@@ -495,13 +495,13 @@ class TestMondrianForestExactness(unittest.TestCase):
         # Rebuilding one tree after another stops inside the failing tree.
         values = np.array([events[7][name] for name in sorted(events[7])])
         for tree in expected.trees:
-            tree.learn_one_from_global(values)
+            tree.learn_one(values[tree.selected_indices])
         window = [*expected._window, values][-4:]
         for index, tree in enumerate(expected.trees[:2]):
             tree.root = None
             tree.n_samples = 0
             for point in window[: 4 if index == 0 else 2]:
-                tree.learn_one_from_global(point)
+                tree.learn_one(point[tree.selected_indices])
 
         self.assertEqual(model.n_samples, 8)
         for alone, batched in zip(expected.trees, model.trees, strict=True):
@@ -541,7 +541,7 @@ class TestMondrianForestExactness(unittest.TestCase):
         # Rebuilding one tree after another fails on the first tree's first point.
         values = np.array([events[7][name] for name in sorted(events[7])])
         for tree in expected.trees:
-            tree.learn_one_from_global(values)
+            tree.learn_one(values[tree.selected_indices])
         expected.trees[0].root = None
         expected.trees[0].n_samples = 0
 

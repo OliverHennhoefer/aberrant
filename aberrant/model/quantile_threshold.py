@@ -1,6 +1,7 @@
 """Quantile-based adaptive threshold for anomaly detection."""
 
 import math
+from bisect import bisect_left, insort
 from collections import deque
 
 from aberrant.base.model import BaseModel
@@ -63,6 +64,9 @@ class QuantileThreshold(BaseModel):
         self.score_key = score_key
 
         self._scores: deque[float] = deque(maxlen=window_size)
+        # The same scores in ascending order, so an update shifts one value in
+        # and one out without sorting the window again.
+        self._sorted: list[float] = []
         self._threshold: float | None = None
         self._min_samples: int = min(
             window_size,
@@ -105,7 +109,12 @@ class QuantileThreshold(BaseModel):
             raise ValueError(f"Input must contain '{self.score_key}' key")
 
         score = self._validated_score(x[self.score_key])
+        if len(self._scores) == self.window_size:
+            # Equal scores keep arrival order, so the leftmost match is the
+            # score the window is about to drop.
+            del self._sorted[bisect_left(self._sorted, self._scores[0])]
         self._scores.append(score)
+        insort(self._sorted, score)
 
         # Update threshold if we have enough samples
         if len(self._scores) >= self._min_samples:
@@ -115,7 +124,7 @@ class QuantileThreshold(BaseModel):
         """Recompute the quantile-based threshold."""
         # Interpolate without subtracting opposite float extremes: NumPy's
         # interpolation can retain an infinite threshold from finite scores.
-        self._threshold = linear_quantile(sorted(self._scores), self.quantile)
+        self._threshold = linear_quantile(self._sorted, self.quantile)
 
     def score_one(self, x: dict[str, float]) -> float:
         """
@@ -152,6 +161,7 @@ class QuantileThreshold(BaseModel):
     def reset(self) -> None:
         """Reset the model to its initial state."""
         self._scores.clear()
+        self._sorted.clear()
         self._threshold = None
 
     def __repr__(self) -> str:

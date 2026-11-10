@@ -52,6 +52,8 @@ class PrequentialEvaluator:
         learn_filter: Optional decision receiving the event and its raw score
             (None during exclusion). Labels are never supplied to this callback
             or the model. Returning False skips learning, including in warm-up.
+            Warm-up counts successful learns, so a filter that refuses every
+            event without a score never lets the evaluator leave warm-up.
         learn_policy_name: Required descriptive name when using learn_filter.
         metrics: Enable optional scikit-learn ranking metrics from ``[eval]``.
             Disabled by default, keeping evaluation usable in the base install.
