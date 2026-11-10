@@ -201,7 +201,7 @@ class IncrementalPCA(BaseTransformer):
         if len(window) >= self.n0:
             # Perform initial full PCA and switch to online mode
             initial_data = np.array(window)
-            u, s, vt = np.linalg.svd(initial_data, full_matrices=False)
+            _, s, vt = np.linalg.svd(initial_data, full_matrices=False)
             s = s / np.sqrt(max(1, initial_data.shape[0] - 1))
 
             # Store vectors as (n_features, n_components) to match online phase

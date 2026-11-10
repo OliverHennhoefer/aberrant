@@ -7,8 +7,24 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-10
+
 ### Added
 
+- `aberrant.forecast`: online forecasters and regressors for forecast-based
+  anomaly detection. A forecaster learns one series with `learn_one(y)` and
+  forecasts leads `1..horizon` with `forecast_one()`; a regressor learns a
+  target from covariates with `learn_one(x, y)` and predicts it with
+  `predict_one(x)` at lead 0. Both return a `Forecast` (in `aberrant.base`,
+  with `ForecasterProtocol` and `RegressorProtocol`) holding a point forecast
+  and a spread per lead, and optionally quantiles on any level grid. Three
+  models: `SeasonalNaive`, additive `HoltWinters` and `RLSRegressor`
+  (recursive least squares with forgetting). `ResidualDetector` turns any of
+  them into a detector that scores the target against the forecast issued
+  `lead` events earlier; around `HoltWinters` it reproduces
+  `SeasonalResidualDetector` exactly. `nonconformity` (absolute, scaled, CQR)
+  and `interval` connect forecasts to `aberrant.calibration` with the target
+  event as the delayed-feedback key.
 - `aberrant.calibration`: online calibration of score streams with delayed
   feedback. `ScoreCalibrator` issues a threshold with `predict(key)` and learns
   each score with `update(key, score)` once it is known, so forecast leads and
@@ -213,6 +229,10 @@ Semantic Versioning.
   leave that search out. Scores, the best-so-far score and the history are
   unchanged. With a subsequence length of 32 and the default lag, scoring
   then learning each value runs about 1.9 times more events per second.
+- Removed state that was written but never read: an accumulator and a
+  counter in `ADWIN`, an attribute `MovingInterquartileRange.score_one` set
+  on the model while scoring, and the unused `NumericScalar` alias in
+  `aberrant.utils.validation`. Scores and drift decisions are unchanged.
 
 ## [1.4.0] - 2026-10-30
 
