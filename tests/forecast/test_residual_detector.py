@@ -11,6 +11,7 @@ from aberrant.forecast import (
     ResidualDetector,
     RLSRegressor,
     SeasonalNaive,
+    interval,
     nonconformity,
 )
 
@@ -46,6 +47,38 @@ def test_scores_against_the_forecast_issued_lead_events_earlier(lead: int) -> No
         origin = event - lead
         assert expected == (None if origin < 1 else 100.0 * origin + lead)
         detector.learn_one({"y": 0.0})
+
+
+@pytest.mark.parametrize("lead", [1, 3])
+def test_forecast_for_gives_the_forecast_an_event_is_scored_against(lead: int) -> None:
+    detector = ResidualDetector(_Recorder(), "y", lead=lead, score="scaled")
+    for event in range(1, 8):
+        # The target is not read: the forecast is known before the value.
+        forecast = detector.forecast_for({})
+        assert forecast is detector.forecast_for({"y": 5.0})
+        score, expected, _ = detector.explain_one({"y": 5.0})
+        if event <= lead:
+            assert forecast is None and expected is None
+        else:
+            assert forecast.origin == event - lead
+            assert forecast.point(lead) == expected
+            assert score == nonconformity(forecast, lead, 5.0, "scaled")
+            low, high = interval(forecast, lead, 2.0, "scaled")
+            assert (low, high) == (expected - 2.0, expected + 2.0)
+        detector.learn_one({"y": 5.0})
+
+
+def test_forecast_for_a_regressor_is_its_prediction_from_the_covariates() -> None:
+    detector = ResidualDetector(RLSRegressor(forgetting=1.0, delta=1e8), "power")
+    assert detector.forecast_for({"a": 1.0, "b": 1.0}) is None
+    rng = np.random.default_rng(0)
+    for _ in range(100):
+        a, b = rng.uniform(1, 2, size=2)
+        detector.learn_one({"a": float(a), "b": float(b), "power": float(2 * a + b)})
+    forecast = detector.forecast_for({"a": 1.0, "b": 1.0})
+    assert forecast is not None and forecast.point(0) == pytest.approx(3.0)
+    _, expected, _ = detector.explain_one({"a": 1.0, "b": 1.0, "power": 5.0})
+    assert forecast.point(0) == expected
 
 
 def test_regressor_scores_its_own_prediction_from_covariates() -> None:

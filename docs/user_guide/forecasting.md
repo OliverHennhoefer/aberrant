@@ -90,6 +90,17 @@ the absolute residual by the spread at that lead; `score="absolute"` keeps
 target units. The detector works anywhere a model does: in pipelines, graph
 pipelines and `PrequentialEvaluator`.
 
+`forecast_for(x)` returns the forecast an event is scored against, or `None`
+before one exists. It does not read the target, so the expected value and its
+band are known before the value arrives:
+
+```python
+forecast = seasonal.forecast_for({})
+if forecast is not None:
+    expected = forecast.point(seasonal.lead)
+    spread = forecast.spread(seasonal.lead)
+```
+
 `ResidualDetector(HoltWinters(m, ...), target)` scores exactly as
 `SeasonalResidualDetector(m, ...)` does.
 
