@@ -102,6 +102,18 @@ class ResidualDetector(BaseModel):
             return None
         return self._issued[0]
 
+    def forecast_for(self, x: FeatureMap) -> Forecast | None:
+        """Return the forecast ``x`` is scored against, or ``None`` without one.
+
+        For a forecaster it is the forecast issued ``lead`` events earlier; read
+        it at ``lead``. For a regressor it is the prediction from the covariates
+        of ``x``. The target is not read, so ``x`` may be the event before its
+        target is known.
+        """
+        return self._forecast_for(
+            {key: value for key, value in x.items() if key != self.target}
+        )
+
     def explain_one(self, x: FeatureMap) -> tuple[float, float | None, float | None]:
         """Return (score, expected target, signed residual) without learning.
 

@@ -25,6 +25,11 @@ Semantic Versioning.
   `SeasonalResidualDetector` exactly. `nonconformity` (absolute, scaled, CQR)
   and `interval` connect forecasts to `aberrant.calibration` with the target
   event as the delayed-feedback key.
+- `ResidualDetector.forecast_for(x)` returns the forecast an event is scored
+  against: the one a forecaster issued `lead` events earlier, or a regressor's
+  prediction from the event's covariates. It does not read the target, so the
+  expected value and, with `interval`, its band are known before the value
+  arrives.
 - Forecasters in the catalog. `FORECASTER_CATALOG` and `get_forecaster_spec`
   list `seasonal_naive`, `holt_winters` and `rls_regressor` with their
   constructor schemas, and the manifest has a `forecasters` section. The
