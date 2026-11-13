@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its older, now pointless run; runs on
+# main always finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   UV_VERSION: "0.12.18"
 
@@ -72,6 +78,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.12", "3.13", "3.14"]
+        # Pull requests test Windows on the oldest and newest Python only;
+        # main runs the whole matrix.
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"}]') || fromJSON('[]') }}
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
