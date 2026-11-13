@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from typing import cast
 
 import numpy as np
 
@@ -108,7 +107,7 @@ def _mass_distance_profile(
     if not np.all(np.isfinite(normalized_dot)):
         return _stable_distance_profile(series, query, eps)
     squared_distances = 2.0 * (float(m) - normalized_dot)
-    return cast(np.ndarray, np.sqrt(np.maximum(squared_distances, 0.0)))
+    return np.sqrt(np.maximum(squared_distances, 0.0))
 
 
 class XLagDAMP(BaseModel):
