@@ -1,6 +1,9 @@
 <p align="center">
   <a href="https://oliverhennhoefer.github.io/aberrant/">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/aberrant.png" alt="aberrant" width="420">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/logo-dark.svg">
+      <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/logo-light.svg" alt="aberrant" width="360">
+    </picture>
   </a>
 </p>
 

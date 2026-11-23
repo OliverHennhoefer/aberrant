@@ -5,7 +5,7 @@ hide:
 ---
 
 <p align="center">
-  <img src="img/aberrant.png" alt="aberrant" width="420">
+  <img src="img/logo-light.svg" alt="aberrant" width="360">
 </p>
 
 <h1 align="center">aberrant — real-time anomaly detection for data streams</h1>
