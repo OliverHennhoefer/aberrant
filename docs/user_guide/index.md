@@ -46,11 +46,11 @@ An anomaly score is a detector-specific ranking signal. It is not generally a
 probability, a p-value, or a portable quantity across models.
 
 - Higher scores indicate greater anomaly evidence for detector defaults.
-- Some models offer optional normalization to `[0, 1)` or `[0, 1]`; that
-  transform does not make the result a calibrated probability.
-- `RandomCutForest` returns raw, unbounded CoDisp by default.
-- LOF-like scores use a baseline near `1`, while several detectors return `0`
-  during explicit warm-up.
+- Every model returns `0.0` until it has learned enough to judge an event.
+- Every model returns its raw statistic. There is no built-in normalization;
+  map scores to a common scale with [calibration](calibration.md).
+- `RandomCutForest` returns raw, unbounded CoDisp, and LOF-like scores use a
+  baseline near `1` once ready.
 - Moving-statistic models return a statistic change. With `abs_diff=False`, the
   sign records direction and the result is no longer a simple higher-is-more-
   anomalous magnitude.

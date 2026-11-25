@@ -380,7 +380,7 @@ class _RandomHistogramTree:
         return self._leaf_size_from(node, point)
 
 
-class StreamRandomHistogramForest(BaseModel):
+class RHF(BaseModel):
     """
     STREamRHF tree-based unsupervised anomaly detector.
 
@@ -505,11 +505,3 @@ class StreamRandomHistogramForest(BaseModel):
             if leaf_size > 0:
                 score += math.log(float(candidate_size) / float(leaf_size))
         return float(score)
-
-    def __repr__(self) -> str:
-        return (
-            "StreamRandomHistogramForest("
-            f"n_trees={self.n_trees}, max_depth={self.max_depth}, "
-            f"window_size={self.window_size}, seed={self.seed}, "
-            f"initialized={bool(self._trees)}, forest_size={self._forest_size})"
-        )

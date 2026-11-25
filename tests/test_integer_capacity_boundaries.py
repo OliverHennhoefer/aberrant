@@ -10,11 +10,11 @@ import pytest
 from aberrant._utils.validation import coerce_integer_count
 from aberrant.drift import ADWIN
 from aberrant.model.forest import (
+    RHF,
     MondrianIsolationForest,
-    StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.graph import SignedGraphSketchDetector
+from aberrant.model.graph import StreamSpot
 from aberrant.model.sketch import LODA
 from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.stream import BatchStreamer, Sample
@@ -43,13 +43,13 @@ _CAPACITY_CASES = [
     (IncrementalPCA, {"n_components": 1, "warm_up": 4}, "warm_up", 1),
     (_batch_streamer, {}, "batch_size", 1),
     (
-        SignedGraphSketchDetector,
+        StreamSpot,
         {"num_clusters": 1, "warm_up": 1},
         "max_graphs",
         1,
     ),
     (LODA, {}, "warm_up", 1),
-    (StreamRandomHistogramForest, {"n_trees": 1}, "window_size", 2),
+    (RHF, {"n_trees": 1}, "window_size", 2),
     (XStream, {}, "window_size", 1),
     (XStream, {}, "warm_up", 1),
     (XStream, {}, "max_feature_cache_size", 1),

@@ -58,6 +58,17 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** one shared contract for models, transformers, forecasters,
+  regressors and drift detectors. Each stores its constructor arguments under
+  their own names, `get_params()` returns them, `clone()` builds an untrained
+  copy, `reset()` returns the instance to that state, and `repr` shows the
+  arguments that differ from their defaults. Models also get `learn_many` and
+  `score_many`. Hand-written `reset` and `__repr__` methods are gone, so every
+  `reset()` now matches a freshly built component, seeded generators included.
+- **Breaking:** one score convention: higher is more anomalous, `0.0` until the
+  model has learned enough to judge, and the raw statistic otherwise.
+  `OnlineIsolationForest` scores `0.0` instead of `1.0` until it can normalize
+  path lengths, and `AnoEdgeL` scores `0.0` before its first learned edge.
 - **Breaking:** every constructor takes keyword arguments only, for example
   `HalfSpaceTrees(n_trees=25, height=8)` instead of `HalfSpaceTrees(25, 8)`.
   The wrapped component stays positional in `ResidualDetector(model, target=...)`
@@ -65,9 +76,10 @@ Semantic Versioning.
   takes keyword arguments too.
 - **Breaking:** classes named after their method without a prefix:
   `StreamingLODA` is `LODA`, `StreamingRSHash` is `RSHash`, `XLagDAMP` is
-  `DAMP` and `IncrementalOneClassSVMAdaptiveKernel` is `AdaptiveOneClassSVM`.
-  Their catalog ids follow (`loda`, `rshash`, `damp`,
-  `adaptive_one_class_svm`), and the ids of `AnoEdgeL`, `XStream`, `MStream`
+  `DAMP`, `IncrementalOneClassSVMAdaptiveKernel` is `AdaptiveOneClassSVM`,
+  `StreamRandomHistogramForest` is `RHF` and `SignedGraphSketchDetector` is
+  `StreamSpot`. Their catalog ids follow (`loda`, `rshash`, `damp`,
+  `adaptive_one_class_svm`, `rhf`, `streamspot`), and the ids of `AnoEdgeL`, `XStream`, `MStream`
   and `SDOStream` keep the acronym whole: `anoedge_l`, `xstream`, `mstream`,
   `sdostream`.
 - **Breaking:** one name per concept across all constructors.
@@ -187,6 +199,15 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `normalize_score` on `AnoEdgeL`, `ISCONNA`, `MIDAS`,
+  `StreamSpot` and `RandomCutForest`, and `score_scale` on `RandomCutForest`.
+  Map raw scores to a common scale with `aberrant.calibration`.
+- **Breaking:** `OnlineIsolationForest.n_jobs`, `learn_batch` and
+  `score_batch`. The threads could not run in parallel under the GIL, and the
+  batch path learned chunks differently from `learn_one`. Use `learn_many` and
+  `score_many`, which match `learn_one` and `score_one` exactly.
+- **Breaking:** `AdaptiveOneClassSVM.get_model_info()`. Read its attributes
+  directly.
 - **Breaking:** `SeasonalResidualDetector` and its catalog ID
   `seasonal_residual_detector`. `ResidualDetector(HoltWinters(season_length=m),
   target="x")` scores the same events identically; in a configuration use the

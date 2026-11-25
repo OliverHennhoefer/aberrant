@@ -73,12 +73,11 @@ capabilities = spec.capabilities(
         "sample_size": 256,
         "shingle_size": 4,
         "warm_up": 128,
-        "normalize_score": True,
     }
 )
 
 assert capabilities.warmup.minimum == 131
-assert capabilities.score_kind.value == "zero_to_one"
+assert capabilities.score_kind.value == "non_negative"
 assert capabilities.state.value == "bounded"
 ```
 

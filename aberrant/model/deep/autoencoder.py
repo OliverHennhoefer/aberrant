@@ -148,11 +148,3 @@ class Autoencoder(BaseModel):
         tensor[0].copy_(torch.as_tensor(prepared.values, device=tensor.device))
         if not torch.isfinite(tensor).all():
             raise OverflowError("Input exceeds the autoencoder tensor's numeric range")
-
-    def __repr__(self) -> str:
-        """Return a string representation of the autoencoder."""
-        return (
-            f"Autoencoder(model={self.model.__class__.__name__}, "
-            f"optimizer={self.optimizer.__class__.__name__}, "
-            f"criterion={self.criterion.__class__.__name__})"
-        )

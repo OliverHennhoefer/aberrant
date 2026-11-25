@@ -97,12 +97,6 @@ class RollingRobustScaler(BaseTransformer):
         """Resume rolling updates from the retained calibration window."""
         self._frozen = False
 
-    def reset(self) -> None:
-        """Clear all learned features and unfreeze, preserving parameters."""
-        self._windows.clear()
-        self._statistics.clear()
-        self._frozen = False
-
     @contextmanager
     def learning_transaction(self, x: dict[str, float]) -> Iterator[None]:
         """Restore this event's windows if a downstream pipeline update fails."""
@@ -174,9 +168,3 @@ class RollingRobustScaler(BaseTransformer):
             raise ValidationError(
                 f"Feature '{feature}' has not been seen during learning"
             )
-
-    def __repr__(self) -> str:
-        return (
-            f"RollingRobustScaler(window_size={self.window_size}, "
-            f"warm_up={self.warm_up}, fallback_scale={self.fallback_scale})"
-        )

@@ -14,9 +14,6 @@ class MovingMedian(_BaseMovingOrderStatistic):
     def _statistic(self, ordered: Sequence[float]) -> float:
         return linear_quantile(ordered, 0.5)
 
-    def __repr__(self) -> str:
-        return f"MovingMedian(window_size={self.window_size}, abs_diff={self.abs_diff})"
-
 
 class MovingQuantile(_BaseMovingOrderStatistic):
     """Score the change in a configured linearly interpolated quantile."""

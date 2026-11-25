@@ -116,10 +116,6 @@ class LODA(BaseModel):
 
         self._samples_seen = 0
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     @property
     def n_samples_seen(self) -> int:
         """Number of samples processed with ``learn_one``."""
@@ -276,14 +272,3 @@ class LODA(BaseModel):
 
         projected = self._project(event.features.values)
         return self._score_projected(projected)
-
-    def __repr__(self) -> str:
-        return (
-            "LODA("
-            f"n_projections={self.n_projections}, n_bins={self.n_bins}, "
-            f"sparsity={self.sparsity}, warm_up={self.warm_up}, "
-            f"decay={self.decay}, time_key={self.time_key!r}, "
-            f"pseudocount={self.pseudocount}, "
-            f"seed={self.seed}, "
-            f"samples_seen={self._samples_seen}, ready={self._ready})"
-        )

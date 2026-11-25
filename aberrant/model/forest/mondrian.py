@@ -578,11 +578,3 @@ class MondrianIsolationForest(BaseModel):
             else self.n_samples
         )
         return _average_path_length(population)
-
-    def __repr__(self) -> str:
-        """Return a string representation of the MondrianIsolationForest."""
-        return (
-            f"MondrianIsolationForest(n_trees={self.n_trees}, "
-            f"subspace_size={self.subspace_size}, "
-            f"lifetime={self.lifetime}, seed={self.seed}, window_size={self.window_size})"
-        )

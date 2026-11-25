@@ -155,7 +155,6 @@ def test_capabilities_resolve_from_model_parameters() -> None:
             "sample_size": 64,
             "shingle_size": 4,
             "warm_up": 10,
-            "normalize_score": True,
         }
     )
     xstream = get_model_spec("xstream").capabilities()
@@ -165,7 +164,7 @@ def test_capabilities_resolve_from_model_parameters() -> None:
     edge = get_model_spec("midas").capabilities({"time_key": None})
 
     assert random_cut.warmup.minimum == 13
-    assert random_cut.score_kind is ScoreKind.ZERO_TO_ONE
+    assert random_cut.score_kind is ScoreKind.NON_NEGATIVE
     assert xstream.warmup.minimum == 256
     assert xstream.state is StateKind.BOUNDED
     assert xstream.feature_schema is FeatureSchemaKind.EVOLVING
@@ -540,7 +539,6 @@ def test_detector_config_round_trips_and_has_stable_fingerprint() -> None:
                     "window_size": 16,
                     "branching_factor": 2,
                     "metric": "axisparallel",
-                    "n_jobs": 1,
                     "seed": 2,
                 },
             },
@@ -635,8 +633,8 @@ def test_projection_output_cannot_exceed_known_input_width(projection_id: str) -
         ("midas", None),
         ("isconna", None),
         ("anoedge_l", None),
-        ("signed_graph_sketch_detector", None),
-        ("signed_graph_sketch_detector", "kind"),
+        ("streamspot", None),
+        ("streamspot", "kind"),
     ],
 )
 @pytest.mark.parametrize("time_key", [None, "t"])
@@ -647,7 +645,7 @@ def test_edge_models_accept_guarded_events_with_metadata(
     event = {"src": 1.0, "dst": 2.0}
     if time_key is not None:
         event[time_key] = 1.0
-    if model_id == "signed_graph_sketch_detector":
+    if model_id == "streamspot":
         params.update({"sketch_dim": 8, "warm_up": 1, "edge_type_key": edge_type_key})
         event["graph"] = 1.0
         if edge_type_key is not None:

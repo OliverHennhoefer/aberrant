@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 
 from aberrant.base.model import BaseModel
-from aberrant.model.forest import StreamRandomHistogramForest, XStream
-from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
+from aberrant.model.forest import RHF, XStream
+from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, StreamSpot
 from aberrant.model.sketch import LODA, MStream, RSHash
 from aberrant.model.svm import AdaptiveOneClassSVM
 
@@ -106,7 +106,7 @@ _FACTORIES: list[tuple[str, Callable[[], BaseModel], str]] = [
     ),
     (
         "signed-graph-churn",
-        lambda: SignedGraphSketchDetector(
+        lambda: StreamSpot(
             sketch_dim=16,
             shingle_size=3,
             max_graphs=8,
@@ -310,8 +310,8 @@ def test_rshash_large_elapsed_time_forgets_old_counts_without_overflow(decay):
         (XStream, "window_size"),
         (XStream, "warm_up"),
         (XStream, "max_feature_cache_size"),
-        (StreamRandomHistogramForest, "window_size"),
-        (SignedGraphSketchDetector, "max_graphs"),
+        (RHF, "window_size"),
+        (StreamSpot, "max_graphs"),
         (AdaptiveOneClassSVM, "sv_budget"),
         (AdaptiveOneClassSVM, "buffer_size"),
     ],
@@ -336,7 +336,7 @@ def test_numpy_integer_capacities_keep_bounded_models_working():
             warm_up=capacity,
             max_feature_cache_size=capacity,
         ),
-        StreamRandomHistogramForest(n_trees=2, max_depth=2, window_size=capacity),
+        RHF(n_trees=2, max_depth=2, window_size=capacity),
         AdaptiveOneClassSVM(buffer_size=capacity, sv_budget=capacity),
     ]
     for model in models:

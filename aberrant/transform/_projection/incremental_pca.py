@@ -90,6 +90,7 @@ class IncrementalPCA(BaseTransformer):
 
         self.n_components: int = n_components
         self.warm_up: int = warm_up
+        self.features = None if features is None else list(features)
         self._schema = ProjectionSchema(n_components, features)
         self.tol: float = tol
         self.forgetting_factor = forgetting_factor
@@ -262,10 +263,3 @@ class IncrementalPCA(BaseTransformer):
         else:
             # Return zeros during initialization phase
             return {f"component_{i}": 0.0 for i in range(self.n_components)}
-
-    def __repr__(self) -> str:
-        """Return string representation of the transformer."""
-        return (
-            f"IncrementalPCA(n_components={self.n_components}, warm_up={self.warm_up}, "
-            f"tol={self.tol}, forgetting_factor={self.forgetting_factor})"
-        )

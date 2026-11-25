@@ -8,8 +8,6 @@ model = RandomCutForest(
     sample_size=256,
     shingle_size=1,
     warm_up=256,
-    normalize_score=True,
-    score_scale=8.0,
     seed=42,
 )
 

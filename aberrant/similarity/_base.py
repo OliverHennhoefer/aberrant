@@ -2,8 +2,10 @@
 
 import abc
 
+from aberrant.base._parameters import Parameterized
 
-class BaseSimilaritySearchEngine(abc.ABC):
+
+class BaseSimilaritySearchEngine(Parameterized, abc.ABC):
     """
     Abstract base class for similarity search engines.
 
@@ -39,11 +41,3 @@ class BaseSimilaritySearchEngine(abc.ABC):
             The engine-specific scalar summary of the nearest-neighbor query.
         """
         pass
-
-    def __repr__(self) -> str:
-        """Return a string representation of the search engine."""
-        return f"{self.__class__.__name__}()"
-
-    def __str__(self) -> str:
-        """Return a human-readable string representation of the search engine."""
-        return self.__repr__()

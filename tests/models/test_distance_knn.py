@@ -31,7 +31,7 @@ class TestKNN(unittest.TestCase):
         model = KNN(k=3, similarity_engine=engine)
 
         self.assertEqual(model.k, 3)
-        self.assertIs(model.engine, engine)
+        self.assertIs(model.similarity_engine, engine)
 
     def test_initialization_invalid_k(self):
         """Test that invalid k values raise ValueError."""

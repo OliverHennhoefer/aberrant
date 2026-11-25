@@ -109,14 +109,6 @@ def _capabilities(
     return resolve
 
 
-def _normalized_score(params: Parameters) -> ScoreKind:
-    return (
-        ScoreKind.ZERO_TO_ONE
-        if bool(params.get("normalize_score", False))
-        else ScoreKind.NON_NEGATIVE
-    )
-
-
 def _mondrian_state(params: Parameters) -> StateKind:
     return (
         StateKind.BOUNDED
@@ -541,7 +533,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
-            score_kind=_normalized_score,
+            score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
@@ -555,7 +547,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
-            score_kind=_normalized_score,
+            score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
@@ -569,21 +561,21 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
-            score_kind=_normalized_score,
+            score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
     ),
     _model(
-        "signed_graph_sketch_detector",
-        "SignedGraphSketchDetector",
+        "streamspot",
+        "StreamSpot",
         "aberrant.model.graph",
         "graph",
         _capabilities(
             event_kind=EventKind.GRAPH_EDGE,
             feature_count=_graph_edge_features,
-            score_kind=_normalized_score,
+            score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_active_graph_warmup,
             state=StateKind.BOUNDED,
             resettable=True,
@@ -649,15 +641,15 @@ _MODEL_SPECS = (
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
-            score_kind=_normalized_score,
+            score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_random_cut_warmup,
             state=StateKind.BOUNDED,
             resettable=True,
         ),
     ),
     _model(
-        "stream_random_histogram_forest",
-        "StreamRandomHistogramForest",
+        "rhf",
+        "RHF",
         "aberrant.model.forest",
         "isolation_forest",
         _capabilities(

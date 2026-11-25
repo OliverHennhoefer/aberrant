@@ -324,8 +324,6 @@
     "sample_size": 32,
     "shingle_size": 3,
     "warm_up": 8,
-    "normalize_score": true,
-    "score_scale": 4.0,
     "seed": 73
    },
    "stream": {
@@ -584,7 +582,11 @@
     0.6164684271236893,
     0.8130816396893333,
     0.501802781495247
-   ]
+   ],
+   "squash": {
+    "kind": "exp",
+    "scale": 4.0
+   }
   },
   {
    "name": "unit_clusters",

@@ -625,7 +625,6 @@
     "gamma": 1.0,
     "include_endpoints": false,
     "warm_up": 20,
-    "normalize_score": true,
     "seed": 43
    },
    "edges": {
@@ -1034,7 +1033,10 @@
     0.9999990893514651,
     0.9999990132425838,
     0.99999877431968
-   ]
+   ],
+   "squash": {
+    "kind": "ratio"
+   }
   },
   {
    "name": "internal_clock",

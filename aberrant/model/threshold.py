@@ -96,7 +96,3 @@ class ThresholdModel(BaseModel):
                     return 1.0
 
         return 0.0
-
-    def __repr__(self) -> str:
-        """Return a string representation of the threshold model."""
-        return f"ThresholdModel(ceiling={self.ceiling}, floor={self.floor})"

@@ -82,11 +82,6 @@ class KSWIN(BaseDriftDetector):
         self._p_value: float | None = None
         self._statistic: float | None = None
 
-    def reset(self) -> None:
-        """Reset the detector to its initial state."""
-        self._rng = random.Random(self.seed)
-        self._reset_state()
-
     @property
     def drift_detected(self) -> bool:
         """Return True if drift was detected on the last update."""
@@ -151,12 +146,6 @@ class KSWIN(BaseDriftDetector):
             self._n_detections += 1
             # The recent samples start the window of the new concept.
             self._window = deque(recent, maxlen=self.window_size)
-
-    def __repr__(self) -> str:
-        return (
-            f"KSWIN(alpha={self.alpha}, window_size={self.window_size}, "
-            f"stat_size={self.stat_size})"
-        )
 
 
 def _ks_two_sample(first: list[float], second: list[float]) -> tuple[float, float]:

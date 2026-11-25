@@ -112,6 +112,7 @@ class MovingCovariance(BaseModel):
 
         self.window_size = window_size
         self.window: dict[str, deque[float]] = {}
+        self.features = None if features is None else list(features)
         self._schema = FeatureSchema(names=features, expected_size=2)
         self.bias = bias
         self.abs_diff = abs_diff
@@ -180,13 +181,6 @@ class MovingCovariance(BaseModel):
         difference = score_cov - window_cov
         return abs(difference) if self.abs_diff else difference
 
-    def __repr__(self) -> str:
-        """Return string representation of the model."""
-        return (
-            f"MovingCovariance(window_size={self.window_size}, "
-            f"bias={self.bias}, abs_diff={self.abs_diff})"
-        )
-
 
 class MovingCorrelationCoefficient(BaseModel):
     """Score the candidate-induced change in bivariate Pearson correlation.
@@ -218,6 +212,7 @@ class MovingCorrelationCoefficient(BaseModel):
         window_size = coerce_integer_count(window_size, label="window_size")
         self.window_size = window_size
         self.window: dict[str, deque[float]] = {}
+        self.features = None if features is None else list(features)
         self._schema = FeatureSchema(names=features, expected_size=2)
         self.bias = bias
         self.abs_diff = abs_diff
@@ -320,6 +315,7 @@ class MovingMahalanobisDistance(BaseModel):
         window_size = coerce_integer_count(window_size, label="window_size")
         self.window_size = window_size
         self.window: deque[list[float]] = deque([], maxlen=window_size)
+        self.features = None if features is None else list(features)
         self._schema = FeatureSchema(names=features)
         self.bias = bias
 

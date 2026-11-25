@@ -92,7 +92,6 @@ class MIDAS(BaseModel):
     Notes:
     - Source and destination identifiers must be integer-like numbers.
     - Scores are continuous and non-negative.
-    - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by fixed-size sketches.
     - Raw statistics larger than float64 can represent saturate at its maximum.
 
@@ -112,8 +111,6 @@ class MIDAS(BaseModel):
         warm_up: Number of learned edges before scoring begins.
         use_relational: Use MIDAS-R endpoint sketches and decayed current
             counts. ``False`` selects the edge-only NormalCore.
-        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
-            statistic.
         seed: Seed for model-local sketch hash generation.
 
     References:
@@ -134,7 +131,6 @@ class MIDAS(BaseModel):
         time_decay_factor: float = 0.5,
         warm_up: int = 0,
         use_relational: bool = True,
-        normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
         n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
@@ -153,7 +149,6 @@ class MIDAS(BaseModel):
         self.time_decay_factor = time_decay_factor
         self.warm_up = warm_up
         self.use_relational = use_relational
-        self.normalize_score = normalize_score
         self.seed = seed
 
         self._reset_state()
@@ -186,10 +181,6 @@ class MIDAS(BaseModel):
         self._current_bucket: int | None = None
         self._first_bucket: int | None = None
         self._samples_seen = 0
-
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
 
     @property
     def n_samples_seen(self) -> int:
@@ -376,19 +367,4 @@ class MIDAS(BaseModel):
             )
 
         score = max(scores)
-        if self.normalize_score:
-            return score / (1.0 + score)
         return score
-
-    def __repr__(self) -> str:
-        return (
-            "MIDAS("
-            f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
-            f"time_key={self.time_key!r}, n_hashes={self.n_hashes}, "
-            f"sketch_width={self.sketch_width}, "
-            f"time_decay_factor={self.time_decay_factor}, "
-            f"warm_up={self.warm_up}, "
-            f"use_relational={self.use_relational}, "
-            f"normalize_score={self.normalize_score}, seed={self.seed}, "
-            f"samples_seen={self._samples_seen})"
-        )

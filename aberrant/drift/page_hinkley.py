@@ -93,10 +93,6 @@ class PageHinkley(BaseDriftDetector):
         self._drift_detected: bool = False
         self._n_detections: int = 0
 
-    def reset(self) -> None:
-        """Reset the detector to its initial state (clears all counters)."""
-        self._reset_state()
-
     def _soft_reset(self) -> None:
         """Reset detector state but preserve n_detections counter."""
         n_detections = self._n_detections
@@ -178,9 +174,3 @@ class PageHinkley(BaseDriftDetector):
         ):
             self._drift_detected = True
             self._n_detections += 1
-
-    def __repr__(self) -> str:
-        return (
-            f"PageHinkley(min_instances={self.min_instances}, delta={self.delta}, "
-            f"threshold={self.threshold}, alpha={self.alpha}, mode='{self.mode}')"
-        )

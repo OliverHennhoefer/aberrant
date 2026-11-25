@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 
 from aberrant._utils.validation import coerce_finite_number, coerce_integer_count
+from aberrant.base._parameters import Parameterized
 from aberrant.base.forecast import Forecast
 from aberrant.base.protocols import FeatureMap
 
@@ -22,7 +23,7 @@ def check_spread_parameters(
     return alpha, floor
 
 
-class BaseForecaster(abc.ABC):
+class BaseForecaster(Parameterized, abc.ABC):
     """An online forecaster of one series sampled at a fixed cadence.
 
     ``forecast_one()`` forecasts leads ``1..horizon`` from the values learned
@@ -47,15 +48,8 @@ class BaseForecaster(abc.ABC):
     def forecast_one(self) -> Forecast | None:
         """Forecast leads ``1..horizon``, or ``None`` before readiness."""
 
-    @abc.abstractmethod
-    def reset(self) -> None:
-        """Forget everything learned."""
 
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(horizon={self.horizon})"
-
-
-class BaseRegressor(abc.ABC):
+class BaseRegressor(Parameterized, abc.ABC):
     """An online regressor of one target from the covariates of each event.
 
     ``predict_one(x)`` predicts the target of the event with covariates ``x``
@@ -74,10 +68,3 @@ class BaseRegressor(abc.ABC):
     @abc.abstractmethod
     def predict_one(self, x: FeatureMap) -> Forecast | None:
         """Predict the target at lead 0, or ``None`` before readiness."""
-
-    @abc.abstractmethod
-    def reset(self) -> None:
-        """Forget everything learned."""
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}()"

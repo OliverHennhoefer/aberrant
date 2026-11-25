@@ -2,8 +2,7 @@
 
 Each JSON file under ``tests/data/score_sequences`` holds, per case, the model
 parameters, the seeded stream that was fed to it and the scores it produced
-when scoring and then learning every event, or every batch for cases that name
-a ``batch_size``. The files were recorded with
+when scoring and then learning every event. The files were recorded with
 aberrant 1.4.0, before the detectors were optimised for speed, so tests can
 check that faster implementations still produce the same score sequences.
 
@@ -25,12 +24,12 @@ import numpy as np
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.forest import (
+    RHF,
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
-    StreamRandomHistogramForest,
     XStream,
 )
 from aberrant.model.graph import ISCONNA
@@ -210,19 +209,6 @@ def score_then_learn(model: Any, events: list[dict[str, float]]) -> list[float]:
     return scores
 
 
-def score_then_learn_batches(
-    model: Any, events: list[dict[str, float]], batch_size: int
-) -> list[float]:
-    """Score each batch of event rows with ``score_batch`` before learning it."""
-    data = np.array([list(event.values()) for event in events], dtype=np.float32)
-    scores: list[float] = []
-    for start in range(0, len(data), batch_size):
-        batch = data[start : start + batch_size]
-        scores.extend(float(score) for score in model.score_batch(batch))
-        model.learn_batch(batch)
-    return scores
-
-
 _MOVING_STATISTICS: dict[str, Callable[..., Any]] = {
     "correlation_coefficient": MovingCorrelationCoefficient,
     "covariance": MovingCovariance,
@@ -245,9 +231,19 @@ def replay(model: Any, case: dict[str, Any]) -> list[float]:
         events = make_series(**case["series"])
     else:
         events = make_stream(**case["stream"])
-    if "batch_size" in case:
-        return score_then_learn_batches(model, events, case["batch_size"])
-    return score_then_learn(model, events)
+    return squash(score_then_learn(model, events), case.get("squash"))
+
+
+def squash(scores: list[float], spec: dict[str, Any] | None) -> list[float]:
+    """Map raw scores onto [0, 1] the way the 1.4.0 normalized cases did."""
+    if spec is None:
+        return scores
+    if spec["kind"] == "ratio":
+        return [score / (1.0 + score) for score in scores]
+    return [
+        float(np.clip(1.0 - np.exp(-score / spec["scale"]), 0.0, 1.0))
+        for score in scores
+    ]
 
 
 def load(name: str) -> list[dict[str, Any]]:
@@ -437,10 +433,10 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "gamma": 1.0,
                     "include_endpoints": False,
                     "warm_up": 20,
-                    "normalize_score": True,
                     "seed": 43,
                 },
                 "edges": {"seed": 44, "n_events": 400, "n_nodes": 12},
+                "squash": {"kind": "ratio"},
             },
             {
                 # Every learned arrival opens a new time bucket.
@@ -679,17 +675,6 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 },
                 "stream": {"seed": 32, "n_events": 300, "n_features": 3},
             },
-            {
-                "name": "adaptive_batches",
-                "params": {
-                    "n_trees": 6,
-                    "max_leaf_samples": 4,
-                    "window_size": 40,
-                    "seed": 5,
-                },
-                "stream": {"seed": 33, "n_events": 300, "n_features": 5},
-                "batch_size": 7,
-            },
         ],
     ),
     "mstream": (
@@ -846,11 +831,10 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "sample_size": 32,
                     "shingle_size": 3,
                     "warm_up": 8,
-                    "normalize_score": True,
-                    "score_scale": 4.0,
                     "seed": 73,
                 },
                 "stream": {"seed": 74, "n_events": 250, "n_features": 2},
+                "squash": {"kind": "exp", "scale": 4.0},
             },
             {
                 "name": "unit_clusters",
@@ -966,8 +950,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
         ],
     ),
-    "stream_random_histogram_forest": (
-        StreamRandomHistogramForest,
+    "rhf": (
+        RHF,
         [
             {
                 "name": "small_forest",

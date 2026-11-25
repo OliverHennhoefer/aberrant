@@ -116,12 +116,11 @@ include:
 - open an investigation without modifying the detector;
 - recalibrate an external threshold on a controlled recent reference period;
 - create a fresh model and warm it alongside the current model;
-- call a documented model-specific `reset()` where one exists;
+- call the model's `reset()`, or warm `model.clone()` alongside it;
 - roll back or quarantine an upstream data change.
 
-Do not assume every model exposes `reset()`, and do not automatically relearn
-from an interval merely because it triggered drift; that interval can contain
-the incident being detected.
+Do not automatically relearn from an interval merely because it triggered
+drift; that interval can contain the incident being detected.
 
 ## Primary sources
 

@@ -11,7 +11,6 @@ model = OnlineIsolationForest(
     window_size=512,
     branching_factor=2,
     metric="axisparallel",
-    n_jobs=1,
 )
 
 labels, scores = [], []

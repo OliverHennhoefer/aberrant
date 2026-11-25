@@ -74,9 +74,9 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
         self.window_size = resolved_window
         self.normalize = normalize
         self.exclusion_zone = resolved_zone
-        self.reset()
+        self._reset_state()
 
-    def reset(self) -> None:
+    def _reset_state(self) -> None:
         """Clear history, schema, and absolute indices; preserve configuration."""
         self._schema = FeatureSchema(expected_size=self._expected_size)
         self._history: deque[_Sample] = deque(maxlen=self.window_size)

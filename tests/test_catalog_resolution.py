@@ -54,7 +54,7 @@ def test_each_component_occurrence_resolves_once(monkeypatch, operation):
         resolved.build()
         assert (
             resolved.fingerprint
-            == "b1a48002ccf7c457563a24d01ffc822e6008745424d37759fdc8383bf1b1ad89"
+            == "15420435d505a1da06502752cfca5c68454a06b5b5ca387837885b9ff11878d5"
         )
     else:
         config.build()
@@ -145,7 +145,7 @@ def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
 @pytest.mark.parametrize(
     ("config", "fingerprint"),
     [
-        (example(), "b1a48002ccf7c457563a24d01ffc822e6008745424d37759fdc8383bf1b1ad89"),
+        (example(), "15420435d505a1da06502752cfca5c68454a06b5b5ca387837885b9ff11878d5"),
         (
             DetectorConfig(
                 ComponentConfig("moving_average", {"window_size": 8}),

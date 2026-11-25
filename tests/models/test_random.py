@@ -202,10 +202,9 @@ class TestRandomModel(unittest.TestCase):
 
     def test_default_seed(self):
         """Test that default seed is used when none provided."""
-        model = RandomModel()  # Should use default seed=1
-        repr_str = repr(model)
+        model = RandomModel()
 
-        self.assertEqual(repr_str, "RandomModel(seed=1)")
+        self.assertEqual(repr(model), "RandomModel()")
         self.assertEqual(model.seed, 1)
 
     def test_reproducibility_over_multiple_calls(self):

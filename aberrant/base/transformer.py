@@ -3,11 +3,12 @@
 import abc
 from typing import overload
 
+from aberrant.base._parameters import Parameterized
 from aberrant.base.pipeline import ModelPipeline, Pipeline, TransformerPipeline
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
 
 
-class BaseTransformer(abc.ABC):
+class BaseTransformer(Parameterized, abc.ABC):
     """
     Abstract base class for online transformers.
 
@@ -53,11 +54,3 @@ class BaseTransformer(abc.ABC):
         self, other: TransformerProtocol | ModelProtocol
     ) -> TransformerPipeline | ModelPipeline:
         return Pipeline(self, other)
-
-    def __repr__(self) -> str:
-        """Return a string representation of the transformer."""
-        return f"{self.__class__.__name__}()"
-
-    def __str__(self) -> str:
-        """Return a human-readable string representation of the transformer."""
-        return self.__repr__()

@@ -211,10 +211,6 @@ class DAMP(BaseModel):
         state["_scored"] = None
         return state
 
-    def reset(self) -> None:
-        """Reset learned state while preserving hyperparameters."""
-        self._reset_state()
-
     @property
     def n_samples_seen(self) -> int:
         """Number of values processed through ``learn_one``."""
@@ -379,12 +375,3 @@ class DAMP(BaseModel):
             return 0.0
         score, _best_so_far = result
         return score
-
-    def __repr__(self) -> str:
-        return (
-            "DAMP("
-            f"subsequence_length={self.subsequence_length}, x_lag={self.x_lag}, "
-            f"start_index={self.start_index}, samples_seen={self._samples_seen}, "
-            f"subsequences_processed={self._subsequences_processed}, "
-            f"best_score={self.best_score})"
-        )

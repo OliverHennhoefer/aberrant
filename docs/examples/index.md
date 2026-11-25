@@ -39,7 +39,7 @@ These notebooks install aberrant themselves and run in Google Colab without a lo
 | Isolation forest | [`online_iforest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/online_iforest.py) | Registered SHUTTLE dataset |
 | Isolation forest | [`mondrian_isolation_forest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/mondrian_isolation_forest.py) | Registered SHUTTLE dataset |
 | Isolation forest | [`asd_iforest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/asd_iforest.py) | Registered SHUTTLE dataset |
-| Isolation forest | [`streamRHF.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streamRHF.py) | Registered SHUTTLE dataset |
+| Random histogram forest | [`rhf.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rhf.py) | Registered SHUTTLE dataset |
 | Isolation forest | [`xstream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/xstream.py) | Registered SHUTTLE dataset |
 | Random cut forest | [`random_cut_forest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/random_cut_forest.py) | Registered SHUTTLE dataset |
 | Half-space trees | [`half_space_trees.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/half_space_trees.py) | Registered SHUTTLE dataset |
@@ -57,7 +57,7 @@ These notebooks install aberrant themselves and run in Google Colab without a lo
 | AnoEdge-L | [`anoedge.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/anoedge.py) | Maps two SHUTTLE features to integer-like edge identifiers for demonstration |
 | ISCONNA | [`isconna.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/isconna.py) | Seeded synthetic edge stream |
 | MIDAS-R | [`midas.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/midas.py) | Seeded synthetic edge stream |
-| Signed graph sketch | [`signed_graph_sketch.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/signed_graph_sketch.py) | Seeded synthetic multi-graph stream |
+| StreamSpot | [`streamspot.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streamspot.py) | Seeded synthetic multi-graph stream |
 | Rolling matrix profile | [`rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rolling_matrix_profile.py) | Seeded periodic stream with a discord, continuous scores, and nearest-match indices; no `eval` extra needed |
 | Multivariate rolling matrix profile | [`multivariate_rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py) | Seeded two-channel phase change, continuous joint scores, common-match indices, and channel distances; no `eval` extra needed |
 | DAMP | [`damp.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/damp.py) | Seeded synthetic periodic series with an injected discord; no `eval` extra needed |

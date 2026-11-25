@@ -100,6 +100,14 @@ from silently acquiring different meanings across model families.
     window, fixed-size sketch, or fixed observer set can be bounded. A growing
     online tree is incremental but not necessarily bounded.
 
+**Parameters, clone and reset**
+:   Every model, transformer, forecaster and drift detector stores each
+    constructor argument under its own name. `get_params()` returns them,
+    `clone()` builds a new, untrained component with the same parameters, and
+    `reset()` turns a component back into that untrained state. A model's
+    `learn_many(events)` and `score_many(events)` process several events in
+    order, exactly like calling `learn_one` and `score_one` for each.
+
 **Forgetting**
 :   Reducing the influence of older events through eviction, replacement,
     exponential fading, or explicit unlearning. The exact mechanism changes the

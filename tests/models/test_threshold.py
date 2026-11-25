@@ -221,11 +221,11 @@ class TestThresholdModel(unittest.TestCase):
         """Test string representation with various configurations."""
         # Ceiling only
         model1 = ThresholdModel(ceiling=10.0)
-        self.assertEqual(repr(model1), "ThresholdModel(ceiling=10.0, floor=None)")
+        self.assertEqual(repr(model1), "ThresholdModel(ceiling=10.0)")
 
         # Floor only
         model2 = ThresholdModel(floor=0.0)
-        self.assertEqual(repr(model2), "ThresholdModel(ceiling=None, floor=0.0)")
+        self.assertEqual(repr(model2), "ThresholdModel(floor=0.0)")
 
         # Both
         model3 = ThresholdModel(ceiling=10.0, floor=0.0)
@@ -233,9 +233,7 @@ class TestThresholdModel(unittest.TestCase):
 
         # Dict parameters
         model4 = ThresholdModel(ceiling={"x": 10.0})
-        self.assertEqual(
-            repr(model4), "ThresholdModel(ceiling={'x': 10.0}, floor=None)"
-        )
+        self.assertEqual(repr(model4), "ThresholdModel(ceiling={'x': 10.0})")
 
     def test_consistency_across_features(self):
         """Test that all features are checked consistently."""

@@ -152,10 +152,6 @@ class XStream(BaseModel):
             OrderedDict()
         )
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     @staticmethod
     def _validate_input(x: dict[str, float]) -> None:
         if not x:
@@ -397,14 +393,3 @@ class XStream(BaseModel):
         if state is None or not state.reference_ready:
             return 0.0
         return self._score_projected(state, self._project_one(x))
-
-    def __repr__(self) -> str:
-        state = self._state
-        return (
-            f"XStream(k={self.k}, n_chains={self.n_chains}, depth={self.depth}, "
-            f"sketch_width={self.sketch_width}, n_hashes={self.n_hashes}, "
-            f"window_size={self.window_size}, warm_up={self.warm_up}, "
-            f"density={self.density}, max_feature_cache_size={self.max_feature_cache_size}, "
-            f"feature_cache_size={len(self._feature_cache)}, ready={state is not None}, "
-            f"reference_ready={state is not None and state.reference_ready})"
-        )

@@ -374,12 +374,6 @@ class LocalOutlierFactor(BaseModel):
         neighbors: list[int] = ordered.tolist()
         return neighbors
 
-    def __repr__(self) -> str:
-        return (
-            f"LocalOutlierFactor(k={self.k}, window_size={self.window_size}, "
-            f"distance='{self.distance}', n_points={self.n_points})"
-        )
-
 
 def _sum_rows(values: np.ndarray) -> np.ndarray:
     """

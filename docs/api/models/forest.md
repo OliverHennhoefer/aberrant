@@ -14,6 +14,6 @@ thresholding outputs.
 
 ::: aberrant.model.forest.RandomCutForest
 
-::: aberrant.model.forest.StreamRandomHistogramForest
+::: aberrant.model.forest.RHF
 
 ::: aberrant.model.forest.XStream

@@ -69,14 +69,14 @@ class HoltWinters(BaseForecaster):
         self.residual_alpha, self.min_scale = check_spread_parameters(
             residual_alpha, min_scale
         )
-        self.reset()
+        self._reset_state()
 
     @property
     def is_ready(self) -> bool:
         """Whether two complete cycles have been learned."""
         return self.n_samples_seen >= 2 * self.season_length
 
-    def reset(self) -> None:
+    def _reset_state(self) -> None:
         """Forget learned components and errors."""
         self.n_samples_seen = 0
         self._warmup: list[float] = []
@@ -146,9 +146,4 @@ class HoltWinters(BaseForecaster):
             leads=tuple(range(1, self.horizon + 1)),
             mean=self._errors.issued[-1],
             scale=self._errors.scales,
-        )
-
-    def __repr__(self) -> str:
-        return (
-            f"HoltWinters(season_length={self.season_length}, horizon={self.horizon})"
         )

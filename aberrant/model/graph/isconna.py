@@ -183,8 +183,6 @@ class ISCONNA(BaseModel):
     - Source and destination identifiers must be integer-like numbers.
     - Scores are continuous and non-negative. A score beyond the float range
       saturates at the largest float.
-    - With ``normalize_score=True``, scores are squashed to ``[0, 1]``; only a
-      saturated score reaches 1.
     - State is bounded by a fixed sketch size.
     - Width and gap occurrence counters saturate at the signed int64 maximum.
 
@@ -205,8 +203,6 @@ class ISCONNA(BaseModel):
         include_endpoints: Combine edge, source, and destination components by
             component-wise maxima. ``False`` scores only edge patterns.
         warm_up: Number of learned edges before scoring begins.
-        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
-            combined statistic.
         seed: Seed for model-local sketch hash generation.
 
     References:
@@ -230,7 +226,6 @@ class ISCONNA(BaseModel):
         gamma: float = 0.5,
         include_endpoints: bool = True,
         warm_up: int = 0,
-        normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
         n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
@@ -258,7 +253,6 @@ class ISCONNA(BaseModel):
         self.gamma = gamma
         self.include_endpoints = include_endpoints
         self.warm_up = warm_up
-        self.normalize_score = normalize_score
         self.seed = seed
 
         self._reset_state()
@@ -306,10 +300,6 @@ class ISCONNA(BaseModel):
         self._current_bucket: int | None = None
         self._first_bucket: int | None = None
         self._samples_seen = 0
-
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
 
     @property
     def n_samples_seen(self) -> int:
@@ -486,20 +476,4 @@ class ISCONNA(BaseModel):
                 (float(gap), self.gamma),
             )
         )
-        if self.normalize_score:
-            return score / (1.0 + score)
         return score
-
-    def __repr__(self) -> str:
-        return (
-            "ISCONNA("
-            f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
-            f"time_key={self.time_key!r}, n_hashes={self.n_hashes}, "
-            f"sketch_width={self.sketch_width}, "
-            f"time_decay_factor={self.time_decay_factor}, alpha={self.alpha}, "
-            f"beta={self.beta}, gamma={self.gamma}, "
-            f"include_endpoints={self.include_endpoints}, "
-            f"warm_up={self.warm_up}, "
-            f"normalize_score={self.normalize_score}, seed={self.seed}, "
-            f"samples_seen={self._samples_seen})"
-        )

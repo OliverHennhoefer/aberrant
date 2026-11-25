@@ -309,9 +309,3 @@ class HalfSpaceTrees(BaseModel):
                 weight += weight
             total += float(node.r_mass * weight)
         return total
-
-    def __repr__(self) -> str:
-        return (
-            f"HalfSpaceTrees(n_trees={self.n_trees}, height={self.height}, "
-            f"window_size={self.window_size}, initialized={self._initialized})"
-        )

@@ -69,6 +69,9 @@ class AdaptiveOneClassSVM(BaseModel):
             raise ValueError("tolerance must be non-negative")
 
         self.nu = nu
+        self.initial_gamma = initial_gamma
+        self.gamma_bounds = gamma_bounds
+        self.seed = seed
         self.gamma = float(initial_gamma)
         self.gamma_min, self.gamma_max = gamma_bounds
         self.adaptation_rate = adaptation_rate
@@ -292,14 +295,3 @@ class AdaptiveOneClassSVM(BaseModel):
             return 0.0
 
         return -self._decision_function(prepared.values, self._feature_std())
-
-    def get_model_info(self) -> dict[str, object]:
-        """Return current model diagnostics."""
-        return {
-            "n_support_vectors": len(self.support_vectors),
-            "gamma": self.gamma,
-            "rho": self.rho,
-            "n_samples_processed": self.n_samples,
-            "buffer_size": len(self.data_buffer),
-            "sv_ages": [self.n_samples - birth for birth in self.birth_sample],
-        }

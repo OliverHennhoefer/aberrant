@@ -45,6 +45,7 @@ class RandomProjection(BaseTransformer):
 
         n_components = coerce_integer_count(n_components, label="n_components")
         self.n_components = n_components
+        self.features = None if features is None else list(features)
         self._schema = ProjectionSchema(n_components, features)
         self.seed = seed
 
@@ -132,7 +133,3 @@ class RandomProjection(BaseTransformer):
         data_vector = self._schema.prepare(x).values
         transformed_x = self.random_matrix.T @ data_vector
         return {f"component_{i}": float(val) for i, val in enumerate(transformed_x)}
-
-    def __repr__(self) -> str:
-        """Return string representation of the transformer."""
-        return f"RandomProjection(n_components={self.n_components}, seed={self.seed})"

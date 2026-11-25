@@ -498,8 +498,6 @@ class RandomCutForest(BaseModel):
         shingle_size: Number of consecutive points concatenated per tree insert.
         warm_up: Number of inserted shingles before non-zero scoring.
             If `None`, defaults to `sample_size`.
-        normalize_score: If True, map raw CoDisp to [0, 1].
-        score_scale: Scale for score normalization when enabled.
         seed: Random seed for reproducibility.
 
     References:
@@ -516,8 +514,6 @@ class RandomCutForest(BaseModel):
         sample_size: int = 256,
         shingle_size: int = 1,
         warm_up: int | None = None,
-        normalize_score: bool = False,
-        score_scale: float = 8.0,
         seed: int | None = None,
     ) -> None:
         n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
@@ -527,15 +523,11 @@ class RandomCutForest(BaseModel):
         )
         if warm_up is not None and warm_up <= 0:
             raise ValueError("warm_up must be positive or None")
-        if score_scale <= 0.0:
-            raise ValueError("score_scale must be positive")
 
         self.n_trees = n_trees
         self.sample_size = sample_size
         self.shingle_size = shingle_size
         self.warm_up = sample_size if warm_up is None else warm_up
-        self.normalize_score = normalize_score
-        self.score_scale = score_scale
         self.seed = seed
 
         self._reset_state()
@@ -556,10 +548,6 @@ class RandomCutForest(BaseModel):
         self._trees = [
             _RandomCutTree(np.random.default_rng(seq)) for seq in child_sequences
         ]
-
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
 
     def __getstate__(self) -> dict[str, object]:
         state = self.__dict__.copy()
@@ -616,12 +604,7 @@ class RandomCutForest(BaseModel):
         descents = _plan(self._trees, query)
         self._planned = (query.tobytes(), descents)
         values = query.tolist()
-        raw = float(np.mean([_codisp(descent, values) for descent in descents]))
-        if not self.normalize_score:
-            return raw
-
-        bounded = 1.0 - float(np.exp(-raw / self.score_scale))
-        return float(np.clip(bounded, 0.0, 1.0))
+        return float(np.mean([_codisp(descent, values) for descent in descents]))
 
     def _learn_descents(
         self,
@@ -686,11 +669,3 @@ class RandomCutForest(BaseModel):
 
         history = list(self._history)[-required_history:]
         return np.asarray(np.concatenate([*history, vector]), dtype=np.float64)
-
-    def __repr__(self) -> str:
-        return (
-            f"RandomCutForest(n_trees={self.n_trees}, sample_size={self.sample_size}, "
-            f"shingle_size={self.shingle_size}, warm_up={self.warm_up}, "
-            f"normalize_score={self.normalize_score}, score_scale={self.score_scale}, "
-            f"ready={self._ready}, stored_points={len(self._id_window)})"
-        )

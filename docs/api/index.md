@@ -59,8 +59,8 @@ numeric scale. In particular:
 
 - isolation-family scores are not universally bounded because
   `RandomCutForest` defaults to raw CoDisp and
-  `StreamRandomHistogramForest` returns a raw log-mass score;
-- graph detectors default to raw scores but expose optional normalization;
+  `RHF` returns a raw log-mass score;
+- graph detectors return raw, unbounded scores;
 - moving statistics can return signed changes when `abs_diff=False`;
 - `RandomModel` is a generator-backed baseline rather than an anomaly model.
 
