@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,6 +13,35 @@ from aberrant.utils.validation import EdgeEventBoundary
 
 # Width and gap occurrence counters stop growing at the signed int64 maximum.
 _COUNTER_LIMIT = int(np.iinfo(np.int64).max) - 1
+_LOG_FLOAT_MAX = math.log(sys.float_info.max)
+
+
+def _weighted_product(terms: tuple[tuple[float, float], ...]) -> float:
+    """Return the product of ``value**exponent``, saturating at the float maximum.
+
+    Values are non-negative and exponents finite and non-negative. Products
+    beyond the float range are recomputed in log space, so an overflowing
+    component reads as the largest score instead of an error or NaN, and a
+    zero component still zeroes the product.
+    """
+    try:
+        product = 1.0
+        for value, exponent in terms:
+            product *= value**exponent
+        if math.isfinite(product):
+            return product
+    except OverflowError:
+        pass
+    log_product = 0.0
+    for value, exponent in terms:
+        if exponent == 0.0:
+            continue
+        if value == 0.0:
+            return 0.0
+        log_product += exponent * math.log(value)
+    if log_product >= _LOG_FLOAT_MAX:
+        return sys.float_info.max
+    return math.exp(log_product)
 
 
 @dataclass
@@ -151,8 +181,10 @@ class ISCONNA(BaseModel):
 
     Notes:
     - Source and destination identifiers must be integer-like numbers.
-    - Scores are continuous and non-negative.
-    - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
+    - Scores are continuous and non-negative. A score beyond the float range
+      saturates at the largest float.
+    - With ``normalize_score=True``, scores are squashed to ``[0, 1]``; only a
+      saturated score reaches 1.
     - State is bounded by a fixed sketch size.
     - Width and gap occurrence counters saturate at the signed int64 maximum.
 
@@ -447,10 +479,13 @@ class ISCONNA(BaseModel):
             return 0.0
 
         frequency, width, gap = self._component_scores(bucket, src, dst)
-        score = frequency**self.alpha * width**self.beta * gap**self.gamma
-        if not np.isfinite(score):
-            score = 0.0
-        score = float(max(score, 0.0))
+        score = _weighted_product(
+            (
+                (float(frequency), self.alpha),
+                (float(width), self.beta),
+                (float(gap), self.gamma),
+            )
+        )
         if self.normalize_score:
             return score / (1.0 + score)
         return score
