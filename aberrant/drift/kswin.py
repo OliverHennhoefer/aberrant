@@ -6,6 +6,7 @@ from collections import deque
 from itertools import chain
 
 from aberrant.drift.base import BaseDriftDetector, _finite_observation
+from aberrant.utils.validation import coerce_integer_count
 
 
 class KSWIN(BaseDriftDetector):
@@ -37,8 +38,7 @@ class KSWIN(BaseDriftDetector):
         detector = KSWIN(alpha=0.005)
         drift_points = []
         for index, value in enumerate([0.0] * 100 + [1.0] * 100):
-            detector.update(value)
-            if detector.drift_detected:
+            if detector.update(value):
                 drift_points.append(index)
         ```
 
@@ -59,12 +59,10 @@ class KSWIN(BaseDriftDetector):
         stat_size: int = 30,
         seed: int | None = None,
     ) -> None:
+        window_size = coerce_integer_count(window_size, label="window_size", minimum=1)
+        stat_size = coerce_integer_count(stat_size, label="stat_size", minimum=1)
         if not 0 < alpha < 1:
             raise ValueError("alpha must be in (0, 1)")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
-        if stat_size <= 0:
-            raise ValueError("stat_size must be positive")
         if stat_size >= window_size / 2:
             raise ValueError("stat_size must be less than window_size / 2")
 
@@ -109,7 +107,7 @@ class KSWIN(BaseDriftDetector):
         """KS statistic from the last test, or None if not yet computed."""
         return self._statistic
 
-    def update(self, x: float) -> "KSWIN":
+    def update(self, x: float) -> bool:
         """
         Update the detector with a new observation.
 
@@ -127,7 +125,7 @@ class KSWIN(BaseDriftDetector):
         if len(self._window) >= self.window_size:
             self._check_drift()
 
-        return self
+        return self._drift_detected
 
     def _check_drift(self) -> None:
         """Perform the KS test to check for drift."""

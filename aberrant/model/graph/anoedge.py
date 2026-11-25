@@ -8,7 +8,7 @@ from collections.abc import Callable
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import EdgeEventBoundary
+from aberrant.utils.validation import EdgeEventBoundary, coerce_integer_count
 
 _MatrixValue = Callable[[int, int], float]
 
@@ -209,22 +209,12 @@ class AnoEdgeL(BaseModel):
         time_decay_factor: float,
         warm_up_samples: int,
     ) -> None:
-        if count_min_rows <= 0:
-            raise ValueError("count_min_rows must be positive")
-        if count_min_cols <= 0:
-            raise ValueError("count_min_cols must be positive")
-        if num_hashes <= 0:
-            raise ValueError("num_hashes must be positive")
-        if num_dense_submatrices <= 0:
-            raise ValueError("num_dense_submatrices must be positive")
         if num_dense_submatrices > min(count_min_rows, count_min_cols):
             raise ValueError(
                 "num_dense_submatrices cannot exceed either sketch dimension"
             )
         if not (0.0 < time_decay_factor <= 1.0):
             raise ValueError("time_decay_factor must be in (0, 1]")
-        if warm_up_samples < 0:
-            raise ValueError("warm_up_samples must be non-negative")
 
     def __init__(
         self,
@@ -241,6 +231,19 @@ class AnoEdgeL(BaseModel):
         normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
+        count_min_rows = coerce_integer_count(
+            count_min_rows, label="count_min_rows", minimum=1
+        )
+        count_min_cols = coerce_integer_count(
+            count_min_cols, label="count_min_cols", minimum=1
+        )
+        num_hashes = coerce_integer_count(num_hashes, label="num_hashes", minimum=1)
+        num_dense_submatrices = coerce_integer_count(
+            num_dense_submatrices, label="num_dense_submatrices", minimum=1
+        )
+        warm_up_samples = coerce_integer_count(
+            warm_up_samples, label="warm_up_samples", minimum=0
+        )
         self._validate_parameters(
             count_min_rows=count_min_rows,
             count_min_cols=count_min_cols,

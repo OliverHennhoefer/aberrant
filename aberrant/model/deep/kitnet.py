@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 _PHASE_FEATURE_MAP = "feature_map_warmup"
 _PHASE_DETECTOR = "detector_warmup"
@@ -183,12 +183,11 @@ class OnlineAutoencoderEnsemble(BaseModel):
         adaptive_after_warmup: bool = False,
         seed: int | None = None,
     ) -> None:
-        if max_ae_size <= 0:
-            raise ValueError("max_ae_size must be positive")
-        if feature_map_grace <= 0:
-            raise ValueError("feature_map_grace must be positive")
-        if ad_grace < 0:
-            raise ValueError("ad_grace must be non-negative")
+        max_ae_size = coerce_integer_count(max_ae_size, label="max_ae_size", minimum=1)
+        feature_map_grace = coerce_integer_count(
+            feature_map_grace, label="feature_map_grace", minimum=1
+        )
+        ad_grace = coerce_integer_count(ad_grace, label="ad_grace", minimum=0)
         if not math.isfinite(learning_rate) or learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
         if not (0.0 < hidden_ratio <= 1.0):

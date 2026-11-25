@@ -72,10 +72,10 @@ class StreamingLODA(BaseModel):
         seed: int | None = None,
         eps: float = 1e-12,
     ) -> None:
-        if n_projections <= 0:
-            raise ValueError("n_projections must be positive")
-        if n_bins <= 1:
-            raise ValueError("n_bins must be greater than 1")
+        n_projections = coerce_integer_count(
+            n_projections, label="n_projections", minimum=1
+        )
+        n_bins = coerce_integer_count(n_bins, label="n_bins", minimum=2)
         if sparsity is not None and not (0.0 < sparsity <= 1.0):
             raise ValueError("sparsity must be in (0, 1] or None")
         warm_up_samples = coerce_integer_count(warm_up_samples, label="warm_up_samples")

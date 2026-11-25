@@ -55,20 +55,24 @@ class TestASDIsolationForest(unittest.TestCase):
         # Test invalid n_estimators
         with self.assertRaises(ValueError) as context:
             ASDIsolationForest(n_estimators=0)
-        self.assertIn("n_estimators must be positive", str(context.exception))
+        self.assertIn("n_estimators must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError) as context:
             ASDIsolationForest(n_estimators=-1)
-        self.assertIn("n_estimators must be positive", str(context.exception))
+        self.assertIn("n_estimators must be a positive integer", str(context.exception))
 
         # Test invalid max_samples
         with self.assertRaises(ValueError) as context:
             ASDIsolationForest(max_samples=0)
-        self.assertIn("max_samples must be greater than 1", str(context.exception))
+        self.assertIn(
+            "max_samples must be an integer greater than 1", str(context.exception)
+        )
 
         with self.assertRaises(ValueError) as context:
             ASDIsolationForest(max_samples=-1)
-        self.assertIn("max_samples must be greater than 1", str(context.exception))
+        self.assertIn(
+            "max_samples must be an integer greater than 1", str(context.exception)
+        )
 
         with self.assertRaises(ValueError):
             ASDIsolationForest(max_samples=1)

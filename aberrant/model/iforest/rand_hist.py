@@ -421,10 +421,10 @@ class StreamRandomHistogramForest(BaseModel):
         window_size: int = 256,
         seed: int | None = None,
     ) -> None:
-        if n_estimators <= 0:
-            raise ValueError("n_estimators must be positive")
-        if max_depth <= 0:
-            raise ValueError("max_depth must be positive")
+        n_estimators = coerce_integer_count(
+            n_estimators, label="n_estimators", minimum=1
+        )
+        max_depth = coerce_integer_count(max_depth, label="max_depth", minimum=1)
         window_size = coerce_integer_count(window_size, label="window_size", minimum=2)
 
         self.n_estimators = n_estimators

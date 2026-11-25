@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from aberrant.base.exceptions import MissingOptionalDependencyError
 from aberrant.base.similarity import BaseSimilaritySearchEngine
 from aberrant.utils.validation import FeatureSchema, PreparedFeatures
 
@@ -44,10 +45,7 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
 
     def __init__(self, *, window_size: int, warm_up: int) -> None:
         if faiss is None:
-            raise RuntimeError(
-                "faiss-cpu is required for FaissSimilaritySearchEngine. "
-                'Install it via `pip install "aberrant[faiss]"`.'
-            )
+            raise MissingOptionalDependencyError("FaissSimilaritySearchEngine", "faiss")
 
         self._check_params(window_size, warm_up)
         self.window_size = window_size

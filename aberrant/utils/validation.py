@@ -23,9 +23,9 @@ _INTEGER_TOLERANCE = 1e-9
 def coerce_integer_count(value: object, *, label: str, minimum: int = 1) -> int:
     """Validate a strict integer count and normalize it before bound arithmetic."""
     if minimum == 0:
-        requirement = "non-negative integer"
+        requirement = "a non-negative integer"
     elif minimum == 1:
-        requirement = "positive integer"
+        requirement = "a positive integer"
     else:
         requirement = f"an integer greater than {minimum - 1}"
     message = f"{label} must be {requirement}"

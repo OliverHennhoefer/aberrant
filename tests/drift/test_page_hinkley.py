@@ -38,7 +38,9 @@ class TestPageHinkley(unittest.TestCase):
         """Test that invalid min_instances raises ValueError."""
         with self.assertRaises(ValueError) as context:
             PageHinkley(min_instances=0)
-        self.assertIn("min_instances must be positive", str(context.exception))
+        self.assertIn(
+            "min_instances must be a positive integer", str(context.exception)
+        )
 
         with self.assertRaises(ValueError):
             PageHinkley(min_instances=-1)
@@ -72,12 +74,6 @@ class TestPageHinkley(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             PageHinkley(mode="invalid")
         self.assertIn("mode must be", str(context.exception))
-
-    def test_update_returns_self(self):
-        """Test that update returns self for method chaining."""
-        detector = PageHinkley()
-        result = detector.update(1.0)
-        self.assertIs(result, detector)
 
     def test_non_finite_observation_is_rejected_without_mutating_state(self):
         detector = PageHinkley()
@@ -176,11 +172,12 @@ class TestPageHinkley(unittest.TestCase):
         self.assertEqual(detector.n_detections, 0)
         self.assertFalse(detector.drift_detected)
 
-    def test_method_chaining(self):
-        """Test that methods can be chained."""
+    def test_update_returns_the_drift_flag(self):
+        """``update`` returns the flag that ``drift_detected`` then holds."""
         detector = PageHinkley()
-        result = detector.update(1.0).update(2.0).update(3.0)
-        self.assertIs(result, detector)
+        for value in [0.0] * 200 + [10.0] * 200:
+            assert detector.update(value) is detector.drift_detected
+        assert detector.n_detections > 0
 
     def test_repr(self):
         """Test string representation."""

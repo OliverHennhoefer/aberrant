@@ -52,7 +52,7 @@ class TestADWIN(unittest.TestCase):
         """Test that invalid clock values raise ValueError."""
         with self.assertRaises(ValueError) as context:
             ADWIN(clock=0)
-        self.assertIn("clock must be positive", str(context.exception))
+        self.assertIn("clock must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError):
             ADWIN(clock=-1)
@@ -71,12 +71,6 @@ class TestADWIN(unittest.TestCase):
         """Test that invalid grace_period values raise ValueError."""
         with self.assertRaises(ValueError):
             ADWIN(grace_period=-1)
-
-    def test_update_returns_self(self):
-        """Test that update returns self for method chaining."""
-        detector = ADWIN()
-        result = detector.update(1.0)
-        self.assertIs(result, detector)
 
     def test_update_increases_width(self):
         """Test that update increases window width."""
@@ -180,12 +174,12 @@ class TestADWIN(unittest.TestCase):
         self.assertFalse(detector.drift_detected)
         self.assertEqual(detector.estimation, 0.0)
 
-    def test_method_chaining(self):
-        """Test that methods can be chained."""
+    def test_update_returns_the_drift_flag(self):
+        """``update`` returns the flag that ``drift_detected`` then holds."""
         detector = ADWIN()
-        result = detector.update(1.0).update(2.0).update(3.0)
-        self.assertIs(result, detector)
-        self.assertEqual(detector.width, 3)
+        for value in [0.0] * 200 + [10.0] * 200:
+            assert detector.update(value) is detector.drift_detected
+        assert detector.n_detections > 0
 
     def test_repr(self):
         """Test string representation."""

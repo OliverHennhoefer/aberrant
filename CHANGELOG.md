@@ -63,6 +63,18 @@ Semantic Versioning.
   The wrapped component stays positional in `ResidualDetector(model, target=...)`
   and the method in `ScoreCalibrator(method, alpha=...)`. `DatasetManager`
   takes keyword arguments too.
+- **Breaking:** `ADWIN.update`, `KSWIN.update` and `PageHinkley.update` return
+  whether this value completed a drift, the same flag `drift_detected` then
+  holds, so a stream loop reads `if detector.update(value):`. They used to
+  return the detector for chaining.
+- **Breaking:** integer constructor parameters, such as `n_trees`, `window_size`
+  or `warm_up_samples`, reject fractions and booleans with `ValueError`.
+  `HalfSpaceTrees(n_trees=2.5)` or `StreamingLODA(n_bins=True)` used to be
+  accepted and truncated or read as 1. Pass an `int` (NumPy integers work too);
+  a float such as `25.0`, for example from a JSON config, needs `int(...)`.
+- `MissingOptionalDependencyError` subclasses `ImportError`, so
+  `except ImportError` catches a missing extra. `FaissSimilaritySearchEngine`
+  raises it instead of `RuntimeError` when FAISS is not installed.
 - SciPy is no longer a dependency, which removes about 95 MB from an
   installation and cuts `import aberrant.drift` from about 0.7 s to under
   0.1 s. `KSWIN` computes the exact two-sample KS test itself and the matrix

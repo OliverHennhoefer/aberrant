@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary
+from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 _HASH_MODULUS = np.int64(2_147_483_647)  # Large Mersenne prime.
 
@@ -95,20 +95,20 @@ class StreamingRSHash(BaseModel):
         time_key: str | None = None,
         seed: int | None = None,
     ) -> None:
-        if components_num <= 0:
-            raise ValueError("components_num must be positive")
-        if hash_num <= 0:
-            raise ValueError("hash_num must be positive")
-        if bins <= 0:
-            raise ValueError("bins must be positive")
+        components_num = coerce_integer_count(
+            components_num, label="components_num", minimum=1
+        )
+        hash_num = coerce_integer_count(hash_num, label="hash_num", minimum=1)
+        bins = coerce_integer_count(bins, label="bins", minimum=1)
+        warm_up_samples = coerce_integer_count(
+            warm_up_samples, label="warm_up_samples", minimum=1
+        )
         if subspace_size is not None and subspace_size <= 0:
             raise ValueError("subspace_size must be positive or None")
         if bin_width <= 0.0:
             raise ValueError("bin_width must be positive")
         if decay < 0.0:
             raise ValueError("decay must be non-negative")
-        if warm_up_samples <= 0:
-            raise ValueError("warm_up_samples must be positive")
         if time_key is not None and (not isinstance(time_key, str) or not time_key):
             raise ValueError("time_key must be a non-empty string or None")
 

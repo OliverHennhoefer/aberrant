@@ -90,7 +90,7 @@ identical numbers.
 | — | `models.RobustRandomCutForest` | `model.iforest.RandomCutForest` |
 | — | `models.IForestASD` | `model.iforest.ASDIsolationForest` |
 | `anomaly.QuantileFilter` | `transform.ConformalProbabilityCalibrator` (calibrated scores) | `calibration.ScoreCalibrator` (adaptive alarm threshold); for conformal p-values see [nonconform](https://github.com/OliverHennhoefer/nonconform) |
-| `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` | — | `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` (same `update` / `drift_detected` interface) |
+| `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` | — | `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` (`update` returns the drift flag, which `drift_detected` also holds) |
 | `preprocessing.StandardScaler`, `preprocessing.MinMaxScaler` | — | `transform.StandardScaler`, `transform.MinMaxScaler` |
 | `compose.Pipeline` or `\|` | — | `\|` (see [Pipelines](pipelines.md)) |
 | `evaluate` with a metric | `evaluation.AUROCMetric`, `utils.ArrayStreamer` | `evaluate.PrequentialEvaluator` |

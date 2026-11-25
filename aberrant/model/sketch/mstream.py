@@ -8,7 +8,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary, PreparedFeatures
+from aberrant.utils.validation import (
+    NumericEventBoundary,
+    PreparedFeatures,
+    coerce_integer_count,
+)
 
 # Categorical hashes of an event without categorical features.
 _NO_CATEGORIES = np.empty(0, dtype=np.int64)
@@ -105,10 +109,11 @@ class MStream(BaseModel):
         warm_up_buckets: int = 0,
         seed: int | None = None,
     ) -> None:
-        if rows <= 0:
-            raise ValueError("rows must be positive")
-        if buckets <= 0:
-            raise ValueError("buckets must be positive")
+        rows = coerce_integer_count(rows, label="rows", minimum=1)
+        buckets = coerce_integer_count(buckets, label="buckets", minimum=1)
+        warm_up_buckets = coerce_integer_count(
+            warm_up_buckets, label="warm_up_buckets", minimum=0
+        )
         if not (0.0 < alpha <= 1.0):
             raise ValueError("alpha must be in (0, 1]")
         if any(not isinstance(name, str) or not name for name in categorical_features):
@@ -117,8 +122,6 @@ class MStream(BaseModel):
             raise ValueError("categorical_features must not contain duplicates")
         if time_key is not None and time_key in categorical_features:
             raise ValueError("time_key cannot also be a categorical feature")
-        if warm_up_buckets < 0:
-            raise ValueError("warm_up_buckets must be non-negative")
 
         self.rows = rows
         self.buckets = buckets
