@@ -23,11 +23,13 @@ upstream schema changes, or a genuine rise in anomalies.
 | Detector | Change signal | State and test cadence | Direction |
 | --- | --- | --- | --- |
 | `ADWIN` | Difference in means across candidate splits of an adaptive window | Exponential-histogram buckets; checks every `clock` observations after `grace_period` | Either direction |
+| `CUSUM` | Standardized cumulative sums against a reference mean and deviation | Constant-size sums after a `warmup` that estimates the reference, unless `target` and `scale` fix it | Configurable `"up"`, `"down"`, or `"both"` |
 | `KSWIN` | Two-sample Kolmogorov-Smirnov difference between the latest `stat_size` values and a seeded random sample from the earlier fixed window | Fixed `window_size`; tests whenever the window is full | Any distributional difference exposed by the KS statistic |
 | `PageHinkley` | Cumulative deviation from a running mean | Constant-size cumulative statistics after `min_instances` | Configurable `"up"`, `"down"`, or `"both"` |
 
-All three reject non-numeric and non-finite observations. `update` returns the
-detector itself, while `reset()` clears its learned state and detection count.
+All four reject non-numeric and non-finite observations. `update` returns
+whether the observation signalled drift, and `reset()` clears the learned state
+and detection count.
 
 Implementation-specific details matter:
 
@@ -41,6 +43,16 @@ Implementation-specific details matter:
   two-sample KS p-value, as `scipy.stats.ks_2samp(method="exact")` computes
   it, and requires both `p_value <= alpha` and a KS statistic greater than
   `0.1`. `seed` controls its historical sampling.
+- CUSUM standardizes each observation, so `k` and `h` are in standard
+  deviations and mean the same on every signal. `k` is half the shift it
+  detects fastest and `h` sets the false-alarm rate. On normal observations
+  the defaults `k = 0.5`, `h = 10` and `warmup = 100` pass about 20,000
+  observations between false alarms and find a one-deviation shift after
+  about 20. A shorter `warmup` estimates the deviation less reliably and
+  alarms more often.
+  After a signal it estimates the reference again, so the new level becomes
+  normal. `direction` and `onset` tell which way the mean moved and how many
+  observations ago the change most likely began.
 - Page-Hinkley `delta` is the tolerated change magnitude, `threshold` controls
   signaling, and `alpha` fades cumulative sums. Values closer to `1` retain
   more history.
@@ -73,7 +85,7 @@ assert detected_at is not None
 ```
 
 `drift_detected` describes only the **last** update. Read and handle it in the
-same iteration. ADWIN and Page-Hinkley soft-reset on the update after a signal;
+same iteration. ADWIN, CUSUM and Page-Hinkley soft-reset on the update after a signal;
 KSWIN clears its window immediately when it signals. Their `n_detections`
 counters remain available until an explicit `reset()`.
 
@@ -132,7 +144,9 @@ drift; that interval can contain the incident being detected.
   (KSWIN).
 - Page,
   [*Continuous Inspection Schemes*](https://doi.org/10.1093/biomet/41.1-2.100)
-  (the sequential cumulative-sum foundation of Page-Hinkley).
+  (the cumulative sum behind CUSUM and Page-Hinkley).
+- Montgomery, *Introduction to Statistical Quality Control*, chapter 9 (the
+  tabular CUSUM and its run lengths).
 
 See [Drift API](../api/drift.md) for exact parameters and observable
 properties.

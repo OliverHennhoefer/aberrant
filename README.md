@@ -92,7 +92,7 @@ print(f"{alerts} alerts, {drift.n_detections} score drift signals")
 | Projection sketches (LODA, RS-Hash)             | ✓        | ✓     | ✓     |
 | Graph-edge streams (MIDAS, AnoEdge, ISCONNA)    | ✓        |       |       |
 | Time-series discords (matrix profile, DAMP)     | ✓        |       |       |
-| Drift detectors (ADWIN, KSWIN, Page-Hinkley)    | ✓        | ✓     |       |
+| Drift detectors (ADWIN, CUSUM, KSWIN, Page-Hinkley) | ✓        | ✓     |       |
 | Score thresholds or calibration                 | ✓        | ✓     | ✓     |
 | Detectors built from declarative configuration  | ✓        |       |       |
 | General online ML (classification, regression)  |          | ✓     |       |
@@ -159,7 +159,7 @@ pip install "aberrant[eval,faiss]"
 | Interpretable rolling statistics | [Univariate and multivariate moving statistics](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#statistical-detectors) |
 | Adaptive margin-based detection | [Online SVM models](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#svm-detectors) |
 | Learned reconstruction error | [`OnlineAutoencoderEnsemble` or the optional PyTorch `Autoencoder`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#reconstruction-detectors) |
-| Detecting distribution drift | [`ADWIN`, `KSWIN`, or `PageHinkley`](https://oliverhennhoefer.github.io/aberrant/api/drift/) |
+| Detecting distribution drift | [`ADWIN`, `CUSUM`, `KSWIN`, or `PageHinkley`](https://oliverhennhoefer.github.io/aberrant/api/drift/) |
 | A fixed bound on raw features | [`ThresholdModel`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#core-utility-models) |
 | Misses of an online forecast or regression, at any lead | [`ResidualDetector` with `HoltWinters`, `SeasonalNaive` or `RLSRegressor`](https://oliverhennhoefer.github.io/aberrant/user_guide/forecasting/) |
 | An alarm threshold that adapts online, with delayed feedback | [`ScoreCalibrator` with ACI, conformal PID, SAOCP and twelve more](https://oliverhennhoefer.github.io/aberrant/user_guide/calibration/) |
@@ -182,7 +182,7 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | Reconstruction | `OnlineAutoencoderEnsemble`, optional `Autoencoder` |
 | Fixed rule | `ThresholdModel` |
 | Baselines | `NullModel`, `RandomModel` |
-| Drift detection | `ADWIN`, `KSWIN`, `PageHinkley` |
+| Drift detection | `ADWIN`, `CUSUM`, `KSWIN`, `PageHinkley` |
 
 </details>
 

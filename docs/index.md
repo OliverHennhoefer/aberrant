@@ -115,7 +115,7 @@ matters.
   graph detectors, online statistics, experimental SVMs, scalar time-series
   discord detection, and reconstruction models.
 - Incremental scaling and projection transformers that compose with `|`.
-- ADWIN, KSWIN, and Page-Hinkley drift detectors for scalar monitoring signals.
+- ADWIN, CUSUM, KSWIN, and Page-Hinkley drift detectors for scalar monitoring signals.
 - A registry-backed, checksum-validated benchmark dataset cache.
 - Runtime-checkable component protocols and `py.typed` metadata for downstream
   type checking.

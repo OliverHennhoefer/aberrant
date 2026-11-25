@@ -6,7 +6,7 @@ from collections.abc import Callable
 import pytest
 
 from aberrant.catalog import create_model, create_transformer
-from aberrant.drift import ADWIN, KSWIN, PageHinkley
+from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.exceptions import ValidationError
 from aberrant.forecast import HoltWinters, SeasonalNaive
 from tests.catalog_cases import (
@@ -75,7 +75,7 @@ def test_transformers_reject_malformed_events_with_validation_error(component_id
     assert failures == []
 
 
-@pytest.mark.parametrize("detector", [ADWIN, KSWIN, PageHinkley])
+@pytest.mark.parametrize("detector", [ADWIN, CUSUM, KSWIN, PageHinkley])
 @pytest.mark.parametrize("value", [math.nan, math.inf, "x", None])
 def test_drift_detectors_reject_malformed_values(detector, value):
     with pytest.raises(ValidationError):

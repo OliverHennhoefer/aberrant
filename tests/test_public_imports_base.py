@@ -26,7 +26,7 @@ from aberrant.base import (
 from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.datasets import Dataset, DatasetStream, load
-from aberrant.drift import ADWIN, KSWIN, PageHinkley
+from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.evaluate import (
     EvaluationRecord,
     EvaluationResult,
@@ -89,6 +89,7 @@ def test_public_imports_base_smoke() -> None:
     assert ADWIN is not None
     assert KSWIN is not None
     assert PageHinkley is not None
+    assert CUSUM is not None
     assert NullModel is not None
     assert RandomModel is not None
     assert ThresholdModel is not None

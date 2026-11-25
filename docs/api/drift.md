@@ -8,6 +8,8 @@ next update.
 
 ::: aberrant.drift.ADWIN
 
+::: aberrant.drift.CUSUM
+
 ::: aberrant.drift.KSWIN
 
 ::: aberrant.drift.PageHinkley

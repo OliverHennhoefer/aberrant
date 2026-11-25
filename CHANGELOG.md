@@ -21,6 +21,11 @@ Semantic Versioning.
   from 0 to `window`. Each labeled anomaly range counts as one event, with
   partial credit near it. It follows the reference package's
   `RangeAUC_volume_opt` and needs NumPy only.
+- `aberrant.drift.CUSUM`: the two-sided tabular CUSUM on standardized
+  observations, with `k` and `h` in standard deviations. The reference mean
+  and deviation are estimated over a warm-up, again after each signal, unless
+  `target` and `scale` fix them. `direction` and `onset` say which way the
+  mean moved and when the change most likely began.
 
 ### Fixed
 
