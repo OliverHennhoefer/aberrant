@@ -1,26 +1,27 @@
 # Examples
 
-The repository's scripts are complete programs rather than fragments. Run them
-from the repository root so relative project configuration and the local
-package checkout are available.
+The scripts are complete programs. Run them from the repository root; CI runs
+every script and notebook on each change, so they stay in step with the API.
 
 === "uv"
 
     ```bash
-    uv sync --extra eval
-    uv run python examples/models/online_iforest.py
+    uv sync
+    uv run python examples/forest.py
     ```
 
 === "pip"
 
     ```bash
     python -m pip install -e ".[eval]"
-    python examples/models/online_iforest.py
+    python examples/forest.py
     ```
 
-Most model scripts compute average precision and ROC AUC and therefore require
-the `eval` extra. Dataset-backed scripts download and cache a registered dataset on
-first use.
+The family scripts evaluate prequentially with `PrequentialEvaluator`: every
+detector scores an event before it learns it and learns every event, normal or
+not. Labels only feed the metrics, so the numbers are what an unsupervised
+detector achieves on the stream. Metrics need the `eval` extra, and the
+Shuttle-based scripts download the dataset on first use.
 
 ## Notebooks
 
@@ -32,52 +33,25 @@ These notebooks install aberrant themselves and run in Google Colab without a lo
 | [`02_graph_streams.ipynb`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/notebooks/02_graph_streams.ipynb) | Graph streams: catch a burst of repeated edges with MIDAS | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/OliverHennhoefer/aberrant/blob/main/examples/notebooks/02_graph_streams.ipynb) |
 | [`03_scores_to_alerts.ipynb`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/notebooks/03_scores_to_alerts.ipynb) | From scores to alerts: an adaptive quantile threshold plus Page-Hinkley drift detection | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/OliverHennhoefer/aberrant/blob/main/examples/notebooks/03_scores_to_alerts.ipynb) |
 
-## General numeric streams
+## One script per model family
 
-| Family | Example | Additional requirement |
+| Script | Detectors | Data |
 | --- | --- | --- |
-| Isolation forest | [`online_iforest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/online_iforest.py) | Registered SHUTTLE dataset |
-| Isolation forest | [`mondrian_isolation_forest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/mondrian_isolation_forest.py) | Registered SHUTTLE dataset |
-| Isolation forest | [`asd_iforest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/asd_iforest.py) | Registered SHUTTLE dataset |
-| Random histogram forest | [`rhf.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rhf.py) | Registered SHUTTLE dataset |
-| Isolation forest | [`xstream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/xstream.py) | Registered SHUTTLE dataset |
-| Random cut forest | [`random_cut_forest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/random_cut_forest.py) | Registered SHUTTLE dataset |
-| Half-space trees | [`half_space_trees.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/half_space_trees.py) | Registered SHUTTLE dataset |
-| Local density | [`local_outlier_factor.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/local_outlier_factor.py) | Registered SHUTTLE dataset |
-| Cell neighborhood | [`cell_neighborhood.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/cell_neighborhood.py) | Registered SHUTTLE dataset |
-| Observer distance | [`sdostream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/sdostream.py) | Registered SHUTTLE dataset |
-| Multi-aspect sketch | [`mstream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/mstream.py) | Registered SHUTTLE dataset |
-| Projection histogram | [`loda.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/loda.py) | Registered SHUTTLE dataset |
-| Randomized hashing | [`rshash.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rshash.py) | Registered SHUTTLE dataset |
+| [`forest.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/forest.py) | HalfSpaceTrees, OnlineIsolationForest, ASDIsolationForest, XStream | First 20,000 Shuttle events |
+| [`distance.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/distance.py) | KNN, LocalOutlierFactor, SDOStream | First 20,000 Shuttle events |
+| [`sketch.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/sketch.py) | LODA, RSHash, MStream | First 20,000 Shuttle events |
+| [`stat.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/stat.py) | OnlineECOD, OnlineCOPOD, MovingMahalanobisDistance, MovingZScore, MovingMAD | Shuttle, and a synthetic sensor with spikes |
+| [`svm.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/svm.py) | AdaptiveOneClassSVM | First 20,000 Shuttle events |
+| [`deep.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/deep.py) | OnlineAutoencoderEnsemble, Autoencoder (needs the `dl` extra) | First 20,000 Shuttle events |
+| [`graph.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/graph.py) | MIDAS, ISCONNA, AnoEdgeL, StreamSpot | Synthetic edge streams with injected anomalous edges |
+| [`timeseries.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/timeseries.py) | DAMP, RollingMatrixProfile, MultivariateRollingMatrixProfile | A periodic series with an injected discord |
+| [`forecast.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/forecast.py) | ResidualDetector over HoltWinters | A seasonal request count with one anomalous value |
 
-## Graph and time-series streams
+## Composition and evaluation
 
-| Model | Example | Data source |
-| --- | --- | --- |
-| AnoEdge-L | [`anoedge.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/anoedge.py) | Maps two SHUTTLE features to integer-like edge identifiers for demonstration |
-| ISCONNA | [`isconna.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/isconna.py) | Seeded synthetic edge stream |
-| MIDAS-R | [`midas.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/midas.py) | Seeded synthetic edge stream |
-| StreamSpot | [`streamspot.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streamspot.py) | Seeded synthetic multi-graph stream |
-| Rolling matrix profile | [`rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rolling_matrix_profile.py) | Seeded periodic stream with a discord, continuous scores, and nearest-match indices; no `eval` extra needed |
-| Multivariate rolling matrix profile | [`multivariate_rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py) | Seeded two-channel phase change, continuous joint scores, common-match indices, and channel distances; no `eval` extra needed |
-| DAMP | [`damp.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/damp.py) | Seeded synthetic periodic series with an injected discord; no `eval` extra needed |
-| Seasonal forecast residual | [`seasonal_residual.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/seasonal_residual.py) | `ResidualDetector(HoltWinters(...))` on a seeded seasonal stream; the highest-scoring event is selected independently, with its prior forecast and signed residual; no `eval` extra needed |
-
-The AnoEdge example is an API demonstration, not a claim that tabular SHUTTLE
-rows are a scientifically meaningful graph benchmark.
-
-## Experimental, reconstruction, and pipeline examples
-
-| Example | Purpose | Additional requirement |
-| --- | --- | --- |
-| [`adaptive_svm.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/adaptive_svm.py) | Budgeted adaptive-kernel SVM heuristic | Registered SHUTTLE dataset |
-| [`online_autoencoder_ensemble.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/online_autoencoder_ensemble.py) | NumPy online autoencoder ensemble | Registered SHUTTLE dataset |
-| [`autoencoder.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/autoencoder.py) | User-supplied PyTorch architecture and optimizer | `aberrant[dl,eval]` and registered SHUTTLE dataset |
-| [`knn.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/knn.py) | FAISS-backed KNN distance | `aberrant[faiss,eval]` and registered SHUTTLE dataset |
-| [`pipeline.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/pipeline.py) | Scaler/KNN versus scaler/PCA/KNN | `aberrant[faiss,eval]` and registered SHUTTLE dataset |
-| [`prequential_evaluation.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/prequential_evaluation.py) | Fresh configured detectors on the same ordered stream, with metrics and score/update timings | `aberrant[eval]`; seeded synthetic stream |
-
-Read each script's warm-up and learning policy before comparing its metrics.
-Several demonstrations intentionally warm up only on labeled-normal rows; that
-is a curated-normal protocol and is not equivalent to fully unsupervised
-test-then-train learning.
+| Script | What it shows |
+| --- | --- |
+| [`pipeline.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/pipeline.py) | A scaled KNN with and without an incremental PCA in front of it |
+| [`graph_pipeline.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/graph_pipeline.py) | Branched preprocessing with a raw feature bypass in a `GraphPipeline` |
+| [`prequential_evaluation.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/prequential_evaluation.py) | Detectors built from catalog configurations, compared with metrics and timings |
+| [`rolling_robust_scaler.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/rolling_robust_scaler.py) | A recent-window scaler against a frozen one on a level shift |

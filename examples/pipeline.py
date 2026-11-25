@@ -1,44 +1,37 @@
-from sklearn.metrics import average_precision_score
+"""Compare a scaled KNN with and without an incremental PCA in front of it.
+
+Pipelines compose with ``|``: each transformer learns from the events it sees
+and passes on its representation. Both pipelines score each of the first
+20,000 Shuttle events before they learn it; labels only feed the metrics. Run
+with ``uv run --extra eval python examples/pipeline.py``.
+"""
+
+from itertools import islice
 
 from aberrant.datasets import Dataset, load
+from aberrant.evaluate import PrequentialEvaluator
 from aberrant.model.distance import KNN
-from aberrant.transform import IncrementalPCA, MinMaxScaler, StandardScaler
+from aberrant.transform import IncrementalPCA, StandardScaler
 
-# Baseline pipeline: scaling + KNN.
-baseline_pipeline = MinMaxScaler() | KNN(k=55, window_size=250)
 
-# PCA pipeline: scaling + incremental PCA + KNN.
-pca_pipeline = (
-    StandardScaler()
-    | IncrementalPCA(n_components=3, warm_up=100)
-    | KNN(k=55, window_size=250)
-)
+def main() -> None:
+    events = list(islice(load(Dataset.SHUTTLE), 20_000))
+    pipelines = {
+        "StandardScaler | KNN": StandardScaler() | KNN(k=10, window_size=500),
+        "StandardScaler | IncrementalPCA | KNN": StandardScaler()
+        | IncrementalPCA(n_components=3, warm_up=100)
+        | KNN(k=10, window_size=500),
+    }
+    for name, pipeline in pipelines.items():
+        evaluator = PrequentialEvaluator(
+            pipeline, warmup=500, metrics=True, metric_window_size=None
+        )
+        result = evaluator.evaluate(events)
+        print(
+            f"{name:<38} average precision {result.average_precision:.3f}  "
+            f"ROC AUC {result.roc_auc:.3f}"
+        )
 
-labels, baseline_scores, pca_scores = [], [], []
-dataset = load(Dataset.SHUTTLE)
 
-for i, (x, y) in enumerate(dataset):
-    if i < 2_000:
-        if y == 0:
-            baseline_pipeline.learn_one(x)
-            pca_pipeline.learn_one(x)
-        continue
-
-    labels.append(y)
-    baseline_scores.append(baseline_pipeline.score_one(x))
-    pca_scores.append(pca_pipeline.score_one(x))
-
-    baseline_pipeline.learn_one(x)
-    pca_pipeline.learn_one(x)
-
-baseline_average_precision = average_precision_score(labels, baseline_scores)
-pca_average_precision = average_precision_score(labels, pca_scores)
-
-print(
-    "Baseline Pipeline (Scaler + KNN): "
-    f"average precision = {round(baseline_average_precision, 3)}"
-)
-print(
-    "PCA Pipeline (Scaler + PCA + KNN): "
-    f"average precision = {round(pca_average_precision, 3)}"
-)
+if __name__ == "__main__":
+    main()

@@ -249,6 +249,14 @@ Semantic Versioning.
 
 ### Development
 
+- The 25 per-model scripts under `examples/models/` gave way to one script
+  per model family (`forest.py`, `distance.py`, `sketch.py`, `stat.py`,
+  `svm.py`, `deep.py`, `graph.py`, `timeseries.py`, `forecast.py`). They
+  evaluate with `PrequentialEvaluator`, so every detector learns every event:
+  the old scripts warmed up on label-0 events only, which leaked labels into
+  training. A new `examples` CI job runs every script and executes every
+  notebook; the notebooks install packages only on Colab, so CI runs them
+  against the checkout.
 - pytest rejects unknown markers and configuration keys, and an `xfail`
   test that passes fails the run.
 - `LocalOutlierFactor` is checked score by score against scikit-learn's
