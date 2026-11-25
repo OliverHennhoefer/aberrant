@@ -7,6 +7,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `ISCONNA` no longer scores an edge 0 when its combined statistic leaves the
+  float range, and no longer raises `OverflowError` for large `alpha`, `beta`
+  or `gamma`. Such a score saturates at the largest float (1 with
+  `normalize_score=True`), and a zero component still gives 0. Scores inside
+  the float range are unchanged.
+
 ### Removed
 
 - `GraphGatedOneClassSVM`. Its node models scored `rho - w·x` on unscaled
