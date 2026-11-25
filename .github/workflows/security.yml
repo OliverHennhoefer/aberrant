@@ -43,10 +43,10 @@ jobs:
         run: uv python install 3.11
 
       - name: Install locked dependencies
-        run: uv sync --locked --extra dev --extra security
+        run: uv sync --locked --group security
 
       - name: Audit dependencies
-        run: uv run --locked --extra dev --extra security python -m pip_audit --local --skip-editable
+        run: uv run --locked --group security python -m pip_audit --local --skip-editable
 
   codeql:
     runs-on: ubuntu-latest

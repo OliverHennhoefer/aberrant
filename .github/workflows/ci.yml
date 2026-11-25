@@ -34,11 +34,11 @@ jobs:
         run: uv python install 3.11
 
       - name: Install base dependencies only
-        run: uv sync --locked
+        run: uv sync --locked --no-dev
 
       - name: Base install smoke
         run: |
-          uv run --locked python - <<'PY'
+          uv run --locked --no-dev python - <<'PY'
           import aberrant
           from aberrant.base import Pipeline
           from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
@@ -72,6 +72,35 @@ jobs:
           assert isinstance(graph.score_one({"x": 3.0, "y": 4.0}), float)
           PY
 
+      - name: Lowest supported dependencies smoke
+        run: |
+          uv venv .venv-lowest --python 3.11
+          VIRTUAL_ENV=.venv-lowest uv pip install --resolution lowest-direct .
+          .venv-lowest/bin/python -I - <<'PY'
+          import numpy
+
+          from aberrant.drift import ADWIN, KSWIN
+          from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
+          from aberrant.model.timeseries import XLagDAMP
+          from aberrant.transform import StandardScaler
+
+          print("numpy", numpy.__version__)
+          detectors = [
+              StandardScaler() | OnlineIsolationForest(seed=1),
+              HalfSpaceTrees(seed=1),
+              XLagDAMP(subsequence_length=8),
+          ]
+          drifts = [ADWIN(), KSWIN(seed=1)]
+          for index in range(300):
+              value = float(index % 17) / 17.0
+              for detector in detectors:
+                  event = {"x": value} if isinstance(detector, XLagDAMP) else {"x": value, "y": 1.0 - value}
+                  detector.score_one(event)
+                  detector.learn_one(event)
+              for drift in drifts:
+                  drift.update(value)
+          PY
+
   lint-type-test:
     strategy:
       fail-fast: false
@@ -97,7 +126,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
 
       - name: Ruff
         run: uv run --locked python -m ruff check .
@@ -126,7 +155,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install extras
-        run: uv sync --locked --extra dev --extra faiss
+        run: uv sync --locked --extra faiss
 
       - name: Extras import smoke
         run: |
@@ -163,7 +192,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
 
       - name: Integration smoke
         run: uv run --locked python -m pytest tests/integration -q
@@ -186,7 +215,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
 
       - name: Coverage
         run: uv run --locked python -m pytest tests --ignore=tests/integration --cov=aberrant --cov-branch --cov-report=xml --cov-report=term-missing -q
