@@ -202,6 +202,45 @@ jobs:
       - name: Integration smoke
         run: uv run --locked python -m pytest tests/integration -n auto -q
 
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --locked --group notebooks
+
+      - name: Run every example script
+        run: |
+          for script in examples/*.py; do
+            echo "::group::$script"
+            uv run --locked python "$script"
+            echo "::endgroup::"
+          done
+
+      - name: Execute every notebook
+        run: |
+          uv run --locked python -I - examples/notebooks/*.ipynb <<'PY'
+          import sys
+
+          import nbformat
+          from nbclient import NotebookClient
+
+          for path in sys.argv[1:]:
+              print(path, flush=True)
+              notebook = nbformat.read(path, as_version=4)
+              NotebookClient(notebook, timeout=600, kernel_name="python3").execute()
+          PY
+
   coverage:
     runs-on: ubuntu-latest
     permissions:

@@ -83,6 +83,12 @@ docs = [
     "pygments>=2.20.0",
 ]
 security = ["pip-audit==2.10.1"]
+notebooks = [
+    "ipykernel>=6.29.0,<8.0.0",
+    "matplotlib>=3.9.0,<4.0.0",
+    "nbclient>=0.10.0,<1.0.0",
+    "nbformat>=5.10.0,<6.0.0",
+]
 benchmark = [
     "river>=0.22.0,<1.0.0",
     "pytest-benchmark>=5.3.1,<6.0.0",

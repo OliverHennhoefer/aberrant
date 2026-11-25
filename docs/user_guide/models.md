@@ -268,7 +268,7 @@ This is a causal, bounded-window adaptation of the pre-max aggregation in
 [Matrix Profile for Anomaly Detection on Multidimensional Time Series](https://arxiv.org/html/2409.09298v1#S4.SS1).
 The catalog ID is `multivariate_rolling_matrix_profile`; it is available in the
 core installation and in declarative model pipelines. The
-[seeded streaming example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py)
+[seeded streaming example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/timeseries.py)
 demonstrates a changed phase relationship and its common-match explanation.
 
 `DAMP` accepts exactly one consistently named scalar feature. It scores the
