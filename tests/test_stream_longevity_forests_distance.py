@@ -61,7 +61,7 @@ def _mondrian_children(node):
 def test_mondrian_bounded_mode_replaces_history_and_population(pattern):
     window = 16
     model = MondrianIsolationForest(
-        n_estimators=2, subspace_size=2, lambda_=8.0, seed=7, window_size=window
+        n_trees=2, subspace_size=2, lifetime=8.0, seed=7, window_size=window
     )
     recent = deque(maxlen=window)
     for i in range(1600):
@@ -93,7 +93,7 @@ def test_mondrian_bounded_mode_replaces_history_and_population(pattern):
 
 
 def test_mondrian_lifetime_mode_remains_explicitly_unbounded():
-    model = MondrianIsolationForest(n_estimators=1, subspace_size=1, lambda_=8, seed=1)
+    model = MondrianIsolationForest(n_trees=1, subspace_size=1, lifetime=8, seed=1)
     for i in range(512):
         model.learn_one({"x": float(i * 10)})
     assert model.window_size is None
@@ -126,9 +126,9 @@ def test_mondrian_deep_tree_update_does_not_use_python_recursion():
 @pytest.mark.parametrize("forest", ["mondrian", "random_cut"])
 def test_expanding_finite_stream_does_not_hit_tree_recursion_limit(forest):
     model = (
-        MondrianIsolationForest(n_estimators=1, subspace_size=1, lambda_=1e301, seed=3)
+        MondrianIsolationForest(n_trees=1, subspace_size=1, lifetime=1e301, seed=3)
         if forest == "mondrian"
-        else RandomCutForest(n_trees=1, sample_size=2500, warmup_samples=2, seed=3)
+        else RandomCutForest(n_trees=1, sample_size=2500, warm_up=2, seed=3)
     )
     for exponent in range(-1000, 1001):
         model.learn_one({"x": math.ldexp(1.0, exponent)})
@@ -151,7 +151,7 @@ def test_online_forest_long_turnover_has_bounded_membership_and_tree(
     subsample, tree_type
 ):
     model = OnlineIsolationForest(
-        num_trees=2,
+        n_trees=2,
         max_leaf_samples=3,
         tree_type=tree_type,
         subsample=subsample,
@@ -187,9 +187,7 @@ def test_online_forest_long_turnover_has_bounded_membership_and_tree(
 
 
 def test_online_large_batch_does_not_pin_discarded_batch_or_overgrow_tree_updates():
-    model = OnlineIsolationForest(
-        num_trees=1, max_leaf_samples=4, window_size=12, seed=5
-    )
+    model = OnlineIsolationForest(n_trees=1, max_leaf_samples=4, window_size=12, seed=5)
     batch = np.arange(30_000.0).reshape(-1, 3)
     populations = []
     original_learn = model.trees[0].learn
@@ -212,7 +210,7 @@ def test_online_large_batch_does_not_pin_discarded_batch_or_overgrow_tree_update
 @pytest.mark.parametrize("pattern", ["duplicates", "unique"])
 def test_random_cut_forest_evicts_ids_and_preserves_score_preview(shingle, pattern):
     model = RandomCutForest(
-        n_trees=2, sample_size=16, shingle_size=shingle, warmup_samples=4, seed=2
+        n_trees=2, sample_size=16, shingle_size=shingle, warm_up=4, seed=2
     )
     for i in range(1800):
         value = 2.0 if pattern == "duplicates" else float(i)
@@ -239,18 +237,16 @@ def test_random_cut_forest_evicts_ids_and_preserves_score_preview(shingle, patte
 @pytest.mark.parametrize("pattern", ["constant", "changing"])
 def test_replacement_forests_do_not_accumulate_old_trees_or_samples(pattern):
     asd = ASDIsolationForest(
-        n_estimators=2, max_samples=12, window_size=16, retrain_interval=7, seed=2
+        n_trees=2, max_samples=12, window_size=16, retrain_interval=7, seed=2
     )
-    rhf = StreamRandomHistogramForest(
-        n_estimators=2, max_depth=5, window_size=16, seed=2
-    )
+    rhf = StreamRandomHistogramForest(n_trees=2, max_depth=5, window_size=16, seed=2)
     for i in range(1200):
         value = 1.0 if pattern == "constant" else float((i * 11) % 17)
         point = {"x": value, "y": float(i % 5)}
         asd.learn_one(point)
         rhf.learn_one(point)
         assert len(asd.window) <= asd.window_size
-        assert len(asd.trees) <= asd.n_estimators
+        assert len(asd.trees) <= asd.n_trees
         assert asd._samples_since_retrain < max(asd.window_size, asd.retrain_interval)
         if asd._last_fit_window is not None:
             assert asd._last_fit_window.shape == (asd.window_size, 2)
@@ -291,17 +287,17 @@ def test_xstream_key_churn_keeps_projection_cache_and_sketches_bounded():
         k=4,
         n_chains=2,
         depth=3,
-        cms_width=8,
-        cms_num_hashes=2,
+        sketch_width=8,
+        n_hashes=2,
         window_size=11,
-        init_sample_size=7,
+        warm_up=7,
         max_feature_cache_size=5,
         seed=3,
     )
     for i in range(1500):
         model.learn_one({f"feature_{i}": float(i % 13)})
         assert len(model._feature_cache) <= 5
-        assert len(model._init_buffer) <= model.init_sample_size
+        assert len(model._init_buffer) <= model.warm_up
         state = model._state
         if state is not None:
             assert len(model._init_buffer) == 0
@@ -326,10 +322,10 @@ def test_xstream_large_window_counters_do_not_wrap_at_int32_limit():
         k=1,
         n_chains=1,
         depth=1,
-        cms_width=1,
-        cms_num_hashes=1,
+        sketch_width=1,
+        n_hashes=1,
         window_size=limit + 2,
-        init_sample_size=1,
+        warm_up=1,
         seed=2,
     )
     model.learn_one({"x": 1.0})
@@ -388,11 +384,13 @@ def test_radius_neighbors_churn_matches_brute_force_and_bounds_all_indexes(
 
 @pytest.mark.parametrize("metric", ["euclidean", "manhattan", "chebyshev", "minkowski"])
 def test_sdostream_long_turnover_uses_fixed_arrays_and_score_does_not_mutate(metric):
-    model = SDOStream(k=8, x_neighbors=2, T=20, distance=metric, seed=4)
+    model = SDOStream(
+        max_observers=8, n_neighbors=2, time_scale=20, distance=metric, seed=4
+    )
     for i in range(2000):
         point = {"x": float((i * 13) % 19), "y": float(i // 100)}
         model.learn_one(point)
-        assert model.n_observers <= model.k
+        assert model.n_observers <= model.max_observers
         assert model._observers.shape == (8, 2)
         assert model._observations.shape == (8,)
         assert model._time_added.shape == model._time_touched.shape == (8,)
@@ -456,9 +454,7 @@ def test_faiss_and_knn_native_indexes_follow_bounded_fifo_after_thousands_of_evi
 
 _BOUNDED_MODELS = [
     pytest.param(
-        lambda: ASDIsolationForest(
-            n_estimators=2, max_samples=16, window_size=16, seed=1
-        ),
+        lambda: ASDIsolationForest(n_trees=2, max_samples=16, window_size=16, seed=1),
         id="asd",
     ),
     pytest.param(
@@ -467,13 +463,13 @@ _BOUNDED_MODELS = [
     ),
     pytest.param(
         lambda: MondrianIsolationForest(
-            n_estimators=2, subspace_size=2, window_size=16, seed=1
+            n_trees=2, subspace_size=2, window_size=16, seed=1
         ),
         id="mondrian-bounded",
     ),
     pytest.param(
         lambda: OnlineIsolationForest(
-            num_trees=2, max_leaf_samples=4, window_size=16, seed=1
+            n_trees=2, max_leaf_samples=4, window_size=16, seed=1
         ),
         id="online",
     ),
@@ -483,7 +479,7 @@ _BOUNDED_MODELS = [
     ),
     pytest.param(
         lambda: StreamRandomHistogramForest(
-            n_estimators=2, window_size=16, max_depth=4, seed=1
+            n_trees=2, window_size=16, max_depth=4, seed=1
         ),
         id="random-histogram",
     ),
@@ -492,16 +488,18 @@ _BOUNDED_MODELS = [
             k=4,
             n_chains=2,
             depth=3,
-            cms_width=8,
-            cms_num_hashes=2,
+            sketch_width=8,
+            n_hashes=2,
             window_size=16,
-            init_sample_size=16,
+            warm_up=16,
             max_feature_cache_size=16,
             seed=1,
         ),
         id="xstream",
     ),
-    pytest.param(lambda: SDOStream(k=8, x_neighbors=2, seed=1), id="sdostream"),
+    pytest.param(
+        lambda: SDOStream(max_observers=8, n_neighbors=2, seed=1), id="sdostream"
+    ),
     pytest.param(
         lambda: CellNeighborhoodDetector(k=2, window_size=16, slide_size=1),
         id="cell-neighborhood",
@@ -547,7 +545,9 @@ def test_faiss_large_finite_distance_matches_representable_euclidean_norm():
     strict=True, reason="SDOStream Euclidean squaring overflows before the norm does"
 )
 def test_sdostream_large_finite_distance_matches_representable_norm():
-    model = SDOStream(k=2, x_neighbors=1, qv=0, T=1, seed=1)
+    model = SDOStream(
+        max_observers=2, n_neighbors=1, inactive_quantile=0, time_scale=1, seed=1
+    )
     for _ in range(4):
         model.learn_one({"x": 0.0})
     with np.errstate(over="ignore"):

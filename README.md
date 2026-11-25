@@ -47,11 +47,11 @@ from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, StandardScaler
 
 stream = load(Dataset.SHUTTLE).stream()
-preprocess = StandardScaler() | IncrementalPCA(n_components=5, n0=100)
+preprocess = StandardScaler() | IncrementalPCA(n_components=5, warm_up=100)
 for event, _ in islice(stream, 512):
     preprocess.learn_one(event)
 
-detector = SDOStream(k=128, seed=42)
+detector = SDOStream(max_observers=128, seed=42)
 evaluator = PrequentialEvaluator(
     detector,
     warmup=256,
@@ -102,7 +102,7 @@ print(f"{alerts} alerts, {drift.n_detections} score drift signals")
 Many anomalies have no outlying value at all. In this ECG from the UCR Time
 Series Anomaly Archive, one malformed heartbeat sits among roughly 180 normal
 ones, under sensor noise and baseline wander, and every one of its values lies
-inside the normal range. `XLagDAMP`, a matrix-profile discord detector, scores
+inside the normal range. `DAMP`, a matrix-profile discord detector, scores
 the stream in a single pass from the first sample, with no training split and
 bounded memory, and its highest score lands on that beat. Because the beat
 differs in shape rather than in value, a detector that scores single values has
@@ -111,11 +111,11 @@ no outlier to find.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-dark.svg">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="A 30,000-sample noisy ECG with 181 heartbeats, one of them anomalous. The XLagDAMP score stream has a single dominant peak on the anomalous beat. An overlay of all beats shows the anomalous beat stays within the normal value range but has a different shape.">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="A 30,000-sample noisy ECG with 181 heartbeats, one of them anomalous. The DAMP score stream has a single dominant peak on the anomalous beat. An overlay of all beats shows the anomalous beat stays within the normal value range but has a different shape.">
   </picture>
 </p>
 
-<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), with <code>XLagDAMP(subsequence_length=167)</code>. Reproduce with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
+<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), with <code>DAMP(subsequence_length=167)</code>. Reproduce with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
 
 ---
 
@@ -152,9 +152,9 @@ pip install "aberrant[eval,faiss]"
 | --- | --- |
 | General multivariate detection | [`OnlineIsolationForest` or another isolation-forest variant](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#isolation-forests) |
 | Local-neighborhood or density anomalies | [`LocalOutlierFactor`, `KNN`, `SDOStream`, or a cell-based detector](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#distance-and-neighborhood-detectors) |
-| Compact projection or frequency sketches | [`StreamingLODA`, `MStream`, or `StreamingRSHash`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#sketch-detectors) |
+| Compact projection or frequency sketches | [`LODA`, `MStream`, or `RSHash`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#sketch-detectors) |
 | Anomalous edges and graph evolution | [`AnoEdgeL`, `ISCONNA`, `MIDAS`, or `SignedGraphSketchDetector`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#graph-stream-detectors) |
-| Discords in a scalar time series | [`RollingMatrixProfile` or `XLagDAMP`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-discord-detection) |
+| Discords in a scalar time series | [`RollingMatrixProfile` or `DAMP`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-discord-detection) |
 | Changes in relationships between time-series channels | [`MultivariateRollingMatrixProfile`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-discord-detection) |
 | Interpretable rolling statistics | [Univariate and multivariate moving statistics](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#statistical-detectors) |
 | Adaptive margin-based detection | [Online SVM models](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#svm-detectors) |
@@ -174,10 +174,10 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | --- | --- |
 | Isolation forest | `ASDIsolationForest`, `HalfSpaceTrees`, `MondrianIsolationForest`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` |
 | Distance | `CellNeighborhoodDetector`, `KNN`, `LocalOutlierFactor`, `SDOStream` |
-| Sketch | `MStream`, `StreamingLODA`, `StreamingRSHash` |
+| Sketch | `MStream`, `LODA`, `RSHash` |
 | Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `SignedGraphSketchDetector` |
-| Time series | `MultivariateRollingMatrixProfile`, `RollingMatrixProfile`, `XLagDAMP` |
-| SVM | `IncrementalOneClassSVMAdaptiveKernel` |
+| Time series | `MultivariateRollingMatrixProfile`, `RollingMatrixProfile`, `DAMP` |
+| SVM | `AdaptiveOneClassSVM` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |
 | Reconstruction | `OnlineAutoencoderEnsemble`, optional `Autoencoder` |
 | Fixed rule | `ThresholdModel` |
@@ -196,7 +196,7 @@ from aberrant.transform import IncrementalPCA, StandardScaler
 
 detector = (
     StandardScaler()  # PCA needs features on comparable scales
-    | IncrementalPCA(n_components=3, n0=100)
+    | IncrementalPCA(n_components=3, warm_up=100)
     | OnlineIsolationForest(window_size=512, seed=42)
 )
 ```

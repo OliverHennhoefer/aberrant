@@ -12,13 +12,13 @@ class TestSDOStream(unittest.TestCase):
 
     def create_model(self, **overrides: object) -> SDOStream:
         defaults: dict[str, object] = {
-            "k": 64,
-            "T": 128.0,
-            "qv": 0.3,
-            "x_neighbors": 4,
+            "max_observers": 64,
+            "time_scale": 128.0,
+            "inactive_quantile": 0.3,
+            "n_neighbors": 4,
             "distance": "euclidean",
             "time_key": "t",
-            "warm_up_observers": 4,
+            "warm_up": 4,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -26,26 +26,26 @@ class TestSDOStream(unittest.TestCase):
 
     def test_initialization_defaults(self) -> None:
         model = SDOStream()
-        self.assertEqual(model.k, 256)
-        self.assertEqual(model.T, 512.0)
-        self.assertEqual(model.qv, 0.3)
-        self.assertEqual(model.x_neighbors, 6)
+        self.assertEqual(model.max_observers, 256)
+        self.assertEqual(model.time_scale, 512.0)
+        self.assertEqual(model.inactive_quantile, 0.3)
+        self.assertEqual(model.n_neighbors, 6)
         self.assertEqual(model.distance, "euclidean")
-        self.assertEqual(model.warm_up_observers, 6)
+        self.assertEqual(model.warm_up, 6)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
-            SDOStream(k=0)
+            SDOStream(max_observers=0)
         with self.assertRaises(ValueError):
-            SDOStream(T=0.0)
+            SDOStream(time_scale=0.0)
         with self.assertRaises(ValueError):
-            SDOStream(qv=-0.1)
+            SDOStream(inactive_quantile=-0.1)
         with self.assertRaises(ValueError):
-            SDOStream(qv=1.0)
+            SDOStream(inactive_quantile=1.0)
         with self.assertRaises(ValueError):
-            SDOStream(x_neighbors=0)
+            SDOStream(n_neighbors=0)
         with self.assertRaises(ValueError):
-            SDOStream(k=4, x_neighbors=5)
+            SDOStream(max_observers=4, n_neighbors=5)
         with self.assertRaises(ValueError):
             SDOStream(distance="cosine")  # type: ignore[arg-type]
         with self.assertRaises(ValueError):
@@ -53,7 +53,7 @@ class TestSDOStream(unittest.TestCase):
         with self.assertRaises(ValueError):
             SDOStream(time_key="")
         with self.assertRaises(ValueError):
-            SDOStream(warm_up_observers=0)
+            SDOStream(warm_up=0)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -70,7 +70,7 @@ class TestSDOStream(unittest.TestCase):
             model.score_one({"t": float("inf"), "x": 1.0})
 
     def test_score_is_zero_before_warmup(self) -> None:
-        model = self.create_model(warm_up_observers=6)
+        model = self.create_model(warm_up=6)
         for i in range(3):
             model.learn_one({"t": float(i), "x": float(i), "y": float(i + 1)})
 
@@ -96,7 +96,7 @@ class TestSDOStream(unittest.TestCase):
             model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
 
     def test_internal_clock_fallback_without_time_key(self) -> None:
-        model = self.create_model(time_key=None, warm_up_observers=3)
+        model = self.create_model(time_key=None, warm_up=3)
 
         first_point = {"a": 1.0, "b": 2.0}
         second_point = {"a": 1.1, "b": 2.1}
@@ -134,7 +134,9 @@ class TestSDOStream(unittest.TestCase):
     def test_replacement_evicts_the_lowest_fading_normalized_activity(self) -> None:
         # The reference compares observations / (1 - fading**age): an old
         # observer that stays popular outranks a young one that is barely hit.
-        model = self.create_model(k=2, T=10.0, x_neighbors=1, warm_up_observers=2)
+        model = self.create_model(
+            max_observers=2, time_scale=10.0, n_neighbors=1, warm_up=2
+        )
         model.learn_one({"t": 0.0, "a": 0.0, "b": 0.0})
         assert model._observations is not None
         assert model._time_added is not None and model._time_touched is not None
@@ -143,7 +145,7 @@ class TestSDOStream(unittest.TestCase):
         model._observations[:2] = [8.0, 1.0]
         model._time_added[:2] = [0.0, 95.0]
         model._time_touched[:2] = [now, now]
-        fading = np.exp(-1.0 / model.T)
+        fading = np.exp(-1.0 / model.time_scale)
         normalized = [8.0 / (1 - fading**100.0), 1.0 / (1 - fading**5.0)]
         self.assertEqual(int(np.argmin(normalized)), 1)
         self.assertEqual(model._choose_replacement_index(now), 1)
@@ -153,7 +155,7 @@ class TestSDOStream(unittest.TestCase):
         points = rng.normal(size=(400, 2))
 
         def scores(unit: float) -> list[float]:
-            model = self.create_model(k=16, T=32.0 * unit, seed=11)
+            model = self.create_model(max_observers=16, time_scale=32.0 * unit, seed=11)
             out = []
             for i, (a, b) in enumerate(points):
                 point = {"t": i * unit, "a": float(a), "b": float(b)}
@@ -167,20 +169,22 @@ class TestSDOStream(unittest.TestCase):
                 np.testing.assert_allclose(scores(unit), reference, rtol=1e-9)
 
     def test_no_observer_is_sampled_without_elapsed_time(self) -> None:
-        # The sampling prefactor k**2 / (x_neighbors * T) is 4096 here, so any
+        # The sampling prefactor k**2 / (n_neighbors * T) is 4096 here, so any
         # elapsed time at all would admit nearly every point.
-        model = self.create_model(k=64, T=1.0, x_neighbors=1, warm_up_observers=2)
+        model = self.create_model(
+            max_observers=64, time_scale=1.0, n_neighbors=1, warm_up=2
+        )
         for i in range(50):
             model.learn_one({"t": 5.0, "a": float(i), "b": float(-i)})
         self.assertEqual(model.n_observers, 1)
 
     def test_outlier_scores_higher_than_normal(self) -> None:
         model = self.create_model(
-            k=96,
-            T=64.0,
-            qv=0.2,
-            x_neighbors=6,
-            warm_up_observers=10,
+            max_observers=96,
+            time_scale=64.0,
+            inactive_quantile=0.2,
+            n_neighbors=6,
+            warm_up=10,
             seed=11,
         )
         rng = np.random.default_rng(123)
@@ -200,7 +204,7 @@ class TestSDOStream(unittest.TestCase):
         self.assertGreater(outlier_score, normal_score)
 
     def test_observer_count_is_bounded(self) -> None:
-        model = self.create_model(k=32, x_neighbors=4, warm_up_observers=4, seed=99)
+        model = self.create_model(max_observers=32, n_neighbors=4, warm_up=4, seed=99)
 
         for i in range(1_000):
             model.learn_one(
@@ -226,11 +230,11 @@ class TestSDOStream(unittest.TestCase):
         self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(k=72, x_neighbors=5)
+        model = self.create_model(max_observers=72, n_neighbors=5)
         output = repr(model)
         self.assertIn("SDOStream", output)
-        self.assertIn("k=72", output)
-        self.assertIn("x_neighbors=5", output)
+        self.assertIn("max_observers=72", output)
+        self.assertIn("n_neighbors=5", output)
 
     def test_distance_variants_return_valid_scores(self) -> None:
         for metric in ("euclidean", "manhattan", "chebyshev", "minkowski"):
@@ -238,7 +242,7 @@ class TestSDOStream(unittest.TestCase):
                 model = self.create_model(
                     distance=metric,
                     minkowski_p=3.0,
-                    warm_up_observers=4,
+                    warm_up=4,
                 )
                 for i in range(20):
                     model.learn_one(

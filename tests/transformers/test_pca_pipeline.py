@@ -21,7 +21,9 @@ class TestPCAPipelineIntegration(unittest.TestCase):
         """Set up pipeline components for testing."""
         # Pipeline components
         self.scaler = StandardScaler()
-        self.pca = IncrementalPCA(n_components=5, n0=50)  # Reduce to 5D from higher dim
+        self.pca = IncrementalPCA(
+            n_components=5, warm_up=50
+        )  # Reduce to 5D from higher dim
         self.engine = FaissSimilaritySearchEngine(window_size=200, warm_up=25)
         self.knn = KNN(k=10, similarity_engine=self.engine)
 
@@ -80,8 +82,8 @@ class TestPCAPipelineIntegration(unittest.TestCase):
             },
         ]
 
-        # Learn on sample data (more than n0 to trigger PCA)
-        for _ in range(60):  # More than n0=50
+        # Learn on sample data (more than warm_up to trigger PCA)
+        for _ in range(60):  # More than warm_up=50
             for sample in sample_data:
                 self.pipeline_scale_pca.learn_one(sample)
 
@@ -138,7 +140,7 @@ class TestPCAPipelineIntegration(unittest.TestCase):
     def test_error_handling_and_robustness(self):
         """Test pipeline robustness with edge cases."""
         # Test with minimal data
-        minimal_pipeline = StandardScaler() | IncrementalPCA(n_components=2, n0=5)
+        minimal_pipeline = StandardScaler() | IncrementalPCA(n_components=2, warm_up=5)
 
         sample_data = {"feat_0": 1.0, "feat_1": 2.0, "feat_2": 3.0}
 

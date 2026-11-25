@@ -28,13 +28,13 @@ class _ChainLevels:
     # The previous split on the same dimension, or the number of splits for a
     # first visit.
     previous: np.ndarray
-    # Hash coefficients of each split's dimension, ``(cms_num_hashes, splits)``.
+    # Hash coefficients of each split's dimension, ``(n_hashes, splits)``.
     hash_coeffs: np.ndarray
     # Whether bin steps and their hash terms are reduced modulo the width
     # before summing, as int64 sums of unreduced terms could overflow.
     reduce_terms: bool
     # Hash offsets and the flat sketch index of each row's first counter,
-    # shaped ``(cms_num_hashes, depth, n_chains)``.
+    # shaped ``(n_hashes, depth, n_chains)``.
     hash_offsets: np.ndarray
     row_starts: np.ndarray
 
@@ -68,7 +68,7 @@ class _XStreamState:
 class XStream(BaseModel):
     """StreamHash and half-space-chain detector for evolving feature streams.
 
-    Scores remain zero until ``init_sample_size`` projected points initialize
+    Scores remain zero until ``warm_up`` projected points initialize
     the chains and one complete reference window has been observed.
 
     Each chain takes its smallest depth-scaled reference count, the minimum
@@ -81,12 +81,12 @@ class XStream(BaseModel):
         k: Dimension of the StreamHash feature projection.
         n_chains: Number of independently sampled half-space chains.
         depth: Number of levels and count sketches in each chain.
-        cms_width: Number of counters in every count-min sketch row.
-        cms_num_hashes: Number of independently hashed rows per count-min
+        sketch_width: Number of counters in every count-min sketch row.
+        n_hashes: Number of independently hashed rows per count-min
             sketch.
         window_size: Number of learned projected points per current/reference
             window swap.
-        init_sample_size: Number of projected points used to establish chain
+        warm_up: Number of projected points used to establish chain
             scales. These points also populate the reference-window counters.
         density: Fraction of projected coordinates updated by each input
             feature's deterministic signed projection, in ``(0, 1]``.
@@ -107,10 +107,10 @@ class XStream(BaseModel):
         k: int = 100,
         n_chains: int = 100,
         depth: int = 15,
-        cms_width: int = 1024,
-        cms_num_hashes: int = 4,
+        sketch_width: int = 1024,
+        n_hashes: int = 4,
         window_size: int = 256,
-        init_sample_size: int = 256,
+        warm_up: int = 256,
         density: float = 1.0 / 3.0,
         max_feature_cache_size: int | None = 10_000,
         seed: int | None = None,
@@ -118,14 +118,12 @@ class XStream(BaseModel):
         k = coerce_integer_count(k, label="k", minimum=1)
         n_chains = coerce_integer_count(n_chains, label="n_chains", minimum=1)
         depth = coerce_integer_count(depth, label="depth", minimum=1)
-        cms_width = coerce_integer_count(cms_width, label="cms_width", minimum=1)
-        cms_num_hashes = coerce_integer_count(
-            cms_num_hashes, label="cms_num_hashes", minimum=1
+        sketch_width = coerce_integer_count(
+            sketch_width, label="sketch_width", minimum=1
         )
+        n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
         window_size = coerce_integer_count(window_size, label="window_size")
-        init_sample_size = coerce_integer_count(
-            init_sample_size, label="init_sample_size"
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up")
         if not (0.0 < density <= 1.0):
             raise ValueError("density must be in (0, 1]")
         if max_feature_cache_size is not None:
@@ -136,10 +134,10 @@ class XStream(BaseModel):
         self.k = k
         self.n_chains = n_chains
         self.depth = depth
-        self.cms_width = cms_width
-        self.cms_num_hashes = cms_num_hashes
+        self.sketch_width = sketch_width
+        self.n_hashes = n_hashes
         self.window_size = window_size
-        self.init_sample_size = init_sample_size
+        self.warm_up = warm_up
         self.density = density
         self.max_feature_cache_size = max_feature_cache_size
         self.seed = seed
@@ -149,7 +147,7 @@ class XStream(BaseModel):
     def _reset_state(self) -> None:
         self.rng = np.random.default_rng(self.seed)
         self._state: _XStreamState | None = None
-        self._init_buffer: deque[np.ndarray] = deque(maxlen=self.init_sample_size)
+        self._init_buffer: deque[np.ndarray] = deque(maxlen=self.warm_up)
         self._feature_cache: OrderedDict[str, tuple[np.ndarray, np.ndarray]] = (
             OrderedDict()
         )
@@ -227,23 +225,23 @@ class XStream(BaseModel):
             if self.window_size <= np.iinfo(counter_dtype).max:
                 break
         cms_current = np.zeros(
-            (self.n_chains, self.depth, self.cms_num_hashes, self.cms_width),
+            (self.n_chains, self.depth, self.n_hashes, self.sketch_width),
             dtype=counter_dtype,
         )
         hash_coeffs = self.rng.integers(
             1,
             np.iinfo(np.int32).max,
-            size=(self.cms_num_hashes, self.k),
+            size=(self.n_hashes, self.k),
             dtype=np.int64,
         )
         hash_offsets = self.rng.integers(
             0,
             np.iinfo(np.int32).max,
-            size=(self.n_chains, self.depth, self.cms_num_hashes),
+            size=(self.n_chains, self.depth, self.n_hashes),
             dtype=np.int64,
         )
-        hash_coeffs_mod = hash_coeffs % self.cms_width
-        hash_offsets_mod = hash_offsets % self.cms_width
+        hash_coeffs_mod = hash_coeffs % self.sketch_width
+        hash_offsets_mod = hash_offsets % self.sketch_width
         return _XStreamState(
             deltamax=deltamax,
             chain_dims=chain_dims,
@@ -287,10 +285,10 @@ class XStream(BaseModel):
         dims = chain_dims.T.ravel()
         level_shift = shift[np.tile(np.arange(n_chains), depth), dims]
         level_deltamax = deltamax[dims]
-        width = self.cms_width
+        width = self.sketch_width
         # Unreduced terms lie within (-2 * width**2, 2 * width**2).
         reduce_terms = 2 * depth * width * width + width > np.iinfo(np.int64).max
-        rows = np.arange(n_splits * self.cms_num_hashes, dtype=np.intp) * width
+        rows = np.arange(n_splits * self.n_hashes, dtype=np.intp) * width
         return _ChainLevels(
             dims=dims,
             shift=level_shift,
@@ -305,12 +303,12 @@ class XStream(BaseModel):
             reduce_terms=reduce_terms,
             hash_offsets=np.ascontiguousarray(hash_offsets_mod.transpose(2, 1, 0)),
             row_starts=np.ascontiguousarray(
-                rows.reshape(n_chains, depth, self.cms_num_hashes).transpose(2, 1, 0)
+                rows.reshape(n_chains, depth, self.n_hashes).transpose(2, 1, 0)
             ),
         )
 
     def _initialize_model(self) -> None:
-        if len(self._init_buffer) < self.init_sample_size:
+        if len(self._init_buffer) < self.warm_up:
             return
         projected = tuple(self._init_buffer)
         state = self._create_state()
@@ -323,13 +321,13 @@ class XStream(BaseModel):
         """Return the flat sketch index of every counter that ``y`` reaches.
 
         All chains descend together. The result is shaped
-        ``(cms_num_hashes, depth, n_chains)``.
+        ``(n_hashes, depth, n_chains)``.
         """
         point = y.tobytes()
         if state.last_cells is not None and point == state.last_point:
             return state.last_cells
         levels = state.levels
-        width = self.cms_width
+        width = self.sketch_width
         z = (y[levels.dims] + levels.shift) / levels.deltamax
         for splits, previous in levels.revisits:
             z[splits] = 2.0 * z[previous] - levels.scaled_shift[splits]
@@ -404,8 +402,8 @@ class XStream(BaseModel):
         state = self._state
         return (
             f"XStream(k={self.k}, n_chains={self.n_chains}, depth={self.depth}, "
-            f"cms_width={self.cms_width}, cms_num_hashes={self.cms_num_hashes}, "
-            f"window_size={self.window_size}, init_sample_size={self.init_sample_size}, "
+            f"sketch_width={self.sketch_width}, n_hashes={self.n_hashes}, "
+            f"window_size={self.window_size}, warm_up={self.warm_up}, "
             f"density={self.density}, max_feature_cache_size={self.max_feature_cache_size}, "
             f"feature_cache_size={len(self._feature_cache)}, ready={state is not None}, "
             f"reference_ready={state is not None and state.reference_ready})"

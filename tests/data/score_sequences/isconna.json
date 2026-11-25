@@ -617,14 +617,14 @@
   {
    "name": "edges_only_small_sketch",
    "params": {
-    "count_min_rows": 3,
-    "count_min_cols": 7,
+    "n_hashes": 3,
+    "sketch_width": 7,
     "time_decay_factor": 1.0,
     "alpha": 0.5,
     "beta": 2.0,
     "gamma": 1.0,
     "include_endpoints": false,
-    "warm_up_samples": 20,
+    "warm_up": 20,
     "normalize_score": true,
     "seed": 43
    },
@@ -1040,7 +1040,7 @@
    "name": "internal_clock",
    "params": {
     "time_key": null,
-    "count_min_cols": 64,
+    "sketch_width": 64,
     "seed": 45
    },
    "edges": {
@@ -1355,8 +1355,8 @@
   {
    "name": "single_cell",
    "params": {
-    "count_min_rows": 1,
-    "count_min_cols": 1,
+    "n_hashes": 1,
+    "sketch_width": 1,
     "time_decay_factor": 0.3,
     "beta": 0.0,
     "gamma": 0.0,
@@ -1574,8 +1574,8 @@
   {
    "name": "long_buckets_many_rows",
    "params": {
-    "count_min_rows": 6,
-    "count_min_cols": 101,
+    "n_hashes": 6,
+    "sketch_width": 101,
     "time_decay_factor": 0.9,
     "seed": 49
    },

@@ -38,7 +38,7 @@ from aberrant.transform import (
 
 def test_branched_pca_raw_bypass_matches_explicit_numeric_reference():
     scaler = StandardScaler()
-    pca = IncrementalPCA(n_components=1, n0=3)
+    pca = IncrementalPCA(n_components=1, warm_up=3)
     model = MovingCovariance(window_size=20)
     graph = GraphPipeline(
         [
@@ -54,7 +54,7 @@ def test_branched_pca_raw_bypass_matches_explicit_numeric_reference():
     )
     assert isinstance(graph, ModelProtocol)
     reference_scaler = StandardScaler()
-    reference_pca = IncrementalPCA(n_components=1, n0=3)
+    reference_pca = IncrementalPCA(n_components=1, warm_up=3)
     reference_model = MovingCovariance(window_size=20)
     for index in range(1, 10):
         sample = {"a": float(index), "b": float(index**2), "temperature": 20.0 + index}
@@ -108,8 +108,8 @@ def test_shared_node_updates_once_and_score_is_read_only():
 
 def test_staggered_branches_gate_downstream_initialization():
     left, right = (
-        IncrementalPCA(n_components=1, n0=2),
-        IncrementalPCA(n_components=1, n0=4),
+        IncrementalPCA(n_components=1, warm_up=2),
+        IncrementalPCA(n_components=1, warm_up=4),
     )
     model = MovingCovariance(window_size=20)
     graph = GraphPipeline(
@@ -325,8 +325,8 @@ def test_first_input_order_is_frozen_through_learning_scoring_and_checkpoint(
     passthrough,
 ):
     observations = []
-    terminal = OnlineIsolationForest(num_trees=2, max_leaf_samples=4, seed=42)
-    reference = OnlineIsolationForest(num_trees=2, max_leaf_samples=4, seed=42)
+    terminal = OnlineIsolationForest(n_trees=2, max_leaf_samples=4, seed=42)
+    reference = OnlineIsolationForest(n_trees=2, max_leaf_samples=4, seed=42)
     nodes = [GraphNode("raw", Passthrough())] if passthrough else []
     graph = GraphPipeline(
         nodes, terminal, "raw" if passthrough else INPUT, observer=observations.append
@@ -453,7 +453,7 @@ def test_old_minmax_checkpoint_restores_default_extrapolation():
 
 def test_online_pca_keeps_a_real_orthogonal_basis_on_degenerate_stream():
     scaler = StandardScaler()
-    projection = IncrementalPCA(n_components=2, n0=3)
+    projection = IncrementalPCA(n_components=2, warm_up=3)
     for index in range(30):
         data = {"a": float(index), "b": float(index**2), "c": float(index % 3)}
         scaler.learn_one(data)

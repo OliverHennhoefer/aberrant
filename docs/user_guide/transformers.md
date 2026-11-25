@@ -12,7 +12,7 @@ can precede another transformer or one terminal model in a pipeline.
 | `MinMaxScaler` | Per-feature running minimum and maximum | Same keys, values mapped to `feature_range` | A value outside the learned extrema can transform outside the requested range; a constant learned feature maps to the lower bound |
 | `StandardScaler` | Per-feature count, mean, and population variance accumulator | Same keys, centered values and optionally population-standardized values | A feature with zero learned variance maps to `0.0`; `with_std=False` centers without scaling |
 | `RollingRobustScaler` | Per-feature recent window, median, and interquartile range | Same keys, median-centered and IQR-scaled values | Exact linearly interpolated quartiles; zero IQR uses `fallback_scale` to preserve deviations; calibration can be frozen |
-| `IncrementalPCA` | Warm-up SVD followed by an incremental uncentered subspace | `component_0` through `component_{n_components - 1}` | Returns zero components until `n0` events; inputs are projected around the origin, not around an internally learned mean |
+| `IncrementalPCA` | Warm-up SVD followed by an incremental uncentered subspace | `component_0` through `component_{n_components - 1}` | Returns zero components until `warm_up` events; inputs are projected around the origin, not around an internally learned mean |
 | `RandomProjection` | One seeded sparse Achlioptas projection matrix | `component_0` through `component_{n_components - 1}` | `learn_one` establishes the schema and matrix once; later calls do not fit distributional parameters |
 
 All built-in transformers reject non-numeric or non-finite values before updating their
@@ -46,7 +46,7 @@ affect scaling, call `learn_one` first; that is exactly what
 
 ## Robust recent-window calibration
 
-`RollingRobustScaler(window_size=256, min_samples=1, fallback_scale=1.0)`
+`RollingRobustScaler(window_size=256, warm_up=1, fallback_scale=1.0)`
 retains at most `window_size` observations per feature and computes
 `(value - median) / (Q3 - Q1)`. Quartiles interpolate linearly at
 `(n - 1) * q`. A zero IQR uses `fallback_scale` instead: a constant reference
@@ -55,7 +55,7 @@ There is no clipping or normalization to `[0, 1]`.
 
 Missing features do not advance their own windows. `sample_counts` returns a
 detached snapshot of retained counts, and `is_ready` becomes true when every
-learned feature has `min_samples` observations. An empty scaler is unready;
+learned feature has `warm_up` observations. An empty scaler is unready;
 introducing a new feature can make it unready again. Use `FeatureSchemaGuard`
 when the set of features must remain fixed. Transformations use provisional
 statistics during warm-up, so a pipeline can accumulate history normally;
@@ -67,8 +67,8 @@ a downstream reference model when a fixed coordinate system is required:
 ```python
 from aberrant.transform import RollingRobustScaler
 
-adaptive = RollingRobustScaler(window_size=5, min_samples=5)
-frozen = RollingRobustScaler(window_size=5, min_samples=5)
+adaptive = RollingRobustScaler(window_size=5, warm_up=5)
+frozen = RollingRobustScaler(window_size=5, warm_up=5)
 for value in [0, 2, 4, 6, 8]:
     adaptive.learn_one({"x": float(value)})
     frozen.learn_one({"x": float(value)})
@@ -105,8 +105,8 @@ stage rejects an event. See the standalone
 ## Projection schemas
 
 `IncrementalPCA` and `RandomProjection` use the exact order supplied through
-`keys=`. Without `keys=`, they preserve the first learned dictionary's insertion
-order and reject missing or additional keys afterward. Set `keys=` when schema
+`features=`. Without `features=`, they preserve the first learned dictionary's insertion
+order and reject missing or additional fields afterward. Set `features=` when schema
 order must be explicit before the first event.
 
 ```python
@@ -114,8 +114,8 @@ from aberrant.transform import IncrementalPCA
 
 pca = IncrementalPCA(
     n_components=2,
-    n0=3,
-    keys=["x", "y", "z"],
+    warm_up=3,
+    features=["x", "y", "z"],
 )
 
 for event in [
@@ -142,7 +142,7 @@ from aberrant.model.forest import OnlineIsolationForest
 from aberrant.transform import StandardScaler
 
 detector = StandardScaler() | OnlineIsolationForest(
-    num_trees=10,
+    n_trees=10,
     window_size=32,
     seed=5,
 )

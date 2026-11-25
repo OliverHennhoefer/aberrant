@@ -64,12 +64,12 @@ class TestAnoEdgeL(unittest.TestCase):
             "source_key": "src",
             "destination_key": "dst",
             "time_key": "t",
-            "count_min_rows": 64,
-            "count_min_cols": 64,
-            "num_hashes": 4,
+            "sketch_rows": 64,
+            "sketch_cols": 64,
+            "n_hashes": 4,
             "num_dense_submatrices": 1,
             "time_decay_factor": 1.0,
-            "warm_up_samples": 0,
+            "warm_up": 0,
             "normalize_score": False,
             "seed": 42,
         }
@@ -81,12 +81,12 @@ class TestAnoEdgeL(unittest.TestCase):
         self.assertEqual(model.source_key, "src")
         self.assertEqual(model.destination_key, "dst")
         self.assertEqual(model.time_key, "t")
-        self.assertEqual(model.count_min_rows, 256)
-        self.assertEqual(model.count_min_cols, 256)
-        self.assertEqual(model.num_hashes, 4)
+        self.assertEqual(model.sketch_rows, 256)
+        self.assertEqual(model.sketch_cols, 256)
+        self.assertEqual(model.n_hashes, 4)
         self.assertEqual(model.num_dense_submatrices, 1)
         self.assertEqual(model.time_decay_factor, 1.0)
-        self.assertEqual(model.warm_up_samples, 0)
+        self.assertEqual(model.warm_up, 0)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -100,23 +100,23 @@ class TestAnoEdgeL(unittest.TestCase):
         with self.assertRaises(ValueError):
             AnoEdgeL(time_key="src")
         with self.assertRaises(ValueError):
-            AnoEdgeL(count_min_rows=0)
+            AnoEdgeL(sketch_rows=0)
         with self.assertRaises(ValueError):
-            AnoEdgeL(count_min_cols=0)
+            AnoEdgeL(sketch_cols=0)
         with self.assertRaises(ValueError):
-            AnoEdgeL(num_hashes=0)
+            AnoEdgeL(n_hashes=0)
         with self.assertRaises(ValueError):
             AnoEdgeL(num_dense_submatrices=0)
         with self.assertRaises(ValueError):
             AnoEdgeL(
-                count_min_rows=2,
-                count_min_cols=2,
+                sketch_rows=2,
+                sketch_cols=2,
                 num_dense_submatrices=3,
             )
         with self.assertRaises(ValueError):
             AnoEdgeL(time_decay_factor=0.0)
         with self.assertRaises(ValueError):
-            AnoEdgeL(warm_up_samples=-1)
+            AnoEdgeL(warm_up=-1)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -137,9 +137,9 @@ class TestAnoEdgeL(unittest.TestCase):
 
     def test_dense_block_edge_scores_above_sparse_edge(self) -> None:
         model = self.create_model(
-            count_min_rows=32,
-            count_min_cols=32,
-            num_hashes=1,
+            sketch_rows=32,
+            sketch_cols=32,
+            n_hashes=1,
             seed=1,
         )
         model._hash_a[:] = 1
@@ -154,7 +154,7 @@ class TestAnoEdgeL(unittest.TestCase):
         self.assertGreater(dense_score, sparse_score)
 
     def test_score_one_does_not_mutate_or_advance_state(self) -> None:
-        model = self.create_model(num_hashes=1, time_decay_factor=0.5)
+        model = self.create_model(n_hashes=1, time_decay_factor=0.5)
         for _ in range(10):
             model.learn_one({"src": 1.0, "dst": 2.0, "t": 1.0})
 
@@ -174,14 +174,14 @@ class TestAnoEdgeL(unittest.TestCase):
         )
 
     def test_rollover_decays_once_on_bucket_jump(self) -> None:
-        model = self.create_model(num_hashes=1, time_decay_factor=0.5)
+        model = self.create_model(n_hashes=1, time_decay_factor=0.5)
         model.learn_one({"src": 1.0, "dst": 2.0, "t": 1.0})
         mass_before = float(np.sum(model._sketch))
         model.learn_one({"src": 3.0, "dst": 4.0, "t": 100.0})
         self.assertAlmostEqual(float(np.sum(model._sketch)), mass_before * 0.5 + 1.0)
 
     def test_score_is_zero_before_optional_warmup(self) -> None:
-        model = self.create_model(warm_up_samples=4)
+        model = self.create_model(warm_up=4)
         for _ in range(3):
             model.learn_one({"src": 1.0, "dst": 2.0, "t": 1.0})
         self.assertEqual(
@@ -222,9 +222,9 @@ class TestAnoEdgeL(unittest.TestCase):
 
     def test_state_shapes_are_bounded(self) -> None:
         model = self.create_model(
-            count_min_rows=12,
-            count_min_cols=13,
-            num_hashes=5,
+            sketch_rows=12,
+            sketch_cols=13,
+            n_hashes=5,
             num_dense_submatrices=2,
         )
         sketch_shape = model._sketch.shape
@@ -261,15 +261,15 @@ class TestAnoEdgeL(unittest.TestCase):
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(
-            count_min_rows=15,
-            count_min_cols=17,
-            num_hashes=6,
+            sketch_rows=15,
+            sketch_cols=17,
+            n_hashes=6,
             num_dense_submatrices=2,
         )
         output = repr(model)
         self.assertIn("AnoEdgeL", output)
-        self.assertIn("count_min_rows=15", output)
-        self.assertIn("count_min_cols=17", output)
+        self.assertIn("sketch_rows=15", output)
+        self.assertIn("sketch_cols=17", output)
         self.assertIn("num_dense_submatrices=2", output)
 
 

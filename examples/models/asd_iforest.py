@@ -4,7 +4,7 @@ from aberrant.model.forest.asd import ASDIsolationForest
 from aberrant.stream import Dataset, load
 
 model = ASDIsolationForest(
-    n_estimators=100,
+    n_trees=100,
     max_samples=256,
     window_size=2048,
     retrain_interval=2048,

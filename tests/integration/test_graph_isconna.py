@@ -18,11 +18,11 @@ class TestISCONNA(unittest.TestCase):
         frequency/width/gap pattern change.
         """
         model = ISCONNA(
-            count_min_rows=2,
-            count_min_cols=10_007,
+            n_hashes=2,
+            sketch_width=10_007,
             time_decay_factor=0.7,
             include_endpoints=False,
-            warm_up_samples=0,
+            warm_up=0,
             seed=42,
         )
         target = {"src": 1.0, "dst": 2.0}

@@ -3,11 +3,20 @@
 import pickle
 import unittest
 from collections import deque
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 from aberrant.model.distance import CellNeighborhoodDetector as NETS
+from aberrant.model.distance import nets as nets_module
+
+TOLERANCE = nets_module._DISTANCE_TOLERANCE
+
+
+def _with_tolerance(tolerance: float, **params: object) -> NETS:
+    with patch.object(nets_module, "_DISTANCE_TOLERANCE", tolerance):
+        return NETS(**params)
 
 
 class TestNETS(unittest.TestCase):
@@ -20,8 +29,7 @@ class TestNETS(unittest.TestCase):
             "window_size": 64,
             "slide_size": 4,
             "time_key": "t",
-            "warm_up_slides": 2,
-            "eps": 1e-9,
+            "warm_up": 2,
         }
         defaults.update(overrides)
         return NETS(**defaults)
@@ -32,7 +40,7 @@ class TestNETS(unittest.TestCase):
         self.assertEqual(model.radius, 1.5)
         self.assertEqual(model.window_size, 10_000)
         self.assertEqual(model.slide_size, 500)
-        self.assertEqual(model.warm_up_slides, 1)
+        self.assertEqual(model.warm_up, 1)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -48,9 +56,7 @@ class TestNETS(unittest.TestCase):
         with self.assertRaises(ValueError):
             NETS(time_key="")
         with self.assertRaises(ValueError):
-            NETS(warm_up_slides=0)
-        with self.assertRaises(ValueError):
-            NETS(eps=0.0)
+            NETS(warm_up=0)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -67,7 +73,7 @@ class TestNETS(unittest.TestCase):
             model.score_one({"t": float("inf"), "x": 1.0})
 
     def test_score_is_zero_before_warmup(self) -> None:
-        model = self.create_model(k=4, warm_up_slides=3, slide_size=4)
+        model = self.create_model(k=4, warm_up=3, slide_size=4)
         for i in range(8):
             model.learn_one({"t": float(i), "x": float(i % 3), "y": float(i % 5)})
 
@@ -93,7 +99,7 @@ class TestNETS(unittest.TestCase):
             model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
 
     def test_internal_clock_fallback_without_time_key(self) -> None:
-        model = self.create_model(time_key=None, warm_up_slides=1, slide_size=3, k=2)
+        model = self.create_model(time_key=None, warm_up=1, slide_size=3, k=2)
 
         first_point = {"a": 1.0, "b": 2.0}
         second_point = {"a": 1.2, "b": 2.1}
@@ -110,8 +116,8 @@ class TestNETS(unittest.TestCase):
         self.assertLessEqual(score, 1.0)
 
     def test_deterministic_behavior(self) -> None:
-        model1 = self.create_model(k=4, warm_up_slides=2, slide_size=4)
-        model2 = self.create_model(k=4, warm_up_slides=2, slide_size=4)
+        model1 = self.create_model(k=4, warm_up=2, slide_size=4)
+        model2 = self.create_model(k=4, warm_up=2, slide_size=4)
 
         for i in range(40):
             point = {
@@ -130,7 +136,7 @@ class TestNETS(unittest.TestCase):
         )
 
     def test_outlier_scores_higher_than_normal(self) -> None:
-        model = self.create_model(k=8, radius=0.75, warm_up_slides=3, slide_size=4)
+        model = self.create_model(k=8, radius=0.75, warm_up=3, slide_size=4)
         rng = np.random.default_rng(123)
 
         for i in range(250):
@@ -148,7 +154,7 @@ class TestNETS(unittest.TestCase):
         self.assertGreater(outlier_score, normal_score)
 
     def test_scores_are_bounded(self) -> None:
-        model = self.create_model(k=3, warm_up_slides=1, slide_size=3)
+        model = self.create_model(k=3, warm_up=1, slide_size=3)
         for i in range(20):
             model.learn_one({"t": float(i), "a": float(i % 4), "b": float(i % 3)})
 
@@ -163,7 +169,7 @@ class TestNETS(unittest.TestCase):
             radius=1.0,
             window_size=12,
             slide_size=3,
-            warm_up_slides=1,
+            warm_up=1,
         )
 
         for i in range(50):
@@ -189,7 +195,7 @@ class TestNETS(unittest.TestCase):
             radius=0.1,
             window_size=10,
             slide_size=2,
-            warm_up_slides=1,
+            warm_up=1,
         )
 
         for i in range(30):
@@ -211,7 +217,7 @@ class TestNETS(unittest.TestCase):
             radius=1.0,
             window_size=50,
             slide_size=10,
-            warm_up_slides=1,
+            warm_up=1,
         )
 
         for i in range(8):
@@ -229,7 +235,7 @@ class TestNETS(unittest.TestCase):
 
     def test_offset_lookup_matches_radius_counts(self) -> None:
         model = self.create_model(
-            time_key=None, k=20, radius=1.0, slide_size=1, warm_up_slides=1
+            time_key=None, k=20, radius=1.0, slide_size=1, warm_up=1
         )
         points = [
             np.array([a + 0.2, b + 0.2]) for a in range(-3, 4) for b in range(-3, 4)
@@ -238,7 +244,7 @@ class TestNETS(unittest.TestCase):
             model.learn_one({"a": point[0], "b": point[1]})
         query = np.array([0.2, 0.2])
         count = sum(
-            np.dot(point - query, point - query) <= 1.0 + model.eps for point in points
+            np.dot(point - query, point - query) <= 1.0 + TOLERANCE for point in points
         )
         self.assertEqual(
             model.score_one({"a": query[0], "b": query[1]}), 1.0 - count / model.k
@@ -246,8 +252,13 @@ class TestNETS(unittest.TestCase):
         self.assertEqual(len(model._neighbor_offsets_cache[2]), 25)
 
     def test_high_dimensional_tolerance_does_not_enumerate_offsets(self) -> None:
-        model = self.create_model(
-            time_key=None, k=2, radius=1.0, eps=100.0, slide_size=1, warm_up_slides=1
+        model = _with_tolerance(
+            100.0,
+            k=2,
+            radius=1.0,
+            window_size=64,
+            slide_size=1,
+            warm_up=1,
         )
         for value in (0.0, 1.0, 20.0):
             model.learn_one({str(dim): value for dim in range(20)})
@@ -256,7 +267,7 @@ class TestNETS(unittest.TestCase):
         self.assertEqual(model._neighbor_offsets_cache, {})
 
     def test_reset_restores_cold_state(self) -> None:
-        model = self.create_model(k=3, warm_up_slides=1, slide_size=3)
+        model = self.create_model(k=3, warm_up=1, slide_size=3)
         for i in range(20):
             model.learn_one({"t": float(i), "a": float(i), "b": float(i + 1)})
 
@@ -292,7 +303,7 @@ def test_continuous_score_matches_brute_force_through_evictions():
             continue
         for query in rng.normal(size=(3, 2)):
             neighbors = sum(
-                np.dot(point - query, point - query) <= 1.0 + model.eps
+                np.dot(point - query, point - query) <= 1.0 + TOLERANCE
                 for point in window
             )
             expected = 1.0 - min(neighbors / model.k, 1.0)
@@ -323,7 +334,7 @@ def test_score_only_queries_in_shared_rows_do_not_accumulate_state():
     ],
 )
 def test_tolerance_neighbors_across_nonadjacent_cells(point, query, eps):
-    model = NETS(k=2, radius=1.0, window_size=5, slide_size=1, eps=eps)
+    model = _with_tolerance(eps, k=2, radius=1.0, window_size=5, slide_size=1)
     for value in (point, 10.0, 20.0):
         model.learn_one({"x": value})
     assert model.score_one({"x": query}) == 0.5
@@ -333,7 +344,7 @@ def test_tolerance_neighbors_across_nonadjacent_cells(point, query, eps):
 def test_neighbor_candidates_preserve_distances_at_large_offsets(offset):
     # This tolerance makes radius² + eps exactly 4.0 in float arithmetic.
     eps = float(np.nextafter(3.51, np.inf))
-    model = NETS(k=2, radius=0.7, eps=eps, window_size=5, slide_size=1)
+    model = _with_tolerance(eps, k=2, radius=0.7, window_size=5, slide_size=1)
     for value in (offset, offset + 100.0, offset + 200.0):
         model.learn_one({"x": value})
     assert model.score_one({"x": offset + 2.0}) == 0.5
@@ -355,11 +366,11 @@ def test_radius_must_be_finite(radius):
 
 
 def test_subnormal_squared_distance_rounding_preserves_candidate_coverage():
-    model = NETS(k=2, radius=1e-200, eps=5e-324, window_size=5, slide_size=1)
+    model = _with_tolerance(5e-324, k=2, radius=1e-200, window_size=5, slide_size=1)
     for value in (2.5e-162, 1.0, 2.0):
         model.learn_one({"x": value})
     point = np.array([2.5e-162])
-    assert float(np.dot(point, point)) == model.eps
+    assert float(np.dot(point, point)) == 5e-324
     assert model.score_one({"x": 0.0}) == 0.5
 
 
@@ -371,11 +382,10 @@ def test_score_matches_window_reference_through_eviction(n_features, eps):
         "radius": 1.0,
         "window_size": 13,
         "slide_size": 2,
-        "warm_up_slides": 3,
+        "warm_up": 3,
         "time_key": "t",
-        "eps": eps,
     }
-    model = NETS(**config)
+    model = _with_tolerance(eps, **config)
     window = deque(maxlen=13)
     rng = np.random.default_rng(719)
     names = tuple(str(dim) for dim in range(n_features))

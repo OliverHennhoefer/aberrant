@@ -83,20 +83,20 @@ jobs:
 
           from aberrant.drift import ADWIN, KSWIN
           from aberrant.model.forest import HalfSpaceTrees, OnlineIsolationForest
-          from aberrant.model.timeseries import XLagDAMP
+          from aberrant.model.timeseries import DAMP
           from aberrant.transform import StandardScaler
 
           print("numpy", numpy.__version__)
           detectors = [
               StandardScaler() | OnlineIsolationForest(seed=1),
               HalfSpaceTrees(seed=1),
-              XLagDAMP(subsequence_length=8),
+              DAMP(subsequence_length=8),
           ]
           drifts = [ADWIN(), KSWIN(seed=1)]
           for index in range(300):
               value = float(index % 17) / 17.0
               for detector in detectors:
-                  event = {"x": value} if isinstance(detector, XLagDAMP) else {"x": value, "y": 1.0 - value}
+                  event = {"x": value} if isinstance(detector, DAMP) else {"x": value, "y": 1.0 - value}
                   detector.score_one(event)
                   detector.learn_one(event)
               for drift in drifts:

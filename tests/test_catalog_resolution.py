@@ -54,7 +54,7 @@ def test_each_component_occurrence_resolves_once(monkeypatch, operation):
         resolved.build()
         assert (
             resolved.fingerprint
-            == "8f87e74a7056c6b4364d6abcaba1ed0015e1a93d2161874e52290b4e96ad2a75"
+            == "b1a48002ccf7c457563a24d01ffc822e6008745424d37759fdc8383bf1b1ad89"
         )
     else:
         config.build()
@@ -110,9 +110,7 @@ def test_normalization_and_fingerprint_do_not_require_feature_compatibility():
 
 
 def test_resolution_does_not_construct_or_validate_constructor_only_invariants():
-    config = DetectorConfig(
-        ComponentConfig("online_isolation_forest", {"num_trees": 0})
-    )
+    config = DetectorConfig(ComponentConfig("online_isolation_forest", {"n_trees": 0}))
     resolved = config.resolve()
     assert resolved.config == config.normalized()
     assert resolved.fingerprint == config.fingerprint()
@@ -147,13 +145,13 @@ def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
 @pytest.mark.parametrize(
     ("config", "fingerprint"),
     [
-        (example(), "8f87e74a7056c6b4364d6abcaba1ed0015e1a93d2161874e52290b4e96ad2a75"),
+        (example(), "b1a48002ccf7c457563a24d01ffc822e6008745424d37759fdc8383bf1b1ad89"),
         (
             DetectorConfig(
                 ComponentConfig("moving_average", {"window_size": 8}),
                 (ComponentConfig("min_max_scaler", {"feature_range": [0, 1]}),),
             ),
-            "8feb46d480239c33fbc9bb2760277444247cfaabd13b14ff47b268a9078db906",
+            "bae4638b4a7d65c3627bddae8e0a9cc77d92dc5511ea6e019499b6ae0a993acc",
         ),
     ],
 )
@@ -237,7 +235,7 @@ def test_detector_parameter_errors_retain_component_indexes():
                 "model": {
                     "id": "online_isolation_forest",
                     "params": {
-                        "num_trees": "many",
+                        "n_trees": "many",
                         "seed": True,
                     },
                 },
@@ -247,7 +245,7 @@ def test_detector_parameter_errors_retain_component_indexes():
             }
         ).resolve()
     assert {issue.loc for issue in error.value.issues} == {
-        ("model", "params", "num_trees"),
+        ("model", "params", "n_trees"),
         ("model", "params", "seed"),
         ("transformers", 0, "params", "with_std"),
     }
@@ -263,7 +261,7 @@ def test_unknown_component_keeps_its_subclass_and_location():
 
 def test_collecting_other_errors_preserves_the_first_exception_subclass():
     config = DetectorConfig(
-        ComponentConfig("online_isolation_forest", {"num_trees": "many"}),
+        ComponentConfig("online_isolation_forest", {"n_trees": "many"}),
         (ComponentConfig("no-such-transformer"),),
     )
     with pytest.raises(UnknownComponentError) as error:
@@ -301,7 +299,8 @@ def test_missing_dependency_keeps_its_subclass_and_nested_location(monkeypatch):
         ({"model": {"id": "null"}, "transformers": [False]}, ("transformers", 0)),
         ({"model": {"params": {}}}, ("model", "id")),
         ({"model": {"id": "null"}, "version": 0}, ("version",)),
-        ({"version": 1}, ("model",)),
+        ({"version": 2}, ("model",)),
+        ({"model": {"id": "null"}, "version": 1}, ("version",)),
         ({"model": "null"}, ("model",)),
         ({"model": {"id": ""}}, ("model", "id")),
         ({"model": {"id": "null", "params": {1: 2}}}, ("model", "params")),
@@ -323,7 +322,7 @@ def test_issue_records_and_issue_collection_are_immutable():
         error.issues = ()
     assert error.issues == (issue,)
     assert (
-        get_model_spec("online_isolation_forest").resolved_parameters()["num_trees"]
+        get_model_spec("online_isolation_forest").resolved_parameters()["n_trees"]
         == 100
     )
 

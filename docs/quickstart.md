@@ -29,7 +29,7 @@ anomalies = rng.normal(loc=5.0, scale=0.5, size=(16, 2))
 stream = np.vstack([normal, anomalies])
 
 detector = StandardScaler() | OnlineIsolationForest(
-    num_trees=25,
+    n_trees=25,
     max_leaf_samples=32,
     window_size=256,
     seed=7,

@@ -8,10 +8,10 @@ model = ISCONNA(
     source_key="src",
     destination_key="dst",
     time_key="t",
-    count_min_rows=8,
-    count_min_cols=1024,
+    n_hashes=8,
+    sketch_width=1024,
     time_decay_factor=0.5,
-    warm_up_samples=128,
+    warm_up=128,
     normalize_score=False,
     seed=42,
 )

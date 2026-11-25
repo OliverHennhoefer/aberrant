@@ -29,7 +29,7 @@ from aberrant.model.forest import (
 )
 from aberrant.model.null import NullModel
 from aberrant.model.random import RandomModel
-from aberrant.model.sketch import StreamingLODA, StreamingRSHash
+from aberrant.model.sketch import LODA, RSHash
 from aberrant.model.stat import (
     MovingAverage,
     MovingCovariance,
@@ -38,7 +38,7 @@ from aberrant.model.stat import (
     OnlineCOPOD,
     OnlineECOD,
 )
-from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.similarity import FaissSimilaritySearchEngine
 from aberrant.stream import Dataset, get_dataset_info
 from aberrant.transform import MinMaxScaler, StandardScaler
@@ -80,7 +80,7 @@ def _autoencoder(seed: int) -> object:
 CASES = [
     Case(
         "asd-isolation-forest",
-        lambda s: ASDIsolationForest(n_estimators=50, max_samples=256, seed=s),
+        lambda s: ASDIsolationForest(n_trees=50, max_samples=256, seed=s),
         0.97,
         0.87,
     ),
@@ -96,7 +96,7 @@ CASES = [
     Case(
         "mondrian-isolation-forest",
         lambda s: MondrianIsolationForest(
-            n_estimators=50, subspace_size=128, lambda_=1.0, seed=s
+            n_trees=50, subspace_size=128, lifetime=1.0, seed=s
         ),
         0.93,
         0.55,
@@ -104,7 +104,7 @@ CASES = [
     Case(
         "online-isolation-forest",
         lambda s: OnlineIsolationForest(
-            num_trees=100,
+            n_trees=100,
             max_leaf_samples=32,
             tree_type="adaptive",
             subsample=1.0,
@@ -120,7 +120,7 @@ CASES = [
     Case(
         "random-histogram-forest",
         lambda s: StreamRandomHistogramForest(
-            n_estimators=25, max_depth=10, window_size=256, seed=s
+            n_trees=25, max_depth=10, window_size=256, seed=s
         ),
         0.96,
         0.77,
@@ -131,7 +131,7 @@ CASES = [
             n_trees=12,
             sample_size=256,
             shingle_size=1,
-            warmup_samples=256,
+            warm_up=256,
             normalize_score=True,
             score_scale=8.0,
             seed=s,
@@ -145,10 +145,10 @@ CASES = [
             k=32,
             n_chains=32,
             depth=10,
-            cms_width=256,
-            cms_num_hashes=3,
+            sketch_width=256,
+            n_hashes=3,
             window_size=128,
-            init_sample_size=128,
+            warm_up=128,
             density=0.25,
             seed=s,
         ),
@@ -164,7 +164,7 @@ CASES = [
                 radius=1.5,
                 window_size=2048,
                 slide_size=128,
-                warm_up_slides=2,
+                warm_up=2,
             )
         ),
         0.68,
@@ -173,12 +173,12 @@ CASES = [
     Case(
         "sdostream",
         lambda s: SDOStream(
-            k=128,
-            T=256.0,
-            qv=0.3,
-            x_neighbors=8,
+            max_observers=128,
+            time_scale=256.0,
+            inactive_quantile=0.3,
+            n_neighbors=8,
             distance="euclidean",
-            warm_up_observers=12,
+            warm_up=12,
             seed=s,
         ),
         0.97,
@@ -189,11 +189,11 @@ CASES = [
         "loda",
         lambda s: (
             StandardScaler()
-            | StreamingLODA(
+            | LODA(
                 n_projections=64,
                 n_bins=24,
                 sparsity=0.3,
-                warm_up_samples=256,
+                warm_up=256,
                 decay=1.0,
                 time_key=None,
                 pseudocount=0.5,
@@ -205,14 +205,14 @@ CASES = [
     ),
     Case(
         "rshash",
-        lambda s: StreamingRSHash(
-            components_num=24,
-            hash_num=4,
-            bins=512,
+        lambda s: RSHash(
+            n_members=24,
+            n_hashes=4,
+            sketch_width=512,
             subspace_size=3,
             bin_width=1.0,
             decay=0.01,
-            warm_up_samples=128,
+            warm_up=128,
             time_key="t",
             seed=s,
         ),
@@ -240,9 +240,7 @@ CASES = [
     Case("autoencoder-torch", _autoencoder, 0.84, 0.28, requires=("torch",)),
     Case(
         "adaptive-kernel-svm",
-        lambda s: IncrementalOneClassSVMAdaptiveKernel(
-            nu=0.1, initial_gamma=1.0, seed=s
-        ),
+        lambda s: AdaptiveOneClassSVM(nu=0.1, initial_gamma=1.0, seed=s),
         0.77,
         0.29,
     ),

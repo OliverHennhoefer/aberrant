@@ -39,7 +39,7 @@ def _log_time_difference(current: int | float, previous: int | float) -> float:
     return math.log(numerator) - math.log(denominator)
 
 
-class StreamingRSHash(BaseModel):
+class RSHash(BaseModel):
     """
     Bounded-memory streaming adaptation of RS-Hash.
 
@@ -56,13 +56,13 @@ class StreamingRSHash(BaseModel):
 
     Notes:
     - Scores are continuous, non-negative, and bounded in ``[0, 1]``.
-    - Memory usage is bounded by ``components_num * hash_num * bins``.
+    - Memory usage is bounded by ``n_members * n_hashes * sketch_width``.
     - Feature schema is fixed after the first ``learn_one`` call.
 
     Args:
-        components_num: Number of independently sampled feature subspaces.
-        hash_num: Number of independent hash tables per subspace.
-        bins: Number of counters in every hash table.
+        n_members: Number of independently sampled feature subspaces.
+        n_hashes: Number of independent hash tables per subspace.
+        sketch_width: Number of counters in every hash table.
         subspace_size: Features sampled without replacement per component.
             ``None`` uses ``ceil(sqrt(n_features))``; an explicit value cannot
             exceed the established feature count.
@@ -70,7 +70,7 @@ class StreamingRSHash(BaseModel):
             coordinates.
         decay: Non-negative exponential fading rate. Counts are scaled by
             ``exp(-decay * elapsed_time)``.
-        warm_up_samples: Number of learned samples required before scoring.
+        warm_up: Number of learned samples required before scoring.
         time_key: Event-time field to exclude from the feature vector. ``None``
             uses one-based arrival order; explicit times must be finite and
             non-decreasing.
@@ -85,24 +85,22 @@ class StreamingRSHash(BaseModel):
     def __init__(
         self,
         *,
-        components_num: int = 24,
-        hash_num: int = 4,
-        bins: int = 256,
+        n_members: int = 24,
+        n_hashes: int = 4,
+        sketch_width: int = 256,
         subspace_size: int | None = None,
         bin_width: float = 1.0,
         decay: float = 0.01,
-        warm_up_samples: int = 64,
+        warm_up: int = 64,
         time_key: str | None = None,
         seed: int | None = None,
     ) -> None:
-        components_num = coerce_integer_count(
-            components_num, label="components_num", minimum=1
+        n_members = coerce_integer_count(n_members, label="n_members", minimum=1)
+        n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
+        sketch_width = coerce_integer_count(
+            sketch_width, label="sketch_width", minimum=1
         )
-        hash_num = coerce_integer_count(hash_num, label="hash_num", minimum=1)
-        bins = coerce_integer_count(bins, label="bins", minimum=1)
-        warm_up_samples = coerce_integer_count(
-            warm_up_samples, label="warm_up_samples", minimum=1
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=1)
         if subspace_size is not None and subspace_size <= 0:
             raise ValueError("subspace_size must be positive or None")
         if bin_width <= 0.0:
@@ -112,21 +110,21 @@ class StreamingRSHash(BaseModel):
         if time_key is not None and (not isinstance(time_key, str) or not time_key):
             raise ValueError("time_key must be a non-empty string or None")
 
-        self.components_num = components_num
-        self.hash_num = hash_num
-        self.bins = bins
+        self.n_members = n_members
+        self.n_hashes = n_hashes
+        self.sketch_width = sketch_width
         self.subspace_size = subspace_size
         self.bin_width = bin_width
         self.decay = decay
-        self.warm_up_samples = warm_up_samples
+        self.warm_up = warm_up
         self.time_key = time_key
         self.seed = seed
 
         self._scale_renorm_threshold = 1e-12
         self._std_floor = 1e-6
         # With an array of buckets, these select one counter in every table.
-        self._components = np.arange(components_num)[:, None]
-        self._tables = np.arange(hash_num)
+        self._components = np.arange(n_members)[:, None]
+        self._tables = np.arange(n_hashes)
 
         self._reset_state()
 
@@ -182,10 +180,10 @@ class StreamingRSHash(BaseModel):
             )
 
         subspace_indices = np.empty(
-            (self.components_num, resolved_subspace_size),
+            (self.n_members, resolved_subspace_size),
             dtype=np.int32,
         )
-        for index in range(self.components_num):
+        for index in range(self.n_members):
             chosen = self._rng.choice(
                 n_features,
                 size=resolved_subspace_size,
@@ -197,22 +195,22 @@ class StreamingRSHash(BaseModel):
         self._subspace_shifts = self._rng.uniform(
             low=0.0,
             high=self.bin_width,
-            size=(self.components_num, resolved_subspace_size),
+            size=(self.n_members, resolved_subspace_size),
         )
         self._hash_a = self._rng.integers(
             low=1,
             high=_HASH_MODULUS,
-            size=(self.components_num, self.hash_num, resolved_subspace_size),
+            size=(self.n_members, self.n_hashes, resolved_subspace_size),
             dtype=np.int64,
         )
         self._hash_b = self._rng.integers(
             low=0,
             high=_HASH_MODULUS,
-            size=(self.components_num, self.hash_num),
+            size=(self.n_members, self.n_hashes),
             dtype=np.int64,
         )
         self._counts = np.zeros(
-            (self.components_num, self.hash_num, self.bins),
+            (self.n_members, self.n_hashes, self.sketch_width),
             dtype=np.float64,
         )
 
@@ -280,7 +278,7 @@ class StreamingRSHash(BaseModel):
         # Reducing each product first leaves (b + sum(a * q)) mod p unchanged.
         terms = np.remainder(self._hash_a * residues[:, None, :], _HASH_MODULUS)
         hashes = np.remainder(self._hash_b + terms.sum(axis=2), _HASH_MODULUS)
-        buckets: np.ndarray = hashes % self.bins
+        buckets: np.ndarray = hashes % self.sketch_width
         return buckets
 
     def _score_buckets(self, buckets: np.ndarray, query_scale: float) -> float:
@@ -343,7 +341,7 @@ class StreamingRSHash(BaseModel):
         event = self._boundary.preview(x)
         if not self._boundary.schema.is_established or self._counts is None:
             return 0.0
-        if self._samples_seen < self.warm_up_samples:
+        if self._samples_seen < self.warm_up:
             return 0.0
 
         current_time = event.timestamp.value
@@ -355,10 +353,10 @@ class StreamingRSHash(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "StreamingRSHash("
-            f"components_num={self.components_num}, hash_num={self.hash_num}, "
-            f"bins={self.bins}, subspace_size={self.subspace_size}, "
+            "RSHash("
+            f"n_members={self.n_members}, n_hashes={self.n_hashes}, "
+            f"sketch_width={self.sketch_width}, subspace_size={self.subspace_size}, "
             f"bin_width={self.bin_width}, decay={self.decay}, "
-            f"warm_up_samples={self.warm_up_samples}, time_key={self.time_key!r}, "
+            f"warm_up={self.warm_up}, time_key={self.time_key!r}, "
             f"seed={self.seed}, samples_seen={self._samples_seen})"
         )

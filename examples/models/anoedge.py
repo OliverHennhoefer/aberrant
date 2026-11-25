@@ -8,12 +8,12 @@ model = AnoEdgeL(
     destination_key="dst",
     time_key="t",
     # Compact sketch works well for this mapped tabular stream.
-    count_min_rows=128,
-    count_min_cols=128,
-    num_hashes=4,
+    sketch_rows=128,
+    sketch_cols=128,
+    n_hashes=4,
     num_dense_submatrices=1,
     time_decay_factor=1.0,
-    warm_up_samples=0,
+    warm_up=0,
     normalize_score=False,
     seed=42,
 )

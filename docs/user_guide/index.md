@@ -28,7 +28,7 @@ post-update transform downstream. See [Pipelines](pipelines.md).
 | Component | Expected input |
 | --- | --- |
 | General multivariate detector | A non-empty `dict[str, float]` with finite numeric values and, for schema-owning models, the same feature-key set after the first successful `learn_one` |
-| Univariate moving statistic, `RollingMatrixProfile`, and `XLagDAMP` | Exactly one consistently named numeric feature |
+| Univariate moving statistic, `RollingMatrixProfile`, and `DAMP` | Exactly one consistently named numeric feature |
 | `MultivariateRollingMatrixProfile` | One or more fixed named channels per aligned observation; every event supplies all channels |
 | Bivariate covariance/correlation statistic | Exactly two consistently named numeric features |
 | Edge-stream detector | Named source and destination fields, usually integer-like, plus the configured timestamp field when `time_key` is not `None` |
@@ -37,7 +37,7 @@ post-update transform downstream. See [Pipelines](pipelines.md).
 Schema-owning models canonicalize feature order; callers need a stable **key
 set**, not a stable dictionary insertion order. The scalers instead maintain
 independent state per observed key, while `IncrementalPCA` and
-`RandomProjection` preserve explicit `keys=` order or the first learned event's
+`RandomProjection` preserve explicit `features=` order or the first learned event's
 order. The [transformer guide](transformers.md) documents those differences.
 
 ## Score contracts

@@ -6,7 +6,7 @@
    "params": {
     "n_trees": 10,
     "sample_size": 64,
-    "warmup_samples": 32,
+    "warm_up": 32,
     "seed": 71
    },
    "stream": {
@@ -323,7 +323,7 @@
     "n_trees": 6,
     "sample_size": 32,
     "shingle_size": 3,
-    "warmup_samples": 8,
+    "warm_up": 8,
     "normalize_score": true,
     "score_scale": 4.0,
     "seed": 73
@@ -591,7 +591,7 @@
    "params": {
     "n_trees": 8,
     "sample_size": 48,
-    "warmup_samples": 16,
+    "warm_up": 16,
     "seed": 75
    },
    "stream": {
@@ -908,7 +908,7 @@
    "params": {
     "n_trees": 8,
     "sample_size": 40,
-    "warmup_samples": 10,
+    "warm_up": 10,
     "seed": 77
    },
    "stream": {
@@ -1225,7 +1225,7 @@
    "params": {
     "n_trees": 5,
     "sample_size": 2,
-    "warmup_samples": 1,
+    "warm_up": 1,
     "seed": 79
    },
    "stream": {

@@ -23,7 +23,7 @@ class RandomProjection(BaseTransformer):
     Args:
         n_components: Number of projected dimensions. It cannot exceed the
             number of input features.
-        keys: Explicit feature order. If omitted, the first learned mapping's
+        features: Explicit feature order. If omitted, the first learned mapping's
             insertion order is used.
         seed: Seed for the transformer's local NumPy generator.
 
@@ -37,7 +37,7 @@ class RandomProjection(BaseTransformer):
         self,
         *,
         n_components: int,
-        keys: list[str] | None = None,
+        features: list[str] | None = None,
         seed: int | None = None,
     ) -> None:
         """Initialize the projection and, when possible, its random matrix."""
@@ -45,15 +45,15 @@ class RandomProjection(BaseTransformer):
 
         n_components = coerce_integer_count(n_components, label="n_components")
         self.n_components = n_components
-        self._schema = ProjectionSchema(n_components, keys)
+        self._schema = ProjectionSchema(n_components, features)
         self.seed = seed
 
         self.n_dimensions = 0
         self.random_matrix: np.ndarray = np.array([])
 
-        if keys is not None:
-            self.random_matrix = self._create_random_matrix(len(keys))
-            self.n_dimensions = len(keys)
+        if features is not None:
+            self.random_matrix = self._create_random_matrix(len(features))
+            self.n_dimensions = len(features)
 
     @property
     def readiness(self) -> Readiness:
@@ -126,7 +126,7 @@ class RandomProjection(BaseTransformer):
         if self.feature_names is None:
             coerce_feature_values(x)
             raise RuntimeError(
-                "Cannot transform before learning. Call learn_one() first or provide keys."
+                "Cannot transform before learning. Call learn_one() first or pass features."
             )
 
         data_vector = self._schema.prepare(x).values

@@ -103,13 +103,13 @@ class MIDAS(BaseModel):
         time_key: Input field containing a non-decreasing integer-like time
             bucket. ``None`` assigns a new one-based bucket to every learned
             arrival.
-        count_min_rows: Number of independently hashed rows in each count-min
+        n_hashes: Number of independently hashed rows in each count-min
             sketch.
-        count_min_cols: Number of counters per sketch row.
+        sketch_width: Number of counters per sketch row.
         time_decay_factor: Factor in ``(0, 1]`` applied to current edge and
             endpoint sketches at bucket changes in relational mode. NormalCore
             clears its current edge sketch instead.
-        warm_up_samples: Number of learned edges before scoring begins.
+        warm_up: Number of learned edges before scoring begins.
         use_relational: Use MIDAS-R endpoint sketches and decayed current
             counts. ``False`` selects the edge-only NormalCore.
         normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
@@ -129,33 +129,29 @@ class MIDAS(BaseModel):
         source_key: str = "src",
         destination_key: str = "dst",
         time_key: str | None = "t",
-        count_min_rows: int = 2,
-        count_min_cols: int = 1024,
+        n_hashes: int = 2,
+        sketch_width: int = 1024,
         time_decay_factor: float = 0.5,
-        warm_up_samples: int = 0,
+        warm_up: int = 0,
         use_relational: bool = True,
         normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
-        count_min_rows = coerce_integer_count(
-            count_min_rows, label="count_min_rows", minimum=1
+        n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
+        sketch_width = coerce_integer_count(
+            sketch_width, label="sketch_width", minimum=1
         )
-        count_min_cols = coerce_integer_count(
-            count_min_cols, label="count_min_cols", minimum=1
-        )
-        warm_up_samples = coerce_integer_count(
-            warm_up_samples, label="warm_up_samples", minimum=0
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=0)
         if not (0.0 < time_decay_factor <= 1.0):
             raise ValueError("time_decay_factor must be in (0, 1]")
 
         self.source_key = source_key
         self.destination_key = destination_key
         self.time_key = time_key
-        self.count_min_rows = count_min_rows
-        self.count_min_cols = count_min_cols
+        self.n_hashes = n_hashes
+        self.sketch_width = sketch_width
         self.time_decay_factor = time_decay_factor
-        self.warm_up_samples = warm_up_samples
+        self.warm_up = warm_up
         self.use_relational = use_relational
         self.normalize_score = normalize_score
         self.seed = seed
@@ -164,8 +160,8 @@ class MIDAS(BaseModel):
 
     def _new_sketch_pair(self) -> tuple[_CountMinSketch, _CountMinSketch]:
         current = _CountMinSketch(
-            rows=self.count_min_rows,
-            cols=self.count_min_cols,
+            rows=self.n_hashes,
+            cols=self.sketch_width,
             rng=self._rng,
         )
         return current, current.empty_copy()
@@ -340,7 +336,7 @@ class MIDAS(BaseModel):
         """Preview the candidate-inclusive MIDAS or MIDAS-R score."""
         event = self._boundary.preview(x)
         bucket, src, dst = event.bucket, event.source, event.destination
-        if self._samples_seen < self.warm_up_samples:
+        if self._samples_seen < self.warm_up:
             return 0.0
 
         rollover = self._current_bucket is not None and bucket > self._current_bucket
@@ -388,10 +384,10 @@ class MIDAS(BaseModel):
         return (
             "MIDAS("
             f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
-            f"time_key={self.time_key!r}, count_min_rows={self.count_min_rows}, "
-            f"count_min_cols={self.count_min_cols}, "
+            f"time_key={self.time_key!r}, n_hashes={self.n_hashes}, "
+            f"sketch_width={self.sketch_width}, "
             f"time_decay_factor={self.time_decay_factor}, "
-            f"warm_up_samples={self.warm_up_samples}, "
+            f"warm_up={self.warm_up}, "
             f"use_relational={self.use_relational}, "
             f"normalize_score={self.normalize_score}, seed={self.seed}, "
             f"samples_seen={self._samples_seen})"

@@ -15,6 +15,8 @@ from aberrant.base.model import BaseModel
 _Cell: TypeAlias = tuple[int, ...]
 _Entry: TypeAlias = tuple[int, _Cell]
 _MAX_NEIGHBOR_OFFSETS = 20_000
+# Added to the squared radius so rounding cannot drop a neighbor on the boundary.
+_DISTANCE_TOLERANCE = 1e-9
 
 
 class CellNeighborhoodDetector(BaseModel):
@@ -47,8 +49,7 @@ class CellNeighborhoodDetector(BaseModel):
         time_key: Event-time field to exclude from the feature vector. ``None``
             uses one-based arrival order; explicit times must be finite and
             non-decreasing.
-        warm_up_slides: Complete slides required before non-zero scoring.
-        eps: Positive tolerance added to squared-distance comparisons.
+        warm_up: Complete slides required before non-zero scoring.
 
     References:
         Yoon, S., Lee, J.-G., & Lee, B. S. (2019). NETS: Extremely Fast
@@ -65,31 +66,25 @@ class CellNeighborhoodDetector(BaseModel):
         window_size: int = 10_000,
         slide_size: int = 500,
         time_key: str | None = None,
-        warm_up_slides: int = 1,
-        eps: float = 1e-9,
+        warm_up: int = 1,
     ) -> None:
         k = coerce_integer_count(k, label="k", minimum=1)
         window_size = coerce_integer_count(window_size, label="window_size", minimum=1)
         slide_size = coerce_integer_count(slide_size, label="slide_size", minimum=1)
-        warm_up_slides = coerce_integer_count(
-            warm_up_slides, label="warm_up_slides", minimum=1
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=1)
         if not math.isfinite(radius) or radius <= 0.0:
             raise ValueError("radius must be finite and positive")
         if window_size <= k:
             raise ValueError("window_size must be greater than k")
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
 
         self.k = k
         self.radius = radius
         self.window_size = window_size
         self.slide_size = slide_size
         self.time_key = time_key
-        self.warm_up_slides = warm_up_slides
-        self.eps = eps
+        self.warm_up = warm_up
         self._radius_ratio = float(radius).as_integer_ratio()
-        self._distance_limit_sq = radius * radius + eps
+        self._distance_limit_sq = radius * radius + _DISTANCE_TOLERANCE
         # Squared distances can round down, especially in the subnormal range.
         distance_bound = math.nextafter(self._distance_limit_sq, math.inf)
         accepted_radius = math.nextafter(math.sqrt(distance_bound), math.inf)
@@ -201,7 +196,7 @@ class CellNeighborhoodDetector(BaseModel):
     def score_one(self, x: dict[str, float]) -> float:
         """Count exact neighbors, stopping once the scarcity score is zero."""
         event = self._boundary.preview(x)
-        if self._samples_seen < self.warm_up_slides * self.slide_size or (
+        if self._samples_seen < self.warm_up * self.slide_size or (
             len(self._window_entries) <= self.k
         ):
             return 0.0
@@ -221,8 +216,7 @@ class CellNeighborhoodDetector(BaseModel):
             "CellNeighborhoodDetector("
             f"k={self.k}, radius={self.radius}, window_size={self.window_size}, "
             f"slide_size={self.slide_size}, time_key={self.time_key!r}, "
-            f"warm_up_slides={self.warm_up_slides}, "
-            f"eps={self.eps}, "
+            f"warm_up={self.warm_up}, "
             f"samples_seen={self._samples_seen}, "
             f"active_cells={len(self._cell_members)})"
         )

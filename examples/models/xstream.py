@@ -7,10 +7,10 @@ model = XStream(
     k=64,
     n_chains=50,
     depth=12,
-    cms_width=512,
-    cms_num_hashes=4,
+    sketch_width=512,
+    n_hashes=4,
     window_size=256,
-    init_sample_size=256,
+    warm_up=256,
     density=0.25,
     seed=42,
 )

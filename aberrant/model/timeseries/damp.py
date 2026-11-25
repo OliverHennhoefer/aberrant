@@ -111,7 +111,7 @@ def _mass_distance_profile(
     return np.sqrt(np.maximum(squared_distances, 0.0))
 
 
-class XLagDAMP(BaseModel):
+class DAMP(BaseModel):
     """
     Pure-online X-Lag Amnesic Discord Aware Matrix Profile detector.
 
@@ -140,7 +140,9 @@ class XLagDAMP(BaseModel):
         start_index: One-based subsequence start index at which processing
             begins. Defaults to the authors' recommendation of at least four
             cycles, ``4 * subsequence_length``.
-        eps: Numerical threshold used to reject constant subsequences.
+        min_std: Population standard deviation at or below which a
+            subsequence counts as constant and is rejected. It is absolute, so
+            lower it for series on a very small scale.
 
     Notes:
         - Input must contain exactly one consistently named numeric feature.
@@ -165,7 +167,7 @@ class XLagDAMP(BaseModel):
         subsequence_length: int,
         x_lag: int | None = None,
         start_index: int | None = None,
-        eps: float = 1e-12,
+        min_std: float = 1e-12,
     ) -> None:
         if subsequence_length < 2:
             raise ValueError("subsequence_length must be at least 2")
@@ -179,14 +181,14 @@ class XLagDAMP(BaseModel):
         )
         if resolved_start_index < subsequence_length:
             raise ValueError("start_index must be at least subsequence_length")
-        eps = coerce_finite_number(eps, label="eps")
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
+        min_std = coerce_finite_number(min_std, label="min_std")
+        if min_std <= 0.0:
+            raise ValueError("min_std must be positive")
 
         self.subsequence_length = subsequence_length
         self.x_lag = resolved_x_lag
         self.start_index = resolved_start_index
-        self.eps = eps
+        self.min_std = min_std
 
         self._initial_search_length = _next_power_of_two(8 * self.subsequence_length)
         self._history_capacity = self.x_lag + self.subsequence_length - 1
@@ -250,7 +252,7 @@ class XLagDAMP(BaseModel):
         if not x:
             raise ValidationError("Input dictionary cannot be empty")
         if len(x) != 1:
-            raise ValidationError("XLagDAMP requires exactly one feature")
+            raise ValidationError("DAMP requires exactly one feature")
 
         feature_name, raw_value = next(iter(x.items()))
         if not isinstance(feature_name, str):
@@ -276,7 +278,7 @@ class XLagDAMP(BaseModel):
         series: np.ndarray,
         query: np.ndarray,
     ) -> float:
-        profile = _mass_distance_profile(series, query, eps=self.eps)
+        profile = _mass_distance_profile(series, query, eps=self.min_std)
         return float(np.min(profile))
 
     def _backward_process(
@@ -380,7 +382,7 @@ class XLagDAMP(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "XLagDAMP("
+            "DAMP("
             f"subsequence_length={self.subsequence_length}, x_lag={self.x_lag}, "
             f"start_index={self.start_index}, samples_seen={self._samples_seen}, "
             f"subsequences_processed={self._subsequences_processed}, "

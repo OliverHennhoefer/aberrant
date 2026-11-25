@@ -24,10 +24,12 @@ class TestIncrementalPCA(unittest.TestCase):
             ValueError, "n_components must be a positive integer"
         ):
             IncrementalPCA(n_components=0)
-        with self.assertRaisesRegex(ValueError, "n0 must be a positive integer"):
-            IncrementalPCA(n_components=1, n0=0)
-        with self.assertRaisesRegex(ValueError, "n0 must be at least n_components"):
-            IncrementalPCA(n_components=3, n0=2)
+        with self.assertRaisesRegex(ValueError, "warm_up must be a positive integer"):
+            IncrementalPCA(n_components=1, warm_up=0)
+        with self.assertRaisesRegex(
+            ValueError, "warm_up must be at least n_components"
+        ):
+            IncrementalPCA(n_components=3, warm_up=2)
         for tol in (-1.0, float("nan"), float("inf"), float("-inf")):
             with (
                 self.subTest(tol=tol),
@@ -35,11 +37,11 @@ class TestIncrementalPCA(unittest.TestCase):
             ):
                 IncrementalPCA(n_components=1, tol=tol)
         with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
-            IncrementalPCA(n_components=1, keys=["x", "x"])
+            IncrementalPCA(n_components=1, features=["x", "x"])
 
     def test_minimum_warmup_preserves_pipeline_feature_schema(self):
-        ipca = IncrementalPCA(n_components=3, n0=3)
-        pipeline = ipca | OnlineIsolationForest(num_trees=1, window_size=8, seed=1)
+        ipca = IncrementalPCA(n_components=3, warm_up=3)
+        pipeline = ipca | OnlineIsolationForest(n_trees=1, window_size=8, seed=1)
         samples = [
             {"x": 1.0, "y": 0.0, "z": 0.0, "w": 0.0},
             {"x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0},
@@ -60,7 +62,7 @@ class TestIncrementalPCA(unittest.TestCase):
     def test_zero_tolerance_preserves_zero_and_repeated_samples(self):
         for value in (0.0, 1.0):
             with self.subTest(value=value):
-                ipca = IncrementalPCA(n_components=1, n0=1, tol=0.0)
+                ipca = IncrementalPCA(n_components=1, warm_up=1, tol=0.0)
                 sample = {"x": value, "y": 0.0}
                 with np.errstate(divide="raise", invalid="raise"):
                     for _ in range(5):
@@ -77,7 +79,7 @@ class TestIncrementalPCA(unittest.TestCase):
 
     def test_keys_are_owned_and_non_finite_values_do_not_poison_state(self):
         keys = ["x", "y"]
-        ipca = IncrementalPCA(n_components=1, n0=2, keys=keys)
+        ipca = IncrementalPCA(n_components=1, warm_up=2, features=keys)
         keys[0] = "changed"
 
         with self.assertRaisesRegex(ValueError, "must be finite"):
@@ -91,7 +93,7 @@ class TestIncrementalPCA(unittest.TestCase):
         with self.assertRaises(ValueError):
             ipca = IncrementalPCA(  # noqa
                 n_components=7,
-                keys=["key_01", "key_02", "key_03", "key_04", "key_05"],  # noqa
+                features=["key_01", "key_02", "key_03", "key_04", "key_05"],  # noqa
             )  # noqa
 
     def test_q_greater_d_dict(self):
@@ -109,19 +111,19 @@ class TestIncrementalPCA(unittest.TestCase):
         # keys match
         ipca2 = IncrementalPCA(
             n_components=3,
-            keys=["feature_0", "feature_1", "feature_2", "feature_3", "feature_4"],
+            features=["feature_0", "feature_1", "feature_2", "feature_3", "feature_4"],
         )
         ipca2.learn_one(x)
         self.assertListEqual(list(ipca1.window[0]), [2, 3, 3.5, 11, 5])
         # keys do not match
         ipca3 = IncrementalPCA(
-            n_components=3, keys=["key_01", "key_02", "key_03", "key_04", "key_05"]
+            n_components=3, features=["key_01", "key_02", "key_03", "key_04", "key_05"]
         )
         with self.assertRaisesRegex(ValidationError, "missing feature"):
             ipca3.learn_one(x)
 
     def test_rejects_schema_extras_during_learning_and_warmup_transform(self):
-        ipca = IncrementalPCA(n_components=1, n0=3, keys=["x", "y"])
+        ipca = IncrementalPCA(n_components=1, warm_up=3, features=["x", "y"])
 
         with self.assertRaisesRegex(ValidationError, "unexpected feature"):
             ipca.learn_one({"x": 1.0, "y": 2.0, "z": 3.0})
@@ -135,7 +137,7 @@ class TestIncrementalPCA(unittest.TestCase):
     def test_initialization(self):  # compare to incRpca from R (onlinePCA package)
         data = np.array([[1, 2, 2.5, 5, 5], [10, 10.5, 11, 8, 4], [3, 3.5, 7, 10, 9]])
         data_stream = [{f"feature_{i}": val for i, val in enumerate(dp)} for dp in data]
-        ipca = IncrementalPCA(n_components=2, n0=3)
+        ipca = IncrementalPCA(n_components=2, warm_up=3)
         for data_point in data_stream:
             ipca.learn_one(data_point)
 
@@ -161,8 +163,8 @@ class TestIncrementalPCA(unittest.TestCase):
         x = {f"feature_{i}": val for i, val in enumerate([2, 3, 3.5, 11, 5])}
         y = {f"feature_{i}": val for i, val in enumerate([4, 3.4, 9.5, 1, 1])}
         data_stream = [{f"feature_{i}": val for i, val in enumerate(dp)} for dp in data]
-        ipca = IncrementalPCA(n_components=2, n0=3)
-        for data_point in data_stream:  # learning data including n0
+        ipca = IncrementalPCA(n_components=2, warm_up=3)
+        for data_point in data_stream:  # learning data including warm_up
             ipca.learn_one(data_point)
         # learn x
         ipca.learn_one(x)
@@ -200,8 +202,8 @@ class TestIncrementalPCA(unittest.TestCase):
         x = {f"feature_{i}": val for i, val in enumerate([2, 3, 3.5, 11, 5])}
 
         data_stream = [{f"feature_{i}": val for i, val in enumerate(dp)} for dp in data]
-        ipca = IncrementalPCA(n_components=q, n0=3)
-        for data_point in data_stream:  # learning data including n0
+        ipca = IncrementalPCA(n_components=q, warm_up=3)
+        for data_point in data_stream:  # learning data including warm_up
             ipca.learn_one(data_point)
 
         x_transformed = ipca.transform_one(x)
@@ -214,8 +216,8 @@ class TestIncrementalPCA(unittest.TestCase):
         x = {f"feature_{i}": val for i, val in enumerate([2, 3, 3.5, 11, 5])}
 
         data_stream = [{f"feature_{i}": val for i, val in enumerate(dp)} for dp in data]
-        ipca = IncrementalPCA(n_components=q, n0=3, forgetting_factor=0.1)
-        for data_point in data_stream:  # learning data including n0
+        ipca = IncrementalPCA(n_components=q, warm_up=3, forgetting_factor=0.1)
+        for data_point in data_stream:  # learning data including warm_up
             ipca.learn_one(data_point)
 
         x_transformed = ipca.transform_one(x)
@@ -224,7 +226,7 @@ class TestIncrementalPCA(unittest.TestCase):
 
     def test_init_with_wrong_f(self):
         with self.assertRaises(ValueError):
-            _ipca = IncrementalPCA(n_components=2, n0=3, forgetting_factor=-0.5)
+            _ipca = IncrementalPCA(n_components=2, warm_up=3, forgetting_factor=-0.5)
 
     def test_hardcoded_pca_exact_r_match(self):
         """
@@ -248,7 +250,7 @@ class TestIncrementalPCA(unittest.TestCase):
         # Parameters matching R test
         n = 10  # Total samples
         q = 2  # Components
-        n0 = 5  # Initialization samples
+        warm_up = 5  # Initialization samples
 
         # Convert to stream format
         data_stream = [
@@ -257,10 +259,10 @@ class TestIncrementalPCA(unittest.TestCase):
         ]
 
         # Initialize PCA
-        ipca = IncrementalPCA(n_components=q, n0=n0)
+        ipca = IncrementalPCA(n_components=q, warm_up=warm_up)
 
-        # Learn first n0 samples (initialization phase)
-        for i in range(n0):
+        # Learn first warm_up samples (initialization phase)
+        for i in range(warm_up):
             ipca.learn_one(data_stream[i])
 
         # Test initialization results against R
@@ -303,9 +305,9 @@ class TestIncrementalPCA(unittest.TestCase):
             [218.186016, 3.040879],  # After sample 10
         ]
 
-        for i in range(n0, n):
+        for i in range(warm_up, n):
             ipca.learn_one(data_stream[i])
-            step_idx = i - n0
+            step_idx = i - warm_up
             expected_vals = np.array(expected_values_by_step[step_idx])
 
             self.assertTrue(

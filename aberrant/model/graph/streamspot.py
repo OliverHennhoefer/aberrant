@@ -66,12 +66,11 @@ class SignedGraphSketchDetector(BaseModel):
         num_clusters: Maximum number of online Euclidean cluster centers.
         max_graphs: Maximum number of active per-graph sketches. Least-recently
             learned graph state is evicted when the limit is exceeded.
-        warm_up_graphs: Number of active graph sketches required before
+        warm_up: Number of active graph sketches required before
             scoring. It cannot exceed ``max_graphs``.
         normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
             distance-plus-novelty score.
         seed: Seed for model-local shingle hashing.
-        eps: Positive numerical floor in the bounded distance component.
 
     References:
         Manzoor, E., Milajerdi, S. M., & Akoglu, L. (2016). Fast Memory-efficient
@@ -119,15 +118,12 @@ class SignedGraphSketchDetector(BaseModel):
         shingle_size: int,
         num_clusters: int,
         max_graphs: int,
-        warm_up_graphs: int,
-        eps: float,
+        warm_up: int,
     ) -> None:
         if num_clusters > max_graphs:
             raise ValueError("num_clusters must be less than or equal to max_graphs")
-        if warm_up_graphs > max_graphs:
-            raise ValueError("warm_up_graphs must be less than or equal to max_graphs")
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
+        if warm_up > max_graphs:
+            raise ValueError("warm_up must be less than or equal to max_graphs")
 
     def __init__(
         self,
@@ -141,10 +137,9 @@ class SignedGraphSketchDetector(BaseModel):
         shingle_size: int = 2,
         num_clusters: int = 8,
         max_graphs: int = 4096,
-        warm_up_graphs: int = 32,
+        warm_up: int = 32,
         normalize_score: bool = False,
         seed: int | None = None,
-        eps: float = 1e-9,
     ) -> None:
         sketch_dim = coerce_integer_count(sketch_dim, label="sketch_dim", minimum=1)
         num_clusters = coerce_integer_count(
@@ -153,9 +148,7 @@ class SignedGraphSketchDetector(BaseModel):
         shingle_size = coerce_integer_count(
             shingle_size, label="shingle_size", minimum=1
         )
-        warm_up_graphs = coerce_integer_count(
-            warm_up_graphs, label="warm_up_graphs", minimum=1
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=1)
         self.graph_key = self._validate_required_name(graph_key, "graph_key")
         self.source_key = self._validate_required_name(source_key, "source_key")
         self.destination_key = self._validate_required_name(
@@ -179,17 +172,15 @@ class SignedGraphSketchDetector(BaseModel):
             shingle_size=shingle_size,
             num_clusters=num_clusters,
             max_graphs=max_graphs,
-            warm_up_graphs=warm_up_graphs,
-            eps=eps,
+            warm_up=warm_up,
         )
         self.sketch_dim = sketch_dim
         self.shingle_size = shingle_size
         self.num_clusters = num_clusters
         self.max_graphs = max_graphs
-        self.warm_up_graphs = warm_up_graphs
+        self.warm_up = warm_up
         self.normalize_score = normalize_score
         self.seed = seed
-        self.eps = eps
 
         self._reset_state()
 
@@ -424,8 +415,7 @@ class SignedGraphSketchDetector(BaseModel):
 
     def _is_warm(self) -> bool:
         return (
-            len(self._graph_states) >= self.warm_up_graphs
-            and self._initialized_clusters > 0
+            len(self._graph_states) >= self.warm_up and self._initialized_clusters > 0
         )
 
     def learn_one(self, x: dict[str, float]) -> None:
@@ -476,7 +466,7 @@ class SignedGraphSketchDetector(BaseModel):
             candidate_sketch
         )
         distance = float(np.sqrt(max(distance_sq, 0.0)))
-        distance_component = distance / (1.0 + distance + self.eps)
+        distance_component = distance / (1.0 + distance)
         raw_score = float(distance_component + novelty)
         if not np.isfinite(raw_score):
             raw_score = 0.0
@@ -492,7 +482,7 @@ class SignedGraphSketchDetector(BaseModel):
             f"edge_type_key={self.edge_type_key!r}, time_key={self.time_key!r}, "
             f"sketch_dim={self.sketch_dim}, shingle_size={self.shingle_size}, "
             f"num_clusters={self.num_clusters}, max_graphs={self.max_graphs}, "
-            f"warm_up_graphs={self.warm_up_graphs}, "
+            f"warm_up={self.warm_up}, "
             f"normalize_score={self.normalize_score}, "
             f"seed={self.seed}, "
             f"samples_seen={self._samples_seen}, active_graphs={len(self._graph_states)}, "

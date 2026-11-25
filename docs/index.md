@@ -79,7 +79,7 @@ values = np.vstack(
 )
 
 detector = StandardScaler() | OnlineIsolationForest(
-    num_trees=25,
+    n_trees=25,
     window_size=256,
     seed=42,
 )

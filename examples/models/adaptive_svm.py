@@ -1,11 +1,11 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.svm.adaptive import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm.adaptive import AdaptiveOneClassSVM
 from aberrant.stream import Dataset, load
 from aberrant.transform import StandardScaler
 
 scaler = StandardScaler()
-model = IncrementalOneClassSVMAdaptiveKernel(
+model = AdaptiveOneClassSVM(
     nu=0.1,
     sv_budget=25,
     initial_gamma=0.5,

@@ -24,33 +24,33 @@ class SDOStream(BaseModel):
     selected via activity quantile filtering.
 
     Observers are sampled at a rate proportional to the time elapsed since the
-    last sampled point, so ``T`` is in the units of the event times. When the
+    last sampled point, so ``time_scale`` is in the units of the event times. When the
     observer set is full, a sampled point replaces the observer with the lowest
-    ``observations / (1 - exp(-age / T))``: its decayed activity relative to the
+    ``observations / (1 - exp(-age / time_scale))``: its decayed activity relative to the
     most it could have gathered since it was added, as in the authors'
     reference implementation.
 
     Notes:
     - Scores are continuous, non-negative distances.
-    - State is bounded by ``k`` and independent of stream length.
+    - State is bounded by ``max_observers`` and independent of stream length.
     - Feature schema is fixed after the first ``learn_one`` call.
 
     Args:
-        k: Maximum number of observers retained.
-        T: Positive fading time scale and observer-sampling time scale.
-        qv: Activity quantile below which observers are excluded, in
+        max_observers: Maximum number of observers retained.
+        time_scale: Positive fading time scale and observer-sampling time scale.
+        inactive_quantile: Activity quantile below which observers are excluded, in
             ``[0, 1)``.
-        x_neighbors: Number of nearest active observers whose distances enter
-            the median score. It cannot exceed ``k``.
+        n_neighbors: Number of nearest active observers whose distances enter
+            the median score. It cannot exceed ``max_observers``.
         distance: Distance metric: ``"euclidean"``, ``"manhattan"``,
             ``"chebyshev"``, or ``"minkowski"``.
         minkowski_p: Positive order used only for Minkowski distance.
         time_key: Event-time field to exclude from the feature vector. ``None``
             uses one-based arrival order; explicit times must be finite and
             non-decreasing.
-        warm_up_observers: Observer count required before scoring. ``None``
-            resolves to at least ``x_neighbors`` and at least two, capped at
-            ``k``.
+        warm_up: Observer count required before scoring. ``None``
+            resolves to at least ``n_neighbors`` and at least two, capped at
+            ``max_observers``.
         seed: Seed for the model-local observer-sampling generator.
 
     References:
@@ -62,26 +62,28 @@ class SDOStream(BaseModel):
     def __init__(
         self,
         *,
-        k: int = 256,
-        T: float = 512.0,
-        qv: float = 0.3,
-        x_neighbors: int = 6,
+        max_observers: int = 256,
+        time_scale: float = 512.0,
+        inactive_quantile: float = 0.3,
+        n_neighbors: int = 6,
         distance: Literal["euclidean", "manhattan", "chebyshev", "minkowski"] = (
             "euclidean"
         ),
         minkowski_p: float = 2.0,
         time_key: str | None = None,
-        warm_up_observers: int | None = None,
+        warm_up: int | None = None,
         seed: int | None = None,
     ) -> None:
-        k = coerce_integer_count(k, label="k", minimum=1)
-        x_neighbors = coerce_integer_count(x_neighbors, label="x_neighbors", minimum=1)
-        if T <= 0.0:
-            raise ValueError("T must be positive")
-        if not (0.0 <= qv < 1.0):
-            raise ValueError("qv must be in [0, 1)")
-        if x_neighbors > k:
-            raise ValueError("x_neighbors must be less than or equal to k")
+        max_observers = coerce_integer_count(
+            max_observers, label="max_observers", minimum=1
+        )
+        n_neighbors = coerce_integer_count(n_neighbors, label="n_neighbors", minimum=1)
+        if time_scale <= 0.0:
+            raise ValueError("time_scale must be positive")
+        if not (0.0 <= inactive_quantile < 1.0):
+            raise ValueError("inactive_quantile must be in [0, 1)")
+        if n_neighbors > max_observers:
+            raise ValueError("n_neighbors must be less than or equal to max_observers")
         if distance not in ("euclidean", "manhattan", "chebyshev", "minkowski"):
             raise ValueError(
                 "distance must be one of: euclidean, manhattan, chebyshev, minkowski"
@@ -90,29 +92,29 @@ class SDOStream(BaseModel):
             raise ValueError("minkowski_p must be positive when distance='minkowski'")
         if time_key is not None and (not isinstance(time_key, str) or not time_key):
             raise ValueError("time_key must be a non-empty string or None")
-        if warm_up_observers is not None:
-            if warm_up_observers <= 0:
-                raise ValueError("warm_up_observers must be positive")
-            if warm_up_observers > k:
-                raise ValueError("warm_up_observers must be less than or equal to k")
+        if warm_up is not None:
+            if warm_up <= 0:
+                raise ValueError("warm_up must be positive")
+            if warm_up > max_observers:
+                raise ValueError("warm_up must be less than or equal to max_observers")
 
-        self.k = k
-        self.T = T
-        self.qv = qv
-        self.x_neighbors = x_neighbors
+        self.max_observers = max_observers
+        self.time_scale = time_scale
+        self.inactive_quantile = inactive_quantile
+        self.n_neighbors = n_neighbors
         self.distance = distance
         self.minkowski_p = minkowski_p
         self.time_key = time_key
         warm_up_default = (
-            max(2, self.x_neighbors)
-            if warm_up_observers is None
-            else max(2, warm_up_observers)
+            max(2, self.n_neighbors) if warm_up is None else max(2, warm_up)
         )
-        self.warm_up_observers = min(self.k, warm_up_default)
+        self.warm_up = min(self.max_observers, warm_up_default)
         self.seed = seed
 
-        self._fading = float(np.exp(-1.0 / self.T))
-        self._sampling_prefactor = (self.k * self.k) / (self.x_neighbors * self.T)
+        self._fading = float(np.exp(-1.0 / self.time_scale))
+        self._sampling_prefactor = (self.max_observers * self.max_observers) / (
+            self.n_neighbors * self.time_scale
+        )
 
         self._reset_state()
 
@@ -143,10 +145,10 @@ class SDOStream(BaseModel):
         if self._observers is not None:
             return
 
-        self._observers = np.zeros((self.k, n_features), dtype=np.float64)
-        self._observations = np.zeros(self.k, dtype=np.float64)
-        self._time_added = np.zeros(self.k, dtype=np.float64)
-        self._time_touched = np.zeros(self.k, dtype=np.float64)
+        self._observers = np.zeros((self.max_observers, n_features), dtype=np.float64)
+        self._observations = np.zeros(self.max_observers, dtype=np.float64)
+        self._time_added = np.zeros(self.max_observers, dtype=np.float64)
+        self._time_touched = np.zeros(self.max_observers, dtype=np.float64)
 
     def _decay_factor(self, delta: np.ndarray | float) -> np.ndarray | float:
         return np.power(self._fading, delta)
@@ -229,8 +231,8 @@ class SDOStream(BaseModel):
 
         decayed = self._decayed_observations(current_time)
         active_count = max(
-            self.x_neighbors,
-            int((1.0 - self.qv) * self._n_observers),
+            self.n_neighbors,
+            int((1.0 - self.inactive_quantile) * self._n_observers),
         )
         active_count = min(active_count, self._n_observers)
 
@@ -295,7 +297,7 @@ class SDOStream(BaseModel):
         all_observers = self._observers[: self._n_observers]
         distances = self._pairwise_distances(vector, all_observers)
 
-        nn_count = min(self.x_neighbors, self._n_observers)
+        nn_count = min(self.n_neighbors, self._n_observers)
         nn_idx = self._nearest_indices(distances, nn_count)
 
         # Lazy decay update for touched observers only.
@@ -321,7 +323,7 @@ class SDOStream(BaseModel):
         )
 
         if lhs < rhs:
-            if self._n_observers < self.k:
+            if self._n_observers < self.max_observers:
                 self._insert_observer(vector, current_time)
             else:
                 replace_idx = self._choose_replacement_index(current_time)
@@ -349,18 +351,18 @@ class SDOStream(BaseModel):
         )
         vector = event.features.values
 
-        if self._n_observers < self.warm_up_observers:
+        if self._n_observers < self.warm_up:
             return 0.0
         if self._observers is None:
             return 0.0
 
         active_idx = self._active_indices(current_time)
-        if active_idx.size < self.x_neighbors:
+        if active_idx.size < self.n_neighbors:
             return 0.0
 
         active_observers = self._observers[active_idx]
         distances = self._pairwise_distances(vector, active_observers)
-        nn_dist_idx = self._nearest_indices(distances, self.x_neighbors)
+        nn_dist_idx = self._nearest_indices(distances, self.n_neighbors)
         nearest = distances[nn_dist_idx]
 
         score = float(np.median(nearest))
@@ -369,8 +371,8 @@ class SDOStream(BaseModel):
     def __repr__(self) -> str:
         return (
             "SDOStream("
-            f"k={self.k}, T={self.T}, qv={self.qv}, x_neighbors={self.x_neighbors}, "
+            f"max_observers={self.max_observers}, time_scale={self.time_scale}, inactive_quantile={self.inactive_quantile}, n_neighbors={self.n_neighbors}, "
             f"distance='{self.distance}', minkowski_p={self.minkowski_p}, "
-            f"time_key={self.time_key!r}, warm_up_observers={self.warm_up_observers}, "
+            f"time_key={self.time_key!r}, warm_up={self.warm_up}, "
             f"seed={self.seed}, n_observers={self._n_observers})"
         )

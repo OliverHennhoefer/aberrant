@@ -35,7 +35,7 @@ from ._specs import (
     TransformerSpec,
 )
 
-CONFIG_FORMAT_VERSION = 1
+CONFIG_FORMAT_VERSION = 2
 
 
 def _freeze_value(value: object) -> object:

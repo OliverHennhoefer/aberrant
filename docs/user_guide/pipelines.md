@@ -73,7 +73,7 @@ pipeline = (
     StandardScaler()
     | RandomProjection(n_components=2, seed=17)
     | OnlineIsolationForest(
-        num_trees=10,
+        n_trees=10,
         window_size=32,
         seed=17,
     )
@@ -103,7 +103,7 @@ from aberrant.transform import RandomProjection
 
 transformer = StandardScaler() | RandomProjection(
     n_components=2,
-    keys=["x", "y", "z"],
+    features=["x", "y", "z"],
     seed=23,
 )
 

@@ -10,7 +10,7 @@ def main() -> None:
         [
             GraphNode("electrical", Select(features=["voltage", "current"])),
             GraphNode("scaled", StandardScaler(), "electrical"),
-            GraphNode("projected", IncrementalPCA(n_components=1, n0=5), "scaled"),
+            GraphNode("projected", IncrementalPCA(n_components=1, warm_up=5), "scaled"),
             GraphNode("temperature", Select(features=["temperature"])),
             MergeNode("features", ("projected", "temperature")),
         ],

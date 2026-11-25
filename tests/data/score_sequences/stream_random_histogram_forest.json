@@ -4,7 +4,7 @@
   {
    "name": "small_forest",
    "params": {
-    "n_estimators": 6,
+    "n_trees": 6,
     "max_depth": 5,
     "window_size": 32,
     "seed": 61
@@ -270,7 +270,7 @@
   {
    "name": "deep_single_feature",
    "params": {
-    "n_estimators": 3,
+    "n_trees": 3,
     "max_depth": 8,
     "window_size": 20,
     "seed": 63
@@ -436,7 +436,7 @@
   {
    "name": "unit_clusters",
    "params": {
-    "n_estimators": 4,
+    "n_trees": 4,
     "max_depth": 4,
     "window_size": 50,
     "seed": 65
@@ -753,7 +753,7 @@
   {
    "name": "overflowing_moments",
    "params": {
-    "n_estimators": 4,
+    "n_trees": 4,
     "max_depth": 5,
     "window_size": 24,
     "seed": 67

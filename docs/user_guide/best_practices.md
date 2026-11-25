@@ -9,7 +9,7 @@ substitute for detector-specific calibration or an application threat model.
 - For schema-owning numeric models, keep the feature-key **set** fixed after the
   first successful `learn_one`. Dictionary insertion order can vary because the
   shared schema canonicalizes names.
-- For `IncrementalPCA` and `RandomProjection`, pass `keys=` when order must be
+- For `IncrementalPCA` and `RandomProjection`, pass `features=` when order must be
   declared before learning; otherwise the first learned dictionary's order is
   retained.
 - Do not encode missingness as an undocumented numeric sentinel. Impute or
@@ -138,16 +138,16 @@ they describe retained observations and arrays, excluding exact lifetime counter
 | `ASDIsolationForest`, `HalfSpaceTrees`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` | Configured windows, trees, samples, or sketches. Large `OnlineIsolationForest.learn` batches are processed in bounded chunks, and retained rows own their storage. `XStream(max_feature_cache_size=None)` permits an unlimited feature-name cache; keep a finite cache budget for schema churn. |
 | `MondrianIsolationForest` | Default lifetime trees can grow indefinitely. Set `window_size=W` for periodic replacement from the latest W events. Between replacements each tree represents at most `2W - 1` events; replacement has a bounded latency spike. This is periodic rebuilding, not exact per-event sliding-window deletion. |
 | `KNN`, `LocalOutlierFactor`, `SDOStream`, `CellNeighborhoodDetector` | Configured point windows, observer budgets, cells, and bounded indexes. A custom KNN engine owns its own retention policy. |
-| `MStream`, `StreamingLODA`, `StreamingRSHash` | Fixed sketches, projections, histograms, and feature statistics. Novel values do not create a persistent key per value. |
+| `MStream`, `LODA`, `RSHash` | Fixed sketches, projections, histograms, and feature statistics. Novel values do not create a persistent key per value. |
 | `MIDAS`, `ISCONNA`, `AnoEdgeL`, `SignedGraphSketchDetector` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
-| `IncrementalOneClassSVMAdaptiveKernel` | Fixed support-vector and feature-map budgets. |
-| `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `XLagDAMP` | Configured rolling series and lag arrays. DAMP rejects constant subsequences. |
+| `AdaptiveOneClassSVM` | Fixed support-vector and feature-map budgets. |
+| `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `DAMP` | Configured rolling series and lag arrays. DAMP rejects constant subsequences. |
 | All ten univariate moving statistics, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
 | `ThresholdModel`, `NullModel`, `RandomModel` | Fixed rule configuration or generator state. |
 | `OnlineAutoencoderEnsemble` | Fixed feature-map statistics and network weights; frozen and adaptive phases retain no observation history. |
 | `Autoencoder`, bundled feedforward/LSTM architectures | Fixed tensor buffers, network parameters, gradients, and ordinary optimizer state. Supplied architectures, losses, and optimizers can have their own unbounded state or numeric failures. |
 | `MinMaxScaler`, `StandardScaler`, `RollingRobustScaler` | State grows with **distinct feature names**. Place `FeatureSchemaGuard` first to enforce a finite schema. Robust windows are bounded per feature, not across an unlimited feature vocabulary. |
-| `FeatureSchemaGuard`, `RandomProjection`, `IncrementalPCA` | Fixed schema/projection arrays. PCA retains only its first `n0` events during initialization, then releases them. |
+| `FeatureSchemaGuard`, `RandomProjection`, `IncrementalPCA` | Fixed schema/projection arrays. PCA retains only its first `warm_up` events during initialization, then releases them. |
 | `ADWIN`, `KSWIN`, `PageHinkley` | Default ADWIN uses O(log N) buckets on stationary streams; `max_window_size` bounds its represented history by discarding oldest whole buckets. KSWIN has a fixed window; Page-Hinkley uses scalar statistics. |
 | `Pipeline`, `PrequentialEvaluator`, `BatchStreamer` | Pipeline retains components; evaluation retains at most `metric_window_size` labeled scores; batching retains at most `batch_size` events. Evaluation with `metric_window_size=None` explicitly retains O(N) scores when metrics are enabled. |
 | NPZ loading, dataset cache, download and validation | NPZ iteration materializes the complete feature and label arrays. It is a finite benchmark source, not an out-of-core or infinite source. Downloads and hashing use bounded byte chunks; cached artifacts occupy disk. |
@@ -164,7 +164,7 @@ Numeric limits remain observable even with bounded data retention:
 - Exact Python counters occupy O(log N) bits; cumulative floating-point counts
   eventually lose unit precision. ISCONNA's fixed-width pattern counters saturate
   at the signed 64-bit maximum rather than wrapping negative.
-- `StreamingRSHash` normalizes faded occupancy by a lifetime sample count.
+- `RSHash` normalizes faded occupancy by a lifetime sample count.
   Its absolute scores can approach 1 on a long stationary stream with positive
   decay; calibrate against recent scores rather than assume a stationary scale.
 - Shared integer clocks and `MIDAS`/`ISCONNA`/`AnoEdgeL` edge identifiers remain

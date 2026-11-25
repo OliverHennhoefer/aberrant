@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from aberrant.model.sketch import StreamingRSHash as RSHash
+from aberrant.model.sketch import RSHash
 from tests import score_sequences
 
 _MODULUS = 2_147_483_647
@@ -20,9 +20,9 @@ def _reference_buckets(model: RSHash, normalized: np.ndarray) -> np.ndarray:
     sub_values = normalized[model._subspace_indices]
     shifted = (sub_values + model._subspace_shifts) / model.bin_width
     quantized = np.floor(shifted).astype(np.int64)
-    buckets = np.zeros((model.components_num, model.hash_num), dtype=np.intp)
-    for component in range(model.components_num):
-        for table in range(model.hash_num):
+    buckets = np.zeros((model.n_members, model.n_hashes), dtype=np.intp)
+    for component in range(model.n_members):
+        for table in range(model.n_hashes):
             acc = int(model._hash_b[component, table])
             for coefficient, value in zip(
                 model._hash_a[component, table].tolist(),
@@ -30,7 +30,7 @@ def _reference_buckets(model: RSHash, normalized: np.ndarray) -> np.ndarray:
                 strict=True,
             ):
                 acc = (acc + coefficient * (value % _MODULUS)) % _MODULUS
-            buckets[component, table] = acc % model.bins
+            buckets[component, table] = acc % model.sketch_width
     return buckets
 
 
@@ -38,10 +38,10 @@ def _reference_score(model: RSHash, buckets: np.ndarray, query_scale: float) -> 
     """Score with one minimum and one clip per component."""
     assert model._counts is not None
     normalizer = math.log(1.0 + max(model._mass * query_scale, 1.0))
-    component_scores = np.empty(model.components_num, dtype=np.float64)
-    for component in range(model.components_num):
+    component_scores = np.empty(model.n_members, dtype=np.float64)
+    for component in range(model.n_members):
         occupancy_min = float("inf")
-        for table in range(model.hash_num):
+        for table in range(model.n_hashes):
             bucket = int(buckets[component, table])
             occupancy = model._counts[component, table, bucket] * query_scale
             occupancy_min = min(occupancy_min, float(occupancy))
@@ -55,13 +55,13 @@ class TestRSHash(unittest.TestCase):
 
     def create_model(self, **overrides: object) -> RSHash:
         defaults: dict[str, object] = {
-            "components_num": 12,
-            "hash_num": 4,
-            "bins": 128,
+            "n_members": 12,
+            "n_hashes": 4,
+            "sketch_width": 128,
             "subspace_size": 2,
             "bin_width": 1.0,
             "decay": 0.01,
-            "warm_up_samples": 16,
+            "warm_up": 16,
             "time_key": "t",
             "seed": 42,
         }
@@ -70,21 +70,21 @@ class TestRSHash(unittest.TestCase):
 
     def test_initialization_defaults(self) -> None:
         model = RSHash()
-        self.assertEqual(model.components_num, 24)
-        self.assertEqual(model.hash_num, 4)
-        self.assertEqual(model.bins, 256)
+        self.assertEqual(model.n_members, 24)
+        self.assertEqual(model.n_hashes, 4)
+        self.assertEqual(model.sketch_width, 256)
         self.assertEqual(model.subspace_size, None)
         self.assertEqual(model.bin_width, 1.0)
         self.assertEqual(model.decay, 0.01)
-        self.assertEqual(model.warm_up_samples, 64)
+        self.assertEqual(model.warm_up, 64)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
-            RSHash(components_num=0)
+            RSHash(n_members=0)
         with self.assertRaises(ValueError):
-            RSHash(hash_num=0)
+            RSHash(n_hashes=0)
         with self.assertRaises(ValueError):
-            RSHash(bins=0)
+            RSHash(sketch_width=0)
         with self.assertRaises(ValueError):
             RSHash(subspace_size=0)
         with self.assertRaises(ValueError):
@@ -92,7 +92,7 @@ class TestRSHash(unittest.TestCase):
         with self.assertRaises(ValueError):
             RSHash(decay=-0.1)
         with self.assertRaises(ValueError):
-            RSHash(warm_up_samples=0)
+            RSHash(warm_up=0)
         with self.assertRaises(ValueError):
             RSHash(time_key="")
 
@@ -111,7 +111,7 @@ class TestRSHash(unittest.TestCase):
             model.score_one({"t": float("inf"), "x": 1.0})
 
     def test_score_is_zero_before_warmup(self) -> None:
-        model = self.create_model(warm_up_samples=32)
+        model = self.create_model(warm_up=32)
         for i in range(10):
             model.learn_one({"t": float(i), "a": float(i), "b": float(i + 1)})
 
@@ -136,7 +136,7 @@ class TestRSHash(unittest.TestCase):
             model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
 
     def test_large_time_gap_forgets_counts_without_poisoning_state(self) -> None:
-        model = self.create_model(warm_up_samples=1)
+        model = self.create_model(warm_up=1)
         model.learn_one({"t": 0.0, "a": 1.0, "b": 2.0})
         counts_before = model._counts.copy()
         query = {"t": 100_000.0, "a": 1.0, "b": 2.0}
@@ -149,7 +149,7 @@ class TestRSHash(unittest.TestCase):
         model.learn_one(query)
         np.testing.assert_array_equal(
             model._counts.sum(axis=2),
-            np.ones((model.components_num, model.hash_num)),
+            np.ones((model.n_members, model.n_hashes)),
         )
         self.assertEqual(model._scale, 1.0)
         self.assertEqual(model._boundary.clock.max_time, query["t"])
@@ -160,7 +160,7 @@ class TestRSHash(unittest.TestCase):
         # With fading, a bucket holds at most about 1 / (1 - exp(-decay))
         # samples. The normalizer must settle with it, or the score of even
         # the most typical point drifts towards 1 as the stream grows.
-        model = self.create_model(decay=0.01, warm_up_samples=1)
+        model = self.create_model(decay=0.01, warm_up=1)
         point = {"a": 0.5, "b": -0.5}
         for t in range(20_001):
             if t in (1_000, 20_000):
@@ -192,7 +192,7 @@ class TestRSHash(unittest.TestCase):
         self.assertEqual(model._scale, control._scale)
 
     def test_internal_clock_fallback_without_time_key(self) -> None:
-        model = self.create_model(time_key=None, warm_up_samples=4)
+        model = self.create_model(time_key=None, warm_up=4)
 
         first_point = {"a": 1.0, "b": 2.0}
         second_point = {"a": 1.1, "b": 2.1}
@@ -237,11 +237,11 @@ class TestRSHash(unittest.TestCase):
 
     def test_outlier_scores_higher_than_normal(self) -> None:
         model = self.create_model(
-            components_num=20,
-            hash_num=4,
-            bins=256,
+            n_members=20,
+            n_hashes=4,
+            sketch_width=256,
             subspace_size=2,
-            warm_up_samples=32,
+            warm_up=32,
             decay=0.005,
             seed=11,
         )
@@ -263,9 +263,9 @@ class TestRSHash(unittest.TestCase):
 
     def test_state_shapes_are_bounded(self) -> None:
         model = self.create_model(
-            components_num=8,
-            hash_num=3,
-            bins=64,
+            n_members=8,
+            n_hashes=3,
+            sketch_width=64,
             subspace_size=2,
         )
         model.learn_one({"t": 0.0, "a": 1.0, "b": 2.0, "c": 3.0})
@@ -299,11 +299,11 @@ class TestRSHash(unittest.TestCase):
         self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(components_num=18, hash_num=5)
+        model = self.create_model(n_members=18, n_hashes=5)
         output = repr(model)
-        self.assertIn("StreamingRSHash", output)
-        self.assertIn("components_num=18", output)
-        self.assertIn("hash_num=5", output)
+        self.assertIn("RSHash", output)
+        self.assertIn("n_members=18", output)
+        self.assertIn("n_hashes=5", output)
 
 
 class TestRSHashExactness(unittest.TestCase):
@@ -311,13 +311,13 @@ class TestRSHashExactness(unittest.TestCase):
 
     CONFIGS: tuple[dict[str, object], ...] = (
         {"seed": 1},
-        {"components_num": 5, "hash_num": 1, "bins": 1, "subspace_size": 1},
-        {"components_num": 9, "hash_num": 6, "bins": 1_000, "subspace_size": 7},
-        {"components_num": 30, "hash_num": 3, "bins": 17, "bin_width": 0.05},
+        {"n_members": 5, "n_hashes": 1, "sketch_width": 1, "subspace_size": 1},
+        {"n_members": 9, "n_hashes": 6, "sketch_width": 1_000, "subspace_size": 7},
+        {"n_members": 30, "n_hashes": 3, "sketch_width": 17, "bin_width": 0.05},
     )
 
     def _learned(self, config: dict[str, object], n_features: int) -> RSHash:
-        model = RSHash(**{"warm_up_samples": 1, "seed": 2, **config})
+        model = RSHash(**{"warm_up": 1, "seed": 2, **config})
         events = score_sequences.make_stream(
             seed=3, n_events=200, n_features=n_features
         )
@@ -326,7 +326,7 @@ class TestRSHashExactness(unittest.TestCase):
         return model
 
     def test_score_sequences_match_recorded_reference(self) -> None:
-        for case in score_sequences.load("streaming_rs_hash"):
+        for case in score_sequences.load("rshash"):
             with self.subTest(case=case["name"]):
                 model = RSHash(**case["params"])
                 scores = score_sequences.replay(model, case)
@@ -365,7 +365,9 @@ class TestRSHashExactness(unittest.TestCase):
                 for query_scale in (0.0, 1e-300, 0.37, model._scale, 1.0):
                     for _ in range(5):
                         buckets = rng.integers(
-                            0, model.bins, size=(model.components_num, model.hash_num)
+                            0,
+                            model.sketch_width,
+                            size=(model.n_members, model.n_hashes),
                         )
                         self.assertEqual(
                             model._score_buckets(buckets, query_scale),
@@ -374,8 +376,8 @@ class TestRSHashExactness(unittest.TestCase):
 
     def test_learning_a_scored_point_reuses_its_buckets(self) -> None:
         events = score_sequences.make_stream(seed=6, n_events=60, n_features=4)
-        model = RSHash(warm_up_samples=4, seed=7)
-        reference = RSHash(warm_up_samples=4, seed=7)
+        model = RSHash(warm_up=4, seed=7)
+        reference = RSHash(warm_up=4, seed=7)
         for event in events[:20]:
             model.learn_one(event)
             reference.learn_one(event)
@@ -405,7 +407,7 @@ class TestRSHashExactness(unittest.TestCase):
         self.assertEqual(model.score_one(events[43]), reference.score_one(events[43]))
 
         model.reset()
-        fresh = RSHash(warm_up_samples=4, seed=7)
+        fresh = RSHash(warm_up=4, seed=7)
         for event in events[43:]:
             model.learn_one(event)
             fresh.learn_one(event)

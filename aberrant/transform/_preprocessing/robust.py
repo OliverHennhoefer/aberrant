@@ -21,7 +21,7 @@ class RollingRobustScaler(BaseTransformer):
     from a constant reference instead of mapping every candidate to zero.
 
     ``transform_one`` is read-only and uses provisional statistics even before
-    ``min_samples`` observations. Read ``is_ready`` to exclude this warm-up
+    ``warm_up`` observations. Read ``is_ready`` to exclude this warm-up
     from evaluation. Freeze a ready calibration before fitting a downstream
     model when its stored references must share one coordinate system.
     Adaptive updates do not re-express downstream points or split boundaries.
@@ -33,7 +33,7 @@ class RollingRobustScaler(BaseTransformer):
 
     Args:
         window_size: Maximum observations retained per feature.
-        min_samples: Minimum retained observations per learned feature for
+        warm_up: Minimum retained observations per learned feature for
             readiness; this does not disable provisional transformation.
         fallback_scale: Positive finite divisor used only when IQR is zero.
     """
@@ -42,19 +42,19 @@ class RollingRobustScaler(BaseTransformer):
         self,
         *,
         window_size: int = 256,
-        min_samples: int = 1,
+        warm_up: int = 1,
         fallback_scale: float = 1.0,
     ) -> None:
-        for name, value in (("window_size", window_size), ("min_samples", min_samples)):
+        for name, value in (("window_size", window_size), ("warm_up", warm_up)):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        if min_samples > window_size:
-            raise ValueError("min_samples must not exceed window_size")
+        if warm_up > window_size:
+            raise ValueError("warm_up must not exceed window_size")
         scale = coerce_finite_number(fallback_scale, label="fallback_scale")
         if scale <= 0.0:
             raise ValueError("fallback_scale must be positive")
         self.window_size = window_size
-        self.min_samples = min_samples
+        self.warm_up = warm_up
         self.fallback_scale = scale
         self._windows: dict[str, tuple[float, ...]] = {}
         self._statistics: dict[str, tuple[float, float]] = {}
@@ -63,7 +63,7 @@ class RollingRobustScaler(BaseTransformer):
     @property
     def readiness(self) -> Readiness:
         return Readiness(
-            self.is_ready, min(self.sample_counts.values(), default=0), self.min_samples
+            self.is_ready, min(self.sample_counts.values(), default=0), self.warm_up
         )
 
     @property
@@ -73,13 +73,13 @@ class RollingRobustScaler(BaseTransformer):
 
     @property
     def is_ready(self) -> bool:
-        """Whether every learned feature has at least ``min_samples`` values.
+        """Whether every learned feature has at least ``warm_up`` values.
 
         An empty scaler is not ready. Learning a new feature can make an
         adaptive scaler unready again; use a schema guard for fixed inputs.
         """
         return bool(self._windows) and all(
-            len(window) >= self.min_samples for window in self._windows.values()
+            len(window) >= self.warm_up for window in self._windows.values()
         )
 
     @property
@@ -178,5 +178,5 @@ class RollingRobustScaler(BaseTransformer):
     def __repr__(self) -> str:
         return (
             f"RollingRobustScaler(window_size={self.window_size}, "
-            f"min_samples={self.min_samples}, fallback_scale={self.fallback_scale})"
+            f"warm_up={self.warm_up}, fallback_scale={self.fallback_scale})"
         )

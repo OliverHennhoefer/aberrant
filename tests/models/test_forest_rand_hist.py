@@ -50,7 +50,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def create_model(self):
         return StreamRandomHistogramForest(
-            n_estimators=5,  # Small for fast testing
+            n_trees=5,  # Small for fast testing
             max_depth=5,
             window_size=50,
             seed=42,
@@ -62,10 +62,10 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     def test_initialization_valid_parameters(self):
         """Test initialization with valid parameters."""
         model = StreamRandomHistogramForest(
-            n_estimators=10, max_depth=8, window_size=100, seed=123
+            n_trees=10, max_depth=8, window_size=100, seed=123
         )
 
-        self.assertEqual(model.n_estimators, 10)
+        self.assertEqual(model.n_trees, 10)
         self.assertEqual(model.max_depth, 8)
         self.assertFalse(hasattr(model, "max_bins"))
         self.assertEqual(model.window_size, 100)
@@ -73,9 +73,9 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_initialization_invalid_parameters(self):
         """Test initialization with invalid parameters raises errors."""
-        # Invalid n_estimators
+        # Invalid n_trees
         with self.assertRaises((ValueError, AssertionError)):
-            StreamRandomHistogramForest(n_estimators=0)
+            StreamRandomHistogramForest(n_trees=0)
 
         # Invalid max_depth
         with self.assertRaises((ValueError, AssertionError)):
@@ -92,7 +92,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     def test_window_size_behavior(self):
         """Test window size constraint behavior."""
         model = StreamRandomHistogramForest(
-            n_estimators=3,
+            n_trees=3,
             max_depth=4,
             window_size=10,  # Small window
             seed=42,
@@ -115,7 +115,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         for max_depth in [3, 5, 10]:
             with self.subTest(max_depth=max_depth):
                 model = StreamRandomHistogramForest(
-                    n_estimators=3,
+                    n_trees=3,
                     max_depth=max_depth,
                     window_size=50,
                     seed=42,
@@ -163,10 +163,10 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     def test_deterministic_behavior(self):
         """Test deterministic behavior with same seed."""
         model1 = StreamRandomHistogramForest(
-            n_estimators=3, max_depth=5, window_size=20, seed=42
+            n_trees=3, max_depth=5, window_size=20, seed=42
         )
         model2 = StreamRandomHistogramForest(
-            n_estimators=3, max_depth=5, window_size=20, seed=42
+            n_trees=3, max_depth=5, window_size=20, seed=42
         )
 
         # Train both models identically
@@ -189,10 +189,10 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_different_seeds_produce_different_node_random_values(self):
         model1 = StreamRandomHistogramForest(
-            n_estimators=2, max_depth=5, window_size=4, seed=42
+            n_trees=2, max_depth=5, window_size=4, seed=42
         )
         model2 = StreamRandomHistogramForest(
-            n_estimators=2, max_depth=5, window_size=4, seed=43
+            n_trees=2, max_depth=5, window_size=4, seed=43
         )
         points = [
             {"x": 0.0, "y": 4.0},
@@ -210,7 +210,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_large_depth_allocates_random_values_only_for_visited_nodes(self):
         model = StreamRandomHistogramForest(
-            n_estimators=2,
+            n_trees=2,
             max_depth=64,
             window_size=4,
             seed=42,
@@ -225,9 +225,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
         cached_nodes = sum(len(tree._node_random) for tree in model._trees)
         self.assertGreater(cached_nodes, 0)
-        self.assertLessEqual(
-            cached_nodes, model.n_estimators * (2 * model.window_size - 1)
-        )
+        self.assertLessEqual(cached_nodes, model.n_trees * (2 * model.window_size - 1))
         self.assertIsInstance(model.score_one({"x": 1.5, "y": 2.0}), float)
 
     def test_node_random_values_are_independent_of_visit_order(self):
@@ -242,7 +240,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_score_preview_preserves_cache_and_matches_later_learning(self):
         model = StreamRandomHistogramForest(
-            n_estimators=3,
+            n_trees=3,
             max_depth=8,
             window_size=4,
             seed=42,
@@ -277,7 +275,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_score_preview_matches_deepcopy_insert_reference(self):
         model = StreamRandomHistogramForest(
-            n_estimators=4,
+            n_trees=4,
             max_depth=8,
             window_size=8,
             seed=42,
@@ -406,7 +404,7 @@ class TestStreamRandomHistogramForestExactness(unittest.TestCase):
 
     def test_learning_a_scored_point_matches_learning_it_directly(self):
         events = score_sequences.make_stream(seed=7, n_events=260, n_features=3)
-        params = {"n_estimators": 4, "max_depth": 6, "window_size": 40, "seed": 8}
+        params = {"n_trees": 4, "max_depth": 6, "window_size": 40, "seed": 8}
         scored = StreamRandomHistogramForest(**params)
         learned = StreamRandomHistogramForest(**params)
         scored_elsewhere = StreamRandomHistogramForest(**params)
@@ -424,7 +422,7 @@ class TestStreamRandomHistogramForestExactness(unittest.TestCase):
     def test_pickles_leave_out_the_preview(self):
         events = score_sequences.make_stream(seed=9, n_events=80, n_features=2)
         model = StreamRandomHistogramForest(
-            n_estimators=3, max_depth=5, window_size=30, seed=10
+            n_trees=3, max_depth=5, window_size=30, seed=10
         )
         for event in events[:60]:
             model.learn_one(event)

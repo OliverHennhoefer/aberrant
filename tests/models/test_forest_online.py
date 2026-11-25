@@ -26,7 +26,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
     def create_model(self):
         return OnlineIsolationForest(
-            num_trees=3,  # Small for fast testing
+            n_trees=3,  # Small for fast testing
             max_leaf_samples=8,
             tree_type="fixed",
             subsample=1.0,
@@ -43,7 +43,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
     def test_initialization_valid_parameters(self):
         """Test initialization with valid parameters."""
         model = OnlineIsolationForest(
-            num_trees=5,
+            n_trees=5,
             max_leaf_samples=16,
             tree_type="fixed",
             subsample=0.8,
@@ -54,7 +54,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
             seed=42,
         )
 
-        self.assertEqual(model.num_trees, 5)
+        self.assertEqual(model.n_trees, 5)
         self.assertEqual(model.max_leaf_samples, 16)
         self.assertEqual(model.tree_type, "fixed")
         self.assertEqual(model.subsample, 0.8)
@@ -68,13 +68,13 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         np.random.seed(123)
 
         model_1 = OnlineIsolationForest(
-            num_trees=3,
+            n_trees=3,
             max_leaf_samples=4,
             window_size=20,
             seed=7,
         )
         model_2 = OnlineIsolationForest(
-            num_trees=3,
+            n_trees=3,
             max_leaf_samples=4,
             window_size=20,
             seed=7,
@@ -92,9 +92,9 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
     def test_initialization_invalid_parameters(self):
         """Test initialization with invalid parameters raises errors."""
-        # Invalid num_trees
+        # Invalid n_trees
         with self.assertRaises(ValueError):
-            OnlineIsolationForest(num_trees=0)
+            OnlineIsolationForest(n_trees=0)
 
         # Invalid max_leaf_samples
         with self.assertRaises(ValueError):
@@ -141,7 +141,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
     def test_n_jobs_minus_one_uses_all_available_cpus(self):
         with patch("aberrant.model.forest.online.os.cpu_count", return_value=3):
-            model = OnlineIsolationForest(num_trees=2, n_jobs=-1, seed=42)
+            model = OnlineIsolationForest(n_trees=2, n_jobs=-1, seed=42)
 
         self.assertEqual(model.n_jobs, -1)
         self.assertEqual(model._max_workers, 3)
@@ -174,7 +174,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
     def test_window_size_boundary(self):
         """Test window size boundary behavior."""
         model = OnlineIsolationForest(
-            num_trees=2,
+            n_trees=2,
             max_leaf_samples=4,
             tree_type="fixed",
             window_size=10,  # Very small window for testing
@@ -206,7 +206,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
     def test_batch_input_is_not_retained_by_reference(self):
         model = OnlineIsolationForest(
-            num_trees=2,
+            n_trees=2,
             max_leaf_samples=4,
             window_size=10,
             n_jobs=1,
@@ -225,7 +225,7 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         for type_name in ["fixed", "adaptive"]:
             with self.subTest(type=type_name):
                 model = OnlineIsolationForest(
-                    num_trees=2,
+                    n_trees=2,
                     max_leaf_samples=8,
                     tree_type=type_name,
                     window_size=50,
@@ -343,7 +343,7 @@ def test_subsampled_tree_forgets_exactly_the_learned_membership():
 
 
 def test_subsampled_forest_population_stays_within_window():
-    model = OnlineIsolationForest(num_trees=2, window_size=8, subsample=0.5, seed=42)
+    model = OnlineIsolationForest(n_trees=2, window_size=8, subsample=0.5, seed=42)
     for i in range(1000):
         model.learn_one({"x": float(i)})
         for tree in model.trees:
@@ -401,8 +401,8 @@ def _structure(node: _OnlineNode | None) -> object:
 def test_single_rows_update_trees_like_one_row_batches(params):
     events = score_sequences.make_stream(seed=3, n_events=150, n_features=3)
     rows = np.array([list(event.values()) for event in events], dtype=np.float32)
-    by_row = OnlineIsolationForest(num_trees=4, seed=11, **params)
-    by_batch = OnlineIsolationForest(num_trees=4, seed=11, **params)
+    by_row = OnlineIsolationForest(n_trees=4, seed=11, **params)
+    by_batch = OnlineIsolationForest(n_trees=4, seed=11, **params)
 
     for event, row in zip(events, rows, strict=True):
         assert by_row.score_one(event) == by_batch.score_batch(row[np.newaxis])[0]
@@ -477,7 +477,7 @@ def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn(by_row)
 
 @pytest.mark.filterwarnings("ignore:overflow encountered in cast:RuntimeWarning")
 def test_single_rows_reject_float32_overflow():
-    model = OnlineIsolationForest(num_trees=2, window_size=8, seed=1)
+    model = OnlineIsolationForest(n_trees=2, window_size=8, seed=1)
     with pytest.raises(ValueError, match="only finite values"):
         model.learn_one({"a": 1e39, "b": 0.0})
     assert model._n_features is None
@@ -498,11 +498,9 @@ def test_integer_batches_score_like_float_batches(dtype):
     # Extreme values, whose negation wraps in the input dtype.
     data[::9] = info.min
     data[4::9] = info.max
-    typed = OnlineIsolationForest(
-        num_trees=5, max_leaf_samples=2, window_size=40, seed=2
-    )
+    typed = OnlineIsolationForest(n_trees=5, max_leaf_samples=2, window_size=40, seed=2)
     floats = OnlineIsolationForest(
-        num_trees=5, max_leaf_samples=2, window_size=40, seed=2
+        n_trees=5, max_leaf_samples=2, window_size=40, seed=2
     )
     for row in data:
         typed_score = typed.score_batch(row[np.newaxis, :])

@@ -4,7 +4,7 @@
   {
    "name": "small_forest",
    "params": {
-    "n_estimators": 10,
+    "n_trees": 10,
     "subspace_size": 3,
     "seed": 81
    },
@@ -319,9 +319,9 @@
   {
    "name": "windowed",
    "params": {
-    "n_estimators": 8,
+    "n_trees": 8,
     "subspace_size": 2,
-    "lambda_": 2.0,
+    "lifetime": 2.0,
     "window_size": 32,
     "seed": 83
    },
@@ -636,8 +636,8 @@
   {
    "name": "long_lifetime",
    "params": {
-    "n_estimators": 6,
-    "lambda_": 50.0,
+    "n_trees": 6,
+    "lifetime": 50.0,
     "seed": 85
    },
    "stream": {
@@ -901,7 +901,7 @@
   {
    "name": "unit_clusters",
    "params": {
-    "n_estimators": 12,
+    "n_trees": 12,
     "seed": 87
    },
    "stream": {
@@ -1216,8 +1216,8 @@
   {
    "name": "repeated_points",
    "params": {
-    "n_estimators": 8,
-    "lambda_": 4.0,
+    "n_trees": 8,
+    "lifetime": 4.0,
     "seed": 89
    },
    "stream": {

@@ -15,7 +15,7 @@ graph = GraphPipeline(
     [
         GraphNode("selected", Select(features=["voltage", "current"])),
         GraphNode("scaled", StandardScaler(), "selected"),
-        GraphNode("pca", IncrementalPCA(n_components=1, n0=5), "scaled"),
+        GraphNode("pca", IncrementalPCA(n_components=1, warm_up=5), "scaled"),
         GraphNode("raw", Select(features=["temperature"])),
         MergeNode("features", ("pca", "raw")),
     ],

@@ -98,12 +98,12 @@ class TestMondrianTree(unittest.TestCase):
         selected_indices = np.array([0, 2, 4])
         tree = MondrianTree(
             selected_indices=selected_indices,
-            lambda_=1.5,
+            lifetime=1.5,
             rng=np.random.default_rng(42),
         )
 
         np.testing.assert_array_equal(tree.selected_indices, selected_indices)
-        self.assertEqual(tree.lambda_, 1.5)
+        self.assertEqual(tree.lifetime, 1.5)
         self.assertEqual(tree.n_samples, 0)
         self.assertIsNone(tree.root)
 
@@ -111,7 +111,7 @@ class TestMondrianTree(unittest.TestCase):
         """First update should increment root count exactly once."""
         tree = MondrianTree(
             selected_indices=np.array([0, 1]),
-            lambda_=1.0,
+            lifetime=1.0,
             rng=np.random.default_rng(42),
         )
 
@@ -123,7 +123,7 @@ class TestMondrianTree(unittest.TestCase):
         """A far outside point should typically create a parent split."""
         tree = MondrianTree(
             selected_indices=np.array([0, 1]),
-            lambda_=25.0,
+            lifetime=25.0,
             rng=np.random.default_rng(0),
         )
 
@@ -137,13 +137,13 @@ class TestMondrianTree(unittest.TestCase):
         self.assertIsNotNone(tree.root.right_child)
         self.assertIsNotNone(tree.root.split_feature)
         self.assertIsNotNone(tree.root.split_threshold)
-        self.assertLess(tree.root.split_time, tree.lambda_)
+        self.assertLess(tree.root.split_time, tree.lifetime)
 
     def test_score_without_learning(self):
         """Scoring empty tree should return 0."""
         tree = MondrianTree(
             selected_indices=np.array([0, 1]),
-            lambda_=1.0,
+            lifetime=1.0,
             rng=np.random.default_rng(42),
         )
         self.assertEqual(tree.score_one(np.array([1.0, 2.0])), 0.0)
@@ -152,7 +152,7 @@ class TestMondrianTree(unittest.TestCase):
         """Repeated identical points in one leaf should increase path length."""
         tree = MondrianTree(
             selected_indices=np.array([0, 1]),
-            lambda_=0.1,
+            lifetime=0.1,
             rng=np.random.default_rng(123),
         )
         point = np.array([1.0, 1.0])
@@ -174,9 +174,9 @@ class TestMondrianForest(unittest.TestCase):
     def test_initialization_defaults(self):
         """Forest should initialize with expected defaults."""
         forest = MondrianForest()
-        self.assertEqual(forest.n_estimators, 100)
+        self.assertEqual(forest.n_trees, 100)
         self.assertEqual(forest.subspace_size, 256)
-        self.assertEqual(forest.lambda_, 1.0)
+        self.assertEqual(forest.lifetime, 1.0)
         self.assertIsNone(forest.seed)
         self.assertEqual(forest.n_samples, 0)
         self.assertEqual(len(forest.trees), 0)
@@ -185,15 +185,15 @@ class TestMondrianForest(unittest.TestCase):
     def test_initialization_validation(self):
         """Invalid constructor parameters should fail fast."""
         with self.assertRaises(ValueError):
-            MondrianForest(n_estimators=0)
+            MondrianForest(n_trees=0)
         with self.assertRaises(ValueError):
             MondrianForest(subspace_size=0)
         with self.assertRaises(ValueError):
-            MondrianForest(lambda_=0)
+            MondrianForest(lifetime=0)
 
     def test_feature_initialization_and_no_double_learn(self):
         """First sample should initialize features and be learned once per tree."""
-        forest = MondrianForest(n_estimators=5, subspace_size=2, seed=42)
+        forest = MondrianForest(n_trees=5, subspace_size=2, seed=42)
         first_point = {"c": 3.0, "a": 1.0, "b": 2.0}
 
         forest.learn_one(first_point)
@@ -205,13 +205,13 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_subspace_size_adapts_to_feature_count(self):
         """Requested subspace should be clipped by feature dimensionality."""
-        forest = MondrianForest(n_estimators=3, subspace_size=10, seed=42)
+        forest = MondrianForest(n_trees=3, subspace_size=10, seed=42)
         forest.learn_one({"x": 1.0, "y": 2.0})
         self.assertEqual(forest.subspace_size, 2)
 
     def test_input_validation(self):
         """Forest should reject empty, non-numeric, and non-finite input."""
-        forest = MondrianForest(n_estimators=3, subspace_size=2, seed=42)
+        forest = MondrianForest(n_trees=3, subspace_size=2, seed=42)
 
         with self.assertRaises(ValueError):
             forest.learn_one({})
@@ -226,7 +226,7 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_feature_key_consistency(self):
         """Forest should enforce consistent feature keys after initialization."""
-        forest = MondrianForest(n_estimators=3, subspace_size=2, seed=42)
+        forest = MondrianForest(n_trees=3, subspace_size=2, seed=42)
         forest.learn_one({"a": 1.0, "b": 2.0})
 
         with self.assertRaises(ValueError):
@@ -236,12 +236,12 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_score_before_learning(self):
         """Scoring before any learn should return 0."""
-        forest = MondrianForest(n_estimators=5, subspace_size=2)
+        forest = MondrianForest(n_trees=5, subspace_size=2)
         self.assertEqual(forest.score_one({"feature": 1.0}), 0.0)
 
     def test_score_normalization_bounds(self):
         """Scores should stay in [0, 1] once the forest is trained."""
-        forest = MondrianForest(n_estimators=10, subspace_size=3, seed=42)
+        forest = MondrianForest(n_trees=10, subspace_size=3, seed=42)
         training_data = self.data_generator.generate_streaming_data(n=200, n_features=4)
 
         for point in training_data:
@@ -266,8 +266,8 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_reproducibility_with_seed(self):
         """Same seed and data stream should produce equal scores."""
-        forest1 = MondrianForest(n_estimators=6, subspace_size=2, seed=42)
-        forest2 = MondrianForest(n_estimators=6, subspace_size=2, seed=42)
+        forest1 = MondrianForest(n_trees=6, subspace_size=2, seed=42)
+        forest2 = MondrianForest(n_trees=6, subspace_size=2, seed=42)
         test_data = self.data_generator.generate_streaming_data(n=50, n_features=3)
 
         scores1 = []
@@ -283,8 +283,8 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_different_seeds_produce_different_scores(self):
         """Different seeds should lead to different score trajectories."""
-        forest1 = MondrianForest(n_estimators=10, subspace_size=3, seed=42)
-        forest2 = MondrianForest(n_estimators=10, subspace_size=3, seed=123)
+        forest1 = MondrianForest(n_trees=10, subspace_size=3, seed=42)
+        forest2 = MondrianForest(n_trees=10, subspace_size=3, seed=123)
         test_data = self.data_generator.generate_streaming_data(n=50, n_features=4)
 
         scores1 = []
@@ -304,8 +304,8 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_n_estimators_effect(self):
         """Different ensemble sizes should still return valid scores."""
-        forest_few = MondrianForest(n_estimators=5, subspace_size=2, seed=42)
-        forest_many = MondrianForest(n_estimators=40, subspace_size=2, seed=42)
+        forest_few = MondrianForest(n_trees=5, subspace_size=2, seed=42)
+        forest_many = MondrianForest(n_trees=40, subspace_size=2, seed=42)
         training_data = self.data_generator.generate_streaming_data(n=100, n_features=3)
 
         for point in training_data:
@@ -325,7 +325,7 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_c_factor_computation(self):
         """c-factor should match isolation-forest semantics."""
-        forest = MondrianForest(n_estimators=1, subspace_size=1)
+        forest = MondrianForest(n_trees=1, subspace_size=1)
 
         forest.n_samples = 1
         self.assertEqual(forest._compute_c_factor(), 0.0)
@@ -340,12 +340,12 @@ class TestMondrianForest(unittest.TestCase):
 
     def test_repr_string(self):
         """repr should include key hyperparameters."""
-        forest = MondrianForest(n_estimators=25, subspace_size=8, lambda_=2.5, seed=999)
+        forest = MondrianForest(n_trees=25, subspace_size=8, lifetime=2.5, seed=999)
         repr_string = repr(forest)
         self.assertIn("MondrianIsolationForest", repr_string)
-        self.assertIn("n_estimators=25", repr_string)
+        self.assertIn("n_trees=25", repr_string)
         self.assertIn("subspace_size=8", repr_string)
-        self.assertIn("lambda_=2.5", repr_string)
+        self.assertIn("lifetime=2.5", repr_string)
         self.assertIn("seed=999", repr_string)
 
 
@@ -405,7 +405,7 @@ class TestMondrianForestExactness(unittest.TestCase):
         for window_size in (None, 24):
             with self.subTest(window_size=window_size):
                 events = score_sequences.make_stream(seed=7, n_events=260, n_features=4)
-                params = {"n_estimators": 6, "subspace_size": 3, "seed": 8}
+                params = {"n_trees": 6, "subspace_size": 3, "seed": 8}
                 scored = MondrianForest(**params, window_size=window_size)
                 learned = MondrianForest(**params, window_size=window_size)
                 scored_elsewhere = MondrianForest(**params, window_size=window_size)
@@ -424,7 +424,7 @@ class TestMondrianForestExactness(unittest.TestCase):
 
     def test_forest_matches_lone_tree_insertions(self):
         events = score_sequences.make_stream(seed=9, n_events=200, n_features=3)
-        forest = MondrianForest(n_estimators=5, subspace_size=2, lambda_=4.0, seed=10)
+        forest = MondrianForest(n_trees=5, subspace_size=2, lifetime=4.0, seed=10)
         forest.learn_one(events[0])
         trees = copy.deepcopy(forest.trees)
         for event in events[1:]:
@@ -443,7 +443,7 @@ class TestMondrianForestExactness(unittest.TestCase):
 
     def test_blocks_nest_and_bound_their_points(self):
         events = score_sequences.make_stream(seed=11, n_events=300, n_features=3)
-        model = MondrianForest(n_estimators=3, subspace_size=3, lambda_=5.0, seed=12)
+        model = MondrianForest(n_trees=3, subspace_size=3, lifetime=5.0, seed=12)
         for event in events:
             model.score_one(event)
             model.learn_one(event)
@@ -468,7 +468,7 @@ class TestMondrianForestExactness(unittest.TestCase):
 
     def test_failed_rebuild_keeps_the_trees_after_the_failing_one(self):
         events = score_sequences.make_stream(seed=13, n_events=8, n_features=2)
-        model = MondrianForest(n_estimators=4, subspace_size=2, window_size=4, seed=14)
+        model = MondrianForest(n_trees=4, subspace_size=2, window_size=4, seed=14)
         for event in events[:7]:
             model.learn_one(event)
         expected = copy.deepcopy(model)
@@ -510,7 +510,7 @@ class TestMondrianForestExactness(unittest.TestCase):
 
     def test_rebuild_where_every_tree_fails_raises_the_first_error(self):
         events = score_sequences.make_stream(seed=17, n_events=8, n_features=2)
-        model = MondrianForest(n_estimators=3, subspace_size=2, window_size=4, seed=18)
+        model = MondrianForest(n_trees=3, subspace_size=2, window_size=4, seed=18)
         for event in events[:7]:
             model.learn_one(event)
         expected = copy.deepcopy(model)
@@ -551,7 +551,7 @@ class TestMondrianForestExactness(unittest.TestCase):
 
     def test_pickles_leave_out_the_plan(self):
         events = score_sequences.make_stream(seed=15, n_events=60, n_features=3)
-        model = MondrianForest(n_estimators=3, subspace_size=2, seed=16)
+        model = MondrianForest(n_trees=3, subspace_size=2, seed=16)
         for event in events:
             model.learn_one(event)
         before = pickle.dumps(model)

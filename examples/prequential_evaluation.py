@@ -25,7 +25,7 @@ def main() -> None:
         config = DetectorConfig(
             model=ComponentConfig(
                 "online_isolation_forest",
-                {"num_trees": 10, "window_size": 128, "seed": seed},
+                {"n_trees": 10, "window_size": 128, "seed": seed},
             ),
             transformers=(ComponentConfig("standard_scaler"),),
         )

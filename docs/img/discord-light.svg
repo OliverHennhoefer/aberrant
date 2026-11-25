@@ -5031,7 +5031,7 @@ z
     </g>
    </g>
    <g id="text_6">
-    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #3d3c39" x="10.38125" y="167.812837" transform="rotate(-0 10.38125 167.812837)">XLagDAMP score</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #3d3c39" x="10.38125" y="167.812837" transform="rotate(-0 10.38125 167.812837)">DAMP score</text>
    </g>
    <g id="text_7">
     <text style="font-size: 9px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end; fill: #3d3c39" x="480.21493" y="168.053072" transform="rotate(-0 480.21493 168.053072)">one pass, no training split  ·  peak at sample 16,189, the anomalous beat</text>

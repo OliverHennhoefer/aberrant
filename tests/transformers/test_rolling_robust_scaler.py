@@ -94,7 +94,7 @@ def test_constant_extreme_references_center_exactly(value: float) -> None:
 
 
 def test_sparse_windows_and_readiness_are_per_feature() -> None:
-    scaler = RollingRobustScaler(window_size=3, min_samples=2)
+    scaler = RollingRobustScaler(window_size=3, warm_up=2)
     assert not scaler.is_ready
     scaler.learn_one({"x": 0.0})
     assert not scaler.is_ready
@@ -183,7 +183,7 @@ def test_unrepresentable_output_is_rejected_without_learning() -> None:
 
 
 def test_freeze_requires_readiness_and_preserves_calibration() -> None:
-    scaler = RollingRobustScaler(window_size=3, min_samples=2)
+    scaler = RollingRobustScaler(window_size=3, warm_up=2)
     with pytest.raises(ValueError, match="ready"):
         scaler.freeze()
     scaler.learn_one({"x": 0.0})
@@ -208,7 +208,7 @@ def test_freeze_requires_readiness_and_preserves_calibration() -> None:
 
 
 def test_reset_clears_readiness_and_unfreezes_without_changing_parameters() -> None:
-    scaler = RollingRobustScaler(window_size=5, min_samples=2, fallback_scale=3.0)
+    scaler = RollingRobustScaler(window_size=5, warm_up=2, fallback_scale=3.0)
     for value in [0, 1]:
         scaler.learn_one({"x": value})
     scaler.freeze()
@@ -217,11 +217,11 @@ def test_reset_clears_readiness_and_unfreezes_without_changing_parameters() -> N
     assert scaler.sample_counts == {}
     assert not scaler.is_ready
     assert not scaler.is_frozen
-    assert (scaler.window_size, scaler.min_samples, scaler.fallback_scale) == (5, 2, 3)
+    assert (scaler.window_size, scaler.warm_up, scaler.fallback_scale) == (5, 2, 3)
 
 
 def test_pipeline_scores_prior_state_and_learns_post_update_state() -> None:
-    scaler = RollingRobustScaler(window_size=3, min_samples=2)
+    scaler = RollingRobustScaler(window_size=3, warm_up=2)
     model = _RecordingModel()
     pipeline = scaler | model
     for value in [0, 10]:
@@ -253,8 +253,8 @@ def test_pipeline_rollback_restores_evicted_values_and_removes_new_features() ->
 
 
 def test_frozen_and_adaptive_calibration_diverge_after_a_level_shift() -> None:
-    adaptive = RollingRobustScaler(window_size=5, min_samples=5)
-    frozen = RollingRobustScaler(window_size=5, min_samples=5)
+    adaptive = RollingRobustScaler(window_size=5, warm_up=5)
+    frozen = RollingRobustScaler(window_size=5, warm_up=5)
     for value in [0, 2, 4, 6, 8]:
         adaptive.learn_one({"x": value})
         frozen.learn_one({"x": value})
@@ -268,8 +268,8 @@ def test_frozen_and_adaptive_calibration_diverge_after_a_level_shift() -> None:
 
 
 def test_adaptation_does_not_reexpress_retained_downstream_references() -> None:
-    adaptive = RollingRobustScaler(window_size=5, min_samples=5)
-    frozen = RollingRobustScaler(window_size=5, min_samples=5)
+    adaptive = RollingRobustScaler(window_size=5, warm_up=5)
+    frozen = RollingRobustScaler(window_size=5, warm_up=5)
     for value in [0, 2, 4, 6, 8]:
         adaptive.learn_one({"x": value})
         frozen.learn_one({"x": value})
@@ -298,7 +298,7 @@ def test_export_catalog_and_declarative_pipeline() -> None:
     assert spec.parameter_schema()["properties"]["window_size"]["default"] == 256
     config = DetectorConfig.from_mapping(
         {
-            "version": 1,
+            "version": 2,
             "transformers": [
                 {"id": "rolling_robust_scaler", "params": {"window_size": 3}}
             ],
@@ -317,9 +317,9 @@ def test_export_catalog_and_declarative_pipeline() -> None:
         {"window_size": 0},
         {"window_size": 1.5},
         {"window_size": True},
-        {"min_samples": 0},
-        {"min_samples": False},
-        {"window_size": 2, "min_samples": 3},
+        {"warm_up": 0},
+        {"warm_up": False},
+        {"window_size": 2, "warm_up": 3},
         {"fallback_scale": 0.0},
         {"fallback_scale": -1.0},
         {"fallback_scale": float("nan")},

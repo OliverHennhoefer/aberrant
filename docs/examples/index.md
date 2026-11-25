@@ -47,8 +47,8 @@ These notebooks install aberrant themselves and run in Google Colab without a lo
 | Cell neighborhood | [`cell_neighborhood.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/cell_neighborhood.py) | Registered SHUTTLE dataset |
 | Observer distance | [`sdostream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/sdostream.py) | Registered SHUTTLE dataset |
 | Multi-aspect sketch | [`mstream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/mstream.py) | Registered SHUTTLE dataset |
-| Projection histogram | [`streaming_loda.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streaming_loda.py) | Registered SHUTTLE dataset |
-| Randomized hashing | [`streaming_rshash.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streaming_rshash.py) | Registered SHUTTLE dataset |
+| Projection histogram | [`loda.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/loda.py) | Registered SHUTTLE dataset |
+| Randomized hashing | [`rshash.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rshash.py) | Registered SHUTTLE dataset |
 
 ## Graph and time-series streams
 
@@ -60,7 +60,7 @@ These notebooks install aberrant themselves and run in Google Colab without a lo
 | Signed graph sketch | [`signed_graph_sketch.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/signed_graph_sketch.py) | Seeded synthetic multi-graph stream |
 | Rolling matrix profile | [`rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/rolling_matrix_profile.py) | Seeded periodic stream with a discord, continuous scores, and nearest-match indices; no `eval` extra needed |
 | Multivariate rolling matrix profile | [`multivariate_rolling_matrix_profile.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py) | Seeded two-channel phase change, continuous joint scores, common-match indices, and channel distances; no `eval` extra needed |
-| X-Lag DAMP | [`xlag_damp.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/xlag_damp.py) | Seeded synthetic periodic series with an injected discord; no `eval` extra needed |
+| DAMP | [`damp.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/damp.py) | Seeded synthetic periodic series with an injected discord; no `eval` extra needed |
 | Seasonal forecast residual | [`seasonal_residual.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/seasonal_residual.py) | `ResidualDetector(HoltWinters(...))` on a seeded seasonal stream; the highest-scoring event is selected independently, with its prior forecast and signed residual; no `eval` extra needed |
 
 The AnoEdge example is an API demonstration, not a claim that tabular SHUTTLE

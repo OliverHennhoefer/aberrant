@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.timeseries import XLagDAMP
+from aberrant.model.timeseries import DAMP
 from tests.integration._quality import assert_detects
 
 # Measured on main at ROC-AUC 1.000 and PR-AUC 1.000; the floors leave a margin.
@@ -30,7 +30,7 @@ class TestXLagDAMPIntegration(unittest.TestCase):
         ) + np.linspace(-1.0, 1.0, subsequence_length)
         series[discord_start : discord_start + subsequence_length] = discord
 
-        model = XLagDAMP(
+        model = DAMP(
             subsequence_length=subsequence_length,
             x_lag=16 * subsequence_length,
             start_index=4 * subsequence_length,

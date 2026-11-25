@@ -15,8 +15,8 @@ import pytest
 from aberrant.base.model import BaseModel
 from aberrant.model.forest import StreamRandomHistogramForest, XStream
 from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
-from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
-from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.sketch import LODA, MStream, RSHash
+from aberrant.model.svm import AdaptiveOneClassSVM
 
 
 def _retained_bytes(value: object, seen: set[int] | None = None) -> int:
@@ -72,32 +72,32 @@ def test_retained_bytes_counts_shared_numpy_storage_only_once():
 _FACTORIES: list[tuple[str, Callable[[], BaseModel], str]] = [
     (
         "midas-relational",
-        lambda: MIDAS(count_min_cols=32, time_key=None, seed=5),
+        lambda: MIDAS(sketch_width=32, time_key=None, seed=5),
         "edge",
     ),
     (
         "midas-edge",
-        lambda: MIDAS(count_min_cols=32, time_key=None, use_relational=False, seed=5),
+        lambda: MIDAS(sketch_width=32, time_key=None, use_relational=False, seed=5),
         "edge",
     ),
     (
         "isconna-endpoints",
-        lambda: ISCONNA(count_min_cols=32, time_key=None, seed=5),
+        lambda: ISCONNA(sketch_width=32, time_key=None, seed=5),
         "edge",
     ),
     (
         "isconna-edge",
         lambda: ISCONNA(
-            count_min_cols=32, time_key=None, include_endpoints=False, seed=5
+            sketch_width=32, time_key=None, include_endpoints=False, seed=5
         ),
         "edge",
     ),
     (
         "anoedge",
         lambda: AnoEdgeL(
-            count_min_rows=8,
-            count_min_cols=8,
-            num_hashes=2,
+            sketch_rows=8,
+            sketch_cols=8,
+            n_hashes=2,
             num_dense_submatrices=2,
             time_key=None,
             seed=5,
@@ -111,7 +111,7 @@ _FACTORIES: list[tuple[str, Callable[[], BaseModel], str]] = [
             shingle_size=3,
             max_graphs=8,
             num_clusters=2,
-            warm_up_graphs=2,
+            warm_up=2,
             time_key=None,
             seed=5,
         ),
@@ -119,40 +119,36 @@ _FACTORIES: list[tuple[str, Callable[[], BaseModel], str]] = [
     ),
     (
         "mstream",
-        lambda: MStream(rows=2, buckets=32, categorical_features=("category",), seed=5),
+        lambda: MStream(
+            n_hashes=2, sketch_width=32, categorical_features=("category",), seed=5
+        ),
         "categorical",
     ),
     (
         "rshash-decay",
-        lambda: StreamingRSHash(
-            components_num=3, hash_num=2, bins=32, warm_up_samples=4, seed=5
-        ),
+        lambda: RSHash(n_members=3, n_hashes=2, sketch_width=32, warm_up=4, seed=5),
         "numeric",
     ),
     (
         "rshash-cumulative",
-        lambda: StreamingRSHash(
-            components_num=3, hash_num=2, bins=32, warm_up_samples=4, decay=0.0, seed=5
+        lambda: RSHash(
+            n_members=3, n_hashes=2, sketch_width=32, warm_up=4, decay=0.0, seed=5
         ),
         "numeric",
     ),
     (
         "loda-decay",
-        lambda: StreamingLODA(
-            n_projections=3, n_bins=8, warm_up_samples=8, decay=0.9, seed=5
-        ),
+        lambda: LODA(n_projections=3, n_bins=8, warm_up=8, decay=0.9, seed=5),
         "numeric",
     ),
     (
         "loda-cumulative",
-        lambda: StreamingLODA(n_projections=3, n_bins=8, warm_up_samples=8, seed=5),
+        lambda: LODA(n_projections=3, n_bins=8, warm_up=8, seed=5),
         "numeric",
     ),
     (
         "adaptive-svm",
-        lambda: IncrementalOneClassSVMAdaptiveKernel(
-            buffer_size=16, sv_budget=8, seed=5
-        ),
+        lambda: AdaptiveOneClassSVM(buffer_size=16, sv_budget=8, seed=5),
         "numeric",
     ),
 ]
@@ -207,7 +203,7 @@ def test_long_stream_retained_state_and_nonmutating_scoring(factory, kind):
 
 @pytest.mark.parametrize("use_relational", [False, True])
 def test_midas_handles_large_time_span_without_intermediate_overflow(use_relational):
-    model = MIDAS(count_min_cols=8, use_relational=use_relational, seed=3)
+    model = MIDAS(sketch_width=8, use_relational=use_relational, seed=3)
     model.learn_one({"src": 1, "dst": 2, "t": 0})
     score = model.score_one({"src": 1, "dst": 2, "t": 10**200})
     assert math.isfinite(score)
@@ -216,7 +212,7 @@ def test_midas_handles_large_time_span_without_intermediate_overflow(use_relatio
 
 
 def test_midas_can_hash_integer_identifiers_beyond_signed_int64():
-    model = MIDAS(count_min_cols=8, time_key=None, seed=3)
+    model = MIDAS(sketch_width=8, time_key=None, seed=3)
     for source in (2**63 - 1, 2**63, 2**64, -(2**63) - 1, 2**200):
         sample = {"src": source, "dst": -source}
         assert math.isfinite(model.score_one(sample))
@@ -235,7 +231,7 @@ def test_midas_large_cumulative_counts_do_not_overflow_time_scaled_square():
 
 
 def test_mstream_log_score_survives_unrepresentable_raw_anomaly():
-    model = MStream(rows=1, buckets=8, time_key="t", seed=3)
+    model = MStream(n_hashes=1, sketch_width=8, time_key="t", seed=3)
     model.learn_one({"x": 1.0, "y": 1.0, "t": 0})
     # The sum of the three raw statistics exceeds float64 even though the
     # returned logarithm is a perfectly representable finite number.
@@ -246,7 +242,9 @@ def test_mstream_log_score_survives_unrepresentable_raw_anomaly():
 
 @pytest.mark.parametrize("category", [1e20, -1e20, 1e100, -1e100])
 def test_mstream_large_categorical_ids_do_not_overflow_int64(category):
-    model = MStream(rows=2, buckets=31, categorical_features=("category",), seed=3)
+    model = MStream(
+        n_hashes=2, sketch_width=31, categorical_features=("category",), seed=3
+    )
     sample = {"x": 1.0, "category": category}
     with np.errstate(all="raise"):
         model.learn_one(sample)
@@ -261,7 +259,7 @@ def test_isconna_g_test_handles_large_time_span():
 
 
 def test_isconna_pattern_counters_never_wrap_negative():
-    model = ISCONNA(count_min_rows=1, count_min_cols=2, include_endpoints=False)
+    model = ISCONNA(n_hashes=1, sketch_width=2, include_endpoints=False)
     group = model._edge
     largest = np.iinfo(np.int64).max
     group.width_time.fill(largest)
@@ -276,9 +274,7 @@ def test_isconna_pattern_counters_never_wrap_negative():
 
 
 def test_rshash_sample_normalization_accepts_counters_beyond_uint64():
-    model = StreamingRSHash(
-        components_num=2, hash_num=2, bins=8, warm_up_samples=1, seed=3
-    )
+    model = RSHash(n_members=2, n_hashes=2, sketch_width=8, warm_up=1, seed=3)
     model.learn_one({"x": 1.0})
     model._samples_seen = 2**64
     assert math.isfinite(model.score_one({"x": 1.0}))
@@ -288,11 +284,11 @@ def test_rshash_sample_normalization_accepts_counters_beyond_uint64():
 
 @pytest.mark.parametrize("decay", [0.01, 5e-324])
 def test_rshash_large_elapsed_time_forgets_old_counts_without_overflow(decay):
-    model = StreamingRSHash(
-        components_num=2,
-        hash_num=2,
-        bins=8,
-        warm_up_samples=1,
+    model = RSHash(
+        n_members=2,
+        n_hashes=2,
+        sketch_width=8,
+        warm_up=1,
         time_key="t",
         decay=decay,
         seed=3,
@@ -310,14 +306,14 @@ def test_rshash_large_elapsed_time_forgets_old_counts_without_overflow(decay):
 @pytest.mark.parametrize(
     ("model_type", "parameter"),
     [
-        (StreamingLODA, "warm_up_samples"),
+        (LODA, "warm_up"),
         (XStream, "window_size"),
-        (XStream, "init_sample_size"),
+        (XStream, "warm_up"),
         (XStream, "max_feature_cache_size"),
         (StreamRandomHistogramForest, "window_size"),
         (SignedGraphSketchDetector, "max_graphs"),
-        (IncrementalOneClassSVMAdaptiveKernel, "sv_budget"),
-        (IncrementalOneClassSVMAdaptiveKernel, "buffer_size"),
+        (AdaptiveOneClassSVM, "sv_budget"),
+        (AdaptiveOneClassSVM, "buffer_size"),
     ],
 )
 def test_invalid_capacities_cannot_disable_retention_bounds(
@@ -330,18 +326,18 @@ def test_invalid_capacities_cannot_disable_retention_bounds(
 def test_numpy_integer_capacities_keep_bounded_models_working():
     capacity = np.int64(4)
     models = [
-        StreamingLODA(n_projections=2, warm_up_samples=capacity),
+        LODA(n_projections=2, warm_up=capacity),
         XStream(
             k=2,
             n_chains=2,
             depth=2,
-            cms_width=8,
+            sketch_width=8,
             window_size=capacity,
-            init_sample_size=capacity,
+            warm_up=capacity,
             max_feature_cache_size=capacity,
         ),
-        StreamRandomHistogramForest(n_estimators=2, max_depth=2, window_size=capacity),
-        IncrementalOneClassSVMAdaptiveKernel(buffer_size=capacity, sv_budget=capacity),
+        StreamRandomHistogramForest(n_trees=2, max_depth=2, window_size=capacity),
+        AdaptiveOneClassSVM(buffer_size=capacity, sv_budget=capacity),
     ]
     for model in models:
         for index in range(20):

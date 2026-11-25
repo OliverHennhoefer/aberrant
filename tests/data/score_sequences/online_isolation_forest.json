@@ -4,7 +4,7 @@
   {
    "name": "adaptive_binary",
    "params": {
-    "num_trees": 10,
+    "n_trees": 10,
     "max_leaf_samples": 8,
     "window_size": 100,
     "seed": 3
@@ -420,7 +420,7 @@
   {
    "name": "fixed_ternary_subsampled",
    "params": {
-    "num_trees": 8,
+    "n_trees": 8,
     "max_leaf_samples": 4,
     "tree_type": "fixed",
     "subsample": 0.7,
@@ -739,7 +739,7 @@
   {
    "name": "adaptive_batches",
    "params": {
-    "num_trees": 6,
+    "n_trees": 6,
     "max_leaf_samples": 4,
     "window_size": 40,
     "seed": 5

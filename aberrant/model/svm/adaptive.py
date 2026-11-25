@@ -10,7 +10,7 @@ from aberrant._utils.validation import (
 from aberrant.base.model import BaseModel
 
 
-class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
+class AdaptiveOneClassSVM(BaseModel):
     """
     Experimental incremental one-class kernel model with adaptive gamma.
 

@@ -287,7 +287,7 @@ def test_callback_result_requires_boolean(kwargs):
 def test_config_constructs_fresh_model_and_resolves_metadata():
     config = DetectorConfig(
         ComponentConfig(
-            "online_isolation_forest", {"window_size": 16, "num_trees": 2, "seed": 19}
+            "online_isolation_forest", {"window_size": 16, "n_trees": 2, "seed": 19}
         )
     )
     first = PrequentialEvaluator(config)
@@ -425,7 +425,7 @@ def test_harmonic_readiness_ignores_zero_learning_calls():
 @pytest.mark.parametrize(
     "config",
     [
-        DetectorConfig(ComponentConfig("sdo_stream")),
+        DetectorConfig(ComponentConfig("sdostream")),
         DetectorConfig(ComponentConfig("null"), (ComponentConfig("standard_scaler"),)),
     ],
 )

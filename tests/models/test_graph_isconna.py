@@ -25,14 +25,14 @@ class TestISCONNA(unittest.TestCase):
             "source_key": "src",
             "destination_key": "dst",
             "time_key": "t",
-            "count_min_rows": 2,
-            "count_min_cols": 257,
+            "n_hashes": 2,
+            "sketch_width": 257,
             "time_decay_factor": 0.7,
             "alpha": 1.0,
             "beta": 1.0,
             "gamma": 0.5,
             "include_endpoints": True,
-            "warm_up_samples": 0,
+            "warm_up": 0,
             "normalize_score": False,
             "seed": 42,
         }
@@ -44,14 +44,14 @@ class TestISCONNA(unittest.TestCase):
         self.assertEqual(model.source_key, "src")
         self.assertEqual(model.destination_key, "dst")
         self.assertEqual(model.time_key, "t")
-        self.assertEqual(model.count_min_rows, 2)
-        self.assertEqual(model.count_min_cols, 3000)
+        self.assertEqual(model.n_hashes, 2)
+        self.assertEqual(model.sketch_width, 3000)
         self.assertEqual(model.time_decay_factor, 0.7)
         self.assertEqual(model.alpha, 1.0)
         self.assertEqual(model.beta, 1.0)
         self.assertEqual(model.gamma, 0.5)
         self.assertTrue(model.include_endpoints)
-        self.assertEqual(model.warm_up_samples, 0)
+        self.assertEqual(model.warm_up, 0)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -65,9 +65,9 @@ class TestISCONNA(unittest.TestCase):
         with self.assertRaises(ValueError):
             ISCONNA(time_key="src")
         with self.assertRaises(ValueError):
-            ISCONNA(count_min_rows=0)
+            ISCONNA(n_hashes=0)
         with self.assertRaises(ValueError):
-            ISCONNA(count_min_cols=0)
+            ISCONNA(sketch_width=0)
         with self.assertRaises(ValueError):
             ISCONNA(time_decay_factor=0.0)
         with self.assertRaises(ValueError):
@@ -77,7 +77,7 @@ class TestISCONNA(unittest.TestCase):
         with self.assertRaises(ValueError):
             ISCONNA(gamma=-1.0)
         with self.assertRaises(ValueError):
-            ISCONNA(warm_up_samples=-1)
+            ISCONNA(warm_up=-1)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -104,8 +104,8 @@ class TestISCONNA(unittest.TestCase):
 
     def test_component_preview_matches_author_update_formula(self) -> None:
         model = self.create_model(
-            count_min_rows=1,
-            count_min_cols=101,
+            n_hashes=1,
+            sketch_width=101,
             include_endpoints=False,
         )
         model.learn_one({"src": 1.0, "dst": 2.0, "t": 1.0})
@@ -129,8 +129,8 @@ class TestISCONNA(unittest.TestCase):
 
     def test_reset_tracks_consecutive_absence_gap(self) -> None:
         model = self.create_model(
-            count_min_rows=1,
-            count_min_cols=10_007,
+            n_hashes=1,
+            sketch_width=10_007,
             include_endpoints=False,
         )
         target = {"src": 1.0, "dst": 2.0, "t": 1.0}
@@ -145,7 +145,7 @@ class TestISCONNA(unittest.TestCase):
         self.assertFalse(model._edge.busy_current[0, target_index])
 
     def test_edge_node_aggregation_uses_componentwise_maxima(self) -> None:
-        model = self.create_model(count_min_rows=1, count_min_cols=10_007)
+        model = self.create_model(n_hashes=1, sketch_width=10_007)
         for timestamp in range(1, 8):
             model.learn_one(
                 {"src": 1.0, "dst": float(timestamp + 10), "t": float(timestamp)}
@@ -196,7 +196,7 @@ class TestISCONNA(unittest.TestCase):
         np.testing.assert_array_equal(model._edge.gap_current, gap_before)
 
     def test_score_is_zero_before_optional_warmup(self) -> None:
-        model = self.create_model(warm_up_samples=4)
+        model = self.create_model(warm_up=4)
         for timestamp in range(1, 4):
             model.learn_one({"src": 1.0, "dst": 2.0, "t": float(timestamp)})
         self.assertEqual(
@@ -238,7 +238,7 @@ class TestISCONNA(unittest.TestCase):
         )
 
     def test_state_shapes_are_bounded(self) -> None:
-        model = self.create_model(count_min_rows=3, count_min_cols=128)
+        model = self.create_model(n_hashes=3, sketch_width=128)
         baseline_shape = model._edge.frequency_current.shape
 
         for i in range(500):
@@ -295,11 +295,11 @@ class TestISCONNA(unittest.TestCase):
                     self.assertEqual(score, pytest.approx(want, rel=1e-12))
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(count_min_rows=9, count_min_cols=257)
+        model = self.create_model(n_hashes=9, sketch_width=257)
         output = repr(model)
         self.assertIn("ISCONNA", output)
-        self.assertIn("count_min_rows=9", output)
-        self.assertIn("count_min_cols=257", output)
+        self.assertIn("n_hashes=9", output)
+        self.assertIn("sketch_width=257", output)
         self.assertIn("gamma=0.5", output)
 
 
@@ -312,8 +312,8 @@ def test_candidate_preview_matches_learning_across_collisions_and_rollovers(
     include_endpoints,
 ):
     model = ISCONNA(
-        count_min_rows=3,
-        count_min_cols=7,
+        n_hashes=3,
+        sketch_width=7,
         include_endpoints=include_endpoints,
         time_decay_factor=0.7,
         seed=22,
@@ -341,7 +341,7 @@ def test_candidate_preview_matches_learning_across_collisions_and_rollovers(
             ]
         components = []
         for group, indices in groups:
-            rows = np.arange(reference.count_min_rows)
+            rows = np.arange(reference.n_hashes)
             width_time = group.width_time[rows, indices]
             gap_time = group.gap_time[rows, indices]
             width_row = int(np.argmin(width_time))
@@ -376,11 +376,11 @@ def _reference_g_test(current: float, accumulated: float, time: int) -> float:
 
 
 def test_preview_state_copies_only_one_cell_per_sketch_row():
-    model = ISCONNA(count_min_rows=3, count_min_cols=101, seed=22)
+    model = ISCONNA(n_hashes=3, sketch_width=101, seed=22)
     group = model._edge
     indices = model._indices(1, 2)
     cells = group.cells(indices)
-    assert len(cells) == model.count_min_rows
+    assert len(cells) == model.n_hashes
     for field in fields(group):
         original = getattr(group, field.name)
         for row, cell in enumerate(cells):
@@ -417,7 +417,7 @@ def _reference_component_scores(
             (model._source, model._indices(src, 0)),
             (model._destination, model._indices(dst, 0)),
         ]
-    rows = np.arange(model.count_min_rows)
+    rows = np.arange(model.n_hashes)
     scores = []
     for group, indices in groups:
         cells = _CMSGroup(
@@ -485,7 +485,7 @@ class TestISCONNAExactness(unittest.TestCase):
     def test_cell_transitions_match_array_updates(self) -> None:
         rng = np.random.default_rng(31)
         for decay in (0.7, 1.0, 1e-300):
-            model = ISCONNA(count_min_rows=4, count_min_cols=6, time_decay_factor=decay)
+            model = ISCONNA(n_hashes=4, sketch_width=6, time_decay_factor=decay)
             for rollover in (False, True):
                 with self.subTest(decay=decay, rollover=rollover):
                     group = _random_group(rng, rows=4, cols=6)
@@ -509,7 +509,7 @@ class TestISCONNAExactness(unittest.TestCase):
 
     def test_learning_writes_the_array_update(self) -> None:
         rng = np.random.default_rng(32)
-        model = ISCONNA(count_min_rows=3, count_min_cols=5, time_decay_factor=0.6)
+        model = ISCONNA(n_hashes=3, sketch_width=5, time_decay_factor=0.6)
         group = _random_group(rng, rows=3, cols=5)
         reference = copy.deepcopy(group)
         indices = np.array([4, 0, 2])
@@ -529,10 +529,10 @@ class TestISCONNAExactness(unittest.TestCase):
 
     def test_component_scores_match_reference_preview(self) -> None:
         configs: tuple[dict[str, object], ...] = (
-            {"count_min_cols": 11},
-            {"count_min_rows": 3, "count_min_cols": 5, "include_endpoints": False},
-            {"count_min_rows": 1, "count_min_cols": 1, "time_decay_factor": 0.2},
-            {"time_key": None, "count_min_cols": 31},
+            {"sketch_width": 11},
+            {"n_hashes": 3, "sketch_width": 5, "include_endpoints": False},
+            {"n_hashes": 1, "sketch_width": 1, "time_decay_factor": 0.2},
+            {"time_key": None, "sketch_width": 31},
         )
         for config in configs:
             with self.subTest(config=config):

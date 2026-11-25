@@ -4,7 +4,7 @@
   {
    "name": "defaults_short_warm_up",
    "params": {
-    "warm_up_samples": 64,
+    "warm_up": 64,
     "seed": 3
    },
    "stream": {
@@ -421,7 +421,7 @@
     "n_projections": 40,
     "n_bins": 10,
     "sparsity": 0.4,
-    "warm_up_samples": 32,
+    "warm_up": 32,
     "decay": 0.99,
     "time_key": "t",
     "pseudocount": 0.5,

@@ -517,13 +517,13 @@
   {
    "name": "time_key_small_tables",
    "params": {
-    "components_num": 10,
-    "hash_num": 3,
-    "bins": 16,
+    "n_members": 10,
+    "n_hashes": 3,
+    "sketch_width": 16,
     "subspace_size": 3,
     "bin_width": 0.5,
     "decay": 0.05,
-    "warm_up_samples": 8,
+    "warm_up": 8,
     "time_key": "t",
     "seed": 23
    },
@@ -840,7 +840,7 @@
    "name": "fast_decay",
    "params": {
     "decay": 0.5,
-    "warm_up_samples": 4,
+    "warm_up": 4,
     "seed": 25
    },
    "stream": {
@@ -1154,11 +1154,11 @@
   {
    "name": "no_decay_repeated_points",
    "params": {
-    "components_num": 6,
-    "hash_num": 2,
-    "bins": 32,
+    "n_members": 6,
+    "n_hashes": 2,
+    "sketch_width": 32,
     "decay": 0.0,
-    "warm_up_samples": 16,
+    "warm_up": 16,
     "seed": 27
    },
    "stream": {
@@ -1474,7 +1474,7 @@
    "name": "huge_outliers",
    "params": {
     "bin_width": 0.25,
-    "warm_up_samples": 16,
+    "warm_up": 16,
     "seed": 29
    },
    "stream": {
@@ -1789,11 +1789,11 @@
   {
    "name": "single_table_single_bin",
    "params": {
-    "components_num": 3,
-    "hash_num": 1,
-    "bins": 1,
+    "n_members": 3,
+    "n_hashes": 1,
+    "sketch_width": 1,
     "subspace_size": 1,
-    "warm_up_samples": 1,
+    "warm_up": 1,
     "seed": 31
    },
    "stream": {
@@ -1927,11 +1927,11 @@
   {
    "name": "unit_clusters_many_features",
    "params": {
-    "components_num": 40,
-    "hash_num": 5,
-    "bins": 64,
+    "n_members": 40,
+    "n_hashes": 5,
+    "sketch_width": 64,
     "bin_width": 0.05,
-    "warm_up_samples": 32,
+    "warm_up": 32,
     "seed": 33
    },
    "stream": {

@@ -36,7 +36,7 @@ EventKindValue = EventKind | Callable[[Parameters], EventKind]
 ANY_FEATURES = FeatureCount()
 ONE_FEATURE = FeatureCount(1, 1)
 TWO_FEATURES = FeatureCount(2, 2)
-CATALOG_FORMAT_VERSION = 1
+CATALOG_FORMAT_VERSION = 2
 
 _Spec = TypeVar("_Spec", bound=ComponentSpec)
 
@@ -265,16 +265,16 @@ def _knn_warmup(params: Parameters) -> WarmupRequirement:
 
 
 def _cell_warmup(params: Parameters) -> WarmupRequirement:
-    slides = _as_int(params.get("warm_up_slides", 1))
+    slides = _as_int(params.get("warm_up", 1))
     slide_size = _as_int(params.get("slide_size", 500))
     neighbors = _as_int(params.get("k", 50)) + 1
     return _events(max(slides * slide_size, neighbors))
 
 
 def _sdo_warmup(params: Parameters) -> WarmupRequirement:
-    k = _as_int(params.get("k", 256))
-    configured = params.get("warm_up_observers")
-    minimum = max(_as_int(params.get("x_neighbors", 6)), 2)
+    k = _as_int(params.get("max_observers", 256))
+    configured = params.get("warm_up")
+    minimum = max(_as_int(params.get("n_neighbors", 6)), 2)
     if configured is not None:
         minimum = max(minimum, _as_int(configured))
     return WarmupRequirement(min(k, minimum), WarmupUnit.OBSERVERS)
@@ -282,7 +282,7 @@ def _sdo_warmup(params: Parameters) -> WarmupRequirement:
 
 def _active_graph_warmup(params: Parameters) -> WarmupRequirement:
     return WarmupRequirement(
-        _as_int(params.get("warm_up_graphs", 32)),
+        _as_int(params.get("warm_up", 32)),
         WarmupUnit.ACTIVE_GRAPHS,
     )
 
@@ -295,7 +295,7 @@ def _asd_warmup(params: Parameters) -> WarmupRequirement:
 
 
 def _random_cut_warmup(params: Parameters) -> WarmupRequirement:
-    configured = params.get("warmup_samples")
+    configured = params.get("warm_up")
     warmup = _as_int(
         params.get("sample_size", 256) if configured is None else configured
     )
@@ -305,7 +305,7 @@ def _random_cut_warmup(params: Parameters) -> WarmupRequirement:
 def _xstream_warmup(params: Parameters) -> WarmupRequirement:
     return _events(
         max(
-            _as_int(params.get("init_sample_size", 256)),
+            _as_int(params.get("warm_up", 256)),
             _as_int(params.get("window_size", 256)),
         )
     )
@@ -321,7 +321,7 @@ def _xstream_state(params: Parameters) -> StateKind:
 
 def _mstream_warmup(params: Parameters) -> WarmupRequirement:
     return WarmupRequirement(
-        _as_int(params.get("warm_up_buckets", 0)),
+        _as_int(params.get("warm_up", 0)),
         WarmupUnit.BUCKETS,
     )
 
@@ -520,7 +520,7 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "sdo_stream",
+        "sdostream",
         "SDOStream",
         "aberrant.model.distance",
         "distance",
@@ -534,7 +534,7 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "ano_edge_l",
+        "anoedge_l",
         "AnoEdgeL",
         "aberrant.model.graph",
         "graph",
@@ -542,7 +542,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
             score_kind=_normalized_score,
-            warmup=_parameter_warmup("warm_up_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
@@ -556,7 +556,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
             score_kind=_normalized_score,
-            warmup=_parameter_warmup("warm_up_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
@@ -570,7 +570,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
             score_kind=_normalized_score,
-            warmup=_parameter_warmup("warm_up_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
@@ -669,7 +669,7 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "x_stream",
+        "xstream",
         "XStream",
         "aberrant.model.forest",
         "isolation_forest",
@@ -683,7 +683,7 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "m_stream",
+        "mstream",
         "MStream",
         "aberrant.model.sketch",
         "sketch",
@@ -697,29 +697,29 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "streaming_loda",
-        "StreamingLODA",
+        "loda",
+        "LODA",
         "aberrant.model.sketch",
         "sketch",
         _capabilities(
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
     ),
     _model(
-        "streaming_rs_hash",
-        "StreamingRSHash",
+        "rshash",
+        "RSHash",
         "aberrant.model.sketch",
         "sketch",
         _capabilities(
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_parameter_warmup("warm_up_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
@@ -795,7 +795,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("min_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
@@ -809,14 +809,14 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("min_samples"),
+            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
             resettable=True,
         ),
     ),
     _model(
-        "incremental_one_class_svm_adaptive_kernel",
-        "IncrementalOneClassSVMAdaptiveKernel",
+        "adaptive_one_class_svm",
+        "AdaptiveOneClassSVM",
         "aberrant.model.svm",
         "svm",
         _capabilities(
@@ -870,8 +870,8 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "x_lag_damp",
-        "XLagDAMP",
+        "damp",
+        "DAMP",
         "aberrant.model.timeseries",
         "time_series",
         _capabilities(
