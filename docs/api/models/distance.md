@@ -1,9 +1,7 @@
 # Distance and Neighborhood Models API
 
-`CellNeighborhoodDetector` and
-`StationaryRegionNeighborDetector` are documented point-scoring adaptations,
-not exact reproductions of the source papers' set-level NETS and KDE/top-*n*
-STARE procedures.
+`CellNeighborhoodDetector` scores each query with the distance-based outlier
+rule that NETS computes, instead of the paper's window-level outlier set.
 
 ::: aberrant.model.distance.KNN
 
@@ -12,8 +10,6 @@ STARE procedures.
 ::: aberrant.model.distance.CellNeighborhoodDetector
 
 ::: aberrant.model.distance.SDOStream
-
-::: aberrant.model.distance.StationaryRegionNeighborDetector
 
 ## Optional FAISS engine
 

@@ -41,7 +41,6 @@ from aberrant.model.distance import (
     CellNeighborhoodDetector,
     LocalOutlierFactor,
     SDOStream,
-    StationaryRegionNeighborDetector,
 )
 from aberrant.model.graph import (
     ISCONNA,
@@ -96,7 +95,6 @@ def test_public_imports_base_smoke() -> None:
     assert LocalOutlierFactor is not None
     assert CellNeighborhoodDetector is not None
     assert SDOStream is not None
-    assert StationaryRegionNeighborDetector is not None
     assert AnoEdgeL is not None
     assert ISCONNA is not None
     assert MIDAS is not None
@@ -162,6 +160,7 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (deep_api, "KitNET"),
         (distance_api, "NETS"),
         (distance_api, "STARE"),
+        (distance_api, "StationaryRegionNeighborDetector"),
         (graph_api, "StreamSpot"),
         (iforest_api, "MondrianForest"),
         (sketch_api, "LODA"),

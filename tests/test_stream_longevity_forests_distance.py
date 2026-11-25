@@ -22,7 +22,6 @@ from aberrant.model.distance import (
     CellNeighborhoodDetector,
     LocalOutlierFactor,
     SDOStream,
-    StationaryRegionNeighborDetector,
 )
 from aberrant.model.iforest import (
     ASDIsolationForest,
@@ -345,14 +344,11 @@ def test_xstream_large_window_counters_do_not_wrap_at_int32_limit():
     assert math.isfinite(model.score_one({"x": 1.0}))
 
 
-@pytest.mark.parametrize(
-    "detector", [CellNeighborhoodDetector, StationaryRegionNeighborDetector]
-)
 @pytest.mark.parametrize("dimensions", [1, 2, 20])
 def test_radius_neighbors_churn_matches_brute_force_and_bounds_all_indexes(
-    detector, dimensions
+    dimensions,
 ):
-    model = detector(k=3, radius=1.25, window_size=19, slide_size=1)
+    model = CellNeighborhoodDetector(k=3, radius=1.25, window_size=19, slide_size=1)
     recent = deque(maxlen=model.window_size)
     for i in range(1000):
         vector = np.array(
@@ -511,10 +507,6 @@ _BOUNDED_MODELS = [
     pytest.param(
         lambda: CellNeighborhoodDetector(k=2, window_size=16, slide_size=1),
         id="cell-neighborhood",
-    ),
-    pytest.param(
-        lambda: StationaryRegionNeighborDetector(k=2, window_size=16, slide_size=1),
-        id="stationary-region",
     ),
     pytest.param(lambda: LocalOutlierFactor(k=2, window_size=16), id="lof"),
 ]

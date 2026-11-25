@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 from aberrant.model.distance import CellNeighborhoodDetector as NETS
-from aberrant.model.distance import StationaryRegionNeighborDetector as STARE
 
 
 class TestNETS(unittest.TestCase):
@@ -20,11 +19,9 @@ class TestNETS(unittest.TestCase):
             "radius": 1.25,
             "window_size": 64,
             "slide_size": 4,
-            "subspace_dim": 2,
             "time_key": "t",
             "warm_up_slides": 2,
             "predict_threshold": 0.5,
-            "seed": 42,
             "eps": 1e-9,
         }
         defaults.update(overrides)
@@ -36,7 +33,6 @@ class TestNETS(unittest.TestCase):
         self.assertEqual(model.radius, 1.5)
         self.assertEqual(model.window_size, 10_000)
         self.assertEqual(model.slide_size, 500)
-        self.assertIsNone(model.subspace_dim)
         self.assertEqual(model.warm_up_slides, 1)
         self.assertEqual(model.predict_threshold, 0.5)
 
@@ -51,8 +47,6 @@ class TestNETS(unittest.TestCase):
             NETS(window_size=10, k=10)
         with self.assertRaises(ValueError):
             NETS(slide_size=0)
-        with self.assertRaises(ValueError):
-            NETS(subspace_dim=0)
         with self.assertRaises(ValueError):
             NETS(time_key="")
         with self.assertRaises(ValueError):
@@ -121,14 +115,9 @@ class TestNETS(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
 
-    def test_subspace_dim_cannot_exceed_feature_count(self) -> None:
-        model = self.create_model(subspace_dim=3)
-        with self.assertRaises(ValueError):
-            model.learn_one({"t": 1.0, "a": 1.0, "b": 2.0})
-
     def test_deterministic_behavior(self) -> None:
-        model1 = self.create_model(k=4, warm_up_slides=2, slide_size=4, seed=7)
-        model2 = self.create_model(k=4, warm_up_slides=2, slide_size=4, seed=7)
+        model1 = self.create_model(k=4, warm_up_slides=2, slide_size=4)
+        model2 = self.create_model(k=4, warm_up_slides=2, slide_size=4)
 
         for i in range(40):
             point = {
@@ -209,7 +198,6 @@ class TestNETS(unittest.TestCase):
             window_size=10,
             slide_size=2,
             warm_up_slides=1,
-            subspace_dim=1,
         )
 
         for i in range(30):
@@ -232,7 +220,6 @@ class TestNETS(unittest.TestCase):
             window_size=50,
             slide_size=10,
             warm_up_slides=1,
-            subspace_dim=1,
         )
 
         for i in range(8):
@@ -290,13 +277,12 @@ class TestNETS(unittest.TestCase):
         self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(k=9, window_size=128, slide_size=16, subspace_dim=1)
+        model = self.create_model(k=9, window_size=128, slide_size=16)
         output = repr(model)
         self.assertIn("CellNeighborhoodDetector", output)
         self.assertIn("k=9", output)
         self.assertIn("window_size=128", output)
         self.assertIn("slide_size=16", output)
-        self.assertIn("subspace_dim=1", output)
 
 
 if __name__ == "__main__":
@@ -304,7 +290,7 @@ if __name__ == "__main__":
 
 
 def test_continuous_score_matches_brute_force_through_evictions():
-    model = NETS(k=4, radius=1.0, window_size=16, slide_size=1, seed=42)
+    model = NETS(k=4, radius=1.0, window_size=16, slide_size=1)
     window = deque(maxlen=16)
     rng = np.random.default_rng(42)
     for point in rng.normal(size=(100, 2)):
@@ -323,8 +309,8 @@ def test_continuous_score_matches_brute_force_through_evictions():
             )
 
 
-def test_score_only_queries_in_shared_subspace_do_not_accumulate_state():
-    model = NETS(k=2, radius=1.0, window_size=5, slide_size=1, subspace_dim=1, seed=42)
+def test_score_only_queries_in_shared_rows_do_not_accumulate_state():
+    model = NETS(k=2, radius=1.0, window_size=5, slide_size=1)
     for value in (0.1, 0.2, 0.3):
         model.learn_one({"a": value, "b": value})
     model.score_one({"a": 0.1, "b": 0.1})
@@ -335,7 +321,6 @@ def test_score_only_queries_in_shared_subspace_do_not_accumulate_state():
     assert pickle.dumps(model) == before
 
 
-@pytest.mark.parametrize("detector", [NETS, STARE])
 @pytest.mark.parametrize(
     ("point", "query", "eps"),
     [
@@ -345,44 +330,40 @@ def test_score_only_queries_in_shared_subspace_do_not_accumulate_state():
         (2.7, 0.0, 8.0),
     ],
 )
-def test_tolerance_neighbors_across_nonadjacent_cells(detector, point, query, eps):
-    model = detector(k=2, radius=1.0, window_size=5, slide_size=1, eps=eps)
+def test_tolerance_neighbors_across_nonadjacent_cells(point, query, eps):
+    model = NETS(k=2, radius=1.0, window_size=5, slide_size=1, eps=eps)
     for value in (point, 10.0, 20.0):
         model.learn_one({"x": value})
     assert model.score_one({"x": query}) == 0.5
 
 
-@pytest.mark.parametrize("detector", [NETS, STARE])
 @pytest.mark.parametrize("offset", [1e16, -1e16])
-def test_neighbor_candidates_preserve_distances_at_large_offsets(detector, offset):
+def test_neighbor_candidates_preserve_distances_at_large_offsets(offset):
     # This tolerance makes radius² + eps exactly 4.0 in float arithmetic.
     eps = float(np.nextafter(3.51, np.inf))
-    model = detector(k=2, radius=0.7, eps=eps, window_size=5, slide_size=1)
+    model = NETS(k=2, radius=0.7, eps=eps, window_size=5, slide_size=1)
     for value in (offset, offset + 100.0, offset + 200.0):
         model.learn_one({"x": value})
     assert model.score_one({"x": offset + 2.0}) == 0.5
 
 
-@pytest.mark.parametrize("detector", [NETS, STARE])
 @pytest.mark.parametrize("sign", [1.0, -1.0])
-def test_small_radius_accepts_finite_points_without_quotient_overflow(detector, sign):
-    model = detector(k=2, radius=1e-320, window_size=5, slide_size=1)
+def test_small_radius_accepts_finite_points_without_quotient_overflow(sign):
+    model = NETS(k=2, radius=1e-320, window_size=5, slide_size=1)
     with np.errstate(over="raise", invalid="raise"):
         for value in (1.0, 2.0, 3.0):
             model.learn_one({"x": sign * value})
         assert model.score_one({"x": sign}) == 0.5
 
 
-@pytest.mark.parametrize("detector", [NETS, STARE])
 @pytest.mark.parametrize("radius", [float("nan"), float("inf"), -float("inf")])
-def test_radius_must_be_finite(detector, radius):
+def test_radius_must_be_finite(radius):
     with pytest.raises(ValueError, match="radius must be finite and positive"):
-        detector(radius=radius)
+        NETS(radius=radius)
 
 
-@pytest.mark.parametrize("detector", [NETS, STARE])
-def test_subnormal_squared_distance_rounding_preserves_candidate_coverage(detector):
-    model = detector(k=2, radius=1e-200, eps=5e-324, window_size=5, slide_size=1)
+def test_subnormal_squared_distance_rounding_preserves_candidate_coverage():
+    model = NETS(k=2, radius=1e-200, eps=5e-324, window_size=5, slide_size=1)
     for value in (2.5e-162, 1.0, 2.0):
         model.learn_one({"x": value})
     point = np.array([2.5e-162])
@@ -392,7 +373,7 @@ def test_subnormal_squared_distance_rounding_preserves_candidate_coverage(detect
 
 @pytest.mark.parametrize("n_features", [1, 2, 8])
 @pytest.mark.parametrize("eps", [1e-9, 8.0])
-def test_both_detectors_match_window_reference_through_eviction(n_features, eps):
+def test_score_matches_window_reference_through_eviction(n_features, eps):
     config = {
         "k": 4,
         "radius": 1.0,
@@ -402,7 +383,7 @@ def test_both_detectors_match_window_reference_through_eviction(n_features, eps)
         "time_key": "t",
         "eps": eps,
     }
-    models = [NETS(**config), STARE(**config)]
+    model = NETS(**config)
     window = deque(maxlen=13)
     rng = np.random.default_rng(719)
     names = tuple(str(dim) for dim in range(n_features))
@@ -415,17 +396,14 @@ def test_both_detectors_match_window_reference_through_eviction(n_features, eps)
                 np.dot(point - query, point - query) <= 1.0 + eps for point in window
             )
             expected = 0.0 if sample_index < 6 else 1.0 - min(count / 4, 1.0)
-            for model in models:
-                assert model.score_one(event) == expected
-                assert model.predict_one(event) == int(expected >= 0.5)
+            assert model.score_one(event) == expected
+            assert model.predict_one(event) == int(expected >= 0.5)
         point = rng.normal(size=n_features)
         event = dict(zip(names, point, strict=True))
         event["t"] = timestamp
-        for model in models:
-            model.learn_one(event)
+        model.learn_one(event)
         window.append(point)
-    for model in models:
-        model.reset()
-        assert model.n_samples_seen == 0
-        assert model.score_one({"new": 1.0, "t": 0.0}) == 0.0
-        model.learn_one({"new": 1.0, "t": 0.0})
+    model.reset()
+    assert model.n_samples_seen == 0
+    assert model.score_one({"new": 1.0, "t": 0.0}) == 0.0
+    model.learn_one({"new": 1.0, "t": 0.0})

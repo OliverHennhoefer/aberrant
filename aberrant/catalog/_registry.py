@@ -553,20 +553,6 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "stationary_region_neighbor_detector",
-        "StationaryRegionNeighborDetector",
-        "aberrant.model.distance",
-        "distance",
-        _capabilities(
-            event_kind=EventKind.TABULAR,
-            feature_count=_time_aware_features,
-            score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_cell_warmup,
-            state=StateKind.BOUNDED,
-            resettable=True,
-        ),
-    ),
-    _model(
         "ano_edge_l",
         "AnoEdgeL",
         "aberrant.model.graph",

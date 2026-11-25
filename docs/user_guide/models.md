@@ -108,17 +108,14 @@ implementation.
 | `LocalOutlierFactor` | Non-negative LOF; values near `1` indicate density comparable to neighbors, larger values indicate lower local density | Returns `0.0` until more than `k` points are learned | At most `window_size` retained points, each with a list of at most `2 * k` nearest neighbors |
 | `CellNeighborhoodDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up_slides * slide_size` events and `k + 1` retained points | At most `window_size` points plus cell indexes |
 | `SDOStream` | Non-negative median distance to nearest active observers | `warm_up_observers`, defaulting to at least `x_neighbors` | Exactly up to `k` observers with exponentially faded activity |
-| `StationaryRegionNeighborDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up_slides * slide_size` events and `k + 1` retained points | At most `window_size` points plus cells and query caches |
 
 For the FAISS-backed KNN, configure `warm_up >= k`; otherwise the engine can
 be warm while still holding too few points for the requested neighbor count.
 Install it with `aberrant[faiss]`.
 
-`CellNeighborhoodDetector` is a point-scoring, NETS-inspired adaptation, not
-the paper's exact set-level outlier procedure. Likewise,
-`StationaryRegionNeighborDetector` uses radius counts and per-cell cache
-invalidation rather than STARE's exact KDE/top-*n* procedure. The distinction
-is intentional and documented in their
+`CellNeighborhoodDetector` scores each query with the distance-based outlier
+rule that NETS computes (fewer than `k` window points within `radius`), not the
+paper's window-level outlier set; see the
 [API reference](../api/models/distance.md). `SDOStream` follows the fixed
 observer and exponential-fading structure described in the
 [SDOstream paper](https://www.esann.org/sites/default/files/proceedings/2020/ES2020-143.pdf).
