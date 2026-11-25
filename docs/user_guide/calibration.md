@@ -24,7 +24,8 @@ hashable value; a method that adapts to its own misses compares each score
 with the threshold it issued for that key.
 
 Before the first score `predict` returns `+inf`, so nothing alarms. Later
-thresholds are clipped to the largest absolute score seen. Scores may be
+thresholds are clipped to the largest absolute score seen, except those of
+the extreme-value methods, which may extrapolate beyond it. Scores may be
 negative, as with conformalized quantile regression.
 
 ## Methods
@@ -55,9 +56,31 @@ negative, as with conformalized quantile regression.
 | Changepoint CP | `cpcp` | None | Split conformal weighted by regime probability |
 | BOCPD | `bocpd` | None | Changepoint predictive quantile |
 | Discounted Bayes | `nig` | None | Student-t predictive with discounted evidence |
+| SPOT | `spot` | None | Generalized Pareto tail of the window's peaks |
+| DSPOT | `dspot` | None | SPOT on the deviation from a moving mean |
 
-Each parameter's `minimum` and `maximum` bound what the method accepts, and
-`low` and `high` give the range worth offering in an editor.
+`CalibratorSpec.schema()` gives each method's parameters as JSON Schema,
+with the bounds the method accepts.
+
+## Very small alarm rates
+
+A window of `W` scores cannot place a conformal quantile above its largest
+score, so for `alpha` below `1 / W` the window methods fall back to the
+largest absolute score ever seen. That threshold never comes down again.
+
+SPOT and DSPOT (Siffer et al., KDD 2017) fit a generalized Pareto
+distribution to the window's peaks, the scores above its `level` quantile,
+and read the threshold off that tail. They extrapolate beyond the window, and
+the threshold follows the scores when they shrink. DSPOT calibrates the
+deviation from the mean of the last `depth` scores, for a score level that
+drifts.
+
+On exponential scores with `alpha = 1e-4` and `W = 2000`, the mean SPOT
+threshold is within 2% of the true quantile, and after the scores halve it
+falls to the new quantile, while split, ACI and NexCP stay at the old record.
+The threshold is an estimate from a few dozen peaks, so its noise lets 2 to 3
+times `alpha` of the scores through. Where `alpha * W` is 1 or more, the rate
+matches `alpha`. A larger window means more peaks and a steadier threshold.
 
 ## From thresholds to alarms
 

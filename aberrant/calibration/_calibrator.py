@@ -88,12 +88,16 @@ class ScoreCalibrator:
     def predict(self, key: Hashable) -> float:
         """The threshold issued for ``key``.
 
-        ``+inf`` before any score; otherwise clipped to the largest absolute
-        score seen, as the method compares its feedback against that value.
+        ``+inf`` before any score. Otherwise a method that extrapolates
+        returns its finite threshold as it is; every other threshold is
+        clipped to the largest absolute score seen, as the method compares
+        its feedback against that value.
         """
         q = self.method.predict(key)
         if self.history.count == 0:
             return math.inf
+        if self.spec.extrapolates and math.isfinite(q):
+            return q
         return self.history.cap(q)
 
     def update(self, key: Hashable, score: float) -> None:

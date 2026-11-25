@@ -60,7 +60,11 @@ def test_thresholds_match_the_arena(run):
 def test_every_arena_method_is_registered_with_its_defaults():
     arena = {spec["id"]: spec for spec in FIXTURE["specs"]}
 
-    assert set(CALIBRATORS) == set(arena)
+    # The extreme-value methods are not in the arena.
+    ported = {
+        key for key, spec in CALIBRATORS.items() if spec.family != "extreme_value"
+    }
+    assert ported == set(arena)
     for identifier, spec in arena.items():
         ours = CALIBRATORS[identifier]
         assert ours.family == spec["family"]

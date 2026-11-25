@@ -127,7 +127,7 @@ def test_public_imports_base_smoke() -> None:
 
 def test_calibration_public_imports_base_smoke() -> None:
     assert ScoreCalibrator is not None
-    assert len(CALIBRATORS) == 15
+    assert len(CALIBRATORS) == 17
 
 
 def test_forecast_public_imports_base_smoke() -> None:

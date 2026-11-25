@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog and the project aims to follow
 Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- `ScoreCalibrator("spot")` and `ScoreCalibrator("dspot")`: streaming peaks
+  over threshold (Siffer et al., KDD 2017) over the calibration window. A
+  generalized Pareto tail fitted to the window's peaks gives thresholds for
+  an `alpha` below `1 / window`, where the window's conformal quantile does
+  not exist. DSPOT calibrates the deviation from a moving mean. Their
+  thresholds are not clipped to the largest score seen;
+  `CalibratorSpec.extrapolates` marks such methods.
+
 ## [2.0.0] - Unreleased
 
 ### Fixed
