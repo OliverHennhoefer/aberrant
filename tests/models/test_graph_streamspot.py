@@ -23,7 +23,6 @@ class TestStreamSpot(unittest.TestCase):
             "max_graphs": 32,
             "warm_up_graphs": 4,
             "normalize_score": False,
-            "predict_threshold": 0.5,
             "seed": 42,
             "eps": 1e-9,
         }
@@ -71,12 +70,6 @@ class TestStreamSpot(unittest.TestCase):
             StreamSpot(warm_up_graphs=0)
         with self.assertRaises(ValueError):
             StreamSpot(warm_up_graphs=5, max_graphs=4)
-        with self.assertRaises(ValueError):
-            StreamSpot(normalize_score=True, predict_threshold=-0.1)
-        with self.assertRaises(ValueError):
-            StreamSpot(normalize_score=True, predict_threshold=1.1)
-        with self.assertRaises(ValueError):
-            StreamSpot(normalize_score=False, predict_threshold=-0.1)
         with self.assertRaises(ValueError):
             StreamSpot(eps=0.0)
 
@@ -287,29 +280,6 @@ class TestStreamSpot(unittest.TestCase):
         )
         self.assertGreaterEqual(score, 0.0)
         self.assertLess(score, 1.0)
-
-    def test_predict_is_binary(self) -> None:
-        model = self.create_model(
-            edge_type_key=None,
-            shingle_size=1,
-            warm_up_graphs=2,
-            normalize_score=True,
-            predict_threshold=0.3,
-        )
-        for i in range(120):
-            model.learn_one(
-                {
-                    "graph": float(i % 5),
-                    "src": float(i % 13),
-                    "dst": float((i + 1) % 13),
-                    "t": float(i),
-                }
-            )
-
-        prediction = model.predict_one(
-            {"graph": 444.0, "src": 555.0, "dst": 666.0, "t": 121.0}
-        )
-        self.assertIn(prediction, (0, 1))
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(sketch_dim=128, num_clusters=6, max_graphs=64)

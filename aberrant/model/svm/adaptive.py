@@ -32,7 +32,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
         buffer_size: Maximum recent raw samples used to estimate gamma.
         sv_budget: Maximum retained support vectors.
         tolerance: Non-negative margin tolerance used for support-vector
-            insertion and ``predict_one``.
+            insertion.
         seed: Seed for the model-local subsampling generator used by gamma
             estimation.
     """
@@ -284,15 +284,6 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
 
         self._adapt_gamma(std)
         self._schema.commit(prepared)
-
-    def predict_one(self, x: dict[str, float]) -> int:
-        """Predict normal (1) or anomalous (-1)."""
-        prepared = self._schema.preview(x)
-        if not self.support_vectors:
-            return 1
-
-        decision_value = self._decision_function(prepared.values, self._feature_std())
-        return 1 if decision_value >= -self.tolerance else -1
 
     def score_one(self, x: dict[str, float]) -> float:
         """Compute anomaly score (higher means more anomalous)."""

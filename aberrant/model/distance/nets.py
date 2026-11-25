@@ -48,7 +48,6 @@ class CellNeighborhoodDetector(BaseModel):
             uses one-based arrival order; explicit times must be finite and
             non-decreasing.
         warm_up_slides: Complete slides required before non-zero scoring.
-        predict_threshold: Score boundary used by ``predict_one``.
         eps: Positive tolerance added to squared-distance comparisons.
 
     References:
@@ -67,7 +66,6 @@ class CellNeighborhoodDetector(BaseModel):
         slide_size: int = 500,
         time_key: str | None = None,
         warm_up_slides: int = 1,
-        predict_threshold: float = 0.5,
         eps: float = 1e-9,
     ) -> None:
         if k <= 0:
@@ -82,8 +80,6 @@ class CellNeighborhoodDetector(BaseModel):
             raise ValueError("slide_size must be positive")
         if warm_up_slides <= 0:
             raise ValueError("warm_up_slides must be positive")
-        if not (0.0 <= predict_threshold <= 1.0):
-            raise ValueError("predict_threshold must be in [0, 1]")
         if eps <= 0.0:
             raise ValueError("eps must be positive")
 
@@ -93,7 +89,6 @@ class CellNeighborhoodDetector(BaseModel):
         self.slide_size = slide_size
         self.time_key = time_key
         self.warm_up_slides = warm_up_slides
-        self.predict_threshold = predict_threshold
         self.eps = eps
         self._radius_ratio = float(radius).as_integer_ratio()
         self._distance_limit_sq = radius * radius + eps
@@ -223,17 +218,13 @@ class CellNeighborhoodDetector(BaseModel):
                         return 0.0
         return 1.0 - neighbors / float(self.k)
 
-    def predict_one(self, x: dict[str, float]) -> int:
-        """Return binary anomaly prediction using ``predict_threshold``."""
-        return int(self.score_one(x) >= self.predict_threshold)
-
     def __repr__(self) -> str:
         return (
             "CellNeighborhoodDetector("
             f"k={self.k}, radius={self.radius}, window_size={self.window_size}, "
             f"slide_size={self.slide_size}, time_key={self.time_key!r}, "
             f"warm_up_slides={self.warm_up_slides}, "
-            f"predict_threshold={self.predict_threshold}, eps={self.eps}, "
+            f"eps={self.eps}, "
             f"samples_seen={self._samples_seen}, "
             f"active_cells={len(self._cell_members)})"
         )

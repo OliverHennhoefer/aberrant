@@ -49,7 +49,6 @@ class StreamingLODA(BaseModel):
             uses one-based arrival order; explicit times must be finite and
             non-decreasing. Time deltas do not alter ``decay``.
         pseudocount: Positive additive smoothing count for each bin.
-        predict_threshold: Non-negative score boundary used by ``predict_one``.
         seed: Seed for model-local sparse projection generation.
         eps: Positive width below which a projection's warm-up range counts
             as constant and is widened to one unit.
@@ -70,7 +69,6 @@ class StreamingLODA(BaseModel):
         decay: float = 1.0,
         time_key: str | None = None,
         pseudocount: float = 1.0,
-        predict_threshold: float = 0.5,
         seed: int | None = None,
         eps: float = 1e-12,
     ) -> None:
@@ -87,8 +85,6 @@ class StreamingLODA(BaseModel):
             raise ValueError("time_key must be a non-empty string or None")
         if pseudocount <= 0.0:
             raise ValueError("pseudocount must be positive")
-        if predict_threshold < 0.0:
-            raise ValueError("predict_threshold must be non-negative")
         if eps <= 0.0:
             raise ValueError("eps must be positive")
 
@@ -99,7 +95,6 @@ class StreamingLODA(BaseModel):
         self.decay = decay
         self.time_key = time_key
         self.pseudocount = pseudocount
-        self.predict_threshold = predict_threshold
         self.seed = seed
         self.eps = eps
 
@@ -286,10 +281,6 @@ class StreamingLODA(BaseModel):
         projected = self._project(event.features.values)
         return self._score_projected(projected)
 
-    def predict_one(self, x: dict[str, float]) -> int:
-        """Return binary anomaly prediction using ``predict_threshold``."""
-        return int(self.score_one(x) >= self.predict_threshold)
-
     def __repr__(self) -> str:
         return (
             "StreamingLODA("
@@ -297,6 +288,6 @@ class StreamingLODA(BaseModel):
             f"sparsity={self.sparsity}, warm_up_samples={self.warm_up_samples}, "
             f"decay={self.decay}, time_key={self.time_key!r}, "
             f"pseudocount={self.pseudocount}, "
-            f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
+            f"seed={self.seed}, "
             f"samples_seen={self._samples_seen}, ready={self._ready})"
         )

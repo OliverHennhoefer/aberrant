@@ -70,8 +70,6 @@ class SignedGraphSketchDetector(BaseModel):
             scoring. It cannot exceed ``max_graphs``.
         normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
             distance-plus-novelty score.
-        predict_threshold: Boundary used by ``predict_one`` on the selected
-            raw or normalized score scale.
         seed: Seed for model-local shingle hashing.
         eps: Positive numerical floor in the bounded distance component.
 
@@ -122,8 +120,6 @@ class SignedGraphSketchDetector(BaseModel):
         num_clusters: int,
         max_graphs: int,
         warm_up_graphs: int,
-        normalize_score: bool,
-        predict_threshold: float,
         eps: float,
     ) -> None:
         if sketch_dim <= 0:
@@ -138,15 +134,6 @@ class SignedGraphSketchDetector(BaseModel):
             raise ValueError("warm_up_graphs must be positive")
         if warm_up_graphs > max_graphs:
             raise ValueError("warm_up_graphs must be less than or equal to max_graphs")
-        if normalize_score:
-            if not (0.0 <= predict_threshold <= 1.0):
-                raise ValueError(
-                    "predict_threshold must be in [0, 1] when normalize_score=True"
-                )
-        elif predict_threshold < 0.0:
-            raise ValueError(
-                "predict_threshold must be non-negative when normalize_score=False"
-            )
         if eps <= 0.0:
             raise ValueError("eps must be positive")
 
@@ -164,7 +151,6 @@ class SignedGraphSketchDetector(BaseModel):
         max_graphs: int = 4096,
         warm_up_graphs: int = 32,
         normalize_score: bool = False,
-        predict_threshold: float = 0.5,
         seed: int | None = None,
         eps: float = 1e-9,
     ) -> None:
@@ -192,8 +178,6 @@ class SignedGraphSketchDetector(BaseModel):
             num_clusters=num_clusters,
             max_graphs=max_graphs,
             warm_up_graphs=warm_up_graphs,
-            normalize_score=normalize_score,
-            predict_threshold=predict_threshold,
             eps=eps,
         )
         self.sketch_dim = sketch_dim
@@ -202,7 +186,6 @@ class SignedGraphSketchDetector(BaseModel):
         self.max_graphs = max_graphs
         self.warm_up_graphs = warm_up_graphs
         self.normalize_score = normalize_score
-        self.predict_threshold = predict_threshold
         self.seed = seed
         self.eps = eps
 
@@ -499,10 +482,6 @@ class SignedGraphSketchDetector(BaseModel):
             return float(raw_score / (1.0 + raw_score))
         return raw_score
 
-    def predict_one(self, x: dict[str, float]) -> int:
-        """Return binary anomaly prediction using ``predict_threshold``."""
-        return int(self.score_one(x) >= self.predict_threshold)
-
     def __repr__(self) -> str:
         return (
             "SignedGraphSketchDetector("
@@ -513,7 +492,7 @@ class SignedGraphSketchDetector(BaseModel):
             f"num_clusters={self.num_clusters}, max_graphs={self.max_graphs}, "
             f"warm_up_graphs={self.warm_up_graphs}, "
             f"normalize_score={self.normalize_score}, "
-            f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
+            f"seed={self.seed}, "
             f"samples_seen={self._samples_seen}, active_graphs={len(self._graph_states)}, "
             f"initialized_clusters={self._initialized_clusters})"
         )

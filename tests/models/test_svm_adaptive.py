@@ -81,11 +81,8 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
         # Should handle gracefully
         sample = {"feature1": 1.0, "feature2": 2.0}
 
-        # Before training, should return default values
-        prediction = model.predict_one(sample)
         score = model.score_one(sample)
 
-        self.assertEqual(prediction, 1)  # Default to normal
         self.assertEqual(score, 0.0)  # Default neutral score
 
     def test_running_statistics_include_first_sample_and_keep_raw_support_vectors(self):

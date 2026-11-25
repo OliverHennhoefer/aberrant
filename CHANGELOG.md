@@ -128,6 +128,17 @@ Semantic Versioning.
   `seasonal_residual_detector`. `ResidualDetector(HoltWinters(season_length=m),
   target="x")` scores the same events identically; in a configuration use the
   `residual_detector` ID with a nested `holt_winters` model.
+- **Breaking:** `QuantileThreshold` and its catalog ID `quantile_threshold`.
+  Models return scores only, and alarm thresholds come from
+  `aberrant.calibration`: `ScoreCalibrator("split", alpha=0.01, window=1000)`
+  keeps the conformal quantile of a rolling score window, and fourteen other
+  methods adapt to drift. Compare each score with `predict(t)` before calling
+  `update(t, score)`. The catalog's `score` event kind went with it.
+- **Breaking:** `predict_one` and `predict_threshold` on
+  `CellNeighborhoodDetector`, `AnoEdgeL`, `SignedGraphSketchDetector` and
+  `StreamingLODA`, and `predict_one` on
+  `IncrementalOneClassSVMAdaptiveKernel`. Compare `score_one` with a threshold
+  instead, ideally one learned by a `ScoreCalibrator`.
 - **Breaking:** `StationaryRegionNeighborDetector` and its catalog ID
   `stationary_region_neighbor_detector`. It scored exactly like
   `CellNeighborhoodDetector`, and `skip_threshold` did nothing. A rebuild

@@ -39,9 +39,9 @@
 # pip install "aberrant[eval]"
 from itertools import islice
 
+from aberrant.calibration import ScoreCalibrator
 from aberrant.drift import ADWIN
 from aberrant.evaluate import PrequentialEvaluator
-from aberrant.model import QuantileThreshold
 from aberrant.model.distance import SDOStream
 from aberrant.stream.dataset import Dataset, load
 from aberrant.transform import IncrementalPCA, StandardScaler
@@ -58,20 +58,19 @@ evaluator = PrequentialEvaluator(
     metrics=True,
     metric_window_size=None,  # Retain all labeled scores for full-stream metrics.
 )
-threshold = QuantileThreshold(quantile=0.99, window_size=256)
+threshold = ScoreCalibrator("split", alpha=0.01, window=256)
 drift = ADWIN(max_window_size=2048)
 
 projected_stream = ((preprocess.transform_one(event), label) for event, label in stream)
 alerts = 0
-for record in evaluator.iter_evaluate(projected_stream):
+for t, record in enumerate(evaluator.iter_evaluate(projected_stream)):
     score = record.score
     if score is None:  # The detector is still warming up.
         continue
 
-    score_event = {"score": score}
-    if threshold.score_one(score_event) == 1.0:
+    if score > threshold.predict(t):
         alerts += 1
-    threshold.learn_one(score_event)
+    threshold.update(t, score)
     drift.update(score)
 
 result = evaluator.result()
@@ -161,7 +160,7 @@ pip install "aberrant[eval,faiss]"
 | Adaptive margin-based detection | [Online SVM models](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#svm-detectors) |
 | Learned reconstruction error | [`OnlineAutoencoderEnsemble` or the optional PyTorch `Autoencoder`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#reconstruction-detectors) |
 | Detecting distribution drift | [`ADWIN`, `KSWIN`, or `PageHinkley`](https://oliverhennhoefer.github.io/aberrant/api/drift/) |
-| Turning a score into an alert signal | [`QuantileThreshold` or `ThresholdModel`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#core-utility-models) |
+| A fixed bound on raw features | [`ThresholdModel`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#core-utility-models) |
 | Misses of an online forecast or regression, at any lead | [`ResidualDetector` with `HoltWinters`, `SeasonalNaive` or `RLSRegressor`](https://oliverhennhoefer.github.io/aberrant/user_guide/forecasting/) |
 | An alarm threshold that adapts online, with delayed feedback | [`ScoreCalibrator` with ACI, conformal PID, SAOCP and twelve more](https://oliverhennhoefer.github.io/aberrant/user_guide/calibration/) |
 
@@ -181,7 +180,7 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | SVM | `IncrementalOneClassSVMAdaptiveKernel` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |
 | Reconstruction | `OnlineAutoencoderEnsemble`, optional `Autoencoder` |
-| Score policy | `QuantileThreshold`, `ThresholdModel` |
+| Fixed rule | `ThresholdModel` |
 | Baselines | `NullModel`, `RandomModel` |
 | Drift detection | `ADWIN`, `KSWIN`, `PageHinkley` |
 

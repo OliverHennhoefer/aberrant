@@ -166,11 +166,10 @@ For branching, explicit merging and staged transformer initialization, use the
 standalone [numeric graph API](graph_pipelines.md). Its readiness-aware learning
 is additive; linear pipelines retain the behaviour described above.
 
-`ThresholdModel` and `QuantileThreshold` are models, not transformers. They
-cannot be appended after another model. Score the detector, pass the resulting
-scalar in a new mapping to the threshold model, and update each component in
-the intended order. This keeps model learning separate from alert-policy
-changes and makes threshold contamination decisions explicit.
+A pipeline ends in a model and returns its score. The alarm threshold stays
+outside: pass each score to a [`ScoreCalibrator`](calibration.md) and update it
+in the order you intend. This keeps model learning separate from alarm-policy
+changes and makes it explicit which scores the threshold learns from.
 
 See [Base API](../api/base.md) for the protocols, overloads, and pipeline
 exceptions.

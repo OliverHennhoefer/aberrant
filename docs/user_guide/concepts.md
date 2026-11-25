@@ -35,9 +35,9 @@ from silently acquiring different meanings across model families.
     baseline are not standardized across model families.
 
 **Prediction**
-:   A discrete decision produced by methods such as `predict_one`, where a
-    class exposes one, or by an external threshold policy. A score is not itself
-    a binary prediction.
+:   A discrete decision made by comparing a score with a threshold, for
+    example one learned by a `ScoreCalibrator`. Models return scores only; a
+    score is not itself a binary prediction.
 
 **Alert**
 :   An application action triggered from a score or prediction. Alert policy

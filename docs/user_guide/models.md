@@ -18,7 +18,7 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
 | Interpretable local statistic change | `aberrant.model.stat` | Measures candidate-induced changes in means, spread, moments, covariance, or correlation |
 | Learned reconstruction error | `OnlineAutoencoderEnsemble` or optional `Autoencoder` | Uses NumPy or user-supplied PyTorch autoencoders |
-| Static or adaptive score policy | `ThresholdModel` or `QuantileThreshold` | Converts feature or detector-score boundaries into a decision-oriented output |
+| A fixed bound on raw features | `ThresholdModel` | Returns `1.0` when a feature leaves its configured ceiling or floor; learned alarm thresholds on scores live in [calibration](calibration.md) |
 
 Feature scaling is part of the model specification. Distance-based methods and
 reconstruction models are scale-sensitive. `HalfSpaceTrees` specifically
@@ -439,11 +439,8 @@ built-in warm-up policy; `score_one` returns the supplied criterion's loss and
 | Class | Contract |
 | --- | --- |
 | `ThresholdModel` | Stateless binary output: `1.0` when any configured ceiling or floor is violated, otherwise `0.0`. Scalar bounds apply to every supplied feature; mapping bounds ignore unconfigured feature names. |
-| `QuantileThreshold` | Sliding score-window policy. It becomes ready after `min(window_size, max(10, floor(0.1 * window_size)))` learned scores and returns `1.0` at or above the quantile for any threshold sign. Below a positive threshold it returns `max(score / threshold, 0.0)`; below a zero or negative threshold it returns `0.0`. |
 | `NullModel` | Stateless baseline that always returns `0.0`. |
 | `RandomModel` | Uniform `[0, 1)` baseline. Each `score_one` consumes one draw from its model-local generator; `learn_one` is a no-op. |
 
-`QuantileThreshold` is adaptive but not contamination-resistant: learning
-anomalous scores moves the score distribution it uses. Decide explicitly
-whether every score, only accepted-normal scores, or a delayed/calibration
-stream should update it.
+Models return scores only. To turn a score into an alarm, use a
+`ScoreCalibrator` from [`aberrant.calibration`](calibration.md).

@@ -11,7 +11,7 @@ from collections import deque
 import numpy as np
 import pytest
 
-from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
+from aberrant.model import NullModel, RandomModel, ThresholdModel
 from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble, _NumpyAutoencoder
 from aberrant.model.stat import (
     MovingAverage,
@@ -166,21 +166,6 @@ def test_damp_normalization_survives_finite_extreme_magnitudes(scale: float) -> 
     np.testing.assert_allclose(actual, expected, atol=1e-12, rtol=1e-12)
 
 
-def test_quantile_threshold_extremes_and_turnover_never_retain_nonfinite_boundary() -> (
-    None
-):
-    model = QuantileThreshold(quantile=0.5, window_size=2)
-    extreme = np.finfo(float).max
-    for index in range(5_000):
-        model.learn_one({"score": -extreme if index % 2 else extreme})
-        assert model.n_scores <= 2
-        if model.threshold is not None:
-            assert model.threshold == 0.0
-            assert model.score_one({"score": 0.0}) == 1.0
-    model.reset()
-    assert model.threshold is None and model.n_scores == 0
-
-
 @pytest.mark.parametrize(
     "model", [NullModel(), RandomModel(), ThresholdModel(ceiling=1.0)]
 )
@@ -282,7 +267,6 @@ def test_retained_python_memory_plateaus_after_warmup_across_model_families() ->
         RollingMatrixProfile(subsequence_length=4, window_size=23),
         MultivariateRollingMatrixProfile(subsequence_length=4, window_size=23),
         XLagDAMP(subsequence_length=4, x_lag=23, start_index=8),
-        QuantileThreshold(window_size=23),
         OnlineAutoencoderEnsemble(
             feature_map_grace=13,
             ad_grace=17,
@@ -297,9 +281,7 @@ def test_retained_python_memory_plateaus_after_warmup_across_model_families() ->
             point = {"x": math.sin(index * 0.17)}
             paired = {**point, "y": math.cos(index * 0.21)}
             for model_index, model in enumerate(models):
-                sample = paired if model_index in (1, 3, 6) else point
-                if model_index == 5:
-                    sample = {"score": point["x"]}
+                sample = paired if model_index in (1, 3, 5) else point
                 if index % 4 == 0:
                     model.score_one(sample)
                 model.learn_one(sample)

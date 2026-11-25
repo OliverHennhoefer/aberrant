@@ -153,11 +153,6 @@ def _graph_edge_features(params: Parameters) -> FeatureCount:
     return FeatureCount(count)
 
 
-def _quantile_warmup(params: Parameters) -> WarmupRequirement:
-    window_size = _as_int(params.get("window_size", 1000))
-    return _events(min(window_size, max(10, int(window_size * 0.1))))
-
-
 # Forecasters that predict the target from the event's other features at lead 0
 # instead of forecasting the series ahead.
 _REGRESSORS = frozenset({"rls_regressor"})
@@ -445,20 +440,6 @@ _MODEL_SPECS = (
             warmup=_fixed_warmup(0),
             state=StateKind.STATELESS,
             resettable=False,
-        ),
-    ),
-    _model(
-        "quantile_threshold",
-        "QuantileThreshold",
-        "aberrant.model",
-        "score_policy",
-        _capabilities(
-            event_kind=EventKind.SCORE,
-            feature_count=ONE_FEATURE,
-            score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_quantile_warmup,
-            state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(

@@ -33,7 +33,6 @@ class EventKind(str, Enum):
     BIVARIATE = "bivariate"
     EDGE = "edge"
     GRAPH_EDGE = "graph_edge"
-    SCORE = "score"
     CUSTOM = "custom"
 
 
