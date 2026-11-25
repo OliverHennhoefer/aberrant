@@ -152,7 +152,7 @@ distance, so gaps between explicit bucket numbers count toward
 | Class | What it scores | Default score | State policy |
 | --- | --- | --- | --- |
 | `AnoEdgeL` | Candidate edge membership in maintained local dense submatrices | Non-negative raw score; optional `[0, 1)` | Fixed higher-order sketches and configured submatrices |
-| `ISCONNA` | Edge/endpoint frequency, consecutive-width, and gap patterns | Non-negative raw combined G-test score; optional `[0, 1)` | Fixed count-min sketches |
+| `ISCONNA` | Edge/endpoint frequency, consecutive-width, and gap patterns | Non-negative raw combined G-test score; optional `[0, 1]` | Fixed count-min sketches |
 | `MIDAS` | Candidate-inclusive edge microcluster statistic; MIDAS-R also scores endpoints | Non-negative raw chi-square-style score; optional `[0, 1)` | Fixed count-min sketches |
 | `SignedGraphSketchDetector` | Change in a graph's signed shingle sketch relative to online centroids | Non-negative distance-plus-novelty score; optional `[0, 1)` | At most `max_graphs` sketches plus fixed centroids |
 
