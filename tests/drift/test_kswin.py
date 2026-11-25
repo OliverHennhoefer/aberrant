@@ -2,7 +2,11 @@
 
 import random
 import unittest
+from unittest import mock
 
+from scipy.stats import ks_2samp
+
+from aberrant.drift import kswin as kswin_module
 from aberrant.drift.kswin import KSWIN
 
 
@@ -119,6 +123,42 @@ class TestKSWIN(unittest.TestCase):
 
         self.assertTrue(detected, "Drift should be detected on distribution change")
         self.assertGreater(detector.n_detections, 0)
+
+    def test_drift_keeps_the_recent_samples_as_the_new_window(self):
+        """After a drift the window restarts from its last stat_size samples."""
+        detector = KSWIN(alpha=0.005, window_size=100, stat_size=30, seed=1)
+        values = [0.0] * 100 + [5.0] * 100
+        drifts = []
+        for index, value in enumerate(values):
+            detector.update(value)
+            if detector.drift_detected:
+                drifts.append(index)
+                self.assertEqual(list(detector._window), values[index - 29 : index + 1])
+        # The next test needs window_size - stat_size more samples, not a
+        # whole new window.
+        self.assertTrue(drifts)
+        detector = KSWIN(alpha=0.005, window_size=100, stat_size=30, seed=1)
+        tests = []
+        with mock.patch.object(kswin_module, "ks_2samp", wraps=ks_2samp) as test:
+            for index, value in enumerate(values):
+                calls = test.call_count
+                detector.update(value)
+                if test.call_count > calls:
+                    tests.append(index)
+        self.assertEqual(tests[tests.index(drifts[0]) + 1], drifts[0] + 70)
+
+    def test_p_value_is_the_exact_two_sample_ks_p_value(self):
+        """The author implementation uses the exact KS distribution."""
+        detector = KSWIN(window_size=100, stat_size=30, seed=3)
+        rng = random.Random(0)
+        with mock.patch.object(kswin_module, "ks_2samp", wraps=ks_2samp) as test:
+            for _ in range(100):
+                detector.update(rng.gauss(0.0, 1.0))
+            recent, historical = test.call_args.args[:2]
+            samples = (recent, historical)
+        expected = ks_2samp(*samples, method="exact")
+        self.assertEqual(detector.p_value, expected.pvalue)
+        self.assertEqual(detector.statistic, expected.statistic)
 
     def test_p_value_and_statistic_properties(self):
         """Test p_value and statistic properties."""

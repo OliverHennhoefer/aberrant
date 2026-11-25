@@ -7,6 +7,15 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `KSWIN` uses the exact two-sample KS p-value, as the authors'
+  implementation does, instead of the asymptotic one. For the default 30
+  against 30 samples the asymptotic p-value is too small: on 5,000 samples of
+  Gaussian noise it raised 22 false alarms over two seeds, the exact one 15. After a drift the most recent
+  `stat_size` samples become the new window, as in the paper, instead of
+  clearing it, so the next test comes `window_size - stat_size` samples later.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
