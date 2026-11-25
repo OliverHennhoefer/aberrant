@@ -47,6 +47,46 @@ def test_feature_schema_rejects_invalid_and_stale_candidates_atomically() -> Non
         schema.commit(stale)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"expected_size": 0}, "expected_size must be positive"),
+        ({"names": []}, "cannot be empty"),
+        ({"names": ["a", ""]}, "non-empty strings"),
+        ({"names": ["a", 1]}, "non-empty strings"),
+        ({"names": ["a", "a"]}, "duplicates"),
+        ({"names": ["a", "b"], "expected_size": 3}, "Expected 3 feature names, got 2"),
+    ],
+)
+def test_feature_schema_rejects_invalid_configuration(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        FeatureSchema(**kwargs)
+
+
+def test_feature_schema_rejects_a_preview_from_another_schema() -> None:
+    fixed = FeatureSchema(names=["a", "b"])
+    foreign = FeatureSchema().preview({"x": 1.0})
+
+    with pytest.raises(RuntimeError, match="no longer matches"):
+        fixed.commit(foreign)
+    assert fixed.names == ("a", "b")
+
+
+def test_monotonic_clock_rejects_a_preview_from_another_clock() -> None:
+    ahead, behind = MonotonicClock(), MonotonicClock()
+    ahead.commit(ahead.preview(10, implicit=False))
+    behind.commit(behind.preview(1, implicit=False))
+    foreign = behind.preview(3, implicit=False)
+
+    with pytest.raises(RuntimeError, match="no longer matches"):
+        ahead.commit(foreign)
+    with pytest.raises(RuntimeError, match="stale"):
+        MonotonicClock().commit(foreign)
+    assert ahead.max_time == 10
+
+
 def test_monotonic_clock_only_advances_on_commit() -> None:
     clock = MonotonicClock()
 
