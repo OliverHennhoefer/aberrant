@@ -7,10 +7,12 @@ from itertools import chain
 
 import numpy as np
 import pytest
+from scipy.fft import next_fast_len
 from scipy.signal import fftconvolve
 
 from aberrant.model.timeseries import RollingMatrixProfile
 from aberrant.model.timeseries._matrix_profile import (
+    _next_fast_length,
     _statistics_array,
     _valid_convolution,
 )
@@ -332,6 +334,11 @@ def test_valid_convolution_matches_fftconvolve(scale):
             actual = _valid_convolution(signal, kernel)
             assert actual.shape == expected.shape
             assert actual.tobytes() == expected.tobytes()
+
+
+def test_next_fast_length_matches_scipy():
+    for size in range(1, 20_000):
+        assert _next_fast_length(size) == next_fast_len(size, real=True)
 
 
 def test_statistics_array_matches_asarray():

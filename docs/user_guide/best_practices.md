@@ -118,8 +118,7 @@ If an application checkpoints model objects anyway:
 
 - own the serializer and storage security policy;
 - never load an untrusted pickle-like artifact;
-- record the exact Python, aberrant, NumPy, SciPy, and optional dependency
-  versions;
+- record the exact Python, aberrant, NumPy, and optional dependency versions;
 - test round-trip scores and subsequent learning for every model type;
 - retain the source event offset needed to resume without gaps or duplicates;
 - keep a path to rebuild state from events when upgrading; the

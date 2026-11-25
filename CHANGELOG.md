@@ -52,6 +52,13 @@ Semantic Versioning.
 
 ### Changed
 
+- SciPy is no longer a dependency, which removes about 95 MB from an
+  installation and cuts `import aberrant.drift` from about 0.7 s to under
+  0.1 s. `KSWIN` computes the exact two-sample KS test itself and the matrix
+  profile detectors use NumPy's FFT. P-values, statistics and scores are
+  bit-identical to the SciPy versions. An update of a default `KSWIN` costs
+  about 30 µs instead of 320 µs, and it no longer changes the process-wide
+  warning filters on each test, which was not thread-safe.
 - `MovingMedian`, `MovingQuantile` and `MovingInterquartileRange` keep their
   window sorted as they learn, so a score reads the order statistics in
   logarithmic time instead of sorting the window twice. Scores are
