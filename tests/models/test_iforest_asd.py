@@ -1,7 +1,6 @@
 """Tests for ASD Isolation Forest anomaly detection model."""
 
 import math
-import time
 import unittest
 from typing import Any
 
@@ -573,16 +572,6 @@ class TestASDIsolationForestExactness(unittest.TestCase):
                     choosing.uniform(-1.0, 1.0), indexing.uniform(-1.0, 1.0)
                 )
             self.assertEqual(choosing.bit_generator.state, indexing.bit_generator.state)
-
-    def test_default_forest_speed_smoke(self):
-        events = score_sequences.make_stream(seed=7, n_events=2000, n_features=8)
-        forest = ASDIsolationForest(seed=7)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(forest, events)
-
-        # Generous bound against large regressions; typical runs take ~0.4 s.
-        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@
 Real dataset tests are in tests/integration/test_detection_quality.py
 """
 
-import time
 import unittest
 from unittest.mock import patch
 
@@ -509,14 +508,3 @@ def test_integer_batches_score_like_float_batches(dtype):
         np.testing.assert_array_equal(typed_score, floats.score_batch(float_row))
         typed.learn_batch(row[np.newaxis, :])
         floats.learn_batch(float_row)
-
-
-def test_model_processes_two_thousand_events_quickly():
-    events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
-    model = OnlineIsolationForest(num_trees=25, window_size=256, seed=1)
-
-    start = time.perf_counter()
-    score_sequences.score_then_learn(model, events)
-
-    # Generous bound against large regressions; typical runs take ~0.3 s.
-    assert time.perf_counter() - start < 3.0

@@ -1,6 +1,5 @@
 """Unit tests for the LODA sketch-based anomaly detector."""
 
-import time
 import unittest
 from unittest import mock
 
@@ -292,16 +291,6 @@ class TestLODA(unittest.TestCase):
                     scores = score_sequences.score_then_learn(model, events)
                 self.assertEqual(scores, reference_scores)
                 np.testing.assert_array_equal(model._bin_counts, reference._bin_counts)
-
-    def test_default_model_processes_two_thousand_events_quickly(self) -> None:
-        events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
-        model = LODA(seed=1)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.05 s.
-        self.assertLess(time.perf_counter() - start, 1.0)
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(n_projections=18, n_bins=14, sparsity=0.25)

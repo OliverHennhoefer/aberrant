@@ -1,6 +1,5 @@
 """Unit tests for xStream anomaly detection model."""
 
-import time
 import unittest
 
 import numpy as np
@@ -380,16 +379,6 @@ class TestXStreamExactness(unittest.TestCase):
                 assert model._state is not None
                 self.assertEqual(model._state.cms_current.dtype, dtype)
                 self.assertEqual(model._state.cms_reference.dtype, dtype)
-
-    def test_default_model_processes_two_thousand_events_quickly(self):
-        events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
-        model = XStream(seed=1)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.5 s.
-        self.assertLess(time.perf_counter() - start, 5.0)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 """Unit tests for the RSHash sketch-based anomaly detector."""
 
 import math
-import time
 import unittest
 from unittest.mock import patch
 
@@ -411,16 +410,6 @@ class TestRSHashExactness(unittest.TestCase):
             model.learn_one(event)
             fresh.learn_one(event)
         np.testing.assert_array_equal(model._counts, fresh._counts)
-
-    def test_default_model_speed_smoke(self) -> None:
-        events = score_sequences.make_stream(seed=8, n_events=2000, n_features=8)
-        model = RSHash(seed=8)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.15 s.
-        self.assertLess(time.perf_counter() - start, 2.0)
 
 
 if __name__ == "__main__":

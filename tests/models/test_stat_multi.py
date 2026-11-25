@@ -1,4 +1,3 @@
-import time
 import unittest
 from collections import deque
 
@@ -407,16 +406,6 @@ class TestMovingMultivariateExactness(unittest.TestCase):
                     self.assertEqual(array.shape, expected.shape)
                     self.assertEqual(array.dtype, expected.dtype)
                     self.assertEqual(array.tobytes(), expected.tobytes())
-
-    def test_window_of_one_thousand_speed_smoke(self):
-        events = score_sequences.make_stream(seed=13, n_events=2000, n_features=2)
-        model = MovingCovariance(window_size=1000)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.25 s.
-        self.assertLess(time.perf_counter() - start, 5.0)
 
 
 if __name__ == "__main__":

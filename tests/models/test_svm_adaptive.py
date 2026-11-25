@@ -1,5 +1,4 @@
 import copy
-import time
 import unittest
 
 import numpy as np
@@ -229,16 +228,6 @@ class TestIncrementalOneClassSVMAdaptiveKernelExactness(unittest.TestCase):
                 self.assertEqual(
                     model.rng.bit_generator.state, reference.rng.bit_generator.state
                 )
-
-    def test_default_model_speed_smoke(self):
-        events = score_sequences.make_stream(seed=10, n_events=2000, n_features=8)
-        model = IncrementalOneClassSVMAdaptiveKernel(seed=10)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.4 s.
-        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":

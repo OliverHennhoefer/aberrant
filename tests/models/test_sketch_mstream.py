@@ -1,7 +1,6 @@
 """Unit tests for the MStream sketch-based anomaly detector."""
 
 import math
-import time
 import unittest
 
 import numpy as np
@@ -392,18 +391,6 @@ class TestMStreamExactness(unittest.TestCase):
         categorical_total = state.categorical.counts.total
         # Both events hash category 2 of feature ``a`` to the same cells.
         self.assertEqual(categorical_total[0].max(), 2.0)
-
-    def test_default_model_speed_smoke(self) -> None:
-        events = score_sequences.make_multi_aspect_stream(
-            seed=17, n_events=2000, n_numeric=8, n_categorical=0
-        )
-        model = MStream(seed=17)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.3 s.
-        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":

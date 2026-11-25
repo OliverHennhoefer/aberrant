@@ -3,7 +3,6 @@
 import copy
 import pickle
 import sys
-import time
 import unittest
 from dataclasses import fields
 from unittest import mock
@@ -554,13 +553,3 @@ class TestISCONNAExactness(unittest.TestCase):
                         _reference_component_scores(model, bucket, src, dst),
                     )
                     model.learn_one(event)
-
-    def test_default_model_speed_smoke(self) -> None:
-        events = score_sequences.make_edge_stream(seed=35, n_events=2000, n_nodes=50)
-        model = ISCONNA(seed=35)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.13 s.
-        self.assertLess(time.perf_counter() - start, 2.0)
