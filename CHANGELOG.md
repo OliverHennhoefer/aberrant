@@ -52,6 +52,14 @@ Semantic Versioning.
 
 ### Changed
 
+- SciPy is no longer a dependency, which removes about 95 MB from an
+  installation and cuts `import aberrant.drift` from about 0.7 s to under
+  0.1 s. `KSWIN` computes the exact two-sample KS test itself and the matrix
+  profile detectors use NumPy's FFT. KSWIN p-values and statistics are
+  bit-identical to SciPy's; matrix profile scores match to the last bit or
+  two, depending on how NumPy and SciPy were built. An update of a default `KSWIN` costs
+  about 30 µs instead of 320 µs, and it no longer changes the process-wide
+  warning filters on each test, which was not thread-safe.
 - Runtime and optional dependencies have no upper version bounds, so
   aberrant no longer blocks an application from upgrading NumPy, tqdm,
   filelock, scikit-learn, PyTorch or FAISS. CI installs the lowest supported
@@ -91,6 +99,8 @@ Semantic Versioning.
   clipped at 0, so it returned 0 for every sample on SHUTTLE and COVER
   (ROC-AUC 0.50). Its child nodes never trained. It followed no published
   method, so there was nothing to correct it towards.
+- The weekly OpenSSF Scorecard workflow and the Scorecard badge in the
+  README.
 
 ## [1.5.0] - 2026-11-10
 

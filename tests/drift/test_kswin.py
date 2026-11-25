@@ -2,6 +2,7 @@
 
 import random
 import unittest
+import warnings
 from unittest import mock
 
 from scipy.stats import ks_2samp
@@ -139,7 +140,9 @@ class TestKSWIN(unittest.TestCase):
         self.assertTrue(drifts)
         detector = KSWIN(alpha=0.005, window_size=100, stat_size=30, seed=1)
         tests = []
-        with mock.patch.object(kswin_module, "ks_2samp", wraps=ks_2samp) as test:
+        with mock.patch.object(
+            kswin_module, "_ks_two_sample", wraps=kswin_module._ks_two_sample
+        ) as test:
             for index, value in enumerate(values):
                 calls = test.call_count
                 detector.update(value)
@@ -151,7 +154,9 @@ class TestKSWIN(unittest.TestCase):
         """The author implementation uses the exact KS distribution."""
         detector = KSWIN(window_size=100, stat_size=30, seed=3)
         rng = random.Random(0)
-        with mock.patch.object(kswin_module, "ks_2samp", wraps=ks_2samp) as test:
+        with mock.patch.object(
+            kswin_module, "_ks_two_sample", wraps=kswin_module._ks_two_sample
+        ) as test:
             for _ in range(100):
                 detector.update(rng.gauss(0.0, 1.0))
             recent, historical = test.call_args.args[:2]
@@ -159,6 +164,32 @@ class TestKSWIN(unittest.TestCase):
         expected = ks_2samp(*samples, method="exact")
         self.assertEqual(detector.p_value, expected.pvalue)
         self.assertEqual(detector.statistic, expected.statistic)
+
+    def test_two_sample_test_matches_scipy_exact_ks(self):
+        """The KS test equals SciPy's exact test, also for tied values."""
+        rng = random.Random(7)
+        for n in [1, 2, 3, 5, 10, 30, 64, 200, 1000]:
+            for shift in (0.0, 0.3, 1.0, 3.0):
+                first = [rng.gauss(0.0, 1.0) for _ in range(n)]
+                second = [rng.gauss(shift, 1.0) for _ in range(n)]
+                tied_first = [round(value) for value in first]
+                tied_second = [round(value) for value in second]
+                for left, right in ((first, second), (tied_first, tied_second)):
+                    # SciPy falls back to the asymptotic test, which gives 1
+                    # as well, when the exact p-value rounds above 1.
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        expected = ks_2samp(left, right, method="exact")
+                    statistic, p_value = kswin_module._ks_two_sample(left, right)
+                    self.assertEqual(statistic, expected.statistic)
+                    self.assertEqual(p_value, expected.pvalue)
+
+    def test_two_sample_test_rejects_unequal_sizes(self):
+        """KSWIN always compares two samples of stat_size values."""
+        with self.assertRaises(ValueError):
+            kswin_module._ks_two_sample([0.0, 1.0], [0.0])
+        with self.assertRaises(ValueError):
+            kswin_module._ks_two_sample([], [])
 
     def test_p_value_and_statistic_properties(self):
         """Test p_value and statistic properties."""

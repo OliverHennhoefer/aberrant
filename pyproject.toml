@@ -56,7 +56,6 @@ requires-python = ">=3.11"
 dependencies = [
     "filelock>=4.2.7",
     "numpy>=2.2.3",
-    "scipy>=1.17.1",
     "tqdm>=4.67.1",
 ]
 
@@ -75,6 +74,8 @@ dev = [
     "hypothesis>=6.0.0,<7.0.0",
     "mypy>=1.13.0,<3.0.0",
     "scikit-learn>=1.9.1,<2.0.0",
+    # Reference implementations that tests compare against.
+    "scipy>=1.17.1,<2.0.0",
     "torch>=2.6.0,<3.0.0",
 ]
 docs = [
@@ -177,13 +178,6 @@ show_error_codes = true
 module = [
     "tqdm",
     "tqdm.*",
-    "scipy",
-    "scipy.stats",
-    "scipy.*",
     "faiss",
 ]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["aberrant.drift.kswin"]
-disable_error_code = ["import-untyped"]
