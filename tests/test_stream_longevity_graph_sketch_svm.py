@@ -16,10 +16,7 @@ from aberrant.base.model import BaseModel
 from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
 from aberrant.model.iforest import StreamRandomHistogramForest, XStream
 from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
-from aberrant.model.svm import (
-    GraphGatedOneClassSVM,
-    IncrementalOneClassSVMAdaptiveKernel,
-)
+from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 
 
 def _retained_bytes(value: object, seen: set[int] | None = None) -> int:
@@ -149,11 +146,6 @@ _FACTORIES: list[tuple[str, Callable[[], BaseModel], str]] = [
     (
         "loda-cumulative",
         lambda: StreamingLODA(n_projections=3, n_bins=8, warm_up_samples=8, seed=5),
-        "numeric",
-    ),
-    (
-        "graph-gated-svm-cycle",
-        lambda: GraphGatedOneClassSVM(graph={0: [1], 1: [2], 2: [0]}, threshold=-1.0),
         "numeric",
     ),
     (

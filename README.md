@@ -183,7 +183,7 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | Sketch | `MStream`, `StreamingLODA`, `StreamingRSHash` |
 | Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `SignedGraphSketchDetector` |
 | Time series | `MultivariateRollingMatrixProfile`, `RollingMatrixProfile`, `SeasonalResidualDetector`, `XLagDAMP` |
-| SVM | `GraphGatedOneClassSVM`, `IncrementalOneClassSVMAdaptiveKernel` |
+| SVM | `IncrementalOneClassSVMAdaptiveKernel` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |
 | Reconstruction | `OnlineAutoencoderEnsemble`, optional `Autoencoder` |
 | Score policy | `QuantileThreshold`, `ThresholdModel` |
