@@ -49,6 +49,11 @@ class StreamingRSHash(BaseModel):
     normalization and exponential fading are streaming adaptations in this
     implementation and do not reproduce the paper's exact window procedure.
 
+    Each subspace scores ``1 - log(1 + c) / log(1 + max(m, 1))``, where ``c`` is
+    the faded count of the sample's least occupied bucket and ``m`` the faded
+    number of learned samples, the most any bucket can hold. The score is the
+    mean over subspaces.
+
     Notes:
     - Scores are continuous, non-negative, and bounded in ``[0, 1]``.
     - Memory usage is bounded by ``components_num * hash_num * bins``.
@@ -139,6 +144,8 @@ class StreamingRSHash(BaseModel):
         self._n_stats: int = 0
 
         self._samples_seen: int = 0
+        # The faded number of learned samples, in the units of ``_counts``.
+        self._mass: float = 0.0
         self._scale: float = 1.0
         # The value bytes and buckets of the last scored point. Only learning
         # changes the buckets of a point, so learning that point reuses them.
@@ -279,15 +286,21 @@ class StreamingRSHash(BaseModel):
         if self._counts is None:
             return 0.0
 
-        # NumPy treats Python integers beyond uint64 as objects, for which its
-        # log1p ufunc fails. math.log accepts arbitrary-size integer counters.
-        normalizer = math.log(1 + max(self._samples_seen, 1))
-        if normalizer <= 0.0:
-            return 0.0
+        # No bucket can hold more than the faded mass of all learned samples,
+        # so the score keeps its scale on an endless fading stream.
+        mass = max(self._mass * query_scale, 1.0)
+        normalizer = math.log(1.0 + mass)
 
         occupancy = self._counts[self._components, self._tables, buckets] * query_scale
         occupancy_min = np.maximum(occupancy.min(axis=1), 0.0)
-        component_scores = np.clip(1.0 - np.log1p(occupancy_min) / normalizer, 0.0, 1.0)
+        # A bucket holding the whole mass scores exactly 0. Its count and the
+        # mass take the same float steps, but NumPy's log1p and math.log can
+        # round one ulp apart, so the ratio of the two logs is not reliably 1.
+        component_scores = np.where(
+            occupancy_min >= mass,
+            0.0,
+            np.clip(1.0 - np.log1p(occupancy_min) / normalizer, 0.0, 1.0),
+        )
         return float(np.mean(component_scores))
 
     def learn_one(self, x: dict[str, float]) -> None:
@@ -311,11 +324,13 @@ class StreamingRSHash(BaseModel):
         # forgetting, so zero the old counts and start again at unit scale.
         if scale < self._scale_renorm_threshold:
             self._counts *= scale
+            self._mass *= scale
             scale = 1.0
         self._scale = scale
 
         increment = 1.0 / self._scale
         self._counts[self._components, self._tables, buckets] += increment
+        self._mass += increment
 
         self._update_running_stats(vector)
 

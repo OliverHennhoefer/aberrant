@@ -36,9 +36,9 @@ def _reference_buckets(model: RSHash, normalized: np.ndarray) -> np.ndarray:
 
 
 def _reference_score(model: RSHash, buckets: np.ndarray, query_scale: float) -> float:
-    """Score like aberrant 1.4.0, one minimum and one clip per component."""
+    """Score with one minimum and one clip per component."""
     assert model._counts is not None
-    normalizer = math.log(1 + max(model.n_samples_seen, 1))
+    normalizer = math.log(1.0 + max(model._mass * query_scale, 1.0))
     component_scores = np.empty(model.components_num, dtype=np.float64)
     for component in range(model.components_num):
         occupancy_min = float("inf")
@@ -156,6 +156,20 @@ class TestRSHash(unittest.TestCase):
         self.assertEqual(model._boundary.clock.max_time, query["t"])
         model.learn_one({"t": 100_001.0, "a": 1.1, "b": 2.1})
         self.assertEqual(model.n_samples_seen, 3)
+
+    def test_a_point_holding_all_faded_mass_scores_zero_at_any_length(self) -> None:
+        # With fading, a bucket holds at most about 1 / (1 - exp(-decay))
+        # samples. The normalizer must settle with it, or the score of even
+        # the most typical point drifts towards 1 as the stream grows.
+        model = self.create_model(decay=0.01, warm_up_samples=1)
+        point = {"a": 0.5, "b": -0.5}
+        for t in range(20_001):
+            if t in (1_000, 20_000):
+                # Only the first sample, hashed before any feature statistics,
+                # lands elsewhere; its weight has faded by exp(-10) or more.
+                score = model.score_one({"t": float(t), **point})
+                self.assertAlmostEqual(score, 0.0, places=6)
+            model.learn_one({"t": float(t), **point})
 
     def test_failed_hashing_does_not_apply_decay_or_advance_time(self) -> None:
         model = self.create_model()
