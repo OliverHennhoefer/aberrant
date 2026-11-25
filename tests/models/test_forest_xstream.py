@@ -1,5 +1,6 @@
 """Unit tests for xStream anomaly detection model."""
 
+import pickle
 import unittest
 
 import numpy as np
@@ -375,6 +376,73 @@ class TestXStreamExactness(unittest.TestCase):
                 assert model._state is not None
                 self.assertEqual(model._state.cms_current.dtype, dtype)
                 self.assertEqual(model._state.cms_reference.dtype, dtype)
+
+    def test_pickle_stores_window_points_and_recounts_the_sketches(self):
+        rng = np.random.default_rng(5)
+        events = [
+            {"a": float(a), "b": float(b), "c": float(c)}
+            for a, b, c in rng.normal(size=(120, 3))
+        ]
+        for learned in (5, 16, 40, 85):
+            with self.subTest(learned=learned):
+                model = self.create_model()
+                for event in events[:learned]:
+                    model.learn_one(event)
+                restored = pickle.loads(pickle.dumps(model))
+
+                if model._state is not None:
+                    assert restored._state is not None
+                    np.testing.assert_array_equal(
+                        restored._state.cms_current, model._state.cms_current
+                    )
+                    np.testing.assert_array_equal(
+                        restored._state.cms_reference, model._state.cms_reference
+                    )
+                for event in events[learned:]:
+                    self.assertEqual(restored.score_one(event), model.score_one(event))
+                    restored.learn_one(event)
+                    model.learn_one(event)
+
+    def test_windows_larger_than_a_sketch_pickle_the_sketches(self):
+        model = XStream(
+            k=16,
+            n_chains=2,
+            depth=3,
+            sketch_width=8,
+            n_hashes=1,
+            window_size=64,
+            warm_up=16,
+            seed=4,
+        )
+        rng = np.random.default_rng(7)
+        events = [{"a": float(a), "b": float(b)} for a, b in rng.normal(size=(200, 2))]
+        for event in events[:150]:
+            model.learn_one(event)
+        assert model._state is not None
+        self.assertIsNone(model._state.current_points)
+
+        restored = pickle.loads(pickle.dumps(model))
+        assert restored._state is not None
+        np.testing.assert_array_equal(
+            restored._state.cms_reference, model._state.cms_reference
+        )
+        for event in events[150:]:
+            self.assertEqual(restored.score_one(event), model.score_one(event))
+            restored.learn_one(event)
+            model.learn_one(event)
+
+    def test_pickle_is_far_smaller_than_the_sketches(self):
+        model = XStream(seed=3)
+        rng = np.random.default_rng(6)
+        for row in rng.normal(size=(600, 10)):
+            model.learn_one({f"f{index}": float(v) for index, v in enumerate(row)})
+        assert model._state is not None
+        sketches = model._state.cms_current.nbytes + model._state.cms_reference.nbytes
+        points = 2 * model.window_size * model.k * 8
+
+        size = len(pickle.dumps(model))
+        self.assertLess(size, 2 * points)
+        self.assertLess(size, sketches / 20)
 
 
 if __name__ == "__main__":
