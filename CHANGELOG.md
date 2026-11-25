@@ -7,6 +7,15 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `StreamingRSHash` normalizes bucket occupancy by the faded number of
+  learned samples instead of the total count. With fading, occupancy settles
+  while the total keeps growing, so every score drifted towards 1 as a stream
+  grew: the only point ever seen scored 0.33 after 1,000 samples. Without
+  fading (`decay=0`) scores are unchanged. On SHUTTLE, HTTP and COVER,
+  prequential ROC-AUC and AP stay level or rise.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
