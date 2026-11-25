@@ -7,6 +7,13 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Development
+
+- `LocalOutlierFactor` is checked score by score against scikit-learn's
+  novelty LOF over a sliding window, for both metrics.
+- The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
+  skips without FAISS and so ran in no job.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
