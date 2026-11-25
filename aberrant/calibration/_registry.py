@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
-from aberrant._utils.validation import coerce_finite_number
+from aberrant.base.descriptors import (
+    ParameterDescriptor,
+    ValueDescriptor,
+    parameters_schema,
+    resolve_parameters,
+)
 from aberrant.calibration._bayesian import (
     BOCPDACI,
     BayesianBelief,
@@ -44,47 +48,28 @@ class OnlineCalibrator(Protocol):
     def update(self, key: object, score: float) -> None: ...
 
 
-@dataclass(frozen=True)
-class CalibratorParameter:
-    """One parameter of a calibration method.
-
-    ``minimum`` and ``maximum`` bound the values the method accepts;
-    ``low`` and ``high`` are the range worth offering in an editor.
-    """
-
-    key: str
-    label: str
-    default: float
-    low: float
-    high: float
-    step: float
-    minimum: float
-    maximum: float = math.inf
-    exclusive_minimum: bool = False
-    exclusive_maximum: bool = False
-    integer: bool = False
-    help: str = ""
-
-    def coerce(self, value: object) -> float:
-        """Validate a value for this parameter."""
-        if isinstance(value, bool):
-            raise ValueError(f"{self.key} must be numeric")
-        number = coerce_finite_number(value, label=self.key)
-        if self.integer and not number.is_integer():
-            raise ValueError(f"{self.key} must be an integer")
-        too_low = (
-            number <= self.minimum if self.exclusive_minimum else number < self.minimum
-        )
-        too_high = (
-            number >= self.maximum if self.exclusive_maximum else number > self.maximum
-        )
-        if too_low or too_high:
-            low = "(" if self.exclusive_minimum else "["
-            high = ")" if self.exclusive_maximum else "]"
-            raise ValueError(
-                f"{self.key} must be in {low}{self.minimum:g}, {self.maximum:g}{high}"
-            )
-        return number
+def _parameter(
+    name: str,
+    title: str,
+    default: float,
+    *,
+    minimum: float,
+    maximum: float | None = None,
+    exclusive_minimum: bool = False,
+    exclusive_maximum: bool = False,
+    integer: bool = False,
+    description: str = "",
+) -> ParameterDescriptor:
+    value = ValueDescriptor.number(
+        integer=integer,
+        minimum=minimum,
+        maximum=maximum,
+        exclusive_minimum=exclusive_minimum,
+        exclusive_maximum=exclusive_maximum,
+    )
+    return ParameterDescriptor(
+        name, value, int(default) if integer else float(default), title, description
+    )
 
 
 Coverage = Literal["exchangeable", "long_run", "none"]
@@ -111,49 +96,53 @@ class CalibratorSpec:
     summary: str
     family: Literal["conformal", "bayesian"]
     coverage: Coverage
-    parameters: tuple[CalibratorParameter, ...]
+    parameters: tuple[ParameterDescriptor, ...]
     factory: Factory
 
     def defaults(self) -> dict[str, float]:
         """Every parameter at its default."""
-        return {p.key: p.default for p in self.parameters}
+        return self.resolve({})
 
     def resolve(self, params: Mapping[str, object]) -> dict[str, float]:
-        """Defaults overridden by ``params``, each value validated."""
-        known = {p.key: p for p in self.parameters}
-        unknown = sorted(set(params) - set(known))
-        if unknown:
-            raise ValueError(f"{self.id} has no parameter {', '.join(unknown)}")
-        resolved = self.defaults()
-        for key, value in params.items():
-            resolved[key] = known[key].coerce(value)
-        return resolved
+        """Defaults overridden by ``params``, each value validated.
+
+        Raises:
+            ConfigurationError: A parameter is unknown or out of range.
+        """
+        return cast(
+            "dict[str, float]",
+            resolve_parameters(self.parameters, params, label=self.id),
+        )
+
+    def schema(self) -> dict[str, object]:
+        """The JSON Schema of the parameters, as the catalog gives components."""
+        return parameters_schema(self.parameters)
 
 
-def _gamma(default: float = 0.01) -> CalibratorParameter:
-    return CalibratorParameter(
-        "gamma", "Step size", default, 0.001, 0.2, 0.001, 0.0, exclusive_minimum=True
-    )
+def _gamma() -> ParameterDescriptor:
+    return _parameter("gamma", "Step size", 0.01, minimum=0.0, exclusive_minimum=True)
 
 
-def _lr(help: str = "") -> CalibratorParameter:
-    return CalibratorParameter(
-        "lr", "Learning rate", 0.05, 0.001, 0.5, 0.001, 0.0,
-        exclusive_minimum=True, help=help,
+def _lr(description: str = "") -> ParameterDescriptor:
+    return _parameter(
+        "lr", "Learning rate", 0.05, minimum=0.0, exclusive_minimum=True,
+        description=description,
     )  # fmt: skip
 
 
-def _run_length() -> CalibratorParameter:
-    return CalibratorParameter(
-        "lambda", "Run length", 250, 10, 5000, 10, 1.0,
-        help="Expected steps between changepoints (hazard 1/lambda).",
+def _run_length() -> ParameterDescriptor:
+    return _parameter(
+        "lambda", "Run length", 250, minimum=1.0,
+        description="Expected steps between changepoints (hazard 1/lambda).",
     )  # fmt: skip
 
 
-def _discount(key: str, label: str, default: float, help: str) -> CalibratorParameter:
-    return CalibratorParameter(
-        key, label, default, 0.8, 0.9999, 0.0001, 0.0, 1.0,
-        exclusive_minimum=True, exclusive_maximum=True, help=help,
+def _discount(
+    name: str, title: str, default: float, description: str
+) -> ParameterDescriptor:
+    return _parameter(
+        name, title, default, minimum=0.0, maximum=1.0,
+        exclusive_minimum=True, exclusive_maximum=True, description=description,
     )  # fmt: skip
 
 
@@ -182,9 +171,9 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "the step size tunes itself.",
             "conformal", "long_run",
             (
-                CalibratorParameter(
-                    "interval", "Interval", 100, 10, 1000, 10, 1.0,
-                    help="Local-regret interval that sets the learning rates.",
+                _parameter(
+                    "interval", "Interval", 100, minimum=1.0,
+                    description="Local-regret interval that sets the learning rates.",
                 ),
             ),
             lambda h, a, p: DtACI(h, a, DEFAULT_GAMMAS, p["interval"]),
@@ -209,9 +198,9 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "conformal", "long_run",
             (
                 _lr(),
-                CalibratorParameter(
-                    "ki", "Integrator gain", 0.5, 0, 5, 0.05, 0.0,
-                    help="In units of the recent score range.",
+                _parameter(
+                    "ki", "Integrator gain", 0.5, minimum=0.0,
+                    description="In units of the recent score range.",
                 ),
             ),
             lambda h, a, p: ConformalPID(history=h, alpha=a, lr=p["lr"], scale_window=100, ki=p["ki"], horizon_guess=1000),
@@ -230,15 +219,15 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "conformal", "none",
             (
                 _lr(_RANGE),
-                CalibratorParameter(
-                    "c", "Sigmoid slope", 1, 0.05, 50, 0.05, 0.0,
-                    exclusive_minimum=True,
-                    help="Slope of the smoothed miss indicator, per unit of the "
-                    "recent score range.",
+                _parameter(
+                    "c", "Sigmoid slope", 1, minimum=0.0, exclusive_minimum=True,
+                    description="Slope of the smoothed miss indicator, per unit "
+                    "of the recent score range.",
                 ),
-                CalibratorParameter(
-                    "h", "Cutoff", 0, 0, 1, 0.01, 0.0,
-                    help="Apply the error term only beyond this share of the range.",
+                _parameter(
+                    "h", "Cutoff", 0, minimum=0.0,
+                    description="Apply the error term only beyond this share of "
+                    "the range.",
                 ),
             ),
             lambda h, a, p: ECI(history=h, alpha=a, lr=p["lr"], c=p["c"], cutoff=p["h"]),
@@ -256,10 +245,10 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "betting: low regret on every time interval.",
             "conformal", "long_run",
             (
-                CalibratorParameter(
-                    "g", "Lifetime", 8, 1, 64, 1, 1.0, integer=True,
-                    help="An expert started at t lives g * 2^(trailing zeros of t) "
-                    "steps.",
+                _parameter(
+                    "g", "Lifetime", 8, minimum=1, integer=True,
+                    description="An expert started at t lives "
+                    "g * 2^(trailing zeros of t) steps.",
                 ),
             ),
             lambda h, a, p: SAOCP(h, a, int(p["g"])),

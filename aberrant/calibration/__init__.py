@@ -9,7 +9,6 @@ the Timestral Uncertainty Arena.
 from aberrant.calibration._calibrator import ScoreCalibrator
 from aberrant.calibration._registry import (
     CALIBRATORS,
-    CalibratorParameter,
     CalibratorSpec,
     Coverage,
     OnlineCalibrator,
@@ -18,7 +17,6 @@ from aberrant.calibration._window import ScoreHistory, conformal_quantile, pinba
 
 __all__ = [
     "CALIBRATORS",
-    "CalibratorParameter",
     "CalibratorSpec",
     "Coverage",
     "OnlineCalibrator",

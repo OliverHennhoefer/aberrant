@@ -6,6 +6,7 @@ import math
 from collections.abc import Hashable
 
 from aberrant._utils.validation import coerce_event_number, coerce_finite_number
+from aberrant.base.descriptors import invalid
 from aberrant.calibration._registry import CALIBRATORS, CalibratorSpec, OnlineCalibrator
 from aberrant.calibration._window import ScoreHistory
 
@@ -24,6 +25,10 @@ class ScoreCalibrator:
         window: Number of recent scores in the calibration window.
         **params: Method parameters; omitted ones take their defaults.
 
+    Raises:
+        ConfigurationError: The method is unknown, or a parameter is unknown
+            or out of range. Its ``issues`` locate each failure.
+
     Examples:
         ```python
         from aberrant.calibration import ScoreCalibrator
@@ -41,8 +46,10 @@ class ScoreCalibrator:
         spec = CALIBRATORS.get(method)
         if spec is None:
             known = ", ".join(sorted(CALIBRATORS))
-            raise ValueError(
-                f"Unknown calibration method {method!r}; use one of {known}"
+            raise invalid(
+                "unknown_component",
+                ("method",),
+                f"Unknown calibration method {method!r}; use one of {known}",
             )
         alpha = coerce_finite_number(alpha, label="alpha")
         if not 0 < alpha < 1:

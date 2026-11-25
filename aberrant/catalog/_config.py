@@ -12,15 +12,15 @@ from typing import cast
 
 from aberrant import __version__
 from aberrant.base import ModelProtocol, Pipeline, TransformerProtocol
+from aberrant.base.descriptors import (
+    Location,
+    copy_parameter,
+    invalid,
+    raise_errors,
+)
 from aberrant.exceptions import ConfigurationError, ConfigurationIssue
 
-from ._parameters import (
-    ConstructorParameters,
-    Location,
-    _invalid,
-    _raise_errors,
-    copy_parameter,
-)
+from ._parameters import ConstructorParameters
 from ._registry import (
     CATALOG_FORMAT_VERSION,
     FORECASTER_CATALOG,
@@ -72,15 +72,15 @@ class ComponentConfig:
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id:
-            raise _invalid(
+            raise invalid(
                 "invalid_type", ("id",), "Component 'id' must be a non-empty string"
             )
         if not isinstance(self.params, Mapping):
-            raise _invalid(
+            raise invalid(
                 "invalid_type", ("params",), "Component 'params' must be an object"
             )
         if any(not isinstance(name, str) for name in self.params):
-            raise _invalid(
+            raise invalid(
                 "invalid_type", ("params",), "Component parameter names must be strings"
             )
         object.__setattr__(
@@ -106,14 +106,14 @@ class ComponentConfig:
                 ),
             )
         if "id" not in value:
-            raise _invalid(
+            raise invalid(
                 "invalid_configuration",
                 ("id",),
                 "Component configuration requires 'id'",
             )
         params = value.get("params", {})
         if not isinstance(params, Mapping):
-            raise _invalid(
+            raise invalid(
                 "invalid_type", ("params",), "Component 'params' must be an object"
             )
         return cls(id=cast(str, value["id"]), params=params)
@@ -132,7 +132,7 @@ class DetectorConfig:
 
     def __post_init__(self) -> None:
         if not isinstance(self.model, ComponentConfig):
-            raise _invalid(
+            raise invalid(
                 "invalid_type",
                 ("model",),
                 "Detector 'model' must be a component config",
@@ -140,13 +140,13 @@ class DetectorConfig:
         try:
             transformers = tuple(self.transformers)
         except TypeError as exc:
-            raise _invalid(
+            raise invalid(
                 "invalid_type",
                 ("transformers",),
                 "Detector 'transformers' must contain component configs",
             ) from exc
         if any(not isinstance(item, ComponentConfig) for item in transformers):
-            raise _invalid(
+            raise invalid(
                 "invalid_type",
                 ("transformers",),
                 "Detector 'transformers' must contain component configs",
@@ -169,14 +169,14 @@ class DetectorConfig:
             )
         version = value.get("version", CONFIG_FORMAT_VERSION)
         if type(version) is not int or version != CONFIG_FORMAT_VERSION:
-            raise _invalid(
+            raise invalid(
                 "invalid_value",
                 ("version",),
                 f"Unsupported detector config version: {version!r}; "
                 f"expected {CONFIG_FORMAT_VERSION}",
             )
         if "model" not in value:
-            raise _invalid(
+            raise invalid(
                 "invalid_configuration",
                 ("model",),
                 "Detector configuration requires 'model'",
@@ -189,7 +189,7 @@ class DetectorConfig:
             with _at(("model",)):
                 model = ComponentConfig.from_mapping(raw_model)
         else:
-            raise _invalid(
+            raise invalid(
                 "invalid_type", ("model",), "Detector 'model' must be an object"
             )
 
@@ -197,7 +197,7 @@ class DetectorConfig:
         if not isinstance(raw_transformers, Sequence) or isinstance(
             raw_transformers, str | bytes
         ):
-            raise _invalid(
+            raise invalid(
                 "invalid_type",
                 ("transformers",),
                 "Detector 'transformers' must be an array",
@@ -215,13 +215,13 @@ class DetectorConfig:
                     errors.append(error)
             else:
                 errors.append(
-                    _invalid(
+                    invalid(
                         "invalid_type",
                         ("transformers", index),
                         "Every detector transformer must be an object",
                     )
                 )
-        _raise_errors(errors)
+        raise_errors(errors)
         return cls(model=model, transformers=tuple(transformers))
 
     def as_dict(self) -> dict[str, object]:
@@ -295,7 +295,7 @@ class _ResolvedComponent:
             return self.constructor.component(**params)
         except (TypeError, ValueError) as error:
             message = f"Invalid parameters for {self.spec.kind.value} '{self.spec.id}': {error}"
-            raise _invalid("invalid_value", (*self.loc, "params"), message) from error
+            raise invalid("invalid_value", (*self.loc, "params"), message) from error
 
 
 @dataclass
@@ -319,7 +319,7 @@ class _Resolution:
         declarative: bool = True,
     ) -> _ResolvedComponent:
         if declarative and not spec.declarative:
-            raise _invalid(
+            raise invalid(
                 "invalid_configuration",
                 loc,
                 f"{spec.kind.value.title()} '{spec.id}' requires runtime Python objects "
@@ -355,7 +355,7 @@ class _Resolution:
                 )
         except ConfigurationError as error:
             errors.append(error)
-        _raise_errors(errors)
+        raise_errors(errors)
         return _ResolvedComponent(
             spec,
             ComponentConfig(spec.id, resolved),
@@ -494,7 +494,7 @@ def _resolve_components(
         model = resolution.component(model_spec, parsed.model, ("model",))
     except ConfigurationError as error:
         errors.append(error)
-    _raise_errors(errors)
+    raise_errors(errors)
     assert model is not None
     normalized = DetectorConfig(
         model.config, tuple(item.config for item in transformers)
@@ -540,7 +540,7 @@ def _capabilities(
             if maximum is None
             else f"{capabilities.feature_count.minimum} to {maximum}"
         )
-        raise _invalid(
+        raise invalid(
             "invalid_configuration",
             model.loc,
             f"Model '{model.spec.id}' expects {expected} features, but its "

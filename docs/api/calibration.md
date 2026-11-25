@@ -7,8 +7,6 @@ that prediction with `update(key, score)` once the score is known.
 
 ::: aberrant.calibration.CalibratorSpec
 
-::: aberrant.calibration.CalibratorParameter
-
 ::: aberrant.calibration.OnlineCalibrator
 
 ::: aberrant.calibration.ScoreHistory

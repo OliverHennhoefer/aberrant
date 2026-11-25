@@ -61,6 +61,15 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** calibration methods describe their parameters with the same
+  `ParameterDescriptor` and `ValueDescriptor` the component catalog derives
+  from constructors, now public in `aberrant.base`. `CalibratorSpec.schema()`
+  gives the parameters as JSON Schema, with `title`, `description`, `default`
+  and `minimum` or `exclusiveMinimum` bounds, in the shape the catalog gives
+  components. `ScoreCalibrator` raises `ConfigurationError`, with an issue per
+  failure, for an unknown method or an unknown, mistyped or out-of-range
+  parameter; integer parameters reject floats such as `8.0`.
+
 - **Breaking:** every model, transformer, forecaster, regressor and pipeline
   reports `readiness`: a `Readiness(ready, observed, required, unit)` saying
   whether it has learned enough, counted in events, buckets, observers or
@@ -244,6 +253,8 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `CalibratorParameter`, with its editor hints `low`, `high` and
+  `step`. Use `CalibratorSpec.parameters` or `CalibratorSpec.schema()`.
 - **Breaking:** `ReadinessProtocol`, `WarmupRequirement`, `WarmupUnit`,
   `GraphNotReadyError`, `GraphNode.minimum_updates`,
   `GraphPipeline(model_minimum_updates=...)`, the forecasters' `is_ready`, and
