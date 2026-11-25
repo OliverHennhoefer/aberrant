@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
+from typing import TypeVar, cast
 
 from aberrant import __version__
 from aberrant.base.exceptions import UnknownComponentError
@@ -36,6 +37,8 @@ ANY_FEATURES = FeatureCount()
 ONE_FEATURE = FeatureCount(1, 1)
 TWO_FEATURES = FeatureCount(2, 2)
 CATALOG_FORMAT_VERSION = 1
+
+_Spec = TypeVar("_Spec", bound=ComponentSpec)
 
 
 def _as_int(value: object) -> int:
@@ -949,9 +952,7 @@ def _schema_features(
     features = params.get("features")
     if features is None:
         return input_feature_count
-    if not isinstance(features, (list, tuple)):
-        raise TypeError("features must be an array")
-    return len(features)
+    return len(cast(Sequence[str], features))
 
 
 def _projected_features(
@@ -978,8 +979,8 @@ def _projected_names(
 def _selected_names(
     params: Parameters, inputs: tuple[str, ...] | None
 ) -> tuple[str, ...]:
-    features = params["features"]
-    if not isinstance(features, (tuple, list)) or not features:
+    features = cast(Sequence[str], params["features"])
+    if not features:
         raise ValueError("features must be a non-empty sequence")
     if any(not isinstance(name, str) or not name for name in features):
         raise ValueError("features must contain non-empty names")
@@ -997,14 +998,12 @@ def _selected_count(params: Parameters, _inputs: int | None) -> int:
 def _renamed_names(
     params: Parameters, inputs: tuple[str, ...] | None
 ) -> tuple[str, ...] | None:
-    mapping = params["mapping"]
-    if not isinstance(mapping, Mapping):
-        raise TypeError("mapping must be an object")
+    mapping = cast(Mapping[str, str], params["mapping"])
     if inputs is None:
         return None
     if not set(mapping).issubset(inputs):
         raise ValueError("Renamed features must exist in the input")
-    names = tuple(str(mapping.get(name, name)) for name in inputs)
+    names = tuple(mapping.get(name, name) for name in inputs)
     if len(names) != len(set(names)):
         raise ValueError("Renaming produces duplicate features")
     return names
@@ -1140,26 +1139,17 @@ _FORECASTER_SPECS = (
 )
 
 
-def _index(specs: tuple[ComponentSpec, ...]) -> Mapping[str, ComponentSpec]:
+def _index(specs: tuple[_Spec, ...]) -> Mapping[str, _Spec]:
     indexed = {spec.id: spec for spec in specs}
     if len(indexed) != len(specs):
         raise RuntimeError("Catalog component identifiers must be unique")
     return MappingProxyType(indexed)
 
 
-MODEL_CATALOG: Mapping[str, ModelSpec] = MappingProxyType(
-    {spec.id: spec for spec in _MODEL_SPECS}
-)
-TRANSFORMER_CATALOG: Mapping[str, TransformerSpec] = MappingProxyType(
-    {spec.id: spec for spec in _TRANSFORMER_SPECS}
-)
+MODEL_CATALOG: Mapping[str, ModelSpec] = _index(_MODEL_SPECS)
+TRANSFORMER_CATALOG: Mapping[str, TransformerSpec] = _index(_TRANSFORMER_SPECS)
 SIMILARITY_ENGINE_CATALOG: Mapping[str, ComponentSpec] = _index(_SIMILARITY_SPECS)
 FORECASTER_CATALOG: Mapping[str, ComponentSpec] = _index(_FORECASTER_SPECS)
-
-if len(MODEL_CATALOG) != len(_MODEL_SPECS):
-    raise RuntimeError("Catalog model identifiers must be unique")
-if len(TRANSFORMER_CATALOG) != len(_TRANSFORMER_SPECS):
-    raise RuntimeError("Catalog transformer identifiers must be unique")
 
 
 def get_model_spec(component_id: str) -> ModelSpec:

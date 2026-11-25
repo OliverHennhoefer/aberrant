@@ -1,7 +1,7 @@
 """Standalone graph execution against real numeric components and references."""
 
 import pickle
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import FrozenInstanceError
 
 import numpy as np
@@ -456,3 +456,132 @@ def test_online_pca_keeps_a_real_orthogonal_basis_on_degenerate_stream():
             np.testing.assert_allclose(
                 projection.vectors.T @ projection.vectors, np.eye(2), atol=1e-10
             )
+
+
+class _UndeclaredTransformer:
+    def learn_one(self, x):
+        return None
+
+    def transform_one(self, x):
+        return x
+
+
+@pytest.mark.parametrize(
+    ("nodes", "model", "message"),
+    [
+        ([], StandardScaler(), "unambiguous model"),
+        (["a"], MovingAverage(5), "GraphNode or MergeNode"),
+        (
+            [GraphNode("a", MovingAverage(5))],
+            MovingAverage(5),
+            "unambiguous transformer",
+        ),
+        (
+            [GraphNode("a", _UndeclaredTransformer())],
+            MovingAverage(5),
+            "minimum_updates",
+        ),
+        ([MergeNode("a", ())], MovingAverage(5), "named inputs"),
+        (
+            [GraphNode("b", Passthrough()), MergeNode("a", ("b", "b"))],
+            MovingAverage(5),
+            "repeat a predecessor",
+        ),
+    ],
+    ids=[
+        "transformer-terminal",
+        "not-a-node",
+        "model-as-transformer",
+        "custom-without-readiness",
+        "merge-without-inputs",
+        "merge-repeats-input",
+    ],
+)
+def test_graphs_with_ambiguous_components_are_rejected(nodes, model, message):
+    with pytest.raises(ConfigurationError, match=message):
+        GraphPipeline(nodes, model, "a" if nodes else INPUT)
+
+
+def test_merge_inputs_must_name_nodes_not_one_string():
+    with pytest.raises(ValueError, match="sequence of node IDs"):
+        MergeNode("joined", "ab")
+
+
+def test_scoring_failures_name_the_node_and_keep_the_graph_usable():
+    class RejectsNegative(_UndeclaredTransformer):
+        def transform_one(self, x):
+            if x["x"] < 0:
+                raise ValueError("negative reading")
+            return x
+
+    model, reference = MovingAverage(5), MovingAverage(5)
+    graph = GraphPipeline(
+        [GraphNode("guard", RejectsNegative(), minimum_updates=0)], model, "guard"
+    )
+    graph.learn_one({"x": 1.0})
+    reference.learn_one({"x": 1.0})
+
+    with pytest.raises(GraphExecutionError, match="negative reading") as error:
+        graph.score_one({"x": -1.0})
+    assert (error.value.node_id, error.value.phase) == ("guard", "transform")
+    assert not graph.failed
+    assert graph.score_one({"x": 2.0}) == reference.score_one({"x": 2.0})
+
+
+def test_transformers_must_emit_string_feature_names():
+    class NumberedKeys(_UndeclaredTransformer):
+        def transform_one(self, x):
+            return {1: x["x"]}
+
+    graph = GraphPipeline(
+        [GraphNode("numbered", NumberedKeys(), minimum_updates=0)],
+        MovingAverage(5),
+        "numbered",
+    )
+    with pytest.raises(GraphExecutionError, match="non-empty strings"):
+        graph.learn_one({"x": 1.0})
+
+
+def test_component_readiness_must_be_a_readiness_value():
+    class ClaimsReadiness(_UndeclaredTransformer):
+        readiness = "ready"
+
+    with pytest.raises(TypeError, match="Readiness value"):
+        GraphPipeline(
+            [GraphNode("claims", ClaimsReadiness())], MovingAverage(5), "claims"
+        )
+
+
+def test_a_failing_transaction_entry_disables_the_graph():
+    class BrokenTransaction(Passthrough):
+        @contextmanager
+        def learning_transaction(self, x):
+            raise RuntimeError("cannot snapshot")
+            yield
+
+    graph = GraphPipeline(
+        [GraphNode("broken", BrokenTransaction())], MovingAverage(5), "broken"
+    )
+    with pytest.raises(GraphStateUncertainError, match="cannot snapshot"):
+        graph.learn_one({"x": 1.0})
+    assert graph.failed
+
+
+def test_a_transaction_that_swallows_failures_disables_the_graph():
+    class Swallowing(Passthrough):
+        @contextmanager
+        def learning_transaction(self, x):
+            with suppress(Exception):
+                yield
+
+    graph = GraphPipeline(
+        [
+            GraphNode("swallowing", Swallowing()),
+            GraphNode("b", Rename({"missing": "x"}), "swallowing"),
+        ],
+        MovingAverage(5),
+        "b",
+    )
+    with pytest.raises(GraphStateUncertainError, match="cannot suppress"):
+        graph.learn_one({"x": 1.0})
+    assert graph.failed

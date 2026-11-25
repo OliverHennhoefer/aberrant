@@ -61,12 +61,24 @@ def test_long_run_coverage_is_near_the_target(method):
     assert sum(covered) / len(covered) == pytest.approx(0.9, abs=0.03)
 
 
-def test_feedback_for_an_unknown_key_still_joins_the_history():
-    calibrator = ScoreCalibrator("aci", alpha=0.1)
-    calibrator.update("never issued", 1.0)
+@pytest.mark.parametrize("method", sorted(CALIBRATORS))
+def test_feedback_for_an_unknown_key_still_joins_the_history(method):
+    calibrator = ScoreCalibrator(method, alpha=0.1, window=30)
+    scores = _scores(60)
+    for score in scores:
+        calibrator.update("never issued", score)
 
-    assert calibrator.history.count == 1
-    assert calibrator.predict(0) == 1.0
+    assert calibrator.history.count == 60
+    assert 0.0 <= calibrator.predict(0) <= max(scores)
+
+
+def test_the_calibrator_describes_its_method():
+    calibrator = ScoreCalibrator("eci", alpha=0.1, window=40, c=2)
+
+    assert calibrator.spec is CALIBRATORS["eci"]
+    assert repr(calibrator) == (
+        "ScoreCalibrator('eci', alpha=0.1, window=40, lr=0.05, c=2, h=0)"
+    )
 
 
 def test_parameters_default_and_validate():

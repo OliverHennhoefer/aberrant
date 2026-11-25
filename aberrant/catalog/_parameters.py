@@ -172,7 +172,10 @@ class ValueDescriptor:
         return value
 
     def _array(self, value: object, loc: Location) -> object:
-        if not isinstance(value, list | tuple):
+        unordered = self.annotation in (set, frozenset)
+        if not isinstance(value, list | tuple) and not (
+            unordered and isinstance(value, set | frozenset)
+        ):
             raise _invalid("invalid_type", loc, "expected an array")
         if self.kind == "tuple" and len(value) != len(self.children):
             raise _invalid(
