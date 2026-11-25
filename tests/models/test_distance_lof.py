@@ -105,7 +105,7 @@ class TestLocalOutlierFactor(unittest.TestCase):
         """Test that invalid k values raise ValueError."""
         with self.assertRaises(ValueError) as context:
             LocalOutlierFactor(k=0)
-        self.assertIn("k must be positive", str(context.exception))
+        self.assertIn("k must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError):
             LocalOutlierFactor(k=-1)
@@ -114,7 +114,7 @@ class TestLocalOutlierFactor(unittest.TestCase):
         """Test that invalid window_size raises ValueError."""
         with self.assertRaises(ValueError) as context:
             LocalOutlierFactor(window_size=0)
-        self.assertIn("window_size must be positive", str(context.exception))
+        self.assertIn("window_size must be a positive integer", str(context.exception))
 
     def test_k_greater_than_window(self):
         """Test that k >= window_size raises ValueError."""

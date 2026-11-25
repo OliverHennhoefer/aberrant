@@ -40,8 +40,7 @@ class ADWIN(BaseDriftDetector):
         detector = ADWIN(delta=0.002)
         drift_points = []
         for index, value in enumerate([0.0] * 64 + [1.0] * 64):
-            detector.update(value)
-            if detector.drift_detected:
+            if detector.update(value):
                 drift_points.append(index)
         ```
 
@@ -146,7 +145,7 @@ class ADWIN(BaseDriftDetector):
             return 0.0
         return self._variance / self._width
 
-    def update(self, x: float) -> "ADWIN":
+    def update(self, x: float) -> bool:
         """
         Update the detector with a new observation.
 
@@ -178,7 +177,7 @@ class ADWIN(BaseDriftDetector):
         if self._samples_since_reset % self.clock == 0:
             self._detect_change()
 
-        return self
+        return self._drift_detected
 
     def _insert_element(self, x: float) -> None:
         """Insert a new element into the bucket structure."""

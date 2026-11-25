@@ -197,5 +197,5 @@ def test_search_rejects_impossible_neighbour_counts() -> None:
 def test_explains_how_to_install_faiss_when_it_is_missing(monkeypatch) -> None:
     monkeypatch.setattr(faiss_engine, "faiss", None)
 
-    with pytest.raises(RuntimeError, match=r"aberrant\[faiss\]"):
+    with pytest.raises(ImportError, match=r"aberrant\[faiss\]"):
         FaissSimilaritySearchEngine(window_size=2, warm_up=1)

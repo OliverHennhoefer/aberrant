@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 
 def _point_box(point: np.ndarray) -> np.ndarray:
@@ -520,12 +520,11 @@ class RandomCutForest(BaseModel):
         score_scale: float = 8.0,
         seed: int | None = None,
     ) -> None:
-        if n_trees <= 0:
-            raise ValueError("n_trees must be positive")
-        if sample_size <= 1:
-            raise ValueError("sample_size must be greater than 1")
-        if shingle_size <= 0:
-            raise ValueError("shingle_size must be positive")
+        n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
+        sample_size = coerce_integer_count(sample_size, label="sample_size", minimum=2)
+        shingle_size = coerce_integer_count(
+            shingle_size, label="shingle_size", minimum=1
+        )
         if warmup_samples is not None and warmup_samples <= 0:
             raise ValueError("warmup_samples must be positive or None")
         if score_scale <= 0.0:

@@ -115,7 +115,9 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         with self.assertRaises(ValueError):
             OnlineIsolationForest(branching_factor=1)
 
-        with self.assertRaisesRegex(ValueError, "window_size must be positive"):
+        with self.assertRaisesRegex(
+            ValueError, "window_size must be a positive integer"
+        ):
             OnlineIsolationForest(window_size=0)
 
         with self.assertRaisesRegex(ValueError, "metric must be 'axisparallel'"):

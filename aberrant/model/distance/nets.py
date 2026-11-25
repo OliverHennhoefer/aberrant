@@ -10,7 +10,7 @@ from typing import TypeAlias
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary
+from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 _Cell: TypeAlias = tuple[int, ...]
 _Entry: TypeAlias = tuple[int, _Cell]
@@ -68,18 +68,16 @@ class CellNeighborhoodDetector(BaseModel):
         warm_up_slides: int = 1,
         eps: float = 1e-9,
     ) -> None:
-        if k <= 0:
-            raise ValueError("k must be positive")
+        k = coerce_integer_count(k, label="k", minimum=1)
+        window_size = coerce_integer_count(window_size, label="window_size", minimum=1)
+        slide_size = coerce_integer_count(slide_size, label="slide_size", minimum=1)
+        warm_up_slides = coerce_integer_count(
+            warm_up_slides, label="warm_up_slides", minimum=1
+        )
         if not math.isfinite(radius) or radius <= 0.0:
             raise ValueError("radius must be finite and positive")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
         if window_size <= k:
             raise ValueError("window_size must be greater than k")
-        if slide_size <= 0:
-            raise ValueError("slide_size must be positive")
-        if warm_up_slides <= 0:
-            raise ValueError("warm_up_slides must be positive")
         if eps <= 0.0:
             raise ValueError("eps must be positive")
 

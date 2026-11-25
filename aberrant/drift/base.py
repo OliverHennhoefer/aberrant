@@ -20,8 +20,9 @@ def _finite_observation(x: float) -> float:
 class BaseDriftDetector(abc.ABC):
     """Abstract base class for scalar stream-change detectors.
 
-    ``update`` processes one finite scalar and returns the detector, while
-    ``drift_detected`` describes the observation most recently processed. The
+    ``update`` processes one finite scalar and returns whether it signalled
+    drift; ``drift_detected`` keeps that answer for the observation most
+    recently processed. The
     monitored scalar can be an anomaly score, prediction error, residual,
     feature value, or another application-defined signal.
 
@@ -31,7 +32,7 @@ class BaseDriftDetector(abc.ABC):
     """
 
     @abc.abstractmethod
-    def update(self, x: float) -> "BaseDriftDetector":
+    def update(self, x: float) -> bool:
         """
         Update the detector with a single observation.
 
@@ -39,7 +40,7 @@ class BaseDriftDetector(abc.ABC):
             x: The observed value.
 
         Returns:
-            self: Returns self for method chaining.
+            Whether this observation signalled drift.
         """
         raise NotImplementedError
 

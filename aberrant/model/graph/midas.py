@@ -8,7 +8,7 @@ import math
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import EdgeEventBoundary
+from aberrant.utils.validation import EdgeEventBoundary, coerce_integer_count
 
 
 class _CountMinSketch:
@@ -137,14 +137,17 @@ class MIDAS(BaseModel):
         normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
-        if count_min_rows <= 0:
-            raise ValueError("count_min_rows must be positive")
-        if count_min_cols <= 0:
-            raise ValueError("count_min_cols must be positive")
+        count_min_rows = coerce_integer_count(
+            count_min_rows, label="count_min_rows", minimum=1
+        )
+        count_min_cols = coerce_integer_count(
+            count_min_cols, label="count_min_cols", minimum=1
+        )
+        warm_up_samples = coerce_integer_count(
+            warm_up_samples, label="warm_up_samples", minimum=0
+        )
         if not (0.0 < time_decay_factor <= 1.0):
             raise ValueError("time_decay_factor must be in (0, 1]")
-        if warm_up_samples < 0:
-            raise ValueError("warm_up_samples must be non-negative")
 
         self.source_key = source_key
         self.destination_key = destination_key

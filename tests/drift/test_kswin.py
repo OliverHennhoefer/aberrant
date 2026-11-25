@@ -53,7 +53,7 @@ class TestKSWIN(unittest.TestCase):
         """Test that invalid window_size raises ValueError."""
         with self.assertRaises(ValueError) as context:
             KSWIN(window_size=0)
-        self.assertIn("window_size must be positive", str(context.exception))
+        self.assertIn("window_size must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError):
             KSWIN(window_size=-1)
@@ -62,7 +62,7 @@ class TestKSWIN(unittest.TestCase):
         """Test that invalid stat_size raises ValueError."""
         with self.assertRaises(ValueError) as context:
             KSWIN(stat_size=0)
-        self.assertIn("stat_size must be positive", str(context.exception))
+        self.assertIn("stat_size must be a positive integer", str(context.exception))
 
         # stat_size must be less than window_size / 2
         with self.assertRaises(ValueError) as context:
@@ -70,12 +70,6 @@ class TestKSWIN(unittest.TestCase):
         self.assertIn(
             "stat_size must be less than window_size / 2", str(context.exception)
         )
-
-    def test_update_returns_self(self):
-        """Test that update returns self for method chaining."""
-        detector = KSWIN()
-        result = detector.update(1.0)
-        self.assertIs(result, detector)
 
     def test_non_finite_observation_is_rejected_without_mutating_window(self):
         detector = KSWIN()
@@ -241,11 +235,12 @@ class TestKSWIN(unittest.TestCase):
 
         self.assertEqual(results1, results2)
 
-    def test_method_chaining(self):
-        """Test that methods can be chained."""
+    def test_update_returns_the_drift_flag(self):
+        """``update`` returns the flag that ``drift_detected`` then holds."""
         detector = KSWIN()
-        result = detector.update(1.0).update(2.0).update(3.0)
-        self.assertIs(result, detector)
+        for value in [0.0] * 200 + [10.0] * 200:
+            assert detector.update(value) is detector.drift_detected
+        assert detector.n_detections > 0
 
     def test_repr(self):
         """Test string representation."""

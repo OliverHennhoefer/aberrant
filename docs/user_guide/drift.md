@@ -1,8 +1,9 @@
 # Drift Detection
 
 aberrant's drift detectors monitor one finite scalar at a time. They do not
-implement the anomaly-model protocol: call `update(value)`, then inspect
-`drift_detected` for the observation just processed.
+implement the anomaly-model protocol: `update(value)` returns whether that
+observation signalled drift, and `drift_detected` keeps the answer until the
+next update.
 
 ## Anomaly detection and drift detection answer different questions
 
@@ -63,8 +64,7 @@ stream = [0.0] * 30 + [1.0] * 30
 
 detected_at: int | None = None
 for index, value in enumerate(stream):
-    detector.update(value)
-    if detector.drift_detected:
+    if detector.update(value):
         detected_at = index
         print(f"upward change detected at index {index}")
         break
@@ -97,9 +97,7 @@ events = [{"value": value} for value in [0.0] * 8 + [1.0] * 8]
 
 for index, event in enumerate(events):
     score = model.score_one(event)
-    monitor.update(score)
-
-    if monitor.drift_detected:
+    if monitor.update(score):
         print(f"score distribution changed at event {index}")
 
     model.learn_one(event)

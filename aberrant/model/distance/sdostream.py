@@ -7,7 +7,11 @@ from typing import Literal
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary, coerce_finite_number
+from aberrant.utils.validation import (
+    NumericEventBoundary,
+    coerce_finite_number,
+    coerce_integer_count,
+)
 
 
 class SDOStream(BaseModel):
@@ -70,14 +74,12 @@ class SDOStream(BaseModel):
         warm_up_observers: int | None = None,
         seed: int | None = None,
     ) -> None:
-        if k <= 0:
-            raise ValueError("k must be positive")
+        k = coerce_integer_count(k, label="k", minimum=1)
+        x_neighbors = coerce_integer_count(x_neighbors, label="x_neighbors", minimum=1)
         if T <= 0.0:
             raise ValueError("T must be positive")
         if not (0.0 <= qv < 1.0):
             raise ValueError("qv must be in [0, 1)")
-        if x_neighbors <= 0:
-            raise ValueError("x_neighbors must be positive")
         if x_neighbors > k:
             raise ValueError("x_neighbors must be less than or equal to k")
         if distance not in ("euclidean", "manhattan", "chebyshev", "minkowski"):

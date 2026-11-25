@@ -122,16 +122,8 @@ class SignedGraphSketchDetector(BaseModel):
         warm_up_graphs: int,
         eps: float,
     ) -> None:
-        if sketch_dim <= 0:
-            raise ValueError("sketch_dim must be positive")
-        if shingle_size <= 0:
-            raise ValueError("shingle_size must be positive")
-        if num_clusters <= 0:
-            raise ValueError("num_clusters must be positive")
         if num_clusters > max_graphs:
             raise ValueError("num_clusters must be less than or equal to max_graphs")
-        if warm_up_graphs <= 0:
-            raise ValueError("warm_up_graphs must be positive")
         if warm_up_graphs > max_graphs:
             raise ValueError("warm_up_graphs must be less than or equal to max_graphs")
         if eps <= 0.0:
@@ -154,6 +146,16 @@ class SignedGraphSketchDetector(BaseModel):
         seed: int | None = None,
         eps: float = 1e-9,
     ) -> None:
+        sketch_dim = coerce_integer_count(sketch_dim, label="sketch_dim", minimum=1)
+        num_clusters = coerce_integer_count(
+            num_clusters, label="num_clusters", minimum=1
+        )
+        shingle_size = coerce_integer_count(
+            shingle_size, label="shingle_size", minimum=1
+        )
+        warm_up_graphs = coerce_integer_count(
+            warm_up_graphs, label="warm_up_graphs", minimum=1
+        )
         self.graph_key = self._validate_required_name(graph_key, "graph_key")
         self.source_key = self._validate_required_name(source_key, "source_key")
         self.destination_key = self._validate_required_name(

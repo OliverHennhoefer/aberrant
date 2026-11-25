@@ -77,8 +77,12 @@ class UnknownComponentError(ConfigurationError):
         self.component_id = component_id
 
 
-class MissingOptionalDependencyError(ConfigurationError):
-    """Raised when a catalog component requires an unavailable optional extra."""
+class MissingOptionalDependencyError(ConfigurationError, ImportError):
+    """Raised when a component needs an optional extra that is not installed.
+
+    It is an ``ImportError``, so code that probes for optional features keeps
+    working with a plain ``except ImportError``.
+    """
 
     def __init__(self, component_id: str, extra: str) -> None:
         message = (

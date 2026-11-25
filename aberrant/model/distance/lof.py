@@ -7,7 +7,7 @@ from typing import Literal
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 
 class LocalOutlierFactor(BaseModel):
@@ -76,10 +76,8 @@ class LocalOutlierFactor(BaseModel):
         window_size: int = 1000,
         distance: Literal["euclidean", "manhattan"] = "euclidean",
     ) -> None:
-        if k <= 0:
-            raise ValueError("k must be positive")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
+        k = coerce_integer_count(k, label="k", minimum=1)
+        window_size = coerce_integer_count(window_size, label="window_size", minimum=1)
         if k >= window_size:
             raise ValueError("k must be less than window_size")
         if distance not in ("euclidean", "manhattan"):

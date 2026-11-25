@@ -433,7 +433,7 @@ class TestRandomProjections(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             RandomProjection(n_components=0, keys=self.feature_keys[:5])
 
-        expected_msg_zero = "n_components must be positive integer"
+        expected_msg_zero = "n_components must be a positive integer"
         self.assertTrue(
             expected_msg_zero in str(context.exception),
             f"Expected error message '{expected_msg_zero}' but got {context.exception}",
@@ -442,7 +442,7 @@ class TestRandomProjections(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             RandomProjection(n_components=-3, keys=self.feature_keys[:5])
 
-        expected_msg_negative = "n_components must be positive integer"
+        expected_msg_negative = "n_components must be a positive integer"
         self.assertTrue(
             expected_msg_negative in str(context.exception),
             f"Expected error message '{expected_msg_negative}' but got {context.exception}",
@@ -453,7 +453,7 @@ class TestRandomProjections(unittest.TestCase):
             with (
                 self.subTest(value=value),
                 self.assertRaisesRegex(
-                    ValueError, "n_components must be positive integer"
+                    ValueError, "n_components must be a positive integer"
                 ),
             ):
                 RandomProjection(n_components=value, keys=self.feature_keys[:5])

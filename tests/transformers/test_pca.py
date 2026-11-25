@@ -20,9 +20,11 @@ class TestIncrementalPCA(unittest.TestCase):
         )
 
     def test_invalid_initialization_parameters(self):
-        with self.assertRaisesRegex(ValueError, "n_components must be positive"):
+        with self.assertRaisesRegex(
+            ValueError, "n_components must be a positive integer"
+        ):
             IncrementalPCA(n_components=0)
-        with self.assertRaisesRegex(ValueError, "n0 must be positive"):
+        with self.assertRaisesRegex(ValueError, "n0 must be a positive integer"):
             IncrementalPCA(n_components=1, n0=0)
         with self.assertRaisesRegex(ValueError, "n0 must be at least n_components"):
             IncrementalPCA(n_components=3, n0=2)

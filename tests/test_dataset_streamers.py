@@ -133,5 +133,5 @@ def test_batches_keep_order_and_yield_the_remainder(
 
 
 def test_batch_size_must_be_positive() -> None:
-    with pytest.raises(ValueError, match="batch_size must be positive"):
+    with pytest.raises(ValueError, match="batch_size must be a positive integer"):
         BatchStreamer(object(), batch_size=0)  # type: ignore[arg-type]

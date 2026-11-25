@@ -435,12 +435,14 @@ class MondrianIsolationForest(BaseModel):
         seed: int | None = None,
         window_size: int | None = None,
     ) -> None:
+        n_estimators = coerce_integer_count(
+            n_estimators, label="n_estimators", minimum=1
+        )
+        subspace_size = coerce_integer_count(
+            subspace_size, label="subspace_size", minimum=1
+        )
         super().__init__()
 
-        if n_estimators <= 0:
-            raise ValueError("n_estimators must be positive")
-        if subspace_size <= 0:
-            raise ValueError("subspace_size must be positive")
         if lambda_ <= 0:
             raise ValueError("lambda_ must be positive")
         if window_size is not None:

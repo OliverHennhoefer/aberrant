@@ -11,7 +11,11 @@ import numpy as np
 
 from aberrant.base.model import BaseModel
 from aberrant.model.iforest._online_tree import OnlineIsolationTree, _Bounds
-from aberrant.utils.validation import FeatureSchema, PreparedFeatures
+from aberrant.utils.validation import (
+    FeatureSchema,
+    PreparedFeatures,
+    coerce_integer_count,
+)
 
 
 class OnlineIsolationForest(BaseModel):
@@ -63,18 +67,19 @@ class OnlineIsolationForest(BaseModel):
         seed: int | None = None,
     ) -> None:
         """Initialize an Online Isolation Forest."""
-        if num_trees <= 0:
-            raise ValueError("num_trees must be positive")
-        if max_leaf_samples <= 0:
-            raise ValueError("max_leaf_samples must be positive")
+        num_trees = coerce_integer_count(num_trees, label="num_trees", minimum=1)
+        max_leaf_samples = coerce_integer_count(
+            max_leaf_samples, label="max_leaf_samples", minimum=1
+        )
+        window_size = coerce_integer_count(window_size, label="window_size", minimum=1)
+        branching_factor = coerce_integer_count(
+            branching_factor, label="branching_factor", minimum=2
+        )
+        n_jobs = coerce_integer_count(n_jobs, label="n_jobs", minimum=-1)
         if tree_type not in {"fixed", "adaptive"}:
             raise ValueError("tree_type must be 'fixed' or 'adaptive'")
         if not (0.0 < subsample <= 1.0):
             raise ValueError("subsample must be in (0.0, 1.0]")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
-        if branching_factor <= 1:
-            raise ValueError("branching_factor must be greater than 1")
         if metric != "axisparallel":
             raise ValueError("metric must be 'axisparallel'")
         if n_jobs == 0 or n_jobs < -1:

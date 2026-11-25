@@ -108,7 +108,7 @@ class TestHalfSpaceTrees(unittest.TestCase):
         """Test that invalid n_trees raises ValueError."""
         with self.assertRaises(ValueError) as context:
             HalfSpaceTrees(n_trees=0)
-        self.assertIn("n_trees must be positive", str(context.exception))
+        self.assertIn("n_trees must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError):
             HalfSpaceTrees(n_trees=-1)
@@ -117,13 +117,13 @@ class TestHalfSpaceTrees(unittest.TestCase):
         """Test that invalid height raises ValueError."""
         with self.assertRaises(ValueError) as context:
             HalfSpaceTrees(height=0)
-        self.assertIn("height must be positive", str(context.exception))
+        self.assertIn("height must be a positive integer", str(context.exception))
 
     def test_invalid_window_size(self):
         """Test that invalid window_size raises ValueError."""
         with self.assertRaises(ValueError) as context:
             HalfSpaceTrees(window_size=0)
-        self.assertIn("window_size must be positive", str(context.exception))
+        self.assertIn("window_size must be a positive integer", str(context.exception))
 
     def test_learn_one_empty_dict(self):
         """Test that empty input raises ValueError."""

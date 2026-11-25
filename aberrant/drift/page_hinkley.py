@@ -3,6 +3,7 @@
 from typing import Literal
 
 from aberrant.drift.base import BaseDriftDetector, _finite_observation
+from aberrant.utils.validation import coerce_integer_count
 
 
 class PageHinkley(BaseDriftDetector):
@@ -37,8 +38,7 @@ class PageHinkley(BaseDriftDetector):
         detector = PageHinkley(threshold=50.0)
         drift_points = []
         for index, value in enumerate([0.0] * 64 + [2.0] * 64):
-            detector.update(value)
-            if detector.drift_detected:
+            if detector.update(value):
                 drift_points.append(index)
         ```
 
@@ -57,8 +57,9 @@ class PageHinkley(BaseDriftDetector):
         alpha: float = 0.9999,
         mode: Literal["up", "down", "both"] = "both",
     ) -> None:
-        if min_instances <= 0:
-            raise ValueError("min_instances must be positive")
+        min_instances = coerce_integer_count(
+            min_instances, label="min_instances", minimum=1
+        )
         if delta < 0:
             raise ValueError("delta must be non-negative")
         if threshold <= 0:
@@ -117,7 +118,7 @@ class PageHinkley(BaseDriftDetector):
         """Current running mean."""
         return self._mean
 
-    def update(self, x: float) -> "PageHinkley":
+    def update(self, x: float) -> bool:
         """
         Update the detector with a new observation.
 
@@ -159,7 +160,7 @@ class PageHinkley(BaseDriftDetector):
         if self._n >= self.min_instances:
             self._check_drift()
 
-        return self
+        return self._drift_detected
 
     def _check_drift(self) -> None:
         """Check if drift has occurred based on the mode."""

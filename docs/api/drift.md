@@ -1,7 +1,8 @@
 # Drift API
 
-Drift detectors consume one finite scalar with `update`. The
-`drift_detected` flag always refers to the most recent update.
+Drift detectors consume one finite scalar with `update`, which returns whether
+it signalled drift. The `drift_detected` flag repeats that answer until the
+next update.
 
 ::: aberrant.drift.BaseDriftDetector
 

@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 
 @dataclass(slots=True)
@@ -116,12 +116,9 @@ class HalfSpaceTrees(BaseModel):
         window_size: int = 250,
         seed: int | None = None,
     ) -> None:
-        if n_trees <= 0:
-            raise ValueError("n_trees must be positive")
-        if height <= 0:
-            raise ValueError("height must be positive")
-        if window_size <= 0:
-            raise ValueError("window_size must be positive")
+        n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
+        height = coerce_integer_count(height, label="height", minimum=1)
+        window_size = coerce_integer_count(window_size, label="window_size", minimum=1)
 
         self.n_trees = n_trees
         self.height = height

@@ -115,16 +115,13 @@ class XStream(BaseModel):
         max_feature_cache_size: int | None = 10_000,
         seed: int | None = None,
     ) -> None:
-        if k <= 0:
-            raise ValueError("k must be positive")
-        if n_chains <= 0:
-            raise ValueError("n_chains must be positive")
-        if depth <= 0:
-            raise ValueError("depth must be positive")
-        if cms_width <= 0:
-            raise ValueError("cms_width must be positive")
-        if cms_num_hashes <= 0:
-            raise ValueError("cms_num_hashes must be positive")
+        k = coerce_integer_count(k, label="k", minimum=1)
+        n_chains = coerce_integer_count(n_chains, label="n_chains", minimum=1)
+        depth = coerce_integer_count(depth, label="depth", minimum=1)
+        cms_width = coerce_integer_count(cms_width, label="cms_width", minimum=1)
+        cms_num_hashes = coerce_integer_count(
+            cms_num_hashes, label="cms_num_hashes", minimum=1
+        )
         window_size = coerce_integer_count(window_size, label="window_size")
         init_sample_size = coerce_integer_count(
             init_sample_size, label="init_sample_size"

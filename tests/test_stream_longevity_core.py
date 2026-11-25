@@ -164,7 +164,7 @@ def test_bounded_adwin_still_detects_drift() -> None:
     detector = ADWIN(clock=1, max_window_size=128)
     for _ in range(5_000):
         detector.update(0.0)
-    assert any(detector.update(10.0).drift_detected for _ in range(128))
+    assert any(detector.update(10.0) for _ in range(128))
 
 
 def test_kswin_window_stays_bounded_through_repeated_drift() -> None:

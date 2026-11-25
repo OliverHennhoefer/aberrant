@@ -10,7 +10,7 @@ from typing import TypeAlias
 import numpy as np
 
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
+from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,10 +152,10 @@ class ASDIsolationForest(BaseModel):
         retrain_interval: int | None = None,
         seed: int | None = None,
     ) -> None:
-        if n_estimators <= 0:
-            raise ValueError(f"n_estimators must be positive, got {n_estimators}")
-        if max_samples <= 1:
-            raise ValueError(f"max_samples must be greater than 1, got {max_samples}")
+        max_samples = coerce_integer_count(max_samples, label="max_samples", minimum=2)
+        n_estimators = coerce_integer_count(
+            n_estimators, label="n_estimators", minimum=1
+        )
 
         resolved_window_size = max_samples if window_size is None else window_size
         if resolved_window_size <= 1:
