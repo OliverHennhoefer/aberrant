@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog and the project aims to follow
 Semantic Versioning.
 
-## [Unreleased]
+## [2.0.0] - Unreleased
 
 ### Added
 
@@ -16,8 +16,11 @@ Semantic Versioning.
   not exist. DSPOT calibrates the deviation from a moving mean. Their
   thresholds are not clipped to the largest score seen;
   `CalibratorSpec.extrapolates` marks such methods.
-
-## [2.0.0] - Unreleased
+- `aberrant.evaluate.vus`: VUS-ROC and VUS-PR (Paparrizos et al., VLDB
+  2022), the volume under the range-based ROC and PR surfaces over margins
+  from 0 to `window`. Each labeled anomaly range counts as one event, with
+  partial credit near it. It follows the reference package's
+  `RangeAUC_volume_opt` and needs NumPy only.
 
 ### Fixed
 

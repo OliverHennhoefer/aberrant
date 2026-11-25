@@ -177,6 +177,31 @@ Record anomaly prevalence alongside AP: precision, and therefore AP, depends on
 class prevalence. Neither AP nor ROC AUC evaluates alert volume, delay, or the
 cost of a false alert.
 
+## Anomaly ranges
+
+AP and ROC AUC score each event on its own. In a time series an anomaly is
+usually a range: a long range found late outweighs a short one found on time,
+and a score that rises one step before the range counts as a false positive.
+`vus` measures the volume under the range-based ROC and PR surfaces of
+Paparrizos et al. (*Volume Under the Surface*, VLDB 2022). Each labeled range
+counts as one event, scores within a soft margin around it get partial
+credit, and the metric averages over every margin from 0 to `window`.
+
+```python
+from aberrant.evaluate import vus
+
+labels = [0, 0, 1, 1, 1, 0, 0, 0, 0, 0]
+scores = [0.1, 0.9, 0.8, 0.3, 0.2, 0.1, 0.0, 0.1, 0.2, 0.1]
+result = vus(labels, scores, window=4)
+print(result.pr, result.roc)
+```
+
+It follows `RangeAUC_volume_opt` of the reference package `vus` 0.0.7,
+threshold grid included, and needs NumPy only. VUS-PR is the measure
+Liu and Paparrizos recommend for comparing time-series detectors (*The
+Elephant in the Room*, NeurIPS 2024). Take `window` near one
+period of the series, and report it.
+
 ## Warm-up and contamination
 
 Warm-up is part of the experiment specification. Report:

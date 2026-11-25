@@ -27,7 +27,13 @@ from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.datasets import Dataset, DatasetStream, load
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
-from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
+from aberrant.evaluate import (
+    EvaluationRecord,
+    EvaluationResult,
+    PrequentialEvaluator,
+    VolumeUnderSurface,
+    vus,
+)
 from aberrant.exceptions import ConfigurationError
 from aberrant.forecast import (
     HoltWinters,
@@ -146,6 +152,8 @@ def test_evaluation_public_imports_base_smoke() -> None:
     assert EvaluationRecord is not None
     assert EvaluationResult is not None
     assert PrequentialEvaluator is not None
+    assert VolumeUnderSurface is not None
+    assert callable(vus)
 
 
 def test_removed_compatibility_exports_stay_removed() -> None:
