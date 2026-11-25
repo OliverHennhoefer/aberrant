@@ -10,9 +10,9 @@ class TestAnoEdgeL(unittest.TestCase):
 
     def test_dense_microcluster_scores_above_sparse_edge(self) -> None:
         model = AnoEdgeL(
-            count_min_rows=128,
-            count_min_cols=128,
-            num_hashes=4,
+            sketch_rows=128,
+            sketch_cols=128,
+            n_hashes=4,
             num_dense_submatrices=1,
             time_decay_factor=1.0,
             seed=42,

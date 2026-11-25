@@ -21,10 +21,9 @@ class TestStreamSpot(unittest.TestCase):
             "shingle_size": 2,
             "num_clusters": 4,
             "max_graphs": 32,
-            "warm_up_graphs": 4,
+            "warm_up": 4,
             "normalize_score": False,
             "seed": 42,
-            "eps": 1e-9,
         }
         defaults.update(overrides)
         return StreamSpot(**defaults)
@@ -40,7 +39,7 @@ class TestStreamSpot(unittest.TestCase):
         self.assertEqual(model.shingle_size, 2)
         self.assertEqual(model.num_clusters, 8)
         self.assertEqual(model.max_graphs, 4096)
-        self.assertEqual(model.warm_up_graphs, 32)
+        self.assertEqual(model.warm_up, 32)
         self.assertFalse(model.normalize_score)
 
     def test_invalid_parameters(self) -> None:
@@ -67,11 +66,9 @@ class TestStreamSpot(unittest.TestCase):
         with self.assertRaises(ValueError):
             StreamSpot(num_clusters=5, max_graphs=4)
         with self.assertRaises(ValueError):
-            StreamSpot(warm_up_graphs=0)
+            StreamSpot(warm_up=0)
         with self.assertRaises(ValueError):
-            StreamSpot(warm_up_graphs=5, max_graphs=4)
-        with self.assertRaises(ValueError):
-            StreamSpot(eps=0.0)
+            StreamSpot(warm_up=5, max_graphs=4)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -99,7 +96,7 @@ class TestStreamSpot(unittest.TestCase):
             )
 
     def test_score_is_zero_before_warmup(self) -> None:
-        model = self.create_model(warm_up_graphs=6, shingle_size=1, edge_type_key=None)
+        model = self.create_model(warm_up=6, shingle_size=1, edge_type_key=None)
         for i in range(20):
             model.learn_one(
                 {
@@ -115,7 +112,7 @@ class TestStreamSpot(unittest.TestCase):
         )
 
     def test_non_monotonic_timestamp_raises(self) -> None:
-        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=1)
+        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up=1)
         model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
         model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 2.0})
         with self.assertRaises(ValueError):
@@ -124,7 +121,7 @@ class TestStreamSpot(unittest.TestCase):
             model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
 
     def test_score_one_does_not_advance_timestamp(self) -> None:
-        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=1)
+        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up=1)
         model.learn_one({"graph": 1.0, "src": 1.0, "dst": 2.0, "t": 1.0})
         current_bucket = model._clock.max_time
 
@@ -137,7 +134,7 @@ class TestStreamSpot(unittest.TestCase):
             time_key=None,
             edge_type_key=None,
             shingle_size=1,
-            warm_up_graphs=2,
+            warm_up=2,
         )
         sample = {"graph": 1.0, "src": 1.0, "dst": 2.0}
         self.assertEqual(model.score_one(sample), 0.0)
@@ -151,8 +148,8 @@ class TestStreamSpot(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
 
     def test_deterministic_with_seed(self) -> None:
-        model1 = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=4)
-        model2 = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=4)
+        model1 = self.create_model(edge_type_key=None, shingle_size=1, warm_up=4)
+        model2 = self.create_model(edge_type_key=None, shingle_size=1, warm_up=4)
 
         for i in range(400):
             point = {
@@ -176,7 +173,7 @@ class TestStreamSpot(unittest.TestCase):
             edge_type_key="etype",
             shingle_size=1,
             num_clusters=1,
-            warm_up_graphs=1,
+            warm_up=1,
             max_graphs=8,
         )
         for i in range(300):
@@ -199,7 +196,7 @@ class TestStreamSpot(unittest.TestCase):
             shingle_size=1,
             max_graphs=5,
             num_clusters=2,
-            warm_up_graphs=1,
+            warm_up=1,
         )
         for i in range(100):
             model.learn_one(
@@ -216,7 +213,7 @@ class TestStreamSpot(unittest.TestCase):
 
     def test_eviction_drops_the_least_recently_seen_graph(self) -> None:
         model = self.create_model(
-            edge_type_key=None, max_graphs=8, num_clusters=2, warm_up_graphs=1
+            edge_type_key=None, max_graphs=8, num_clusters=2, warm_up=1
         )
         rng = np.random.default_rng(4)
         last_seen: dict[float, int] = {}
@@ -239,7 +236,7 @@ class TestStreamSpot(unittest.TestCase):
             )
 
     def test_reset_restores_cold_state(self) -> None:
-        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=2)
+        model = self.create_model(edge_type_key=None, shingle_size=1, warm_up=2)
         for i in range(100):
             model.learn_one(
                 {
@@ -262,7 +259,7 @@ class TestStreamSpot(unittest.TestCase):
         model = self.create_model(
             edge_type_key=None,
             shingle_size=1,
-            warm_up_graphs=2,
+            warm_up=2,
             normalize_score=True,
         )
         for i in range(120):

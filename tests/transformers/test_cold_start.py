@@ -55,10 +55,10 @@ def test_unseen_feature_after_learning_still_raises(
 
 def test_score_before_learn_pipeline_starts_on_the_first_event() -> None:
     pipelines = [
-        StandardScaler() | OnlineIsolationForest(num_trees=5, window_size=16, seed=0),
+        StandardScaler() | OnlineIsolationForest(n_trees=5, window_size=16, seed=0),
         MinMaxScaler() | HalfSpaceTrees(n_trees=2, height=3, window_size=4, seed=0),
         RollingRobustScaler(window_size=8)
-        | OnlineIsolationForest(num_trees=5, window_size=16, seed=0),
+        | OnlineIsolationForest(n_trees=5, window_size=16, seed=0),
     ]
     events = [{"x": float(i % 5), "y": float(i % 3)} for i in range(20)]
 

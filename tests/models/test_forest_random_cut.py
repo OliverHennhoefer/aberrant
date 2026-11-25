@@ -55,7 +55,7 @@ class TestRandomCutForest(unittest.TestCase):
             n_trees=8,
             sample_size=32,
             shingle_size=1,
-            warmup_samples=16,
+            warm_up=16,
             normalize_score=True,
             score_scale=8.0,
             seed=42,
@@ -67,7 +67,7 @@ class TestRandomCutForest(unittest.TestCase):
         self.assertEqual(model.n_trees, 40)
         self.assertEqual(model.sample_size, 256)
         self.assertEqual(model.shingle_size, 1)
-        self.assertEqual(model.warmup_samples, 256)
+        self.assertEqual(model.warm_up, 256)
         self.assertFalse(model.normalize_score)
         self.assertFalse(model._ready)
 
@@ -80,7 +80,7 @@ class TestRandomCutForest(unittest.TestCase):
         with self.assertRaises(ValueError):
             RandomCutForest(shingle_size=0)
         with self.assertRaises(ValueError):
-            RandomCutForest(warmup_samples=0)
+            RandomCutForest(warm_up=0)
         with self.assertRaises(ValueError):
             RandomCutForest(score_scale=0.0)
 
@@ -139,7 +139,7 @@ class TestRandomCutForest(unittest.TestCase):
         model = RandomCutForest(
             n_trees=4,
             sample_size=20,
-            warmup_samples=10,
+            warm_up=10,
             seed=7,
         )
         for i in range(200):
@@ -153,7 +153,7 @@ class TestRandomCutForest(unittest.TestCase):
         model = RandomCutForest(
             n_trees=16,
             sample_size=64,
-            warmup_samples=32,
+            warm_up=32,
             seed=11,
         )
         rng = np.random.default_rng(123)
@@ -214,7 +214,7 @@ class TestRandomCutForest(unittest.TestCase):
             n_trees=6,
             sample_size=24,
             shingle_size=3,
-            warmup_samples=8,
+            warm_up=8,
             seed=5,
         )
         for i in range(50):
@@ -229,7 +229,7 @@ class TestRandomCutForest(unittest.TestCase):
         model = RandomCutForest(
             n_trees=8,
             sample_size=32,
-            warmup_samples=16,
+            warm_up=16,
             normalize_score=False,
             seed=42,
         )
@@ -328,7 +328,7 @@ class TestRandomCutForestExactness(unittest.TestCase):
                 events = score_sequences.make_stream(
                     seed=7, n_events=260, n_features=3, kind=kind
                 )
-                params = {"n_trees": 6, "sample_size": 24, "warmup_samples": 4}
+                params = {"n_trees": 6, "sample_size": 24, "warm_up": 4}
                 scored = RandomCutForest(**params, seed=8)
                 learned = RandomCutForest(**params, seed=8)
                 scored_elsewhere = RandomCutForest(**params, seed=8)
@@ -347,7 +347,7 @@ class TestRandomCutForestExactness(unittest.TestCase):
 
     def test_branch_boxes_bound_their_points(self):
         events = score_sequences.make_stream(seed=11, n_events=400, n_features=3)
-        model = RandomCutForest(n_trees=3, sample_size=30, warmup_samples=5, seed=12)
+        model = RandomCutForest(n_trees=3, sample_size=30, warm_up=5, seed=12)
         for event in events:
             model.score_one(event)
             model.learn_one(event)
@@ -364,7 +364,7 @@ class TestRandomCutForestExactness(unittest.TestCase):
 
     def test_pickles_leave_out_the_plan(self):
         events = score_sequences.make_stream(seed=9, n_events=80, n_features=2)
-        model = RandomCutForest(n_trees=4, sample_size=20, warmup_samples=5, seed=10)
+        model = RandomCutForest(n_trees=4, sample_size=20, warm_up=5, seed=10)
         for event in events[:60]:
             model.learn_one(event)
         before = pickle.dumps(model)

@@ -73,7 +73,7 @@ def test_window_score_equals_batch_method_on_window_plus_candidate(
     data = _mixed_stream(rng, 300)
     window = 60
     model = model_type(
-        memory="window", window_size=window, min_samples=20, aggregation=aggregation
+        memory="window", window_size=window, warm_up=20, aggregation=aggregation
     )
     for index, row in enumerate(data):
         score = model.score_one(_event(row))
@@ -92,7 +92,7 @@ def test_uncompressed_sketch_equals_batch_method_on_all_history(
 ) -> None:
     rng = np.random.default_rng(8)
     data = _mixed_stream(rng, 400)
-    model = model_type(compression=1e6, min_samples=10)
+    model = model_type(compression=1e6, warm_up=10)
     for index, row in enumerate(data):
         score = model.score_one(_event(row))
         if index >= 10:
@@ -112,12 +112,10 @@ def test_pyod_aggregation_matches_pyod_when_installed(model_type: type) -> None:
     )
     rng = np.random.default_rng(9)
     data = _mixed_stream(rng, 120)[:, :4]
-    model = model_type(
-        memory="window", window_size=50, min_samples=20, aggregation="pyod"
-    )
+    model = model_type(memory="window", window_size=50, warm_up=20, aggregation="pyod")
     for index, row in enumerate(data):
         score = model.score_one(_event(row))
-        if index >= model.min_samples:
+        if index >= model.warm_up:
             reference = batch_type().fit(data[max(0, index - 50) : index])
             expected = reference.decision_function(row[np.newaxis, :])[0]
             assert score == pytest.approx(expected, abs=1e-9)
@@ -126,7 +124,7 @@ def test_pyod_aggregation_matches_pyod_when_installed(model_type: type) -> None:
 
 def test_paper_scores_of_ecod_and_copod_coincide() -> None:
     rng = np.random.default_rng(10)
-    ecod, copod = OnlineECOD(min_samples=5), OnlineCOPOD(min_samples=5)
+    ecod, copod = OnlineECOD(warm_up=5), OnlineCOPOD(warm_up=5)
     for row in rng.lognormal(size=(200, 3)):
         assert ecod.score_one(_event(row)) == copod.score_one(_event(row))
         ecod.learn_one(_event(row))
@@ -143,7 +141,7 @@ def test_paper_scores_of_ecod_and_copod_coincide() -> None:
 )
 def test_scoring_and_explaining_never_change_state(params: dict) -> None:
     rng = np.random.default_rng(11)
-    model = OnlineECOD(min_samples=10, **params)
+    model = OnlineECOD(warm_up=10, **params)
     for row in rng.normal(size=(150, 3)):
         model.learn_one(_event(row))
     before = pickle.dumps(model)
@@ -167,8 +165,8 @@ def test_scoring_before_learning_does_not_lock_the_schema() -> None:
 def test_window_forgets_everything_older_than_the_window() -> None:
     rng = np.random.default_rng(12)
     data = rng.normal(size=(500, 2))
-    long_run = OnlineECOD(memory="window", window_size=40, min_samples=40)
-    fresh = OnlineECOD(memory="window", window_size=40, min_samples=40)
+    long_run = OnlineECOD(memory="window", window_size=40, warm_up=40)
+    fresh = OnlineECOD(memory="window", window_size=40, warm_up=40)
     for row in data:
         long_run.learn_one(_event(row))
     for row in data[-40:]:
@@ -275,7 +273,7 @@ def test_decayed_sketch_stays_accurate_on_a_long_stationary_stream() -> None:
 
 def test_weights_that_decay_to_zero_are_dropped() -> None:
     # A tiny half-life underflows old weights to zero after renormalization.
-    model = OnlineECOD(half_life=0.1, min_samples=1)
+    model = OnlineECOD(half_life=0.1, warm_up=1)
     for _ in range(1_000):
         model.learn_one({"x": 1.0})
     assert model.score_one({"x": 1.0}) == pytest.approx(0.0, abs=1e-9)
@@ -287,7 +285,7 @@ def test_weights_that_decay_to_zero_are_dropped() -> None:
 def test_extremely_short_half_lives_forget_without_dividing_by_zero(
     model_type: type, half_life: float
 ) -> None:
-    model = model_type(half_life=half_life, min_samples=1)
+    model = model_type(half_life=half_life, warm_up=1)
     for index in range(1_000):
         value = float(index % 3)
         model.learn_one({"x": value})
@@ -297,7 +295,7 @@ def test_extremely_short_half_lives_forget_without_dividing_by_zero(
 
 @pytest.mark.parametrize("model_type", DETECTORS)
 def test_decayed_constant_features_have_nonnegative_scores(model_type: type) -> None:
-    model = model_type(half_life=100.0, min_samples=1)
+    model = model_type(half_life=100.0, warm_up=1)
     for _ in range(1_000):
         model.learn_one({"x": 1.0})
         assert model.score_one({"x": 1.0}) >= 0.0
@@ -320,11 +318,9 @@ def test_decay_survives_weight_renormalization() -> None:
 def test_hybrid_uses_window_until_history_is_ready_then_the_smaller_score() -> None:
     rng = np.random.default_rng(16)
     data = rng.normal(size=(400, 2))
-    hybrid = OnlineECOD(
-        memory="hybrid", window_size=50, compression=1e6, min_samples=20
-    )
-    window = OnlineECOD(memory="window", window_size=50, min_samples=20)
-    history = OnlineECOD(compression=1e6, min_samples=1)
+    hybrid = OnlineECOD(memory="hybrid", window_size=50, compression=1e6, warm_up=20)
+    window = OnlineECOD(memory="window", window_size=50, warm_up=20)
+    history = OnlineECOD(compression=1e6, warm_up=1)
     for index, row in enumerate(data):
         probe = _event(row * 1.5)
         hybrid_score = hybrid.score_one(probe)
@@ -345,9 +341,9 @@ def test_hybrid_uses_window_until_history_is_ready_then_the_smaller_score() -> N
 def test_hybrid_history_warms_up_by_learned_samples_under_fast_decay(
     model_type: type,
 ) -> None:
-    hybrid = model_type(memory="hybrid", window_size=64, half_life=10.0, min_samples=64)
-    window = model_type(memory="window", window_size=64, min_samples=64)
-    history = model_type(half_life=10.0, min_samples=64)
+    hybrid = model_type(memory="hybrid", window_size=64, half_life=10.0, warm_up=64)
+    window = model_type(memory="window", window_size=64, warm_up=64)
+    history = model_type(half_life=10.0, warm_up=64)
     data = [0.0] * 64 + [10.0] * 64
     for index, value in enumerate(data):
         event = {"x": value}
@@ -406,9 +402,7 @@ def test_explanation_sums_to_the_score(
     model_type: type, aggregation: str, memory: str, tail: str
 ) -> None:
     rng = np.random.default_rng(19)
-    model = model_type(
-        memory=memory, aggregation=aggregation, tail=tail, min_samples=10
-    )
+    model = model_type(memory=memory, aggregation=aggregation, tail=tail, warm_up=10)
     names = ["a", "b", "c"]
     assert model.explain_one(dict.fromkeys(names, 0.0)) == dict.fromkeys(names, 0.0)
     for row in rng.lognormal(size=(1_200, 3)):
@@ -437,9 +431,9 @@ def test_window_scores_are_bounded_and_affine_invariant(
     # Integers with power-of-two scales keep every transform exact.
     rows = np.array(data[:-1], dtype=np.float64)
     candidate = np.array(data[-1], dtype=np.float64)
-    plain = OnlineECOD(memory="window", window_size=64, min_samples=1)
-    moved = OnlineECOD(memory="window", window_size=64, min_samples=1)
-    permuted = OnlineECOD(memory="window", window_size=64, min_samples=1)
+    plain = OnlineECOD(memory="window", window_size=64, warm_up=1)
+    moved = OnlineECOD(memory="window", window_size=64, warm_up=1)
+    permuted = OnlineECOD(memory="window", window_size=64, warm_up=1)
     order = [2, 0, 1]
     for row in rows:
         plain.learn_one(_event(row))
@@ -460,7 +454,7 @@ def test_window_scores_are_bounded_and_affine_invariant(
 
 
 def test_warm_up_and_readiness() -> None:
-    model = OnlineECOD(min_samples=3)
+    model = OnlineECOD(warm_up=3)
     assert model.readiness == Readiness(False, 0, 3)
     for value in (1.0, 2.0):
         model.learn_one({"x": value})
@@ -473,7 +467,7 @@ def test_warm_up_and_readiness() -> None:
 
 
 def test_constant_feature_scores_departures_at_the_floor() -> None:
-    model = OnlineECOD(memory="window", window_size=100, min_samples=10)
+    model = OnlineECOD(memory="window", window_size=100, warm_up=10)
     for _ in range(99):
         model.learn_one({"x": 5.0})
     assert model.score_one({"x": 5.0}) == pytest.approx(0.0)
@@ -481,7 +475,7 @@ def test_constant_feature_scores_departures_at_the_floor() -> None:
 
 
 def test_time_key_is_excluded_and_must_not_decrease() -> None:
-    model = OnlineECOD(time_key="t", min_samples=2)
+    model = OnlineECOD(time_key="t", warm_up=2)
     for t, value in enumerate([1.0, 2.0, 3.0]):
         model.learn_one({"t": float(t), "x": value})
     assert model.explain_one({"t": 5.0, "x": 9.0}).keys() == {"x"}
@@ -514,12 +508,12 @@ def test_non_finite_values_are_rejected() -> None:
         {"tail": "pareto", "tail_quantile": 1.0},
         {"tail": "pareto", "tail_quantile": 0.0},
         {"memory": "window", "window_size": 1},
-        {"memory": "window", "window_size": 10, "min_samples": 11},
+        {"memory": "window", "window_size": 10, "warm_up": 11},
         {"half_life": 0.0},
         {"half_life": float("inf")},
         {"compression": 5.0},
-        {"min_samples": 0},
-        {"min_samples": True},
+        {"warm_up": 0},
+        {"warm_up": True},
         {"time_key": ""},
     ],
 )
@@ -557,7 +551,7 @@ def test_defaults_resolve_per_memory() -> None:
 )
 def test_state_stays_bounded_on_long_streams(params: dict) -> None:
     rng = np.random.default_rng(20)
-    model = OnlineECOD(min_samples=8, **params)
+    model = OnlineECOD(warm_up=8, **params)
     for row in rng.standard_t(3, size=(20_000, 2)):
         model.learn_one(_event(row))
     references = [model._primary, model._history]
@@ -572,7 +566,7 @@ def test_state_stays_bounded_on_long_streams(params: dict) -> None:
 
 
 def test_reset_and_repr() -> None:
-    model = OnlineCOPOD(memory="hybrid", window_size=16, min_samples=4)
+    model = OnlineCOPOD(memory="hybrid", window_size=16, warm_up=4)
     for value in range(40):
         model.learn_one({"x": float(value)})
     model.reset()

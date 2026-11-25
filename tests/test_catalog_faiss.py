@@ -67,7 +67,7 @@ def test_nested_resolution_is_reused_and_builds_independent_engines(monkeypatch)
     assert calls == ["faiss", "knn"]
     assert (
         resolved.fingerprint
-        == "ad1a47f7f6bafce816264110e4fe9bcf367afe3d384ca8410896c768fe465edc"
+        == "f9312a966601faa230277528260c15c992f70aafacc11ce6ff7c0b69f0f2f849"
     )
 
 

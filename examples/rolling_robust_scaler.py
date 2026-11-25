@@ -4,8 +4,8 @@ from aberrant.transform import RollingRobustScaler
 
 
 def main() -> None:
-    adaptive = RollingRobustScaler(window_size=5, min_samples=5)
-    frozen = RollingRobustScaler(window_size=5, min_samples=5)
+    adaptive = RollingRobustScaler(window_size=5, warm_up=5)
+    frozen = RollingRobustScaler(window_size=5, warm_up=5)
     for value in [0, 2, 4, 6, 8]:
         adaptive.learn_one({"x": float(value)})
         frozen.learn_one({"x": float(value)})

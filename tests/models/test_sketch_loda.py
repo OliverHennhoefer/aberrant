@@ -5,7 +5,7 @@ from unittest import mock
 
 import numpy as np
 
-from aberrant.model.sketch import StreamingLODA as LODA
+from aberrant.model.sketch import LODA
 from aberrant.model.sketch import loda as loda_module
 from tests import score_sequences
 
@@ -18,12 +18,11 @@ class TestLODA(unittest.TestCase):
             "n_projections": 32,
             "n_bins": 24,
             "sparsity": 0.4,
-            "warm_up_samples": 32,
+            "warm_up": 32,
             "decay": 0.99,
             "time_key": "t",
             "pseudocount": 0.5,
             "seed": 42,
-            "eps": 1e-12,
         }
         defaults.update(overrides)
         return LODA(**defaults)
@@ -33,7 +32,7 @@ class TestLODA(unittest.TestCase):
         self.assertEqual(model.n_projections, 100)
         self.assertEqual(model.n_bins, 32)
         self.assertIsNone(model.sparsity)
-        self.assertEqual(model.warm_up_samples, 256)
+        self.assertEqual(model.warm_up, 256)
         self.assertEqual(model.decay, 1.0)
         self.assertEqual(model.pseudocount, 1.0)
 
@@ -47,7 +46,7 @@ class TestLODA(unittest.TestCase):
         with self.assertRaises(ValueError):
             LODA(sparsity=1.5)
         with self.assertRaises(ValueError):
-            LODA(warm_up_samples=0)
+            LODA(warm_up=0)
         with self.assertRaises(ValueError):
             LODA(decay=0.0)
         with self.assertRaises(ValueError):
@@ -56,8 +55,6 @@ class TestLODA(unittest.TestCase):
             LODA(time_key="")
         with self.assertRaises(ValueError):
             LODA(pseudocount=0.0)
-        with self.assertRaises(ValueError):
-            LODA(eps=0.0)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -74,7 +71,7 @@ class TestLODA(unittest.TestCase):
             model.score_one({"t": float("inf"), "x": 1.0})
 
     def test_score_is_zero_before_warmup(self) -> None:
-        model = self.create_model(warm_up_samples=20)
+        model = self.create_model(warm_up=20)
         for i in range(10):
             model.learn_one({"t": float(i), "a": float(i), "b": float(i + 1)})
 
@@ -101,7 +98,7 @@ class TestLODA(unittest.TestCase):
     def test_internal_clock_fallback_without_time_key(self) -> None:
         model = self.create_model(
             time_key=None,
-            warm_up_samples=4,
+            warm_up=4,
             n_projections=16,
             n_bins=12,
         )
@@ -142,7 +139,7 @@ class TestLODA(unittest.TestCase):
         model = self.create_model(
             n_projections=48,
             n_bins=32,
-            warm_up_samples=64,
+            warm_up=64,
             decay=0.995,
             seed=11,
         )
@@ -184,7 +181,7 @@ class TestLODA(unittest.TestCase):
         model = self.create_model(
             n_projections=12,
             n_bins=16,
-            warm_up_samples=10,
+            warm_up=10,
             time_key=None,
         )
 
@@ -215,7 +212,7 @@ class TestLODA(unittest.TestCase):
         model = self.create_model(
             n_projections=24,
             n_bins=20,
-            warm_up_samples=12,
+            warm_up=12,
             decay=1.0,
             time_key=None,
         )
@@ -249,7 +246,7 @@ class TestLODA(unittest.TestCase):
         self.assertEqual(model.score_one({"t": 1.0, "a": 1.0, "b": 2.0}), 0.0)
 
     def test_score_sequences_match_recorded_reference(self) -> None:
-        for case in score_sequences.load("streaming_loda"):
+        for case in score_sequences.load("loda"):
             with self.subTest(case=case["name"]):
                 model = LODA(**case["params"])
                 events = score_sequences.make_stream(**case["stream"])
@@ -260,7 +257,7 @@ class TestLODA(unittest.TestCase):
 
     def test_warm_up_batches_count_every_row_once(self) -> None:
         events = score_sequences.make_stream(seed=7, n_events=200, n_features=5)
-        params = {"n_projections": 12, "n_bins": 9, "warm_up_samples": 100, "seed": 4}
+        params = {"n_projections": 12, "n_bins": 9, "warm_up": 100, "seed": 4}
         reference = LODA(**params)
         reference_scores = score_sequences.score_then_learn(reference, events)
         # A row needs 8 * 12 comparisons. Bounds below that still take one row
@@ -277,7 +274,7 @@ class TestLODA(unittest.TestCase):
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(n_projections=18, n_bins=14, sparsity=0.25)
         output = repr(model)
-        self.assertIn("StreamingLODA", output)
+        self.assertIn("LODA", output)
         self.assertIn("n_projections=18", output)
         self.assertIn("n_bins=14", output)
         self.assertIn("sparsity=0.25", output)

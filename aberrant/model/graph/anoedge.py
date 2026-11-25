@@ -180,14 +180,14 @@ class AnoEdgeL(BaseModel):
         time_key: Input field containing a non-decreasing integer-like time
             bucket. ``None`` assigns a new one-based bucket to every learned
             arrival.
-        count_min_rows: Row dimension of every higher-order sketch plane.
-        count_min_cols: Column dimension of every higher-order sketch plane.
-        num_hashes: Number of independently hashed sketch planes.
+        sketch_rows: Row dimension of every higher-order sketch plane.
+        sketch_cols: Column dimension of every higher-order sketch plane.
+        n_hashes: Number of independently hashed sketch planes.
         num_dense_submatrices: Local dense submatrices maintained per plane. It
             cannot exceed either sketch dimension.
         time_decay_factor: Factor in ``(0, 1]`` applied to sketches and local
             submatrices when the time bucket advances.
-        warm_up_samples: Number of learned edges before scoring begins.
+        warm_up: Number of learned edges before scoring begins.
         normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
             score.
         seed: Seed for model-local sketch hash generation.
@@ -202,14 +202,14 @@ class AnoEdgeL(BaseModel):
     @staticmethod
     def _validate_parameters(
         *,
-        count_min_rows: int,
-        count_min_cols: int,
-        num_hashes: int,
+        sketch_rows: int,
+        sketch_cols: int,
+        n_hashes: int,
         num_dense_submatrices: int,
         time_decay_factor: float,
-        warm_up_samples: int,
+        warm_up: int,
     ) -> None:
-        if num_dense_submatrices > min(count_min_rows, count_min_cols):
+        if num_dense_submatrices > min(sketch_rows, sketch_cols):
             raise ValueError(
                 "num_dense_submatrices cannot exceed either sketch dimension"
             )
@@ -222,46 +222,40 @@ class AnoEdgeL(BaseModel):
         source_key: str = "src",
         destination_key: str = "dst",
         time_key: str | None = "t",
-        count_min_rows: int = 256,
-        count_min_cols: int = 256,
-        num_hashes: int = 4,
+        sketch_rows: int = 256,
+        sketch_cols: int = 256,
+        n_hashes: int = 4,
         num_dense_submatrices: int = 1,
         time_decay_factor: float = 1.0,
-        warm_up_samples: int = 0,
+        warm_up: int = 0,
         normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
-        count_min_rows = coerce_integer_count(
-            count_min_rows, label="count_min_rows", minimum=1
-        )
-        count_min_cols = coerce_integer_count(
-            count_min_cols, label="count_min_cols", minimum=1
-        )
-        num_hashes = coerce_integer_count(num_hashes, label="num_hashes", minimum=1)
+        sketch_rows = coerce_integer_count(sketch_rows, label="sketch_rows", minimum=1)
+        sketch_cols = coerce_integer_count(sketch_cols, label="sketch_cols", minimum=1)
+        n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
         num_dense_submatrices = coerce_integer_count(
             num_dense_submatrices, label="num_dense_submatrices", minimum=1
         )
-        warm_up_samples = coerce_integer_count(
-            warm_up_samples, label="warm_up_samples", minimum=0
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=0)
         self._validate_parameters(
-            count_min_rows=count_min_rows,
-            count_min_cols=count_min_cols,
-            num_hashes=num_hashes,
+            sketch_rows=sketch_rows,
+            sketch_cols=sketch_cols,
+            n_hashes=n_hashes,
             num_dense_submatrices=num_dense_submatrices,
             time_decay_factor=time_decay_factor,
-            warm_up_samples=warm_up_samples,
+            warm_up=warm_up,
         )
 
         self.source_key = source_key
         self.destination_key = destination_key
         self.time_key = time_key
-        self.count_min_rows = count_min_rows
-        self.count_min_cols = count_min_cols
-        self.num_hashes = num_hashes
+        self.sketch_rows = sketch_rows
+        self.sketch_cols = sketch_cols
+        self.n_hashes = n_hashes
         self.num_dense_submatrices = num_dense_submatrices
         self.time_decay_factor = time_decay_factor
-        self.warm_up_samples = warm_up_samples
+        self.warm_up = warm_up
         self.normalize_score = normalize_score
         self.seed = seed
 
@@ -274,21 +268,21 @@ class AnoEdgeL(BaseModel):
             time_key=self.time_key,
         )
         self._rng = np.random.default_rng(self.seed)
-        hash_modulus = max(self.count_min_rows, self.count_min_cols)
+        hash_modulus = max(self.sketch_rows, self.sketch_cols)
         self._hash_a = self._rng.integers(
             1,
             max(hash_modulus, 2),
-            size=self.num_hashes,
+            size=self.n_hashes,
             dtype=np.int64,
         )
         self._hash_b = self._rng.integers(
             0,
             hash_modulus,
-            size=self.num_hashes,
+            size=self.n_hashes,
             dtype=np.int64,
         )
         self._sketch = np.zeros(
-            (self.num_hashes, self.count_min_rows, self.count_min_cols),
+            (self.n_hashes, self.sketch_rows, self.sketch_cols),
             dtype=np.float64,
         )
         self._dense_submatrices = [
@@ -296,7 +290,7 @@ class AnoEdgeL(BaseModel):
                 _DenseSubmatrix(index, index)
                 for index in range(self.num_dense_submatrices)
             ]
-            for _ in range(self.num_hashes)
+            for _ in range(self.n_hashes)
         ]
         self._current_bucket: int | None = None
         self._samples_seen = 0
@@ -317,10 +311,10 @@ class AnoEdgeL(BaseModel):
         return [
             (
                 plane,
-                self._hash(src, plane, self.count_min_rows),
-                self._hash(dst, plane, self.count_min_cols),
+                self._hash(src, plane, self.sketch_rows),
+                self._hash(dst, plane, self.sketch_cols),
             )
-            for plane in range(self.num_hashes)
+            for plane in range(self.n_hashes)
         ]
 
     def _rollover_for_learning(self, bucket: int) -> None:
@@ -392,7 +386,7 @@ class AnoEdgeL(BaseModel):
         """Preview the candidate-inclusive AnoEdge-L score without mutation."""
         event = self._boundary.preview(x)
         bucket, src, dst = event.bucket, event.source, event.destination
-        if self._samples_seen < self.warm_up_samples:
+        if self._samples_seen < self.warm_up:
             return 0.0
 
         rollover = self._current_bucket is not None and bucket > self._current_bucket
@@ -409,11 +403,11 @@ class AnoEdgeL(BaseModel):
         return (
             "AnoEdgeL("
             f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
-            f"time_key={self.time_key!r}, count_min_rows={self.count_min_rows}, "
-            f"count_min_cols={self.count_min_cols}, num_hashes={self.num_hashes}, "
+            f"time_key={self.time_key!r}, sketch_rows={self.sketch_rows}, "
+            f"sketch_cols={self.sketch_cols}, n_hashes={self.n_hashes}, "
             f"num_dense_submatrices={self.num_dense_submatrices}, "
             f"time_decay_factor={self.time_decay_factor}, "
-            f"warm_up_samples={self.warm_up_samples}, "
+            f"warm_up={self.warm_up}, "
             f"normalize_score={self.normalize_score}, "
             f"seed={self.seed}, "
             f"samples_seen={self._samples_seen})"

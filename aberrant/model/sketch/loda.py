@@ -12,9 +12,11 @@ from aberrant.base.model import BaseModel
 # Bound on the comparisons of warm-up rows with interior bin edges held at
 # once, so fitting the histograms needs about 1 MiB of temporaries.
 _WARM_UP_COMPARISONS = 1 << 20
+# A warm-up range at most this wide counts as constant and is widened to one unit.
+_CONSTANT_RANGE = 1e-12
 
 
-class StreamingLODA(BaseModel):
+class LODA(BaseModel):
     """
     Bounded streaming adaptation of LODA.
 
@@ -41,7 +43,7 @@ class StreamingLODA(BaseModel):
         n_bins: Fixed number of equal-width bins fitted per projection.
         sparsity: Fraction of input features active in each projection, in
             ``(0, 1]``. ``None`` uses ``min(1, 1 / sqrt(n_features))``.
-        warm_up_samples: Number of projected learned samples used to fit the
+        warm_up: Number of projected learned samples used to fit the
             fixed histogram edges and initial counts.
         decay: Factor in ``(0, 1]`` applied to all histogram counts before each
             post-warm-up learned insertion.
@@ -50,8 +52,6 @@ class StreamingLODA(BaseModel):
             non-decreasing. Time deltas do not alter ``decay``.
         pseudocount: Positive additive smoothing count for each bin.
         seed: Seed for model-local sparse projection generation.
-        eps: Positive width below which a projection's warm-up range counts
-            as constant and is widened to one unit.
 
     References:
         Pevny, T. (2016). Loda: Lightweight on-line detector of anomalies.
@@ -65,12 +65,11 @@ class StreamingLODA(BaseModel):
         n_projections: int = 100,
         n_bins: int = 32,
         sparsity: float | None = None,
-        warm_up_samples: int = 256,
+        warm_up: int = 256,
         decay: float = 1.0,
         time_key: str | None = None,
         pseudocount: float = 1.0,
         seed: int | None = None,
-        eps: float = 1e-12,
     ) -> None:
         n_projections = coerce_integer_count(
             n_projections, label="n_projections", minimum=1
@@ -78,25 +77,22 @@ class StreamingLODA(BaseModel):
         n_bins = coerce_integer_count(n_bins, label="n_bins", minimum=2)
         if sparsity is not None and not (0.0 < sparsity <= 1.0):
             raise ValueError("sparsity must be in (0, 1] or None")
-        warm_up_samples = coerce_integer_count(warm_up_samples, label="warm_up_samples")
+        warm_up = coerce_integer_count(warm_up, label="warm_up")
         if not (0.0 < decay <= 1.0):
             raise ValueError("decay must be in (0, 1]")
         if time_key is not None and (not isinstance(time_key, str) or not time_key):
             raise ValueError("time_key must be a non-empty string or None")
         if pseudocount <= 0.0:
             raise ValueError("pseudocount must be positive")
-        if eps <= 0.0:
-            raise ValueError("eps must be positive")
 
         self.n_projections = n_projections
         self.n_bins = n_bins
         self.sparsity = sparsity
-        self.warm_up_samples = warm_up_samples
+        self.warm_up = warm_up
         self.decay = decay
         self.time_key = time_key
         self.pseudocount = pseudocount
         self.seed = seed
-        self.eps = eps
 
         self._reset_state()
 
@@ -177,7 +173,7 @@ class StreamingLODA(BaseModel):
         return cast(np.ndarray, self._last_bins - above)
 
     def _fit_histograms_from_buffer(self) -> None:
-        if len(self._warmup_buffer) < self.warm_up_samples:
+        if len(self._warmup_buffer) < self.warm_up:
             return
 
         warmup = np.vstack(self._warmup_buffer)
@@ -186,7 +182,7 @@ class StreamingLODA(BaseModel):
 
         lows = mins.copy()
         highs = maxs.copy()
-        degenerate = np.abs(highs - lows) <= self.eps
+        degenerate = np.abs(highs - lows) <= _CONSTANT_RANGE
         lows[degenerate] -= 0.5
         highs[degenerate] += 0.5
 
@@ -266,7 +262,7 @@ class StreamingLODA(BaseModel):
             self._update_histograms(projected)
         else:
             self._warmup_buffer.append(projected)
-            if len(self._warmup_buffer) >= self.warm_up_samples:
+            if len(self._warmup_buffer) >= self.warm_up:
                 self._fit_histograms_from_buffer()
 
         self._samples_seen += 1
@@ -283,9 +279,9 @@ class StreamingLODA(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            "StreamingLODA("
+            "LODA("
             f"n_projections={self.n_projections}, n_bins={self.n_bins}, "
-            f"sparsity={self.sparsity}, warm_up_samples={self.warm_up_samples}, "
+            f"sparsity={self.sparsity}, warm_up={self.warm_up}, "
             f"decay={self.decay}, time_key={self.time_key!r}, "
             f"pseudocount={self.pseudocount}, "
             f"seed={self.seed}, "

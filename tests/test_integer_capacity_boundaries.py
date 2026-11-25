@@ -15,8 +15,8 @@ from aberrant.model.forest import (
     XStream,
 )
 from aberrant.model.graph import SignedGraphSketchDetector
-from aberrant.model.sketch import StreamingLODA
-from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.sketch import LODA
+from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.stream import BatchStreamer, Sample
 from aberrant.transform import IncrementalPCA
 
@@ -39,23 +39,23 @@ _CAPACITY_CASES = [
     (ADWIN, {}, "min_window_length", 1),
     (ADWIN, {}, "grace_period", 0),
     (ADWIN, {"min_window_length": 1}, "max_window_size", 2),
-    (IncrementalPCA, {"n_components": 1, "n0": 4}, "n_components", 1),
-    (IncrementalPCA, {"n_components": 1, "n0": 4}, "n0", 1),
+    (IncrementalPCA, {"n_components": 1, "warm_up": 4}, "n_components", 1),
+    (IncrementalPCA, {"n_components": 1, "warm_up": 4}, "warm_up", 1),
     (_batch_streamer, {}, "batch_size", 1),
     (
         SignedGraphSketchDetector,
-        {"num_clusters": 1, "warm_up_graphs": 1},
+        {"num_clusters": 1, "warm_up": 1},
         "max_graphs",
         1,
     ),
-    (StreamingLODA, {}, "warm_up_samples", 1),
-    (StreamRandomHistogramForest, {"n_estimators": 1}, "window_size", 2),
+    (LODA, {}, "warm_up", 1),
+    (StreamRandomHistogramForest, {"n_trees": 1}, "window_size", 2),
     (XStream, {}, "window_size", 1),
-    (XStream, {}, "init_sample_size", 1),
+    (XStream, {}, "warm_up", 1),
     (XStream, {}, "max_feature_cache_size", 1),
-    (IncrementalOneClassSVMAdaptiveKernel, {}, "buffer_size", 1),
-    (IncrementalOneClassSVMAdaptiveKernel, {}, "sv_budget", 1),
-    (MondrianIsolationForest, {"n_estimators": 1}, "window_size", 2),
+    (AdaptiveOneClassSVM, {}, "buffer_size", 1),
+    (AdaptiveOneClassSVM, {}, "sv_budget", 1),
+    (MondrianIsolationForest, {"n_trees": 1}, "window_size", 2),
 ]
 
 
@@ -144,7 +144,7 @@ def test_mondrian_numpy_window_capacity_survives_repeated_rebuilds(
     window_size: np.integer,
 ) -> None:
     model = MondrianIsolationForest(
-        n_estimators=2, subspace_size=1, window_size=window_size, seed=3
+        n_trees=2, subspace_size=1, window_size=window_size, seed=3
     )
     for index in range(32):
         model.learn_one({"x": float(index)})

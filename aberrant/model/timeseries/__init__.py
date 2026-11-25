@@ -1,6 +1,6 @@
 """Time-series anomaly detection models."""
 
-from aberrant.model.timeseries.damp import XLagDAMP
+from aberrant.model.timeseries.damp import DAMP
 from aberrant.model.timeseries.multivariate_rolling_matrix_profile import (
     MultivariateRollingMatrixProfile,
 )
@@ -9,5 +9,5 @@ from aberrant.model.timeseries.rolling_matrix_profile import RollingMatrixProfil
 __all__ = [
     "MultivariateRollingMatrixProfile",
     "RollingMatrixProfile",
-    "XLagDAMP",
+    "DAMP",
 ]

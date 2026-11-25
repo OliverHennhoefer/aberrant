@@ -70,7 +70,7 @@ def test_numpy_integer_capacities_remain_supported() -> None:
     batches = BatchStreamer(_InfiniteStream(), batch_size=np.int64(4)).stream()
     assert len(next(batches)[0]) == 4
     batches.close()
-    pca = IncrementalPCA(n_components=np.int64(1), n0=np.int64(2))
+    pca = IncrementalPCA(n_components=np.int64(1), warm_up=np.int64(2))
     pca.learn_one({"x": 1.0})
     pca.learn_one({"x": 2.0})
     assert pca.n0_reached and not pca.window
@@ -221,7 +221,7 @@ def test_schema_guard_bounds_feature_state_through_novel_feature_rejections(
 def test_pca_storage_and_components_stay_stable_after_long_warmup(
     forgetting_factor,
 ) -> None:
-    pca = IncrementalPCA(n_components=2, n0=8, forgetting_factor=forgetting_factor)
+    pca = IncrementalPCA(n_components=2, warm_up=8, forgetting_factor=forgetting_factor)
     projection = RandomProjection(n_components=2, seed=4)
     rng = np.random.default_rng(4)
     for _ in range(10_000):
@@ -235,7 +235,7 @@ def test_pca_storage_and_components_stay_stable_after_long_warmup(
     assert projection.random_matrix.shape == (3, 2)
 
 
-@pytest.mark.parametrize("parameter", ["n0", "n_components"])
+@pytest.mark.parametrize("parameter", ["warm_up", "n_components"])
 @pytest.mark.parametrize("value", [True, 2.5, math.inf, math.nan])
 def test_pca_capacity_parameters_cannot_disable_warmup_completion(
     parameter: str,

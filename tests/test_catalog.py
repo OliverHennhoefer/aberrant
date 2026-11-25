@@ -125,10 +125,10 @@ def test_manifest_defers_optional_runtime_inspection(tmp_path: Path) -> None:
 
 def test_parameter_schema_reports_types_defaults_and_required_values() -> None:
     forest_schema = get_model_spec("online_isolation_forest").parameter_schema()
-    damp_schema = get_model_spec("x_lag_damp").parameter_schema()
+    damp_schema = get_model_spec("damp").parameter_schema()
     lof_schema = get_model_spec("local_outlier_factor").parameter_schema()
 
-    assert forest_schema["properties"]["num_trees"] == {
+    assert forest_schema["properties"]["n_trees"] == {
         "type": "integer",
         "default": 100,
     }
@@ -154,11 +154,11 @@ def test_capabilities_resolve_from_model_parameters() -> None:
         {
             "sample_size": 64,
             "shingle_size": 4,
-            "warmup_samples": 10,
+            "warm_up": 10,
             "normalize_score": True,
         }
     )
-    xstream = get_model_spec("x_stream").capabilities()
+    xstream = get_model_spec("xstream").capabilities()
     signed_statistic = get_model_spec("moving_covariance").capabilities(
         {"window_size": 20, "abs_diff": False}
     )
@@ -246,23 +246,23 @@ def test_harmonic_average_warmup_requires_a_retained_nonzero_value() -> None:
 
 
 @pytest.mark.parametrize(
-    ("init_sample_size", "window_size"),
+    ("warm_up", "window_size"),
     [(4, 8), (8, 4), (8, 8)],
 )
 def test_xstream_warmup_matches_scoring_readiness(
-    init_sample_size: int, window_size: int
+    warm_up: int, window_size: int
 ) -> None:
     params = {
         "k": 3,
         "n_chains": 2,
         "depth": 2,
-        "cms_width": 8,
-        "init_sample_size": init_sample_size,
+        "sketch_width": 8,
+        "warm_up": warm_up,
         "window_size": window_size,
         "seed": 1,
     }
-    warmup = get_model_spec("x_stream").capabilities(params).warmup
-    model = create_model("x_stream", params)
+    warmup = get_model_spec("xstream").capabilities(params).warmup
+    model = create_model("xstream", params)
     query = {"x": 20.0}
 
     for i in range(7):
@@ -279,9 +279,9 @@ def test_xstream_warmup_matches_scoring_readiness(
 
 
 def test_sdo_warmup_counts_sampled_observers_instead_of_events() -> None:
-    params = {"k": 8, "T": 1000000.0, "x_neighbors": 2, "seed": 1}
-    warmup = get_model_spec("sdo_stream").capabilities(params).warmup
-    model = create_model("sdo_stream", params)
+    params = {"max_observers": 8, "time_scale": 1000000.0, "n_neighbors": 2, "seed": 1}
+    warmup = get_model_spec("sdostream").capabilities(params).warmup
+    model = create_model("sdostream", params)
     assert isinstance(model, SDOStream)
 
     model.learn_one({"x": 0.0})
@@ -295,21 +295,21 @@ def test_sdo_warmup_counts_sampled_observers_instead_of_events() -> None:
 
 
 @pytest.mark.parametrize(
-    ("k", "x_neighbors", "warm_up_observers", "ready_count"),
+    ("k", "n_neighbors", "warm_up", "ready_count"),
     [(8, 2, None, 2), (8, 4, 2, 4), (8, 2, 5, 5), (1, 1, None, 1)],
 )
 def test_sdo_observer_warmup_matches_scoring_readiness(
-    k: int, x_neighbors: int, warm_up_observers: int | None, ready_count: int
+    k: int, n_neighbors: int, warm_up: int | None, ready_count: int
 ) -> None:
     params = {
-        "k": k,
-        "T": 1.0,
-        "x_neighbors": x_neighbors,
-        "warm_up_observers": warm_up_observers,
+        "max_observers": k,
+        "time_scale": 1.0,
+        "n_neighbors": n_neighbors,
+        "warm_up": warm_up,
         "seed": 1,
     }
-    warmup = get_model_spec("sdo_stream").capabilities(params).warmup
-    model = create_model("sdo_stream", params)
+    warmup = get_model_spec("sdostream").capabilities(params).warmup
+    model = create_model("sdostream", params)
     assert isinstance(model, SDOStream)
     query = {"x": 20.0}
 
@@ -501,7 +501,7 @@ def test_build_detector_constructs_a_validated_pipeline() -> None:
             ],
             "model": {
                 "id": "online_isolation_forest",
-                "params": {"num_trees": 2, "window_size": 8, "seed": 17},
+                "params": {"n_trees": 2, "window_size": 8, "seed": 17},
             },
         }
     )
@@ -533,7 +533,7 @@ def test_detector_config_round_trips_and_has_stable_fingerprint() -> None:
             "model": {
                 "id": "online_isolation_forest",
                 "params": {
-                    "num_trees": 100,
+                    "n_trees": 100,
                     "max_leaf_samples": 32,
                     "tree_type": "adaptive",
                     "subsample": 1.0,
@@ -557,7 +557,7 @@ def test_detector_config_round_trips_and_has_stable_fingerprint() -> None:
     assert second == first
     assert second.fingerprint() == first.fingerprint()
     assert explicit_defaults.fingerprint() == first.fingerprint()
-    assert first.normalized().model.params["num_trees"] == 100
+    assert first.normalized().model.params["n_trees"] == 100
     features.append("c")
     assert first.transformers[0].params["features"] == ("a", "b")
     with pytest.raises(TypeError):
@@ -582,10 +582,10 @@ def test_detector_config_rejects_unknown_or_malformed_fields(mapping) -> None:
 def test_builder_rejects_unknown_components_and_invalid_parameters() -> None:
     with pytest.raises(UnknownComponentError):
         create_model("not_a_model")
-    with pytest.raises(ConfigurationError, match="num_trees"):
-        create_model("online_isolation_forest", {"num_trees": 0})
+    with pytest.raises(ConfigurationError, match="n_trees"):
+        create_model("online_isolation_forest", {"n_trees": 0})
     with pytest.raises(ConfigurationError, match="expected an integer"):
-        create_model("online_isolation_forest", {"num_trees": "many"})
+        create_model("online_isolation_forest", {"n_trees": "many"})
 
 
 def test_non_declarative_model_is_cataloged_but_rejected_by_detector_config() -> None:
@@ -634,7 +634,7 @@ def test_projection_output_cannot_exceed_known_input_width(projection_id: str) -
     [
         ("midas", None),
         ("isconna", None),
-        ("ano_edge_l", None),
+        ("anoedge_l", None),
         ("signed_graph_sketch_detector", None),
         ("signed_graph_sketch_detector", "kind"),
     ],
@@ -648,14 +648,14 @@ def test_edge_models_accept_guarded_events_with_metadata(
     if time_key is not None:
         event[time_key] = 1.0
     if model_id == "signed_graph_sketch_detector":
-        params.update(
-            {"sketch_dim": 8, "warm_up_graphs": 1, "edge_type_key": edge_type_key}
-        )
+        params.update({"sketch_dim": 8, "warm_up": 1, "edge_type_key": edge_type_key})
         event["graph"] = 1.0
         if edge_type_key is not None:
             event[edge_type_key] = 1.0
+    elif model_id == "anoedge_l":
+        params.update({"sketch_rows": 2, "sketch_cols": 8})
     else:
-        params.update({"count_min_rows": 2, "count_min_cols": 8})
+        params.update({"n_hashes": 2, "sketch_width": 8})
 
     model_config = ComponentConfig(model_id, params)
     with_metadata = {**event, "weight": 3.0}
@@ -693,8 +693,8 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
     params: dict[str, object] = {"subsequence_length": 8}
     if start_index is not None:
         params["start_index"] = start_index
-    warmup = get_model_spec("x_lag_damp").capabilities(params).warmup
-    model = create_model("x_lag_damp", params)
+    warmup = get_model_spec("damp").capabilities(params).warmup
+    model = create_model("damp", params)
 
     for index in range(ready_count):
         assert not model.is_ready
@@ -702,7 +702,7 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
 
     assert warmup.minimum == ready_count
     assert model.is_ready
-    assert get_model_spec("x_lag_damp").capabilities().warmup.minimum is None
+    assert get_model_spec("damp").capabilities().warmup.minimum is None
 
 
 class _WindowedEngine(BaseSimilaritySearchEngine):

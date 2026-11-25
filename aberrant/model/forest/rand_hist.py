@@ -399,7 +399,7 @@ class StreamRandomHistogramForest(BaseModel):
     of planning the insertion again.
 
     Args:
-        n_estimators: Number of independently seeded random histogram trees.
+        n_trees: Number of independently seeded random histogram trees.
         max_depth: Maximum tree depth.
         window_size: Number of samples in the initial reference window and in
             each subsequent replacement window. It must exceed one.
@@ -416,24 +416,22 @@ class StreamRandomHistogramForest(BaseModel):
     def __init__(
         self,
         *,
-        n_estimators: int = 25,
+        n_trees: int = 25,
         max_depth: int = 5,
         window_size: int = 256,
         seed: int | None = None,
     ) -> None:
-        n_estimators = coerce_integer_count(
-            n_estimators, label="n_estimators", minimum=1
-        )
+        n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
         max_depth = coerce_integer_count(max_depth, label="max_depth", minimum=1)
         window_size = coerce_integer_count(window_size, label="window_size", minimum=2)
 
-        self.n_estimators = n_estimators
+        self.n_trees = n_trees
         self.max_depth = max_depth
         self.window_size = window_size
         self.seed = seed
         self._schema = FeatureSchema()
 
-        self._tree_seed_sequences = np.random.SeedSequence(seed).spawn(n_estimators)
+        self._tree_seed_sequences = np.random.SeedSequence(seed).spawn(n_trees)
         self._initial_window: list[np.ndarray] = []
         self._current_window: list[np.ndarray] = []
         self._trees: list[_RandomHistogramTree] = []
@@ -454,7 +452,7 @@ class StreamRandomHistogramForest(BaseModel):
         if names is None:
             raise RuntimeError("Forest schema is not initialized")
         self._trees = []
-        for tree_index in range(self.n_estimators):
+        for tree_index in range(self.n_trees):
             tree = _RandomHistogramTree(
                 self.max_depth,
                 len(names),
@@ -511,7 +509,7 @@ class StreamRandomHistogramForest(BaseModel):
     def __repr__(self) -> str:
         return (
             "StreamRandomHistogramForest("
-            f"n_estimators={self.n_estimators}, max_depth={self.max_depth}, "
+            f"n_trees={self.n_trees}, max_depth={self.max_depth}, "
             f"window_size={self.window_size}, seed={self.seed}, "
             f"initialized={bool(self._trees)}, forest_size={self._forest_size})"
         )

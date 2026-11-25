@@ -29,9 +29,9 @@ from aberrant.model.stat import (
     MovingVariance,
 )
 from aberrant.model.timeseries import (
+    DAMP,
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
-    XLagDAMP,
 )
 from aberrant.model.timeseries.damp import _mass_distance_profile
 
@@ -138,7 +138,7 @@ def test_matrix_profiles_evict_samples_statistics_and_absolute_matches(
 
 
 def test_damp_bounded_history_and_huge_lifetime_counters() -> None:
-    model = XLagDAMP(subsequence_length=4, x_lag=23, start_index=8)
+    model = DAMP(subsequence_length=4, x_lag=23, start_index=8)
     for index in range(2_000):
         point = {"x": math.sin(index * 0.17) + math.cos(index * 0.11)}
         score = model.score_one(point)
@@ -263,7 +263,7 @@ def test_retained_python_memory_plateaus_after_warmup_across_model_families() ->
         MovingCovariance(window_size=23),
         RollingMatrixProfile(subsequence_length=4, window_size=23),
         MultivariateRollingMatrixProfile(subsequence_length=4, window_size=23),
-        XLagDAMP(subsequence_length=4, x_lag=23, start_index=8),
+        DAMP(subsequence_length=4, x_lag=23, start_index=8),
         OnlineAutoencoderEnsemble(
             feature_map_grace=13,
             ad_grace=17,

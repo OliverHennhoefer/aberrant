@@ -4,7 +4,7 @@ from aberrant.model.forest.online import OnlineIsolationForest
 from aberrant.stream import Dataset, load
 
 model = OnlineIsolationForest(
-    num_trees=20,
+    n_trees=20,
     max_leaf_samples=32,
     tree_type="adaptive",
     subsample=1.0,

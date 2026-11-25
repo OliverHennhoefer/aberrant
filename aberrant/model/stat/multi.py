@@ -6,7 +6,7 @@ from itertools import chain
 
 import numpy as np
 
-from aberrant._utils.validation import FeatureSchema
+from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
 
 
@@ -81,7 +81,7 @@ class MovingCovariance(BaseModel):
     Args:
         window_size: Number of recent values to consider.
         bias: If False, applies Bessel correction (ddof=1).
-        keys: Feature names for the two variables. If None, uses first learned keys.
+        features: Feature names for the two variables. If None, uses the first learned names.
         abs_diff: If True, returns absolute difference.
 
     Raises:
@@ -100,20 +100,19 @@ class MovingCovariance(BaseModel):
     def __init__(
         self,
         *,
-        window_size: int,
+        window_size: int = 256,
         bias: bool = True,
-        keys: list[str] | None = None,
+        features: list[str] | None = None,
         abs_diff: bool = True,
     ) -> None:
         """Initialize the moving covariance model."""
         super().__init__()
 
-        if window_size <= 0:
-            raise ValueError("Window size must be a positive integer.")
+        window_size = coerce_integer_count(window_size, label="window_size")
 
         self.window_size = window_size
         self.window: dict[str, deque[float]] = {}
-        self._schema = FeatureSchema(names=keys, expected_size=2)
+        self._schema = FeatureSchema(names=features, expected_size=2)
         self.bias = bias
         self.abs_diff = abs_diff
         if self._schema.names is not None:
@@ -202,7 +201,7 @@ class MovingCorrelationCoefficient(BaseModel):
         bias: Use population normalization when true and sample normalization
             when false. The normalization cancels in Pearson correlation but is
             also applied consistently to covariance and standard deviations.
-        keys: Explicit names for the two features. If omitted, the first
+        features: Explicit names for the two features. If omitted, the first
             successfully learned mapping establishes a sorted schema.
         abs_diff: Return the magnitude of the change when true.
     """
@@ -210,17 +209,16 @@ class MovingCorrelationCoefficient(BaseModel):
     def __init__(
         self,
         *,
-        window_size: int,
+        window_size: int = 256,
         bias: bool = True,
-        keys: list[str] | None = None,
+        features: list[str] | None = None,
         abs_diff: bool = True,
     ) -> None:
         """Initialize the bounded bivariate window."""
-        if window_size <= 0:
-            raise ValueError("Window size must be a positive integer.")
+        window_size = coerce_integer_count(window_size, label="window_size")
         self.window_size = window_size
         self.window: dict[str, deque[float]] = {}
-        self._schema = FeatureSchema(names=keys, expected_size=2)
+        self._schema = FeatureSchema(names=features, expected_size=2)
         self.bias = bias
         self.abs_diff = abs_diff
         if self._schema.names is not None:
@@ -307,19 +305,22 @@ class MovingMahalanobisDistance(BaseModel):
         window_size: Maximum number of recent observations to retain.
         bias: Pass population normalization to NumPy covariance when true;
             use sample normalization when false.
-        keys: Explicit feature order. If omitted, the first successfully
+        features: Explicit feature order. If omitted, the first successfully
             learned mapping establishes a sorted schema.
     """
 
     def __init__(
-        self, *, window_size: int, bias: bool = True, keys: list[str] | None = None
+        self,
+        *,
+        window_size: int = 256,
+        bias: bool = True,
+        features: list[str] | None = None,
     ) -> None:
         """Initialize the bounded multivariate window."""
-        if window_size <= 0:
-            raise ValueError("Window size must be a positive integer.")
+        window_size = coerce_integer_count(window_size, label="window_size")
         self.window_size = window_size
         self.window: deque[list[float]] = deque([], maxlen=window_size)
-        self._schema = FeatureSchema(names=keys)
+        self._schema = FeatureSchema(names=features)
         self.bias = bias
 
     def learn_one(self, x: dict[str, float]) -> None:

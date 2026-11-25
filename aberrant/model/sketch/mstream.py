@@ -77,9 +77,9 @@ class MStream(BaseModel):
     previews rollover, normalization, and insertion without mutating state.
 
     Args:
-        rows: Number of independent hash rows for categorical attributes and
+        n_hashes: Number of independent hash rows for categorical attributes and
             complete-record counts.
-        buckets: Number of counters per numeric histogram or hash row.
+        sketch_width: Number of counters per numeric histogram or hash row.
         alpha: Factor in ``(0, 1]`` applied once to current-bucket counts when
             an observed time bucket advances.
         time_key: Input field containing a non-decreasing integer-like time
@@ -87,7 +87,7 @@ class MStream(BaseModel):
             arrival. The field is excluded from modeled features.
         categorical_features: Feature names treated as integer-like categorical
             identifiers. Every other feature is numeric.
-        warm_up_buckets: Required integer bucket-index distance from the first
+        warm_up: Required integer bucket-index distance from the first
             learned bucket before scoring begins. With explicit time, skipped
             bucket numbers contribute to this distance.
         seed: Seed for model-local categorical and record hash generation.
@@ -101,19 +101,19 @@ class MStream(BaseModel):
     def __init__(
         self,
         *,
-        rows: int = 2,
-        buckets: int = 1024,
+        n_hashes: int = 2,
+        sketch_width: int = 1024,
         alpha: float = 0.6,
         time_key: str | None = None,
         categorical_features: tuple[str, ...] = (),
-        warm_up_buckets: int = 0,
+        warm_up: int = 0,
         seed: int | None = None,
     ) -> None:
-        rows = coerce_integer_count(rows, label="rows", minimum=1)
-        buckets = coerce_integer_count(buckets, label="buckets", minimum=1)
-        warm_up_buckets = coerce_integer_count(
-            warm_up_buckets, label="warm_up_buckets", minimum=0
+        n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
+        sketch_width = coerce_integer_count(
+            sketch_width, label="sketch_width", minimum=1
         )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=0)
         if not (0.0 < alpha <= 1.0):
             raise ValueError("alpha must be in (0, 1]")
         if any(not isinstance(name, str) or not name for name in categorical_features):
@@ -123,19 +123,19 @@ class MStream(BaseModel):
         if time_key is not None and time_key in categorical_features:
             raise ValueError("time_key cannot also be a categorical feature")
 
-        self.rows = rows
-        self.buckets = buckets
+        self.n_hashes = n_hashes
+        self.sketch_width = sketch_width
         self.alpha = alpha
         self.time_key = time_key
         self.categorical_features = tuple(categorical_features)
-        self.warm_up_buckets = warm_up_buckets
+        self.warm_up = warm_up
         self.seed = seed
 
         self._reset_state()
 
     def _reset_state(self) -> None:
         self._rng = np.random.default_rng(self.seed)
-        self._row_index = np.arange(self.rows, dtype=np.intp)
+        self._row_index = np.arange(self.n_hashes, dtype=np.intp)
         self._boundary = NumericEventBoundary(
             time_key=self.time_key,
             integer_time=True,
@@ -195,9 +195,9 @@ class MStream(BaseModel):
         # Values are finite, so this is np.allclose with rtol=0 and atol=1e-9.
         if not np.all(np.abs(categorical_values - rounded) <= 1e-9):
             raise ValueError("Configured categorical features must be integer-like")
-        # All categorical hashes are modulo buckets. Reduce before converting
+        # All categorical hashes are modulo the sketch width. Reduce before converting
         # to int64, allowing long-lived streams to keep introducing large IDs.
-        categorical = np.remainder(rounded, self.buckets).astype(np.int64)
+        categorical = np.remainder(rounded, self.sketch_width).astype(np.int64)
         return numeric, categorical
 
     def _create_state(
@@ -211,7 +211,7 @@ class MStream(BaseModel):
         n_categorical = len(categorical_indices)
 
         numeric_current = np.zeros(
-            (n_numeric, self.buckets),
+            (n_numeric, self.sketch_width),
             dtype=np.float64,
         )
         numeric = _NumericState(
@@ -224,9 +224,9 @@ class MStream(BaseModel):
             ),
         )
 
-        high = max(self.buckets, 2)
+        high = max(self.sketch_width, 2)
         categorical_current = np.zeros(
-            (n_categorical, self.rows, self.buckets),
+            (n_categorical, self.n_hashes, self.sketch_width),
             dtype=np.float64,
         )
         categorical = _CategoricalState(
@@ -234,13 +234,13 @@ class MStream(BaseModel):
             hash_a=self._rng.integers(
                 1,
                 high,
-                size=(n_categorical, self.rows),
+                size=(n_categorical, self.n_hashes),
                 dtype=np.int64,
             ),
             hash_b=self._rng.integers(
                 0,
-                self.buckets,
-                size=(n_categorical, self.rows),
+                self.sketch_width,
+                size=(n_categorical, self.n_hashes),
                 dtype=np.int64,
             ),
             counts=_CountState(
@@ -249,14 +249,16 @@ class MStream(BaseModel):
             ),
         )
 
-        n_record_bits = math.ceil(math.log2(self.buckets))
-        record_current = np.zeros((self.rows, self.buckets), dtype=np.float64)
+        n_record_bits = math.ceil(math.log2(self.sketch_width))
+        record_current = np.zeros((self.n_hashes, self.sketch_width), dtype=np.float64)
         record = _RecordState(
-            numeric_planes=self._rng.normal(size=(self.rows, n_record_bits, n_numeric)),
+            numeric_planes=self._rng.normal(
+                size=(self.n_hashes, n_record_bits, n_numeric)
+            ),
             categorical_weights=self._rng.integers(
                 0,
-                self.buckets,
-                size=(self.rows, n_categorical),
+                self.sketch_width,
+                size=(self.n_hashes, n_categorical),
                 dtype=np.int64,
             ),
             counts=_CountState(
@@ -311,7 +313,7 @@ class MStream(BaseModel):
         return np.asarray(normalized, dtype=np.float64)
 
     def _numeric_bins(self, normalized: np.ndarray) -> np.ndarray:
-        return np.floor(normalized * float(self.buckets - 1)).astype(np.intp)
+        return np.floor(normalized * float(self.sketch_width - 1)).astype(np.intp)
 
     def _numeric_cells(self, normalized: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Index the histogram cell of every numeric feature."""
@@ -331,9 +333,10 @@ class MStream(BaseModel):
         categorical: np.ndarray,
     ) -> np.ndarray:
         if categorical.size == 0:
-            return np.empty((0, self.rows), dtype=np.intp)
+            return np.empty((0, self.n_hashes), dtype=np.intp)
         return np.asarray(
-            (categorical[:, np.newaxis] * state.hash_a + state.hash_b) % self.buckets,
+            (categorical[:, np.newaxis] * state.hash_a + state.hash_b)
+            % self.sketch_width,
             dtype=np.intp,
         )
 
@@ -344,7 +347,7 @@ class MStream(BaseModel):
         categorical: np.ndarray,
     ) -> np.ndarray:
         if state.numeric_planes.shape[1] == 0:
-            numeric_hash = np.zeros(self.rows, dtype=np.int64)
+            numeric_hash = np.zeros(self.n_hashes, dtype=np.int64)
         else:
             signs = np.einsum("rbn,n->rb", state.numeric_planes, normalized) >= 0.0
             bit_weights = np.left_shift(
@@ -356,10 +359,10 @@ class MStream(BaseModel):
         categorical_hash = (
             state.categorical_weights @ categorical
             if categorical.size
-            else np.zeros(self.rows, dtype=np.int64)
+            else np.zeros(self.n_hashes, dtype=np.int64)
         )
         return np.asarray(
-            (numeric_hash + categorical_hash) % self.buckets,
+            (numeric_hash + categorical_hash) % self.sketch_width,
             dtype=np.intp,
         )
 
@@ -502,7 +505,7 @@ class MStream(BaseModel):
             state.numeric.indices,
             state.categorical.indices,
         )
-        if self._time_index(state, bucket) - 1 < self.warm_up_buckets:
+        if self._time_index(state, bucket) - 1 < self.warm_up:
             return 0.0
 
         normalized = self._normalize_numeric(state.numeric, numeric, update=False)
@@ -510,9 +513,9 @@ class MStream(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            f"MStream(rows={self.rows}, buckets={self.buckets}, alpha={self.alpha}, "
+            f"MStream(n_hashes={self.n_hashes}, sketch_width={self.sketch_width}, alpha={self.alpha}, "
             f"time_key={self.time_key!r}, "
             f"categorical_features={self.categorical_features!r}, "
-            f"warm_up_buckets={self.warm_up_buckets}, seed={self.seed}, "
+            f"warm_up={self.warm_up}, seed={self.seed}, "
             f"samples_seen={self._samples_seen})"
         )

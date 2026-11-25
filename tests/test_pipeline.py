@@ -260,7 +260,7 @@ def test_rejected_update_preserves_scaler_mapping_references(factory, mapping_na
         MinMaxScaler,
         FeatureSchemaGuard,
         lambda: RandomProjection(n_components=2, seed=42),
-        lambda: IncrementalPCA(n_components=2, n0=2),
+        lambda: IncrementalPCA(n_components=2, warm_up=2),
     ],
 )
 @pytest.mark.parametrize("warm", [False, True])

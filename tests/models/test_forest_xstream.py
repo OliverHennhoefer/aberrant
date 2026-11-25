@@ -11,19 +11,17 @@ from tests import score_sequences
 def _reference_buckets(model: XStream, y: np.ndarray) -> np.ndarray:
     """Return the buckets of ``y`` from the per-chain traversal of aberrant 1.4.0.
 
-    The result is shaped ``(cms_num_hashes, depth, n_chains)``.
+    The result is shaped ``(n_hashes, depth, n_chains)``.
     """
     state = model._state
     assert state is not None
-    width = model.cms_width
-    buckets = np.empty(
-        (model.cms_num_hashes, model.depth, model.n_chains), dtype=np.int64
-    )
+    width = model.sketch_width
+    buckets = np.empty((model.n_hashes, model.depth, model.n_chains), dtype=np.int64)
     for chain in range(model.n_chains):
         z = np.zeros(model.k)
         bins = [0] * model.k
         visited: set[int] = set()
-        hash_dots = np.zeros(model.cms_num_hashes, dtype=np.int64)
+        hash_dots = np.zeros(model.n_hashes, dtype=np.int64)
         for level in range(model.depth):
             dim = int(state.chain_dims[chain, level])
             if dim in visited:
@@ -49,10 +47,10 @@ class TestXStream(unittest.TestCase):
             k=16,
             n_chains=8,
             depth=6,
-            cms_width=128,
-            cms_num_hashes=3,
+            sketch_width=128,
+            n_hashes=3,
             window_size=16,
-            init_sample_size=16,
+            warm_up=16,
             density=0.25,
             max_feature_cache_size=32,
             seed=42,
@@ -77,13 +75,13 @@ class TestXStream(unittest.TestCase):
         with self.assertRaises(ValueError):
             XStream(depth=0)
         with self.assertRaises(ValueError):
-            XStream(cms_width=0)
+            XStream(sketch_width=0)
         with self.assertRaises(ValueError):
-            XStream(cms_num_hashes=0)
+            XStream(n_hashes=0)
         with self.assertRaises(ValueError):
             XStream(window_size=0)
         with self.assertRaises(ValueError):
-            XStream(init_sample_size=0)
+            XStream(warm_up=0)
         with self.assertRaises(ValueError):
             XStream(density=0.0)
         with self.assertRaises(ValueError):
@@ -117,10 +115,10 @@ class TestXStream(unittest.TestCase):
             k=8,
             n_chains=4,
             depth=4,
-            cms_width=64,
-            cms_num_hashes=2,
+            sketch_width=64,
+            n_hashes=2,
             window_size=8,
-            init_sample_size=8,
+            warm_up=8,
             density=0.5,
             seed=7,
         )
@@ -172,10 +170,10 @@ class TestXStream(unittest.TestCase):
             k=8,
             n_chains=4,
             depth=4,
-            cms_width=64,
-            cms_num_hashes=2,
+            sketch_width=64,
+            n_hashes=2,
             window_size=8,
-            init_sample_size=8,
+            warm_up=8,
             density=0.5,
             max_feature_cache_size=3,
             seed=7,
@@ -199,10 +197,10 @@ class TestXStream(unittest.TestCase):
             k=8,
             n_chains=4,
             depth=4,
-            cms_width=64,
-            cms_num_hashes=2,
+            sketch_width=64,
+            n_hashes=2,
             window_size=8,
-            init_sample_size=8,
+            warm_up=8,
             density=0.5,
             seed=7,
         )
@@ -269,32 +267,30 @@ class TestXStreamExactness(unittest.TestCase):
     def test_sketch_cells_match_the_per_chain_traversal(self):
         configurations = [
             # Three dimensions over twelve levels revisit every dimension.
-            {"k": 3, "n_chains": 5, "depth": 12, "cms_width": 37, "density": 1.0},
-            {"k": 16, "n_chains": 7, "depth": 9, "cms_width": 64},
-            {"k": 6, "n_chains": 4, "depth": 6, "cms_width": 1},
+            {"k": 3, "n_chains": 5, "depth": 12, "sketch_width": 37, "density": 1.0},
+            {"k": 16, "n_chains": 7, "depth": 9, "sketch_width": 64},
+            {"k": 6, "n_chains": 4, "depth": 6, "sketch_width": 1},
         ]
         rng = np.random.default_rng(5)
         for params in configurations:
-            model = XStream(
-                cms_num_hashes=3, window_size=10, init_sample_size=10, seed=2, **params
-            )
+            model = XStream(n_hashes=3, window_size=10, warm_up=10, seed=2, **params)
             for row in rng.normal(size=(10, 3)):
                 model.learn_one({"a": row[0], "b": row[1], "c": row[2]})
             state = model._state
             assert state is not None
-            rows = np.arange(model.n_chains * model.depth * model.cms_num_hashes)
+            rows = np.arange(model.n_chains * model.depth * model.n_hashes)
             rows = rows.reshape(model.n_chains, model.depth, -1).transpose(2, 1, 0)
             for scale in (1.0, -3.0, 1e6, 1e30, -1e300):
                 y = rng.normal(size=model.k) * scale
                 with self.subTest(params=params, scale=scale):
                     cells = model._sketch_cells(state, y)
-                    np.testing.assert_array_equal(cells // model.cms_width, rows)
+                    np.testing.assert_array_equal(cells // model.sketch_width, rows)
                     np.testing.assert_array_equal(
-                        cells % model.cms_width, _reference_buckets(model, y)
+                        cells % model.sketch_width, _reference_buckets(model, y)
                     )
 
     def test_reduced_hash_terms_give_the_same_cells(self):
-        model = XStream(k=8, n_chains=6, depth=10, cms_width=97, seed=3)
+        model = XStream(k=8, n_chains=6, depth=10, sketch_width=97, seed=3)
         events = score_sequences.make_stream(seed=4, n_events=300, n_features=3)
         for event in events:
             model.learn_one(event)
@@ -334,10 +330,10 @@ class TestXStreamExactness(unittest.TestCase):
             k=2,
             n_chains=3,
             depth=4,
-            cms_width=16,
-            cms_num_hashes=2,
+            sketch_width=16,
+            n_hashes=2,
             window_size=4,
-            init_sample_size=4,
+            warm_up=4,
             density=1.0,
             seed=1,
         )
@@ -369,10 +365,10 @@ class TestXStreamExactness(unittest.TestCase):
                     k=2,
                     n_chains=1,
                     depth=1,
-                    cms_width=2,
-                    cms_num_hashes=1,
+                    sketch_width=2,
+                    n_hashes=1,
                     window_size=window_size,
-                    init_sample_size=1,
+                    warm_up=1,
                     seed=1,
                 )
                 model.learn_one({"x": 1.0})

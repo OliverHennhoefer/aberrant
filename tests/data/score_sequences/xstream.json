@@ -7,10 +7,10 @@
     "k": 20,
     "n_chains": 10,
     "depth": 6,
-    "cms_width": 64,
-    "cms_num_hashes": 3,
+    "sketch_width": 64,
+    "n_hashes": 3,
     "window_size": 32,
-    "init_sample_size": 32,
+    "warm_up": 32,
     "seed": 6
    },
    "stream": {
@@ -327,10 +327,10 @@
     "k": 4,
     "n_chains": 8,
     "depth": 12,
-    "cms_width": 128,
-    "cms_num_hashes": 2,
+    "sketch_width": 128,
+    "n_hashes": 2,
     "window_size": 25,
-    "init_sample_size": 20,
+    "warm_up": 20,
     "density": 1.0,
     "seed": 7
    },
@@ -646,7 +646,7 @@
    "name": "defaults_short_windows",
    "params": {
     "window_size": 64,
-    "init_sample_size": 64,
+    "warm_up": 64,
     "seed": 8
    },
    "stream": {
@@ -963,10 +963,10 @@
     "k": 8,
     "n_chains": 6,
     "depth": 10,
-    "cms_width": 32,
-    "cms_num_hashes": 2,
+    "sketch_width": 32,
+    "n_hashes": 2,
     "window_size": 16,
-    "init_sample_size": 1,
+    "warm_up": 1,
     "density": 0.5,
     "seed": 9
    },

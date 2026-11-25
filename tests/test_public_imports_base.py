@@ -14,7 +14,8 @@ import aberrant.model.forest as forest_api
 import aberrant.model.graph as graph_api
 import aberrant.model.sketch as sketch_api
 import aberrant.model.svm as svm_api
-import aberrant.stream._dataset as dataset_api
+import aberrant.model.timeseries as timeseries_api
+import aberrant.stream as stream_api
 from aberrant import __version__
 from aberrant.base import (
     BaseModel,
@@ -53,13 +54,13 @@ from aberrant.model.forest import (
     XStream,
 )
 from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
-from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
+from aberrant.model.sketch import LODA, MStream, RSHash
 from aberrant.model.stat import MovingAverage, MovingCovariance
-from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.model.timeseries import (
+    DAMP,
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
-    XLagDAMP,
 )
 from aberrant.stream import BatchStreamer, Dataset, NpzStreamer, load
 from aberrant.transform import (
@@ -101,12 +102,12 @@ def test_public_imports_base_smoke() -> None:
     assert RandomCutForest is not None
     assert StreamRandomHistogramForest is not None
     assert XStream is not None
-    assert StreamingLODA is not None
+    assert LODA is not None
     assert MStream is not None
-    assert StreamingRSHash is not None
-    assert IncrementalOneClassSVMAdaptiveKernel is not None
+    assert RSHash is not None
+    assert AdaptiveOneClassSVM is not None
     assert (
-        XLagDAMP is not None
+        DAMP is not None
         and RollingMatrixProfile is not None
         and MultivariateRollingMatrixProfile is not None
     )
@@ -158,11 +159,13 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (distance_api, "StationaryRegionNeighborDetector"),
         (graph_api, "StreamSpot"),
         (forest_api, "MondrianForest"),
-        (sketch_api, "LODA"),
-        (sketch_api, "RSHash"),
+        (sketch_api, "StreamingLODA"),
+        (sketch_api, "StreamingRSHash"),
         (svm_api, "GADGETSVM"),
         (svm_api, "GraphGatedOneClassSVM"),
-        (dataset_api, "DatasetStreamer"),
+        (svm_api, "IncrementalOneClassSVMAdaptiveKernel"),
+        (timeseries_api, "XLagDAMP"),
+        (stream_api, "DatasetStreamer"),
     )
     for module, name in removed:
         assert not hasattr(module, name)

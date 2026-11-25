@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.timeseries import XLagDAMP
+from aberrant.model.timeseries import DAMP
 from aberrant.model.timeseries.damp import _mass_distance_profile, _next_power_of_two
 from tests import score_sequences
 
@@ -139,17 +139,17 @@ class TestMassDistanceProfile(unittest.TestCase):
 class TestXLagDAMP(unittest.TestCase):
     """Test the author-grounded pure-online X-Lag DAMP implementation."""
 
-    def create_model(self, **overrides: object) -> XLagDAMP:
+    def create_model(self, **overrides: object) -> DAMP:
         defaults: dict[str, object] = {
             "subsequence_length": 8,
             "x_lag": 64,
             "start_index": 32,
         }
         defaults.update(overrides)
-        return XLagDAMP(**defaults)
+        return DAMP(**defaults)
 
     def test_initialization_defaults_follow_author_source(self) -> None:
-        model = XLagDAMP(subsequence_length=16)
+        model = DAMP(subsequence_length=16)
 
         self.assertEqual(model.x_lag, 16 * 16)
         self.assertEqual(model.start_index, 4 * 16)
@@ -158,13 +158,13 @@ class TestXLagDAMP(unittest.TestCase):
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
-            XLagDAMP(subsequence_length=1)
+            DAMP(subsequence_length=1)
         with self.assertRaises(ValueError):
-            XLagDAMP(subsequence_length=8, x_lag=7)
+            DAMP(subsequence_length=8, x_lag=7)
         with self.assertRaises(ValueError):
-            XLagDAMP(subsequence_length=8, start_index=7)
+            DAMP(subsequence_length=8, start_index=7)
         with self.assertRaises(ValueError):
-            XLagDAMP(subsequence_length=8, eps=0.0)
+            DAMP(subsequence_length=8, min_std=0.0)
 
     def test_input_validation_and_feature_locking(self) -> None:
         model = self.create_model()
@@ -272,7 +272,7 @@ class TestXLagDAMP(unittest.TestCase):
                 _mass_distance_profile(
                     combined[max(0, query_start - model.x_lag) : query_start + 1],
                     combined[query_start:],
-                    eps=model.eps,
+                    eps=model.min_std,
                 )
             )
         )
@@ -303,7 +303,7 @@ class TestXLagDAMP(unittest.TestCase):
             start_index,
             x_lag,
         )
-        model = XLagDAMP(
+        model = DAMP(
             subsequence_length=subsequence_length,
             x_lag=x_lag,
             start_index=start_index,
@@ -370,13 +370,13 @@ class TestXLagDAMP(unittest.TestCase):
     def test_repr_contains_configuration_and_state(self) -> None:
         representation = repr(self.create_model())
 
-        self.assertIn("XLagDAMP", representation)
+        self.assertIn("DAMP", representation)
         self.assertIn("subsequence_length=8", representation)
         self.assertIn("x_lag=64", representation)
         self.assertIn("start_index=32", representation)
 
 
-def _damp_state(model: XLagDAMP) -> tuple[object, ...]:
+def _damp_state(model: DAMP) -> tuple[object, ...]:
     return (
         tuple(model._history),
         model.n_samples_seen,
@@ -388,15 +388,15 @@ def _damp_state(model: XLagDAMP) -> tuple[object, ...]:
 
 class TestXLagDAMPScoredSearch(unittest.TestCase):
     def test_score_sequences_match_recorded_reference(self) -> None:
-        for case in score_sequences.load("x_lag_damp"):
+        for case in score_sequences.load("damp"):
             with self.subTest(case=case["name"]):
-                scores = score_sequences.replay(XLagDAMP(**case["params"]), case)
+                scores = score_sequences.replay(DAMP(**case["params"]), case)
                 # The tolerance only absorbs last-bit libm differences between
                 # platforms; the recording platform reproduces every bit.
                 np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
 
     def test_learning_the_scored_value_reuses_its_search(self) -> None:
-        model = XLagDAMP(subsequence_length=4, x_lag=16, start_index=4)
+        model = DAMP(subsequence_length=4, x_lag=16, start_index=4)
         searches: list[float] = []
         search = model._candidate_result
 
@@ -422,8 +422,8 @@ class TestXLagDAMPScoredSearch(unittest.TestCase):
     def test_scoring_does_not_change_what_learning_computes(self) -> None:
         rng = np.random.default_rng(23)
         values = (np.sin(np.arange(300) / 4.0) + rng.normal(0, 0.1, 300)).tolist()
-        learned_only = XLagDAMP(subsequence_length=6, x_lag=40)
-        scored = XLagDAMP(subsequence_length=6, x_lag=40)
+        learned_only = DAMP(subsequence_length=6, x_lag=40)
+        scored = DAMP(subsequence_length=6, x_lag=40)
         for index, value in enumerate(values):
             pattern = index % 4
             if pattern == 0:
@@ -444,7 +444,7 @@ class TestXLagDAMPScoredSearch(unittest.TestCase):
             self.assertEqual(_damp_state(scored), _damp_state(learned_only))
 
     def test_pickles_leave_out_the_scored_search(self) -> None:
-        model = XLagDAMP(subsequence_length=4, x_lag=16, start_index=4)
+        model = DAMP(subsequence_length=4, x_lag=16, start_index=4)
         for value in np.cos(np.arange(30) / 2.0).tolist():
             model.learn_one({"x": value})
         before = pickle.dumps(model)

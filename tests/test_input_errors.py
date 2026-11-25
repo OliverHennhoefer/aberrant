@@ -23,16 +23,16 @@ _MODEL_PARAMS: dict[str, dict[str, object]] = {
     },
     "multivariate_rolling_matrix_profile": {"subsequence_length": 4},
     "rolling_matrix_profile": {"subsequence_length": 4},
-    "x_lag_damp": {"subsequence_length": 4},
+    "damp": {"subsequence_length": 4},
 }
 _TRANSFORMER_PARAMS: dict[str, dict[str, object]] = {
     "feature_schema_guard": {"features": ["a", "b"]},
     "select": {"features": ["a"]},
     "rename": {"mapping": {"a": "c"}},
-    "incremental_pca": {"n_components": 1, "n0": 5},
+    "incremental_pca": {"n_components": 1, "warm_up": 5},
     "random_projection": {"n_components": 1},
 }
-_EDGE_MODELS = {"ano_edge_l", "isconna", "midas", "signed_graph_sketch_detector"}
+_EDGE_MODELS = {"anoedge_l", "isconna", "midas", "signed_graph_sketch_detector"}
 _MULTIVARIATE_STATISTICS = {
     "moving_correlation_coefficient",
     "moving_covariance",
@@ -40,7 +40,7 @@ _MULTIVARIATE_STATISTICS = {
 }
 _UNIVARIATE_MODELS = {
     "rolling_matrix_profile",
-    "x_lag_damp",
+    "damp",
 }
 
 

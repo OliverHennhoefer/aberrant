@@ -15,10 +15,10 @@ class TestMIDAS(unittest.TestCase):
             "source_key": "src",
             "destination_key": "dst",
             "time_key": "t",
-            "count_min_rows": 2,
-            "count_min_cols": 257,
+            "n_hashes": 2,
+            "sketch_width": 257,
             "time_decay_factor": 0.5,
-            "warm_up_samples": 0,
+            "warm_up": 0,
             "use_relational": True,
             "normalize_score": False,
             "seed": 42,
@@ -31,10 +31,10 @@ class TestMIDAS(unittest.TestCase):
         self.assertEqual(model.source_key, "src")
         self.assertEqual(model.destination_key, "dst")
         self.assertEqual(model.time_key, "t")
-        self.assertEqual(model.count_min_rows, 2)
-        self.assertEqual(model.count_min_cols, 1024)
+        self.assertEqual(model.n_hashes, 2)
+        self.assertEqual(model.sketch_width, 1024)
         self.assertEqual(model.time_decay_factor, 0.5)
-        self.assertEqual(model.warm_up_samples, 0)
+        self.assertEqual(model.warm_up, 0)
         self.assertTrue(model.use_relational)
 
     def test_invalid_parameters(self) -> None:
@@ -49,13 +49,13 @@ class TestMIDAS(unittest.TestCase):
         with self.assertRaises(ValueError):
             MIDAS(time_key="src")
         with self.assertRaises(ValueError):
-            MIDAS(count_min_rows=0)
+            MIDAS(n_hashes=0)
         with self.assertRaises(ValueError):
-            MIDAS(count_min_cols=0)
+            MIDAS(sketch_width=0)
         with self.assertRaises(ValueError):
             MIDAS(time_decay_factor=0.0)
         with self.assertRaises(ValueError):
-            MIDAS(warm_up_samples=-1)
+            MIDAS(warm_up=-1)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -117,8 +117,8 @@ class TestMIDAS(unittest.TestCase):
 
     def test_relational_score_is_componentwise_maximum(self) -> None:
         model = self.create_model(
-            count_min_rows=1,
-            count_min_cols=10_007,
+            n_hashes=1,
+            sketch_width=10_007,
             use_relational=True,
         )
         for timestamp in range(1, 8):
@@ -181,7 +181,7 @@ class TestMIDAS(unittest.TestCase):
         self.assertIsNone(model._destination_total)
 
     def test_score_is_zero_before_optional_warmup(self) -> None:
-        model = self.create_model(warm_up_samples=4)
+        model = self.create_model(warm_up=4)
         for _ in range(3):
             model.learn_one({"src": 1.0, "dst": 2.0, "t": 1.0})
         self.assertEqual(
@@ -219,7 +219,7 @@ class TestMIDAS(unittest.TestCase):
         )
 
     def test_state_shapes_are_bounded(self) -> None:
-        model = self.create_model(count_min_rows=5, count_min_cols=128)
+        model = self.create_model(n_hashes=5, sketch_width=128)
         shape = model._edge_current.table.shape
         for i in range(500):
             model.learn_one(
@@ -248,11 +248,11 @@ class TestMIDAS(unittest.TestCase):
         self.assertLess(score, 1.0)
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(count_min_rows=9, count_min_cols=257)
+        model = self.create_model(n_hashes=9, sketch_width=257)
         output = repr(model)
         self.assertIn("MIDAS", output)
-        self.assertIn("count_min_rows=9", output)
-        self.assertIn("count_min_cols=257", output)
+        self.assertIn("n_hashes=9", output)
+        self.assertIn("sketch_width=257", output)
         self.assertIn("time_decay_factor=0.5", output)
 
 

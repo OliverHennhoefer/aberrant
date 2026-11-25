@@ -45,7 +45,7 @@ class _OnlineTailDetector(BaseModel):
         compression: float | None = None,
         tail: Literal["empirical", "pareto"] = "empirical",
         tail_quantile: float | None = None,
-        min_samples: int = 64,
+        warm_up: int = 64,
         aggregation: Literal["paper", "pyod"] = "paper",
         time_key: str | None = None,
     ) -> None:
@@ -96,9 +96,9 @@ class _OnlineTailDetector(BaseModel):
             )
             if resolved_tail_quantile >= 1.0:
                 raise ValueError("tail_quantile must be in (0, 1)")
-        min_samples = coerce_integer_count(min_samples, label="min_samples")
-        if resolved_window is not None and min_samples > resolved_window:
-            raise ValueError("min_samples must not exceed window_size")
+        warm_up = coerce_integer_count(warm_up, label="warm_up")
+        if resolved_window is not None and warm_up > resolved_window:
+            raise ValueError("warm_up must not exceed window_size")
         if time_key is not None and (not isinstance(time_key, str) or not time_key):
             raise ValueError("time_key must be a non-empty string or None")
 
@@ -108,7 +108,7 @@ class _OnlineTailDetector(BaseModel):
         self.compression = resolved_compression
         self.tail = tail
         self.tail_quantile = resolved_tail_quantile
-        self.min_samples = min_samples
+        self.warm_up = warm_up
         self.aggregation = aggregation
         self.time_key = time_key
         self._reset_state()
@@ -131,16 +131,16 @@ class _OnlineTailDetector(BaseModel):
 
     @property
     def is_ready(self) -> bool:
-        """Whether ``min_samples`` samples have been learned."""
-        return self._samples_seen >= self.min_samples
+        """Whether ``warm_up`` samples have been learned."""
+        return self._samples_seen >= self.warm_up
 
     @property
     def readiness(self) -> Readiness:
         """Return a detached description of the warm-up state."""
         return Readiness(
             self.is_ready,
-            min(self._samples_seen, self.min_samples),
-            self.min_samples,
+            min(self._samples_seen, self.warm_up),
+            self.warm_up,
         )
 
     def _create_references(self, n_features: int) -> None:
@@ -206,7 +206,7 @@ class _OnlineTailDetector(BaseModel):
         assert self._primary is not None
         score, terms = self._aggregate(self._primary, vector)
         history = self._history
-        if history is not None and self._history_samples_seen >= self.min_samples:
+        if history is not None and self._history_samples_seen >= self.warm_up:
             # ESOD flags a point only when it is an outlier against both the
             # recent window and the long-run history; as a single score that
             # is the smaller of the two.
@@ -247,7 +247,7 @@ class _OnlineTailDetector(BaseModel):
             f"memory={self.memory!r}, window_size={self.window_size}, "
             f"half_life={self.half_life}, compression={self.compression}, "
             f"tail={self.tail!r}, tail_quantile={self.tail_quantile}, "
-            f"min_samples={self.min_samples}, aggregation={self.aggregation!r}, "
+            f"warm_up={self.warm_up}, aggregation={self.aggregation!r}, "
             f"time_key={self.time_key!r}, samples_seen={self._samples_seen})"
         )
 
@@ -266,7 +266,7 @@ class OnlineECOD(_OnlineTailDetector):
 
     Features are treated as independent, as in both papers; dependence between
     features is not modeled. The feature schema is fixed after the first
-    ``learn_one`` call, and scores are ``0.0`` until ``min_samples`` samples
+    ``learn_one`` call, and scores are ``0.0`` until ``warm_up`` samples
     have been learned.
 
     Memories:
@@ -281,7 +281,7 @@ class OnlineECOD(_OnlineTailDetector):
     - ``"hybrid"``: an exact window plus a sketch of the values it evicts, as
       in ESOD. The score is the smaller of the window and history scores, the
       single-score form of ESOD's rule that a point must be an outlier against
-      both; the history joins after learning ``min_samples`` evicted samples,
+      both; the history joins after learning ``warm_up`` evicted samples,
       independently of how quickly their weights decay.
 
     ``tail="pareto"`` replaces the empirical probability beyond each
@@ -307,7 +307,7 @@ class OnlineECOD(_OnlineTailDetector):
         tail_quantile: Reference quantile above which (and below whose mirror
             image) the Pareto tail applies; defaults to 0.98, as in SPOT.
             Only valid with ``tail="pareto"``.
-        min_samples: Learned samples required before scoring.
+        warm_up: Learned samples required before scoring.
         aggregation: ``"paper"`` takes the largest of the left-tail,
             right-tail and skewness-corrected sums. ``"pyod"`` reproduces
             PyOD's implementation, which sums a per-feature maximum instead.
@@ -360,7 +360,7 @@ class OnlineCOPOD(_OnlineTailDetector):
 
     Features are treated as independent, as in both papers; dependence between
     features is not modeled. The feature schema is fixed after the first
-    ``learn_one`` call, and scores are ``0.0`` until ``min_samples`` samples
+    ``learn_one`` call, and scores are ``0.0`` until ``warm_up`` samples
     have been learned.
 
     Memories:
@@ -375,7 +375,7 @@ class OnlineCOPOD(_OnlineTailDetector):
     - ``"hybrid"``: an exact window plus a sketch of the values it evicts, as
       in ESOD. The score is the smaller of the window and history scores, the
       single-score form of ESOD's rule that a point must be an outlier against
-      both; the history joins after learning ``min_samples`` evicted samples,
+      both; the history joins after learning ``warm_up`` evicted samples,
       independently of how quickly their weights decay.
 
     ``tail="pareto"`` replaces the empirical probability beyond each
@@ -401,7 +401,7 @@ class OnlineCOPOD(_OnlineTailDetector):
         tail_quantile: Reference quantile above which (and below whose mirror
             image) the Pareto tail applies; defaults to 0.98, as in SPOT.
             Only valid with ``tail="pareto"``.
-        min_samples: Learned samples required before scoring.
+        warm_up: Learned samples required before scoring.
         aggregation: ``"paper"`` takes the largest of the left-tail,
             right-tail and skewness-corrected sums. ``"pyod"`` reproduces
             PyOD's implementation, which sums a per-feature maximum instead.

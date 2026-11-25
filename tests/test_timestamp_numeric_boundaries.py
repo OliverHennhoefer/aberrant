@@ -9,7 +9,7 @@ import pytest
 
 from aberrant._utils.validation import coerce_finite_number
 from aberrant.model.distance import SDOStream
-from aberrant.model.sketch import StreamingRSHash
+from aberrant.model.sketch import RSHash
 from aberrant.model.sketch.rshash import _time_difference
 
 
@@ -24,7 +24,7 @@ def test_finite_float_coercion_rejects_unrepresentable_integer(value: int) -> No
 def test_sdostream_rejects_timestamp_storage_overflow_without_state_changes(
     learned: bool, method: str
 ) -> None:
-    model = SDOStream(k=2, x_neighbors=1, time_key="t", seed=3)
+    model = SDOStream(max_observers=2, n_neighbors=1, time_key="t", seed=3)
     if learned:
         model.learn_one({"x": 1.0, "t": 0})
     before = pickle.dumps(model)
@@ -54,11 +54,11 @@ def test_sdostream_rejects_timestamp_storage_overflow_without_state_changes(
 def test_rshash_fading_supports_mixed_or_overflowing_timestamp_differences(
     previous: int | float, current: int | float, decay: float
 ) -> None:
-    model = StreamingRSHash(
-        components_num=2,
-        hash_num=2,
-        bins=8,
-        warm_up_samples=1,
+    model = RSHash(
+        n_members=2,
+        n_hashes=2,
+        sketch_width=8,
+        warm_up=1,
         time_key="t",
         decay=decay,
         seed=3,
@@ -86,8 +86,8 @@ def test_rshash_mixed_timestamps_preserve_small_gaps_above_float_precision(
     previous, current = (
         (float(base), base + gap) if float_first else (base - gap, float(base))
     )
-    model = StreamingRSHash(time_key="t", warm_up_samples=1, seed=3)
-    reference = StreamingRSHash(time_key="t", warm_up_samples=1, seed=3)
+    model = RSHash(time_key="t", warm_up=1, seed=3)
+    reference = RSHash(time_key="t", warm_up=1, seed=3)
     model.learn_one({"x": 1.0, "t": previous})
     reference.learn_one({"x": 1.0, "t": 0})
 
@@ -107,7 +107,7 @@ def test_rshash_mixed_timestamps_preserve_small_gaps_above_float_precision(
 def test_rshash_mixed_timestamps_preserve_fractional_elapsed_time(
     previous: int | float, current: int | float
 ) -> None:
-    model = StreamingRSHash(time_key="t", decay=0.01)
+    model = RSHash(time_key="t", decay=0.01)
     model.learn_one({"x": 1.0, "t": previous})
     elapsed = float(Fraction(current) - Fraction(previous))
     assert model._preview_scale(current) == float(np.exp(-0.01 * elapsed))
@@ -127,7 +127,7 @@ def test_mixed_elapsed_time_rounds_once_after_exact_subtraction(
 def test_rshash_ordinary_float_fading_is_unchanged(
     previous: float, delta: float, decay: float
 ) -> None:
-    model = StreamingRSHash(time_key="t", decay=decay)
+    model = RSHash(time_key="t", decay=decay)
     model.learn_one({"x": 1.0, "t": previous})
     current = previous + delta
     if decay == 0.0:

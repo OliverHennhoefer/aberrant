@@ -9,7 +9,7 @@ check that faster implementations still produce the same score sequences.
 
 To re-record a file with the importable aberrant, run for example::
 
-    python tests/score_sequences.py streaming_loda
+    python tests/score_sequences.py loda
 """
 
 from __future__ import annotations
@@ -34,17 +34,17 @@ from aberrant.model.forest import (
     XStream,
 )
 from aberrant.model.graph import ISCONNA
-from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
+from aberrant.model.sketch import LODA, MStream, RSHash
 from aberrant.model.stat import (
     MovingCorrelationCoefficient,
     MovingCovariance,
     MovingMahalanobisDistance,
 )
-from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.model.timeseries import (
+    DAMP,
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
-    XLagDAMP,
 )
 
 FIXTURE_DIR = Path(__file__).parent / "data" / "score_sequences"
@@ -270,7 +270,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "small_window_fast_retrain",
                 "params": {
-                    "n_estimators": 20,
+                    "n_trees": 20,
                     "max_samples": 32,
                     "window_size": 48,
                     "retrain_interval": 16,
@@ -280,7 +280,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
             {
                 "name": "unit_clusters",
-                "params": {"n_estimators": 30, "max_samples": 64, "seed": 115},
+                "params": {"n_trees": 30, "max_samples": 64, "seed": 115},
                 "stream": {
                     "seed": 116,
                     "n_events": 400,
@@ -292,7 +292,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # Repeated values leave nodes whose features are all constant.
                 "name": "repeated_points",
                 "params": {
-                    "n_estimators": 25,
+                    "n_trees": 25,
                     "max_samples": 40,
                     "window_size": 60,
                     "retrain_interval": 20,
@@ -308,7 +308,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "two_point_samples",
                 "params": {
-                    "n_estimators": 10,
+                    "n_trees": 10,
                     "max_samples": 2,
                     "window_size": 5,
                     "retrain_interval": 3,
@@ -319,7 +319,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "many_features",
                 "params": {
-                    "n_estimators": 15,
+                    "n_trees": 15,
                     "max_samples": 50,
                     "window_size": 80,
                     "retrain_interval": 30,
@@ -356,8 +356,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
     ),
     # The streams are continuous, so no two distances tie and the neighbor
     # order does not depend on the platform's sorting algorithm.
-    "incremental_one_class_svm_adaptive_kernel": (
-        IncrementalOneClassSVMAdaptiveKernel,
+    "adaptive_one_class_svm": (
+        AdaptiveOneClassSVM,
         [
             {
                 "name": "defaults",
@@ -429,14 +429,14 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # Three rows of seven columns collide often.
                 "name": "edges_only_small_sketch",
                 "params": {
-                    "count_min_rows": 3,
-                    "count_min_cols": 7,
+                    "n_hashes": 3,
+                    "sketch_width": 7,
                     "time_decay_factor": 1.0,
                     "alpha": 0.5,
                     "beta": 2.0,
                     "gamma": 1.0,
                     "include_endpoints": False,
-                    "warm_up_samples": 20,
+                    "warm_up": 20,
                     "normalize_score": True,
                     "seed": 43,
                 },
@@ -445,7 +445,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 # Every learned arrival opens a new time bucket.
                 "name": "internal_clock",
-                "params": {"time_key": None, "count_min_cols": 64, "seed": 45},
+                "params": {"time_key": None, "sketch_width": 64, "seed": 45},
                 "edges": {
                     "seed": 46,
                     "n_events": 300,
@@ -458,8 +458,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # tests are zero and only the frequency test is scored.
                 "name": "single_cell",
                 "params": {
-                    "count_min_rows": 1,
-                    "count_min_cols": 1,
+                    "n_hashes": 1,
+                    "sketch_width": 1,
                     "time_decay_factor": 0.3,
                     "beta": 0.0,
                     "gamma": 0.0,
@@ -475,8 +475,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "long_buckets_many_rows",
                 "params": {
-                    "count_min_rows": 6,
-                    "count_min_cols": 101,
+                    "n_hashes": 6,
+                    "sketch_width": 101,
                     "time_decay_factor": 0.9,
                     "seed": 49,
                 },
@@ -659,7 +659,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "adaptive_binary",
                 "params": {
-                    "num_trees": 10,
+                    "n_trees": 10,
                     "max_leaf_samples": 8,
                     "window_size": 100,
                     "seed": 3,
@@ -669,7 +669,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "fixed_ternary_subsampled",
                 "params": {
-                    "num_trees": 8,
+                    "n_trees": 8,
                     "max_leaf_samples": 4,
                     "tree_type": "fixed",
                     "subsample": 0.7,
@@ -682,7 +682,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "adaptive_batches",
                 "params": {
-                    "num_trees": 6,
+                    "n_trees": 6,
                     "max_leaf_samples": 4,
                     "window_size": 40,
                     "seed": 5,
@@ -692,7 +692,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
         ],
     ),
-    "m_stream": (
+    "mstream": (
         MStream,
         [
             {
@@ -708,8 +708,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "time_buckets_with_categories",
                 "params": {
-                    "rows": 3,
-                    "buckets": 64,
+                    "n_hashes": 3,
+                    "sketch_width": 64,
                     "alpha": 0.8,
                     "time_key": "t",
                     "categorical_features": ["c0", "c1"],
@@ -727,11 +727,11 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "warm_up_one_row",
                 "params": {
-                    "rows": 1,
-                    "buckets": 16,
+                    "n_hashes": 1,
+                    "sketch_width": 16,
                     "time_key": "t",
                     "categorical_features": ["c0"],
-                    "warm_up_buckets": 3,
+                    "warm_up": 3,
                     "seed": 235,
                 },
                 "multi_aspect": {
@@ -747,7 +747,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # Without numeric features the record hash uses categories only.
                 "name": "categories_only",
                 "params": {
-                    "buckets": 32,
+                    "sketch_width": 32,
                     "categorical_features": ["c0", "c1", "c2"],
                     "seed": 237,
                 },
@@ -761,7 +761,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 # One bucket leaves the record hash without bits.
                 "name": "single_bucket_no_decay",
-                "params": {"rows": 2, "buckets": 1, "alpha": 1.0, "seed": 239},
+                "params": {"n_hashes": 2, "sketch_width": 1, "alpha": 1.0, "seed": 239},
                 "multi_aspect": {
                     "seed": 240,
                     "n_events": 200,
@@ -777,7 +777,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "small_forest",
                 "params": {
-                    "n_estimators": 10,
+                    "n_trees": 10,
                     "subspace_size": 3,
                     "seed": 81,
                 },
@@ -788,9 +788,9 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # events after the first 64.
                 "name": "windowed",
                 "params": {
-                    "n_estimators": 8,
+                    "n_trees": 8,
                     "subspace_size": 2,
-                    "lambda_": 2.0,
+                    "lifetime": 2.0,
                     "window_size": 32,
                     "seed": 83,
                 },
@@ -799,12 +799,12 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 # A long lifetime keeps splitting, so the trees grow deep.
                 "name": "long_lifetime",
-                "params": {"n_estimators": 6, "lambda_": 50.0, "seed": 85},
+                "params": {"n_trees": 6, "lifetime": 50.0, "seed": 85},
                 "stream": {"seed": 86, "n_events": 250, "n_features": 2},
             },
             {
                 "name": "unit_clusters",
-                "params": {"n_estimators": 12, "seed": 87},
+                "params": {"n_trees": 12, "seed": 87},
                 "stream": {
                     "seed": 88,
                     "n_events": 300,
@@ -816,7 +816,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # Repeated points fall inside existing blocks and only add
                 # to their counts.
                 "name": "repeated_points",
-                "params": {"n_estimators": 8, "lambda_": 4.0, "seed": 89},
+                "params": {"n_trees": 8, "lifetime": 4.0, "seed": 89},
                 "stream": {
                     "seed": 90,
                     "n_events": 300,
@@ -834,7 +834,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 "params": {
                     "n_trees": 10,
                     "sample_size": 64,
-                    "warmup_samples": 32,
+                    "warm_up": 32,
                     "seed": 71,
                 },
                 "stream": {"seed": 72, "n_events": 300, "n_features": 4},
@@ -845,7 +845,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_trees": 6,
                     "sample_size": 32,
                     "shingle_size": 3,
-                    "warmup_samples": 8,
+                    "warm_up": 8,
                     "normalize_score": True,
                     "score_scale": 4.0,
                     "seed": 73,
@@ -857,7 +857,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 "params": {
                     "n_trees": 8,
                     "sample_size": 48,
-                    "warmup_samples": 16,
+                    "warm_up": 16,
                     "seed": 75,
                 },
                 "stream": {
@@ -874,7 +874,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 "params": {
                     "n_trees": 8,
                     "sample_size": 40,
-                    "warmup_samples": 10,
+                    "warm_up": 10,
                     "seed": 77,
                 },
                 "stream": {
@@ -890,7 +890,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 "params": {
                     "n_trees": 5,
                     "sample_size": 2,
-                    "warmup_samples": 1,
+                    "warm_up": 1,
                     "seed": 79,
                 },
                 "stream": {"seed": 80, "n_events": 150, "n_features": 1},
@@ -972,7 +972,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "small_forest",
                 "params": {
-                    "n_estimators": 6,
+                    "n_trees": 6,
                     "max_depth": 5,
                     "window_size": 32,
                     "seed": 61,
@@ -982,7 +982,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "deep_single_feature",
                 "params": {
-                    "n_estimators": 3,
+                    "n_trees": 3,
                     "max_depth": 8,
                     "window_size": 20,
                     "seed": 63,
@@ -992,7 +992,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "unit_clusters",
                 "params": {
-                    "n_estimators": 4,
+                    "n_trees": 4,
                     "max_depth": 4,
                     "window_size": 50,
                     "seed": 65,
@@ -1009,7 +1009,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # kurtosis weights are NaN.
                 "name": "overflowing_moments",
                 "params": {
-                    "n_estimators": 4,
+                    "n_trees": 4,
                     "max_depth": 5,
                     "window_size": 24,
                     "seed": 67,
@@ -1023,12 +1023,12 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
         ],
     ),
-    "streaming_loda": (
-        StreamingLODA,
+    "loda": (
+        LODA,
         [
             {
                 "name": "defaults_short_warm_up",
-                "params": {"warm_up_samples": 64, "seed": 3},
+                "params": {"warm_up": 64, "seed": 3},
                 "stream": {"seed": 11, "n_events": 400, "n_features": 8},
             },
             {
@@ -1037,7 +1037,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_projections": 40,
                     "n_bins": 10,
                     "sparsity": 0.4,
-                    "warm_up_samples": 32,
+                    "warm_up": 32,
                     "decay": 0.99,
                     "time_key": "t",
                     "pseudocount": 0.5,
@@ -1052,8 +1052,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
         ],
     ),
-    "streaming_rs_hash": (
-        StreamingRSHash,
+    "rshash": (
+        RSHash,
         [
             {
                 "name": "defaults",
@@ -1063,13 +1063,13 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "time_key_small_tables",
                 "params": {
-                    "components_num": 10,
-                    "hash_num": 3,
-                    "bins": 16,
+                    "n_members": 10,
+                    "n_hashes": 3,
+                    "sketch_width": 16,
                     "subspace_size": 3,
                     "bin_width": 0.5,
                     "decay": 0.05,
-                    "warm_up_samples": 8,
+                    "warm_up": 8,
                     "time_key": "t",
                     "seed": 23,
                 },
@@ -1084,17 +1084,17 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                 # Counts fade below the renormalization threshold every few
                 # dozen events.
                 "name": "fast_decay",
-                "params": {"decay": 0.5, "warm_up_samples": 4, "seed": 25},
+                "params": {"decay": 0.5, "warm_up": 4, "seed": 25},
                 "stream": {"seed": 26, "n_events": 300, "n_features": 4},
             },
             {
                 "name": "no_decay_repeated_points",
                 "params": {
-                    "components_num": 6,
-                    "hash_num": 2,
-                    "bins": 32,
+                    "n_members": 6,
+                    "n_hashes": 2,
+                    "sketch_width": 32,
                     "decay": 0.0,
-                    "warm_up_samples": 16,
+                    "warm_up": 16,
                     "seed": 27,
                 },
                 "stream": {
@@ -1107,7 +1107,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 # Quantized values far beyond the hash modulus.
                 "name": "huge_outliers",
-                "params": {"bin_width": 0.25, "warm_up_samples": 16, "seed": 29},
+                "params": {"bin_width": 0.25, "warm_up": 16, "seed": 29},
                 "stream": {
                     "seed": 30,
                     "n_events": 300,
@@ -1118,11 +1118,11 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "single_table_single_bin",
                 "params": {
-                    "components_num": 3,
-                    "hash_num": 1,
-                    "bins": 1,
+                    "n_members": 3,
+                    "n_hashes": 1,
+                    "sketch_width": 1,
                     "subspace_size": 1,
-                    "warm_up_samples": 1,
+                    "warm_up": 1,
                     "seed": 31,
                 },
                 "stream": {"seed": 32, "n_events": 120, "n_features": 2},
@@ -1130,11 +1130,11 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             {
                 "name": "unit_clusters_many_features",
                 "params": {
-                    "components_num": 40,
-                    "hash_num": 5,
-                    "bins": 64,
+                    "n_members": 40,
+                    "n_hashes": 5,
+                    "sketch_width": 64,
                     "bin_width": 0.05,
-                    "warm_up_samples": 32,
+                    "warm_up": 32,
                     "seed": 33,
                 },
                 "stream": {
@@ -1155,10 +1155,10 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "k": 20,
                     "n_chains": 10,
                     "depth": 6,
-                    "cms_width": 64,
-                    "cms_num_hashes": 3,
+                    "sketch_width": 64,
+                    "n_hashes": 3,
                     "window_size": 32,
-                    "init_sample_size": 32,
+                    "warm_up": 32,
                     "seed": 6,
                 },
                 "stream": {"seed": 51, "n_events": 300, "n_features": 5},
@@ -1171,10 +1171,10 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "k": 4,
                     "n_chains": 8,
                     "depth": 12,
-                    "cms_width": 128,
-                    "cms_num_hashes": 2,
+                    "sketch_width": 128,
+                    "n_hashes": 2,
                     "window_size": 25,
-                    "init_sample_size": 20,
+                    "warm_up": 20,
                     "density": 1.0,
                     "seed": 7,
                 },
@@ -1182,7 +1182,7 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
             {
                 "name": "defaults_short_windows",
-                "params": {"window_size": 64, "init_sample_size": 64, "seed": 8},
+                "params": {"window_size": 64, "warm_up": 64, "seed": 8},
                 "stream": {"seed": 53, "n_events": 300, "n_features": 8},
             },
             {
@@ -1193,10 +1193,10 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "k": 8,
                     "n_chains": 6,
                     "depth": 10,
-                    "cms_width": 32,
-                    "cms_num_hashes": 2,
+                    "sketch_width": 32,
+                    "n_hashes": 2,
                     "window_size": 16,
-                    "init_sample_size": 1,
+                    "warm_up": 1,
                     "density": 0.5,
                     "seed": 9,
                 },
@@ -1209,8 +1209,8 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
         ],
     ),
-    "x_lag_damp": (
-        XLagDAMP,
+    "damp": (
+        DAMP,
         [
             {
                 "name": "defaults",
@@ -1250,9 +1250,9 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
             },
             {
                 # Values below the safe MASS range take the direct distances;
-                # eps is absolute, so it must be smaller still.
+                # min_std is absolute, so it must be smaller still.
                 "name": "tiny_values",
-                "params": {"subsequence_length": 6, "x_lag": 48, "eps": 1e-300},
+                "params": {"subsequence_length": 6, "x_lag": 48, "min_std": 1e-300},
                 "series": {
                     "seed": 276,
                     "n_events": 300,

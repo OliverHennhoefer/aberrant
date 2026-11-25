@@ -4,11 +4,11 @@ from aberrant.model.sketch import MStream
 from aberrant.stream import Dataset, load
 
 model = MStream(
-    rows=1,
-    buckets=512,
+    n_hashes=1,
+    sketch_width=512,
     alpha=0.5,
     time_key="t",
-    warm_up_buckets=4,
+    warm_up=4,
     seed=42,
 )
 

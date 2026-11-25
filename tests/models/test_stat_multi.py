@@ -30,20 +30,20 @@ class TestMovingCovariance(unittest.TestCase):
         self.assertEqual(model.window["y"], deque([2]))
 
     def test_keys_initialization_creates_windows(self):
-        model = MovingCovariance(window_size=3, keys=["x", "y"])
+        model = MovingCovariance(window_size=3, features=["x", "y"])
         self.assertIn("x", model.window)
         self.assertIn("y", model.window)
         self.assertEqual(model.window["x"], deque([], maxlen=3))
         self.assertEqual(model.window["y"], deque([], maxlen=3))
 
     def test_keys_initialization_rejects_missing_feature(self):
-        model = MovingCovariance(window_size=3, keys=["x", "y"])
+        model = MovingCovariance(window_size=3, features=["x", "y"])
         with self.assertRaises(ValueError):
             model.learn_one({"x": 1.0, "z": 2.0})
 
     def test_rejects_duplicate_keys_and_invalid_points_atomically(self):
         with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
-            MovingCovariance(window_size=3, keys=["x", "x"])
+            MovingCovariance(window_size=3, features=["x", "x"])
 
         model = MovingCovariance(window_size=3)
         with self.assertRaisesRegex(ValueError, "must be numeric"):
@@ -107,14 +107,14 @@ class TestMovingCorrelationCoefficient(unittest.TestCase):
         self.assertEqual(model.window["y"], deque([2]))
 
     def test_keys_initialization_creates_windows(self):
-        model = MovingCorrelationCoefficient(window_size=3, keys=["x", "y"])
+        model = MovingCorrelationCoefficient(window_size=3, features=["x", "y"])
         self.assertIn("x", model.window)
         self.assertIn("y", model.window)
         self.assertEqual(model.window["x"], deque([], maxlen=3))
         self.assertEqual(model.window["y"], deque([], maxlen=3))
 
     def test_keys_initialization_rejects_missing_feature(self):
-        model = MovingCorrelationCoefficient(window_size=3, keys=["x", "y"])
+        model = MovingCorrelationCoefficient(window_size=3, features=["x", "y"])
         with self.assertRaises(ValueError):
             model.learn_one({"x": 1.0, "z": 2.0})
 
@@ -184,7 +184,7 @@ class TestMovingMahalanobisDistance(unittest.TestCase):
             MovingMahalanobisDistance(window_size=-1)
 
         with self.assertRaisesRegex(ValueError, "cannot contain duplicates"):
-            MovingMahalanobisDistance(window_size=3, keys=["x", "x"])
+            MovingMahalanobisDistance(window_size=3, features=["x", "x"])
 
     def test_learn_one(self):
         mmd = MovingMahalanobisDistance(window_size=3)

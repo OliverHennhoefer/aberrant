@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.svm.adaptive import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm.adaptive import AdaptiveOneClassSVM
 from tests import score_sequences
 
 
@@ -15,7 +15,7 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
 
     def test_adaptive_gamma(self):
         """Test that gamma adaptation is working."""
-        model = IncrementalOneClassSVMAdaptiveKernel(
+        model = AdaptiveOneClassSVM(
             initial_gamma=1.0,
             adaptation_rate=0.5,  # Higher rate for faster adaptation in test
             gamma_bounds=(0.1, 10.0),
@@ -36,7 +36,7 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
 
     def test_feature_consistency(self):
         """Test that model handles feature consistency correctly."""
-        model = IncrementalOneClassSVMAdaptiveKernel()
+        model = AdaptiveOneClassSVM()
 
         # Train with specific features
         sample1 = {"feature_a": 1.0, "feature_b": 2.0, "feature_c": 3.0}
@@ -54,7 +54,7 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
 
     def test_model_info(self):
         """Test model information reporting."""
-        model = IncrementalOneClassSVMAdaptiveKernel(sv_budget=20)
+        model = AdaptiveOneClassSVM(sv_budget=20)
 
         # Initial state
         info = model.get_model_info()
@@ -74,7 +74,7 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
 
     def test_empty_model_predictions(self):
         """Test model behavior before any training."""
-        model = IncrementalOneClassSVMAdaptiveKernel()
+        model = AdaptiveOneClassSVM()
 
         # Should handle gracefully
         sample = {"feature1": 1.0, "feature2": 2.0}
@@ -84,7 +84,7 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
         self.assertEqual(score, 0.0)  # Default neutral score
 
     def test_running_statistics_include_first_sample_and_keep_raw_support_vectors(self):
-        model = IncrementalOneClassSVMAdaptiveKernel(seed=42)
+        model = AdaptiveOneClassSVM(seed=42)
         samples = [
             {"x": 10.0, "y": -3.0},
             {"x": 12.0, "y": 1.0},
@@ -101,7 +101,7 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
         self.assertAlmostEqual(model.feature_stats["y"][1], np.std([-3.0, 1.0, 5.0]))
 
     def test_scoring_does_not_change_coordinates_or_state(self):
-        model = IncrementalOneClassSVMAdaptiveKernel(seed=42)
+        model = AdaptiveOneClassSVM(seed=42)
         for i in range(30):
             model.learn_one({"x": float(i), "y": float(i * i)})
 
@@ -117,24 +117,20 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
 
     def test_invalid_parameters(self):
         with self.assertRaises(ValueError):
-            IncrementalOneClassSVMAdaptiveKernel(nu=0.0)
+            AdaptiveOneClassSVM(nu=0.0)
         with self.assertRaises(ValueError):
-            IncrementalOneClassSVMAdaptiveKernel(initial_gamma=0.0)
+            AdaptiveOneClassSVM(initial_gamma=0.0)
         with self.assertRaises(ValueError):
-            IncrementalOneClassSVMAdaptiveKernel(
-                initial_gamma=1.0, gamma_bounds=(2.0, 3.0)
-            )
+            AdaptiveOneClassSVM(initial_gamma=1.0, gamma_bounds=(2.0, 3.0))
         with self.assertRaises(ValueError):
-            IncrementalOneClassSVMAdaptiveKernel(adaptation_rate=0.0)
+            AdaptiveOneClassSVM(adaptation_rate=0.0)
         with self.assertRaises(ValueError):
-            IncrementalOneClassSVMAdaptiveKernel(buffer_size=0)
+            AdaptiveOneClassSVM(buffer_size=0)
         with self.assertRaises(ValueError):
-            IncrementalOneClassSVMAdaptiveKernel(sv_budget=0)
+            AdaptiveOneClassSVM(sv_budget=0)
 
 
-def _pairwise_gamma_estimate(
-    model: IncrementalOneClassSVMAdaptiveKernel, std: np.ndarray
-) -> float:
+def _pairwise_gamma_estimate(model: AdaptiveOneClassSVM, std: np.ndarray) -> float:
     """Estimate gamma with the pair-by-pair loop of aberrant 1.4.0."""
     if len(model.data_buffer) < 10:
         return model.gamma
@@ -159,9 +155,9 @@ class TestIncrementalOneClassSVMAdaptiveKernelExactness(unittest.TestCase):
     """Vectorized kernels must reproduce the 1.4.0 scores and generator draws."""
 
     def test_score_sequences_match_recorded_reference(self):
-        for case in score_sequences.load("incremental_one_class_svm_adaptive_kernel"):
+        for case in score_sequences.load("adaptive_one_class_svm"):
             with self.subTest(case=case["name"]):
-                model = IncrementalOneClassSVMAdaptiveKernel(**case["params"])
+                model = AdaptiveOneClassSVM(**case["params"])
                 scores = score_sequences.replay(model, case)
                 # Scores are differences of kernel sums, so last-bit exp and
                 # BLAS differences between platforms surface as absolute
@@ -170,7 +166,7 @@ class TestIncrementalOneClassSVMAdaptiveKernelExactness(unittest.TestCase):
 
     def test_kernel_row_matches_kernels_of_single_pairs(self):
         events = score_sequences.make_stream(seed=1, n_events=150, n_features=5)
-        model = IncrementalOneClassSVMAdaptiveKernel(seed=2)
+        model = AdaptiveOneClassSVM(seed=2)
         for event in events:
             model.learn_one(event)
         self.assertGreater(len(model.support_vectors), 10)
@@ -210,7 +206,7 @@ class TestIncrementalOneClassSVMAdaptiveKernelExactness(unittest.TestCase):
         }
         for name, events in streams.items():
             with self.subTest(stream=name):
-                model = IncrementalOneClassSVMAdaptiveKernel(seed=9)
+                model = AdaptiveOneClassSVM(seed=9)
                 for event in events:
                     model.learn_one(event)
                 reference = copy.deepcopy(model)

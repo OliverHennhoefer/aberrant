@@ -6,7 +6,7 @@ wander and a single labelled anomalous heartbeat at samples 16,000-16,100.
 Every value of that beat lies inside the range of the normal beats, so a
 detector that looks at one value at a time has nothing to find.
 
-``XLagDAMP`` scores each event before learning it, in one pass, from the first
+``DAMP`` scores each event before learning it, in one pass, from the first
 sample, without the archive's training split and with bounded memory. Its
 highest score lands on the anomalous beat. An overlay of every heartbeat shows
 why a detector that scores single values has no outlier to find there.
@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.transforms import blended_transform_factory
 
-from aberrant.model.timeseries import XLagDAMP
+from aberrant.model.timeseries import DAMP
 
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / "img"
 SERIES = "013_UCR_Anomaly_DISTORTEDECG3"
@@ -44,7 +44,7 @@ DATA_SHA256 = "3811edc0a3dbc6b2aa4fdfb314f56fde32bb352a79cd55acfadc4be0e8485e44"
 SUBSEQUENCE_LENGTH = 167  # about one heartbeat
 R_PEAK_HEIGHT = 100.0  # normal R peaks rise far above this; the anomaly does not
 BEAT_WINDOW = (-75, 115)  # samples around each beat's peak in the overlay
-WARMUP = 4 * SUBSEQUENCE_LENGTH  # XLagDAMP's default start_index
+WARMUP = 4 * SUBSEQUENCE_LENGTH  # DAMP's default start_index
 BUCKETS = 1600  # min/max envelope per bucket keeps the SVGs small
 THEMES = {
     "light": {
@@ -84,8 +84,8 @@ def load_series() -> tuple[np.ndarray, tuple[int, int]]:
 
 
 def score_series(values: np.ndarray) -> np.ndarray:
-    """Score every event with XLagDAMP before learning it."""
-    damp = XLagDAMP(subsequence_length=SUBSEQUENCE_LENGTH)
+    """Score every event with DAMP before learning it."""
+    damp = DAMP(subsequence_length=SUBSEQUENCE_LENGTH)
     scores = np.zeros(len(values))
     for index, value in enumerate(values):
         event = {"ecg": float(value)}
@@ -167,7 +167,7 @@ def draw_scores(
     scores: np.ndarray,
     span: tuple[int, int],
 ) -> None:
-    """Draw the XLagDAMP score stream and mark its highest score."""
+    """Draw the DAMP score stream and mark its highest score."""
     start, stop = span
     warm = scores[WARMUP:]
     scaled = warm / warm.max()
@@ -183,7 +183,7 @@ def draw_scores(
     heading(
         ax,
         colors,
-        "XLagDAMP score",
+        "DAMP score",
         f"one pass, no training split  ·  peak at sample {top:,}, the anomalous beat",
         strong=True,
     )
@@ -288,7 +288,7 @@ def main() -> None:
     damp_scores = score_series(values)
     for theme in THEMES:
         render(values, span, damp_scores, theme)
-    print(f"label {span}, XLagDAMP top {int(np.argmax(damp_scores))}")
+    print(f"label {span}, DAMP top {int(np.argmax(damp_scores))}")
 
 
 if __name__ == "__main__":

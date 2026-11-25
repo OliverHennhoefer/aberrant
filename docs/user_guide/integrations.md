@@ -72,7 +72,7 @@ capabilities = spec.capabilities(
     {
         "sample_size": 256,
         "shingle_size": 4,
-        "warmup_samples": 128,
+        "warm_up": 128,
         "normalize_score": True,
     }
 )
@@ -103,7 +103,7 @@ model-specific metadata.
 Always supply counts in `warmup.unit` to `remaining()` and `is_satisfied()`.
 For SDOStream the unit is `observers`: use `model.n_observers`, since observer
 insertion is sampled and learned event counts cannot determine readiness.
-Its minimum accounts for both `warm_up_observers` and `x_neighbors`.
+Its minimum accounts for both `warm_up` and `n_neighbors`.
 Geometric and harmonic moving averages use `retained_values`: supply
 `len(model.window)`, since geometric learning ignores nonpositive inputs and
 harmonic learning ignores zeros. Geometric readiness requires two retained
@@ -125,7 +125,7 @@ from aberrant.catalog import DetectorConfig
 
 config = DetectorConfig.from_mapping(
     {
-        "version": 1,
+        "version": 2,
         "transformers": [
             {
                 "id": "feature_schema_guard",
@@ -139,7 +139,7 @@ config = DetectorConfig.from_mapping(
         ],
         "model": {
             "id": "online_isolation_forest",
-            "params": {"num_trees": 25, "window_size": 512, "seed": 17},
+            "params": {"n_trees": 25, "window_size": 512, "seed": 17},
         },
     }
 )

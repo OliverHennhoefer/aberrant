@@ -5,6 +5,6 @@ claim procedure- or score-parity with the corresponding batch/window papers.
 
 ::: aberrant.model.sketch.MStream
 
-::: aberrant.model.sketch.StreamingLODA
+::: aberrant.model.sketch.LODA
 
-::: aberrant.model.sketch.StreamingRSHash
+::: aberrant.model.sketch.RSHash

@@ -59,12 +59,12 @@ each row into a mapping:
 ```python
 import numpy as np
 
-from aberrant.model.sketch import StreamingLODA
+from aberrant.model.sketch import LODA
 
 X = np.random.default_rng(0).normal(size=(500, 3))
 names = ["temperature", "pressure", "vibration"]
 
-detector = StreamingLODA(seed=0)
+detector = LODA(seed=0)
 scores = []
 for row in X:
     event = dict(zip(names, row.tolist(), strict=True))
@@ -84,9 +84,9 @@ identical numbers.
 | river | PySAD | aberrant |
 | --- | --- | --- |
 | `anomaly.HalfSpaceTrees` | `models.HalfSpaceTrees` | `model.forest.HalfSpaceTrees` (expects features in `[0, 1]`; add a `MinMaxScaler`) |
-| `anomaly.LODA` | `models.LODA` | `model.sketch.StreamingLODA` |
+| `anomaly.LODA` | `models.LODA` | `model.sketch.LODA` |
 | `anomaly.LocalOutlierFactor` | — | `model.distance.LocalOutlierFactor` |
-| — | `models.RSHash` | `model.sketch.StreamingRSHash` |
+| — | `models.RSHash` | `model.sketch.RSHash` |
 | — | `models.RobustRandomCutForest` | `model.forest.RandomCutForest` |
 | — | `models.IForestASD` | `model.forest.ASDIsolationForest` |
 | `anomaly.QuantileFilter` | `transform.ConformalProbabilityCalibrator` (calibrated scores) | `calibration.ScoreCalibrator` (adaptive alarm threshold); for conformal p-values see [nonconform](https://github.com/OliverHennhoefer/nonconform) |
@@ -97,5 +97,5 @@ identical numbers.
 
 aberrant also covers families that neither library ships: graph-edge
 detectors (`MIDAS`, `AnoEdgeL`, `ISCONNA`), time-series discords
-(`RollingMatrixProfile`, `XLagDAMP`), online SVMs and autoencoders. The
+(`RollingMatrixProfile`, `DAMP`), online SVMs and autoencoders. The
 [model guide](models.md) lists them all.

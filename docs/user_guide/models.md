@@ -11,9 +11,9 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | General multivariate events | `OnlineIsolationForest` | Incremental trees with explicit sliding-window unlearning and a bounded `[0, 1]` score |
 | Periodically rebuilt reference model | `ASDIsolationForest` or `StreamRandomHistogramForest` | Replaces a forest from recent-window state rather than adapting every old split forever |
 | Local density or neighborhood isolation | `LocalOutlierFactor`, `SDOStream`, or a cell-neighborhood detector | Scores relative to nearby points, observers, or radius cells |
-| Fixed-size projection/frequency state | `StreamingLODA`, `MStream`, or `StreamingRSHash` | Memory is controlled by projection, histogram, or sketch dimensions |
+| Fixed-size projection/frequency state | `LODA`, `MStream`, or `RSHash` | Memory is controlled by projection, histogram, or sketch dimensions |
 | Dynamic edges | `MIDAS`, `ISCONNA`, `AnoEdgeL`, or `SignedGraphSketchDetector` | Models repeated edges, endpoint patterns, dense submatrices, or graph-level structure |
-| Scalar time-series discords | `RollingMatrixProfile` or `XLagDAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
+| Scalar time-series discords | `RollingMatrixProfile` or `DAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
 | Departures from a known seasonal forecast | `ResidualDetector(HoltWinters(...))` | Scores forecast errors from additive level, trend, and seasonal components; see [forecast-based detection](forecasting.md) |
 | Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
 | Interpretable local statistic change | `aberrant.model.stat` | Measures candidate-induced changes in means, spread, moments, covariance, or correlation |
@@ -35,7 +35,7 @@ often need less scaling, but a transform can still change their geometry.
 | `HalfSpaceTrees` | `[0, 1]`; `0.0` before reference mass exists | First complete `window_size` | Fixed trees and two window-mass counters; no retained sample window |
 | `MondrianIsolationForest` | `[0, 1]`; `0.0` through the first learned event | At least two learned events | Growing online Mondrian trees; no automatic forgetting or state bound |
 | `OnlineIsolationForest` | `[0, 1]`; early scores are possible but not calibrated | No explicit zero-score warm-up | At most `window_size` retained events plus trees; evicted events are unlearned |
-| `RandomCutForest` | Raw non-negative CoDisp by default; optional `[0, 1)` transform | `warmup_samples` inserted shingles, defaulting to `sample_size` | At most `sample_size` shingled points plus shingle history |
+| `RandomCutForest` | Raw non-negative CoDisp by default; optional `[0, 1)` transform | `warm_up` inserted shingles, defaulting to `sample_size` | At most `sample_size` shingled points plus shingle history |
 | `StreamRandomHistogramForest` | Non-negative summed log leaf-mass score | First complete `window_size` | Bounded alternating reference/current-window forest state |
 | `XStream` | `[0, 1]`; `0.0` until ready | Projection initialization plus one complete reference window | Fixed count-min sketches, chains, and bounded feature-hash cache when configured |
 
@@ -70,14 +70,14 @@ query = {"x": 4.0, "y": 4.0}
 raw_detector = RandomCutForest(
     n_trees=10,
     sample_size=4,
-    warmup_samples=4,
+    warm_up=4,
     normalize_score=False,
     seed=3,
 )
 bounded_detector = RandomCutForest(
     n_trees=10,
     sample_size=4,
-    warmup_samples=4,
+    warm_up=4,
     normalize_score=True,
     score_scale=8.0,
     seed=3,
@@ -106,8 +106,8 @@ implementation.
 | --- | --- | --- | --- |
 | `KNN` | Engine-defined; the FAISS engine returns mean Euclidean distance to the `k` nearest retained points | Engine-defined; FAISS returns `0.0` before `warm_up` | Engine-defined; FAISS uses a `window_size` sliding window |
 | `LocalOutlierFactor` | Non-negative LOF; values near `1` indicate density comparable to neighbors, larger values indicate lower local density | Returns `0.0` until more than `k` points are learned | At most `window_size` retained points, each with a list of at most `2 * k` nearest neighbors |
-| `CellNeighborhoodDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up_slides * slide_size` events and `k + 1` retained points | At most `window_size` points plus cell indexes |
-| `SDOStream` | Non-negative median distance to nearest active observers | `warm_up_observers`, defaulting to at least `x_neighbors` | Exactly up to `k` observers with exponentially faded activity |
+| `CellNeighborhoodDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up * slide_size` events and `k + 1` retained points | At most `window_size` points plus cell indexes |
+| `SDOStream` | Non-negative median distance to nearest active observers | `warm_up`, defaulting to at least `n_neighbors` | Exactly up to `max_observers` observers with exponentially faded activity |
 
 For the FAISS-backed KNN, configure `warm_up >= k`; otherwise the engine can
 be warm while still holding too few points for the requested neighbor count.
@@ -124,13 +124,13 @@ observer and exponential-fading structure described in the
 
 | Class | Default score | Built-in warm-up | State policy |
 | --- | --- | --- | --- |
-| `MStream` | Non-negative `log1p` transform of candidate-inclusive multi-aspect sketch statistics | A bucket-index distance of `warm_up_buckets` from the first learned bucket; default `0` | Fixed numeric, categorical, and record sketches |
-| `StreamingLODA` | Non-negative mean negative log histogram bin probability, which ranks like the negative log density | Exactly `warm_up_samples` learned events | Fixed projections and histograms; bin edges freeze after warm-up, counts optionally decay |
-| `StreamingRSHash` | `[0, 1]` from low faded hash occupancy | Exactly `warm_up_samples` learned events | Fixed subspaces and count tables with fading |
+| `MStream` | Non-negative `log1p` transform of candidate-inclusive multi-aspect sketch statistics | A bucket-index distance of `warm_up` from the first learned bucket; default `0` | Fixed numeric, categorical, and record sketches |
+| `LODA` | Non-negative mean negative log histogram bin probability, which ranks like the negative log density | Exactly `warm_up` learned events | Fixed projections and histograms; bin edges freeze after warm-up, counts optionally decay |
+| `RSHash` | `[0, 1]` from low faded hash occupancy | Exactly `warm_up` learned events | Fixed subspaces and count tables with fading |
 
-These are bounded streaming adaptations. `StreamingLODA` fixes its projection
+These are bounded streaming adaptations. `LODA` fixes its projection
 count and histogram edges rather than reproducing the original paper's model
-selection procedure; `StreamingRSHash` adds online standardization and fading
+selection procedure; `RSHash` adds online standardization and fading
 instead of reproducing the paper's window procedure. See the primary
 [LODA](https://doi.org/10.1007/s10994-015-5521-0),
 [MStream](https://doi.org/10.1145/3442381.3450023), and
@@ -142,7 +142,7 @@ explicit `time_key`, timestamps must be finite and non-decreasing; MStream
 additionally requires integer-like time buckets. The time field is removed
 before feature vectorization. MStream warm-up uses the integer bucket-index
 distance, so gaps between explicit bucket numbers count toward
-`warm_up_buckets` even when no event was observed in those buckets.
+`warm_up` even when no event was observed in those buckets.
 
 ### Graph-stream detectors
 
@@ -172,7 +172,7 @@ detector = MIDAS(
     source_key="src",
     destination_key="dst",
     time_key="t",
-    warm_up_samples=2,
+    warm_up=2,
     normalize_score=True,
     seed=11,
 )
@@ -299,7 +299,7 @@ raise `OverflowError`. Adding an identical channel does not dilute the score.
 For `d` fixed channels, typical scoring costs `O(d * W * log(W))`, with direct
 numerical refinement up to `O(d * W * m)` and learning cost `O(d * m)`. State and
 working memory are `O(d * W)`. Scoring continues through eviction without
-retraining. Both rolling models provide exact nearest distances; XLagDAMP's
+retraining. Both rolling models provide exact nearest distances; DAMP's
 early-abandoned scores described below can be approximate.
 
 This is a causal, bounded-window adaptation of the pre-max aggregation in
@@ -309,7 +309,7 @@ core installation and in declarative model pipelines. The
 [seeded streaming example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/multivariate_rolling_matrix_profile.py)
 demonstrates a changed phase relationship and its common-match explanation.
 
-`XLagDAMP` accepts exactly one consistently named scalar feature. It scores the
+`DAMP` accepts exactly one consistently named scalar feature. It scores the
 subsequence ending at the candidate event by z-normalized Euclidean distance to
 its nearest preceding subsequence. Scores are `0.0` before `start_index`; after
 that, high peaks are left-discord candidates. Early-abandoned non-peak scores
@@ -364,7 +364,7 @@ points.
 each feature's reference distribution its values fall, and learn the sample
 afterwards. They need no scaler, since only ranks matter, and treat features
 as independent, as the batch methods do. Scores are non-negative and `0.0`
-until `min_samples` samples have been learned. A tail probability counts the
+until `warm_up` samples have been learned. A tail probability counts the
 candidate itself, `(#{r <= x} + 1) / (n + 1)`, so it is never zero and each
 feature contributes at most `log(n + 1)`.
 
@@ -377,7 +377,7 @@ feature contributes at most `log(n + 1)`.
 With `memory="window"` the score equals batch ECOD or COPOD fitted on the
 window plus the candidate. The hybrid's score is the smaller of its window and
 history scores, so a sample must be unusual against both. The history starts
-contributing after `min_samples` evictions, even when decay keeps its effective
+contributing after `warm_up` evictions, even when decay keeps its effective
 weight below that count. `tail="pareto"`
 fits a generalized Pareto tail beyond the reference's `tail_quantile`
 quantile, as SPOT does, so scores keep growing past the observed range instead
@@ -405,7 +405,7 @@ print(detector.explain_one({"cpu": 0.95, "latency_ms": 11.5}))
 
 ### SVM detectors
 
-`IncrementalOneClassSVMAdaptiveKernel` is a custom, budgeted RBF-kernel
+`AdaptiveOneClassSVM` is a custom, budgeted RBF-kernel
 heuristic with running standardization and adaptive gamma. It returns the
 negative decision function, so higher values are more anomalous, and bounds
 support-vector state with `sv_budget`. It is experimental and does not claim

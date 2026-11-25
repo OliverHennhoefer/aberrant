@@ -2279,7 +2279,7 @@
    "params": {
     "subsequence_length": 6,
     "x_lag": 48,
-    "eps": 1e-300
+    "min_std": 1e-300
    },
    "series": {
     "seed": 276,

@@ -717,7 +717,7 @@
   {
    "name": "small_window_fast_retrain",
    "params": {
-    "n_estimators": 20,
+    "n_trees": 20,
     "max_samples": 32,
     "window_size": 48,
     "retrain_interval": 16,
@@ -1134,7 +1134,7 @@
   {
    "name": "unit_clusters",
    "params": {
-    "n_estimators": 30,
+    "n_trees": 30,
     "max_samples": 64,
     "seed": 115
    },
@@ -1550,7 +1550,7 @@
   {
    "name": "repeated_points",
    "params": {
-    "n_estimators": 25,
+    "n_trees": 25,
     "max_samples": 40,
     "window_size": 60,
     "retrain_interval": 20,
@@ -1868,7 +1868,7 @@
   {
    "name": "two_point_samples",
    "params": {
-    "n_estimators": 10,
+    "n_trees": 10,
     "max_samples": 2,
     "window_size": 5,
     "retrain_interval": 3,
@@ -2035,7 +2035,7 @@
   {
    "name": "many_features",
    "params": {
-    "n_estimators": 15,
+    "n_trees": 15,
     "max_samples": 50,
     "window_size": 80,
     "retrain_interval": 30,

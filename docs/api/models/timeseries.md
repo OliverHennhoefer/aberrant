@@ -10,4 +10,4 @@
       inherited_members: true
       show_bases: false
 
-::: aberrant.model.timeseries.XLagDAMP
+::: aberrant.model.timeseries.DAMP

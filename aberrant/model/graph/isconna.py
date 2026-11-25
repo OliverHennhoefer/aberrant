@@ -195,8 +195,8 @@ class ISCONNA(BaseModel):
         time_key: Input field containing a non-decreasing integer-like time
             bucket. ``None`` assigns a new one-based bucket to every learned
             arrival.
-        count_min_rows: Number of independently hashed rows in each sketch.
-        count_min_cols: Number of counters per sketch row.
+        n_hashes: Number of independently hashed rows in each sketch.
+        sketch_width: Number of counters per sketch row.
         time_decay_factor: Factor in ``(0, 1]`` applied to current pattern
             counts during bucket transitions.
         alpha: Non-negative exponent of the frequency G-test component.
@@ -204,7 +204,7 @@ class ISCONNA(BaseModel):
         gamma: Non-negative exponent of the absence-gap G-test component.
         include_endpoints: Combine edge, source, and destination components by
             component-wise maxima. ``False`` scores only edge patterns.
-        warm_up_samples: Number of learned edges before scoring begins.
+        warm_up: Number of learned edges before scoring begins.
         normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
             combined statistic.
         seed: Seed for model-local sketch hash generation.
@@ -222,26 +222,22 @@ class ISCONNA(BaseModel):
         source_key: str = "src",
         destination_key: str = "dst",
         time_key: str | None = "t",
-        count_min_rows: int = 2,
-        count_min_cols: int = 3000,
+        n_hashes: int = 2,
+        sketch_width: int = 3000,
         time_decay_factor: float = 0.7,
         alpha: float = 1.0,
         beta: float = 1.0,
         gamma: float = 0.5,
         include_endpoints: bool = True,
-        warm_up_samples: int = 0,
+        warm_up: int = 0,
         normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
-        count_min_rows = coerce_integer_count(
-            count_min_rows, label="count_min_rows", minimum=1
+        n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
+        sketch_width = coerce_integer_count(
+            sketch_width, label="sketch_width", minimum=1
         )
-        count_min_cols = coerce_integer_count(
-            count_min_cols, label="count_min_cols", minimum=1
-        )
-        warm_up_samples = coerce_integer_count(
-            warm_up_samples, label="warm_up_samples", minimum=0
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=0)
         if not (0.0 < time_decay_factor <= 1.0):
             raise ValueError("time_decay_factor must be in (0, 1]")
         if alpha < 0.0:
@@ -254,14 +250,14 @@ class ISCONNA(BaseModel):
         self.source_key = source_key
         self.destination_key = destination_key
         self.time_key = time_key
-        self.count_min_rows = count_min_rows
-        self.count_min_cols = count_min_cols
+        self.n_hashes = n_hashes
+        self.sketch_width = sketch_width
         self.time_decay_factor = time_decay_factor
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.include_endpoints = include_endpoints
-        self.warm_up_samples = warm_up_samples
+        self.warm_up = warm_up
         self.normalize_score = normalize_score
         self.seed = seed
 
@@ -278,13 +274,13 @@ class ISCONNA(BaseModel):
         self._hash_multipliers = self._rng.integers(
             1,
             max_uint32,
-            size=self.count_min_rows,
+            size=self.n_hashes,
             dtype=np.uint64,
         )
         self._hash_offsets = self._rng.integers(
             0,
             max_uint32,
-            size=self.count_min_rows,
+            size=self.n_hashes,
             dtype=np.uint64,
         )
         self._hash_parameters = list(
@@ -295,14 +291,14 @@ class ISCONNA(BaseModel):
             )
         )
 
-        self._edge = _CMSGroup.create(self.count_min_rows, self.count_min_cols)
+        self._edge = _CMSGroup.create(self.n_hashes, self.sketch_width)
         self._source = (
-            _CMSGroup.create(self.count_min_rows, self.count_min_cols)
+            _CMSGroup.create(self.n_hashes, self.sketch_width)
             if self.include_endpoints
             else None
         )
         self._destination = (
-            _CMSGroup.create(self.count_min_rows, self.count_min_cols)
+            _CMSGroup.create(self.n_hashes, self.sketch_width)
             if self.include_endpoints
             else None
         )
@@ -325,7 +321,7 @@ class ISCONNA(BaseModel):
         combined = int(a) + 347 * int(b)
         return np.asarray(
             [
-                (combined * multiplier + offset) % self.count_min_cols
+                (combined * multiplier + offset) % self.sketch_width
                 for multiplier, offset in self._hash_parameters
             ],
             dtype=np.intp,
@@ -479,7 +475,7 @@ class ISCONNA(BaseModel):
         """Compute the candidate-inclusive anomaly score without mutating state."""
         event = self._boundary.preview(x)
         bucket, src, dst = event.bucket, event.source, event.destination
-        if self._samples_seen < self.warm_up_samples:
+        if self._samples_seen < self.warm_up:
             return 0.0
 
         frequency, width, gap = self._component_scores(bucket, src, dst)
@@ -498,12 +494,12 @@ class ISCONNA(BaseModel):
         return (
             "ISCONNA("
             f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
-            f"time_key={self.time_key!r}, count_min_rows={self.count_min_rows}, "
-            f"count_min_cols={self.count_min_cols}, "
+            f"time_key={self.time_key!r}, n_hashes={self.n_hashes}, "
+            f"sketch_width={self.sketch_width}, "
             f"time_decay_factor={self.time_decay_factor}, alpha={self.alpha}, "
             f"beta={self.beta}, gamma={self.gamma}, "
             f"include_endpoints={self.include_endpoints}, "
-            f"warm_up_samples={self.warm_up_samples}, "
+            f"warm_up={self.warm_up}, "
             f"normalize_score={self.normalize_score}, seed={self.seed}, "
             f"samples_seen={self._samples_seen})"
         )

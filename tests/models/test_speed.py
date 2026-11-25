@@ -22,13 +22,13 @@ from aberrant.model.forest import (
 )
 from aberrant.model.forest.mondrian import MondrianIsolationForest
 from aberrant.model.graph import ISCONNA
-from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
+from aberrant.model.sketch import LODA, MStream, RSHash
 from aberrant.model.stat import MovingCovariance
-from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
+from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.model.timeseries import (
+    DAMP,
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
-    XLagDAMP,
 )
 from tests import score_sequences
 
@@ -61,7 +61,7 @@ CASES = {
         1.0,
     ),  # ~0.05 s
     "online-isolation-forest": (
-        lambda: OnlineIsolationForest(num_trees=25, window_size=256, seed=1),
+        lambda: OnlineIsolationForest(n_trees=25, window_size=256, seed=1),
         _stream(seed=1),
         3.0,
     ),  # ~0.3 s
@@ -86,8 +86,8 @@ CASES = {
         _stream(seed=1, n_events=600),
         20.0,
     ),  # ~2 s
-    "loda": (lambda: StreamingLODA(seed=1), _stream(seed=1), 1.0),  # ~0.05 s
-    "rshash": (lambda: StreamingRSHash(seed=8), _stream(seed=8), 2.0),  # ~0.15 s
+    "loda": (lambda: LODA(seed=1), _stream(seed=1), 1.0),  # ~0.05 s
+    "rshash": (lambda: RSHash(seed=8), _stream(seed=8), 2.0),  # ~0.15 s
     "mstream": (
         lambda: MStream(seed=17),
         lambda: score_sequences.make_multi_aspect_stream(
@@ -101,12 +101,12 @@ CASES = {
         2.0,
     ),  # ~0.13 s
     "adaptive-svm": (
-        lambda: IncrementalOneClassSVMAdaptiveKernel(seed=10),
+        lambda: AdaptiveOneClassSVM(seed=10),
         _stream(seed=10),
         4.0,
     ),  # ~0.4 s
     "x-lag-damp": (
-        lambda: XLagDAMP(subsequence_length=32),
+        lambda: DAMP(subsequence_length=32),
         _series(seed=39, n_events=2000, n_channels=1),
         4.0,
     ),  # ~0.3 s

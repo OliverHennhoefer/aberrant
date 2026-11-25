@@ -124,7 +124,7 @@ class ASDIsolationForest(BaseModel):
     from the paper without its simulation-specific concept-drift step.
 
     Args:
-        n_estimators: Number of isolation trees in each replacement forest.
+        n_trees: Number of isolation trees in each replacement forest.
         max_samples: Maximum reference-window samples used to build each tree.
         window_size: Number of recent samples retained for retraining. If
             ``None``, defaults to ``max_samples``.
@@ -146,16 +146,14 @@ class ASDIsolationForest(BaseModel):
     def __init__(
         self,
         *,
-        n_estimators: int = 100,
+        n_trees: int = 100,
         max_samples: int = 256,
         window_size: int | None = None,
         retrain_interval: int | None = None,
         seed: int | None = None,
     ) -> None:
         max_samples = coerce_integer_count(max_samples, label="max_samples", minimum=2)
-        n_estimators = coerce_integer_count(
-            n_estimators, label="n_estimators", minimum=1
-        )
+        n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
 
         resolved_window_size = max_samples if window_size is None else window_size
         if resolved_window_size <= 1:
@@ -170,7 +168,7 @@ class ASDIsolationForest(BaseModel):
                 f"retrain_interval must be positive, got {resolved_interval}"
             )
 
-        self.n_estimators = n_estimators
+        self.n_trees = n_trees
         self.max_samples = max_samples
         self.window_size = resolved_window_size
         self.retrain_interval = resolved_interval
@@ -221,7 +219,7 @@ class ASDIsolationForest(BaseModel):
         trees: list[_ASDNode] = []
         nodes = _FlatNodes()
         roots: list[int] = []
-        for _ in range(self.n_estimators):
+        for _ in range(self.n_trees):
             indices = self.rng.choice(len(data), size=sample_size, replace=False)
             roots.append(len(nodes.features))
             trees.append(self._build_tree(data[indices], nodes))
@@ -302,7 +300,7 @@ class ASDIsolationForest(BaseModel):
     def __repr__(self) -> str:
         """Return a string representation of iForestASD."""
         return (
-            f"ASDIsolationForest(n_estimators={self.n_estimators}, "
+            f"ASDIsolationForest(n_trees={self.n_trees}, "
             f"max_samples={self.max_samples}, window_size={self.window_size}, "
             f"retrain_interval={self.retrain_interval}, n_trees={len(self.trees)}, "
             f"fits_completed={self._fits_completed}, seed={self.seed})"

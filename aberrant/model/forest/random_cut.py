@@ -496,7 +496,7 @@ class RandomCutForest(BaseModel):
         n_trees: Number of random cut trees.
         sample_size: Maximum number of stored shingled points.
         shingle_size: Number of consecutive points concatenated per tree insert.
-        warmup_samples: Number of inserted shingles before non-zero scoring.
+        warm_up: Number of inserted shingles before non-zero scoring.
             If `None`, defaults to `sample_size`.
         normalize_score: If True, map raw CoDisp to [0, 1].
         score_scale: Scale for score normalization when enabled.
@@ -515,7 +515,7 @@ class RandomCutForest(BaseModel):
         n_trees: int = 40,
         sample_size: int = 256,
         shingle_size: int = 1,
-        warmup_samples: int | None = None,
+        warm_up: int | None = None,
         normalize_score: bool = False,
         score_scale: float = 8.0,
         seed: int | None = None,
@@ -525,15 +525,15 @@ class RandomCutForest(BaseModel):
         shingle_size = coerce_integer_count(
             shingle_size, label="shingle_size", minimum=1
         )
-        if warmup_samples is not None and warmup_samples <= 0:
-            raise ValueError("warmup_samples must be positive or None")
+        if warm_up is not None and warm_up <= 0:
+            raise ValueError("warm_up must be positive or None")
         if score_scale <= 0.0:
             raise ValueError("score_scale must be positive")
 
         self.n_trees = n_trees
         self.sample_size = sample_size
         self.shingle_size = shingle_size
-        self.warmup_samples = sample_size if warmup_samples is None else warmup_samples
+        self.warm_up = sample_size if warm_up is None else warm_up
         self.normalize_score = normalize_score
         self.score_scale = score_scale
         self.seed = seed
@@ -600,7 +600,7 @@ class RandomCutForest(BaseModel):
                 tree._attach(point_id, shingle, values, box, descent)
 
         self._inserted_shingles += 1
-        self._ready = self._inserted_shingles >= self.warmup_samples
+        self._ready = self._inserted_shingles >= self.warm_up
         self._schema.commit(prepared)
 
     def score_one(self, x: dict[str, float]) -> float:
@@ -690,7 +690,7 @@ class RandomCutForest(BaseModel):
     def __repr__(self) -> str:
         return (
             f"RandomCutForest(n_trees={self.n_trees}, sample_size={self.sample_size}, "
-            f"shingle_size={self.shingle_size}, warmup_samples={self.warmup_samples}, "
+            f"shingle_size={self.shingle_size}, warm_up={self.warm_up}, "
             f"normalize_score={self.normalize_score}, score_scale={self.score_scale}, "
             f"ready={self._ready}, stored_points={len(self._id_window)})"
         )

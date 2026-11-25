@@ -354,7 +354,9 @@ class TestRandomProjections(unittest.TestCase):
         )
 
     def test_initialization_with_keys(self):
-        rp = RandomProjection(n_components=self.n_components, keys=self.feature_keys)
+        rp = RandomProjection(
+            n_components=self.n_components, features=self.feature_keys
+        )
         np.testing.assert_array_equal(
             rp.feature_names,
             self.feature_keys,
@@ -399,14 +401,14 @@ class TestRandomProjections(unittest.TestCase):
         )
 
     def test_transform_rejects_extra_features(self):
-        projection = RandomProjection(n_components=1, keys=["x", "y"], seed=42)
+        projection = RandomProjection(n_components=1, features=["x", "y"], seed=42)
 
         with self.assertRaisesRegex(ValueError, "unexpected feature"):
             projection.transform_one({"x": 1.0, "y": 2.0, "z": 3.0})
 
     def test_error_with_too_many_n_components(self):
         with self.assertRaises(ValueError) as context:
-            RandomProjection(n_components=15, keys=self.feature_keys[:10])
+            RandomProjection(n_components=15, features=self.feature_keys[:10])
 
         expected_msg = "The number of n_components (15) has to be less or equal to the number of features (10)"
         self.assertTrue(
@@ -421,7 +423,7 @@ class TestRandomProjections(unittest.TestCase):
             rp.transform_one(sample_data)
 
         expected_msg = (
-            "Cannot transform before learning. Call learn_one() first or provide keys."
+            "Cannot transform before learning. Call learn_one() first or pass features."
         )
         self.assertTrue(
             expected_msg in str(context.exception),
@@ -430,7 +432,7 @@ class TestRandomProjections(unittest.TestCase):
 
     def test_error_with_zero_or_negative_n_components(self):
         with self.assertRaises(ValueError) as context:
-            RandomProjection(n_components=0, keys=self.feature_keys[:5])
+            RandomProjection(n_components=0, features=self.feature_keys[:5])
 
         expected_msg_zero = "n_components must be a positive integer"
         self.assertTrue(
@@ -439,7 +441,7 @@ class TestRandomProjections(unittest.TestCase):
         )
 
         with self.assertRaises(ValueError) as context:
-            RandomProjection(n_components=-3, keys=self.feature_keys[:5])
+            RandomProjection(n_components=-3, features=self.feature_keys[:5])
 
         expected_msg_negative = "n_components must be a positive integer"
         self.assertTrue(
@@ -455,11 +457,11 @@ class TestRandomProjections(unittest.TestCase):
                     ValueError, "n_components must be a positive integer"
                 ),
             ):
-                RandomProjection(n_components=value, keys=self.feature_keys[:5])
+                RandomProjection(n_components=value, features=self.feature_keys[:5])
 
     def test_numpy_integer_n_components_is_normalized(self):
         projection = RandomProjection(
-            n_components=np.int64(2), keys=self.feature_keys[:5]
+            n_components=np.int64(2), features=self.feature_keys[:5]
         )
         self.assertIs(type(projection.n_components), int)
         self.assertEqual(projection.random_matrix.shape, (5, 2))
@@ -467,7 +469,7 @@ class TestRandomProjections(unittest.TestCase):
     def test_duplicate_feature_names_initialization(self):
         duplicate_keys = ["feature_1", "feature_1"]
         with self.assertRaises(ValueError) as context:
-            RandomProjection(n_components=self.n_components, keys=duplicate_keys)
+            RandomProjection(n_components=self.n_components, features=duplicate_keys)
 
         expected_msg = "Feature names cannot contain duplicates"
         self.assertTrue(
@@ -522,7 +524,7 @@ class TestRandomProjections(unittest.TestCase):
 
     def test_projection_owns_configured_feature_names(self):
         keys = ["a", "b", "c"]
-        projection = RandomProjection(n_components=2, keys=keys, seed=42)
+        projection = RandomProjection(n_components=2, features=keys, seed=42)
         keys[0] = "changed"
 
         self.assertEqual(projection.feature_names, ["a", "b", "c"])

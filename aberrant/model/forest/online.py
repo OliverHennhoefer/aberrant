@@ -28,7 +28,7 @@ class OnlineIsolationForest(BaseModel):
     authors' implementation does; the paper writes base 2.
 
     Args:
-        num_trees: Number of independently seeded online isolation trees.
+        n_trees: Number of independently seeded online isolation trees.
         max_leaf_samples: Base leaf population at which splitting becomes
             eligible.
         tree_type: ``"fixed"`` uses the base split threshold at every depth;
@@ -56,7 +56,7 @@ class OnlineIsolationForest(BaseModel):
     def __init__(
         self,
         *,
-        num_trees: int = 100,
+        n_trees: int = 100,
         max_leaf_samples: int = 32,
         tree_type: Literal["fixed", "adaptive"] = "adaptive",
         subsample: float = 1.0,
@@ -67,7 +67,7 @@ class OnlineIsolationForest(BaseModel):
         seed: int | None = None,
     ) -> None:
         """Initialize an Online Isolation Forest."""
-        num_trees = coerce_integer_count(num_trees, label="num_trees", minimum=1)
+        n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
         max_leaf_samples = coerce_integer_count(
             max_leaf_samples, label="max_leaf_samples", minimum=1
         )
@@ -85,7 +85,7 @@ class OnlineIsolationForest(BaseModel):
         if n_jobs == 0 or n_jobs < -1:
             raise ValueError("n_jobs must be -1 or a positive integer")
 
-        self.num_trees = num_trees
+        self.n_trees = n_trees
         self.max_leaf_samples = max_leaf_samples
         self.tree_type = tree_type
         self.subsample = subsample
@@ -96,7 +96,7 @@ class OnlineIsolationForest(BaseModel):
         self._max_workers = (os.cpu_count() or 1) if n_jobs == -1 else n_jobs
         self.seed = seed
 
-        child_seeds = np.random.SeedSequence(seed).spawn(num_trees)
+        child_seeds = np.random.SeedSequence(seed).spawn(n_trees)
         self.trees = [
             OnlineIsolationTree(
                 max_leaf_samples=max_leaf_samples,

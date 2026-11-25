@@ -135,10 +135,10 @@ class MondrianTree:
     """
 
     def __init__(
-        self, selected_indices: np.ndarray, lambda_: float, rng: np.random.Generator
+        self, selected_indices: np.ndarray, lifetime: float, rng: np.random.Generator
     ) -> None:
         self.selected_indices = selected_indices
-        self.lambda_ = lambda_
+        self.lifetime = lifetime
         self.rng = rng
         self.root: MondrianNode | None = None
         self.n_samples = 0
@@ -183,7 +183,7 @@ class MondrianTree:
         samples nothing.
         """
         if not path:
-            self.root = MondrianLeaf.from_point(point, self.lambda_)
+            self.root = MondrianLeaf.from_point(point, self.lifetime)
             self.n_samples += 1
             return
 
@@ -208,7 +208,7 @@ class MondrianTree:
                 split_threshold = self._sample_split_threshold(
                     x_values=x_values, node=node, split_feature=split_feature
                 )
-                new_leaf = MondrianLeaf.from_point(point, self.lambda_)
+                new_leaf = MondrianLeaf.from_point(point, self.lifetime)
                 left, right = (
                     (new_leaf, node)
                     if x_values[split_feature] <= split_threshold
@@ -409,9 +409,9 @@ class MondrianIsolationForest(BaseModel):
     define this anomaly score, so this class is a custom hybrid.
 
     Args:
-        n_estimators: Number of trees in the forest.
+        n_trees: Number of trees in the forest.
         subspace_size: Number of features sampled per tree.
-        lambda_: Mondrian lifetime budget.
+        lifetime: Mondrian lifetime budget.
         seed: Random seed for reproducibility.
         window_size: Optional bound on recent observations used to replace the
             trees. After the initial window, every ``window_size`` observations
@@ -429,30 +429,28 @@ class MondrianIsolationForest(BaseModel):
     def __init__(
         self,
         *,
-        n_estimators: int = 100,
+        n_trees: int = 100,
         subspace_size: int = 256,
-        lambda_: float = 1.0,
+        lifetime: float = 1.0,
         seed: int | None = None,
         window_size: int | None = None,
     ) -> None:
-        n_estimators = coerce_integer_count(
-            n_estimators, label="n_estimators", minimum=1
-        )
+        n_trees = coerce_integer_count(n_trees, label="n_trees", minimum=1)
         subspace_size = coerce_integer_count(
             subspace_size, label="subspace_size", minimum=1
         )
         super().__init__()
 
-        if lambda_ <= 0:
-            raise ValueError("lambda_ must be positive")
+        if lifetime <= 0:
+            raise ValueError("lifetime must be positive")
         if window_size is not None:
             window_size = coerce_integer_count(
                 window_size, label="window_size", minimum=2
             )
 
-        self.n_estimators = n_estimators
+        self.n_trees = n_trees
         self.subspace_size = subspace_size
-        self.lambda_ = lambda_
+        self.lifetime = lifetime
         self.seed = seed
         self.window_size = window_size
 
@@ -559,7 +557,7 @@ class MondrianIsolationForest(BaseModel):
         self.trees = []
 
         max_seed = np.iinfo(np.int64).max
-        for _ in range(self.n_estimators):
+        for _ in range(self.n_trees):
             selected_indices = np.asarray(
                 self.rng.choice(
                     feature_count,
@@ -570,7 +568,7 @@ class MondrianIsolationForest(BaseModel):
             )
             tree_seed = int(self.rng.integers(0, max_seed))
             tree_rng = np.random.default_rng(tree_seed)
-            self.trees.append(MondrianTree(selected_indices, self.lambda_, tree_rng))
+            self.trees.append(MondrianTree(selected_indices, self.lifetime, tree_rng))
 
     def _compute_c_factor(self) -> float:
         """Compute forest-level isolation normalization term."""
@@ -584,7 +582,7 @@ class MondrianIsolationForest(BaseModel):
     def __repr__(self) -> str:
         """Return a string representation of the MondrianIsolationForest."""
         return (
-            f"MondrianIsolationForest(n_estimators={self.n_estimators}, "
+            f"MondrianIsolationForest(n_trees={self.n_trees}, "
             f"subspace_size={self.subspace_size}, "
-            f"lambda_={self.lambda_}, seed={self.seed}, window_size={self.window_size})"
+            f"lifetime={self.lifetime}, seed={self.seed}, window_size={self.window_size})"
         )

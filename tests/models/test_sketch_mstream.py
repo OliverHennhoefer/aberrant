@@ -14,12 +14,12 @@ class TestMStream(unittest.TestCase):
 
     def create_model(self, **overrides: object) -> MStream:
         defaults: dict[str, object] = {
-            "rows": 2,
-            "buckets": 128,
+            "n_hashes": 2,
+            "sketch_width": 128,
             "alpha": 0.7,
             "time_key": "t",
             "categorical_features": ("category",),
-            "warm_up_buckets": 0,
+            "warm_up": 0,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -27,17 +27,17 @@ class TestMStream(unittest.TestCase):
 
     def test_initialization_defaults_match_author_parameters(self) -> None:
         model = MStream()
-        self.assertEqual(model.rows, 2)
-        self.assertEqual(model.buckets, 1024)
+        self.assertEqual(model.n_hashes, 2)
+        self.assertEqual(model.sketch_width, 1024)
         self.assertEqual(model.alpha, 0.6)
         self.assertEqual(model.categorical_features, ())
-        self.assertEqual(model.warm_up_buckets, 0)
+        self.assertEqual(model.warm_up, 0)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
-            MStream(rows=0)
+            MStream(n_hashes=0)
         with self.assertRaises(ValueError):
-            MStream(buckets=0)
+            MStream(sketch_width=0)
         with self.assertRaises(ValueError):
             MStream(alpha=0.0)
         with self.assertRaises(ValueError):
@@ -51,7 +51,7 @@ class TestMStream(unittest.TestCase):
         with self.assertRaises(ValueError):
             MStream(time_key="t", categorical_features=("t",))
         with self.assertRaises(ValueError):
-            MStream(warm_up_buckets=-1)
+            MStream(warm_up=-1)
 
     def test_standardized_features_are_scored(self) -> None:
         """Values at or below -1 use the mirrored log transform, not an error."""
@@ -100,7 +100,7 @@ class TestMStream(unittest.TestCase):
                 )
 
     def test_numeric_transform_and_online_min_max_match_author_code(self) -> None:
-        model = MStream(rows=1, buckets=11, time_key="t", seed=1)
+        model = MStream(n_hashes=1, sketch_width=11, time_key="t", seed=1)
         model.learn_one({"t": 1.0, "x": 0.0})
         model.learn_one({"t": 1.0, "x": 99.0})
         self.assertIsNotNone(model._state)
@@ -115,7 +115,7 @@ class TestMStream(unittest.TestCase):
         self.assertAlmostEqual(float(normalized[0]), expected)
 
     def test_creates_individual_and_complete_record_sketches(self) -> None:
-        model = self.create_model(rows=3, buckets=64)
+        model = self.create_model(n_hashes=3, sketch_width=64)
         model.learn_one({"t": 1.0, "x": 1.0, "y": 2.0, "category": 3.0})
         self.assertIsNotNone(model._state)
         assert model._state is not None
@@ -125,7 +125,7 @@ class TestMStream(unittest.TestCase):
         self.assertEqual(model._state.record.counts.current.shape, (3, 64))
 
     def test_full_record_hash_uses_all_attributes(self) -> None:
-        model = MStream(rows=1, buckets=4, time_key="t", seed=1)
+        model = MStream(n_hashes=1, sketch_width=4, time_key="t", seed=1)
         model.learn_one({"t": 1.0, "x": 1.0, "y": 1.0})
         self.assertIsNotNone(model._state)
         assert model._state is not None
@@ -147,7 +147,7 @@ class TestMStream(unittest.TestCase):
         self.assertNotEqual(int(first[0]), int(second[0]))
 
     def test_score_matches_sum_of_attribute_and_record_contributions(self) -> None:
-        model = MStream(rows=1, buckets=128, time_key="t", seed=3)
+        model = MStream(n_hashes=1, sketch_width=128, time_key="t", seed=3)
         sample = {"t": 1.0, "x": 1.0}
         model.learn_one(sample)
         self.assertIsNotNone(model._state)
@@ -199,7 +199,7 @@ class TestMStream(unittest.TestCase):
                 self.assertAlmostEqual(model.score_one(query), expected)
 
     def test_rollover_decays_current_counts_once_like_author_code(self) -> None:
-        model = self.create_model(rows=1, buckets=1024)
+        model = self.create_model(n_hashes=1, sketch_width=1024)
         sample = {"t": 1.0, "x": 1.0, "category": 2.0}
         model.learn_one(sample)
         self.assertIsNotNone(model._state)
@@ -245,7 +245,7 @@ class TestMStream(unittest.TestCase):
         self.assertEqual(model._rng.bit_generator.state, rng_state)
 
     def test_score_is_zero_before_optional_warmup(self) -> None:
-        model = self.create_model(warm_up_buckets=2)
+        model = self.create_model(warm_up=2)
         model.learn_one({"t": 1.0, "x": 1.0, "category": 2.0})
         self.assertEqual(
             model.score_one({"t": 2.0, "x": 1.0, "category": 2.0}),
@@ -299,7 +299,7 @@ class TestMStream(unittest.TestCase):
         )
 
     def test_sketch_shapes_are_bounded(self) -> None:
-        model = self.create_model(buckets=64)
+        model = self.create_model(sketch_width=64)
         model.learn_one({"t": 0.0, "x": 1.0, "category": 3.0})
         self.assertIsNotNone(model._state)
         assert model._state is not None
@@ -332,17 +332,17 @@ class TestMStream(unittest.TestCase):
         self.assertIsNone(model._state)
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(rows=3, buckets=256)
+        model = self.create_model(n_hashes=3, sketch_width=256)
         output = repr(model)
         self.assertIn("MStream", output)
-        self.assertIn("rows=3", output)
-        self.assertIn("buckets=256", output)
+        self.assertIn("n_hashes=3", output)
+        self.assertIn("sketch_width=256", output)
         self.assertIn("categorical_features=('category',)", output)
 
 
 class TestMStreamExactness(unittest.TestCase):
     def test_score_sequences_match_recorded_reference(self) -> None:
-        for case in score_sequences.load("m_stream"):
+        for case in score_sequences.load("mstream"):
             with self.subTest(case=case["name"]):
                 scores = score_sequences.replay(MStream(**case["params"]), case)
                 # The tolerance only absorbs last-bit libm differences in log
@@ -350,7 +350,7 @@ class TestMStreamExactness(unittest.TestCase):
                 np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
 
     def test_integer_check_matches_allclose(self) -> None:
-        model = MStream(buckets=16, categorical_features=("c",))
+        model = MStream(sketch_width=16, categorical_features=("c",))
         offsets = [0.0, -0.0, 5e-10, -5e-10, 9.9e-10, 1e-9, -1e-9, 1.01e-9, 2e-9]
         for base in (0.0, 3.0, -7.0, 2.0**40, -(2.0**52), 1e15, 0.5):
             for offset in offsets:
@@ -377,7 +377,11 @@ class TestMStreamExactness(unittest.TestCase):
 
     def test_learning_increments_one_cell_per_feature_and_row(self) -> None:
         model = MStream(
-            rows=3, buckets=8, time_key="t", categorical_features=("a", "b"), seed=4
+            n_hashes=3,
+            sketch_width=8,
+            time_key="t",
+            categorical_features=("a", "b"),
+            seed=4,
         )
         model.learn_one({"x": 1.0, "y": 0.0, "a": 2.0, "b": 2.0, "t": 0})
         model.learn_one({"x": 4.0, "y": 0.5, "a": 2.0, "b": 9.0, "t": 0})

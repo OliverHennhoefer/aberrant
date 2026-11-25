@@ -63,6 +63,41 @@ Semantic Versioning.
   The wrapped component stays positional in `ResidualDetector(model, target=...)`
   and the method in `ScoreCalibrator(method, alpha=...)`. `DatasetManager`
   takes keyword arguments too.
+- **Breaking:** classes named after their method without a prefix:
+  `StreamingLODA` is `LODA`, `StreamingRSHash` is `RSHash`, `XLagDAMP` is
+  `DAMP` and `IncrementalOneClassSVMAdaptiveKernel` is `AdaptiveOneClassSVM`.
+  Their catalog ids follow (`loda`, `rshash`, `damp`,
+  `adaptive_one_class_svm`), and the ids of `AnoEdgeL`, `XStream`, `MStream`
+  and `SDOStream` keep the acronym whole: `anoedge_l`, `xstream`, `mstream`,
+  `sdostream`.
+- **Breaking:** one name per concept across all constructors.
+  - Tree count: `n_trees` (was `n_estimators` on `ASDIsolationForest`,
+    `MondrianIsolationForest` and `StreamRandomHistogramForest`, `num_trees`
+    on `OnlineIsolationForest`).
+  - Warm-up: `warm_up`, in the unit the docstring names (was
+    `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`,
+    `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`
+    and `IncrementalPCA`'s `n0`).
+  - Hash rows and counters per row: `n_hashes` and `sketch_width` (was
+    `count_min_rows`/`count_min_cols` on `MIDAS` and `ISCONNA`,
+    `rows`/`buckets` on `MStream`, `hash_num`/`bins` on `RSHash`,
+    `cms_num_hashes`/`cms_width` on `XStream`). `AnoEdgeL` takes `n_hashes`
+    planes of `sketch_rows` by `sketch_cols`.
+  - Fixed feature order: `features` (was `keys` on `IncrementalPCA`,
+    `RandomProjection` and the multivariate `Moving*` models).
+  - `RSHash(components_num=...)` is `n_members`, `MondrianIsolationForest`'s
+    `lambda_` is `lifetime`, and `SDOStream`'s `k`, `T`, `qv` and
+    `x_neighbors` are `max_observers`, `time_scale`, `inactive_quantile` and
+    `n_neighbors`.
+  - `LODA`, `CellNeighborhoodDetector` and `SignedGraphSketchDetector` no
+    longer take `eps`; `DAMP`'s threshold for constant subsequences is
+    `min_std`. `SignedGraphSketchDetector` scores `d / (1 + d)` without the
+    `1e-9` it added to the denominator.
+  - `MovingCovariance`, `MovingCorrelationCoefficient` and
+    `MovingMahalanobisDistance` default to `window_size=256`.
+- **Breaking:** detector configurations and the catalog manifest use format
+  version 2. A version 1 configuration is rejected; rename its ids and
+  parameters as listed above and set `"version": 2`.
 - **Breaking:** every public class and function has exactly one import path.
   - `aberrant.model.iforest` is now `aberrant.model.forest`.
   - The exceptions moved from `aberrant.base` to `aberrant.exceptions`.

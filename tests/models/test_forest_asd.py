@@ -16,7 +16,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def create_model(self) -> ASDIsolationForest:
         """Create ASDIsolationForest instance for testing."""
-        return ASDIsolationForest(n_estimators=10, max_samples=20, seed=42)
+        return ASDIsolationForest(n_trees=10, max_samples=20, seed=42)
 
     def setUp(self):
         """Set up test fixtures."""
@@ -27,7 +27,7 @@ class TestASDIsolationForest(unittest.TestCase):
         """Test ASDIsolationForest initialization with default parameters."""
         forest = ASDIsolationForest()
 
-        self.assertEqual(forest.n_estimators, 100)
+        self.assertEqual(forest.n_trees, 100)
         self.assertEqual(forest.max_samples, 256)
         self.assertEqual(forest.window_size, 256)
         self.assertEqual(forest.retrain_interval, 256)
@@ -38,23 +38,23 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_initialization_with_custom_params(self):
         """Test ASDIsolationForest initialization with custom parameters."""
-        forest = ASDIsolationForest(n_estimators=50, max_samples=128, seed=42)
+        forest = ASDIsolationForest(n_trees=50, max_samples=128, seed=42)
 
-        self.assertEqual(forest.n_estimators, 50)
+        self.assertEqual(forest.n_trees, 50)
         self.assertEqual(forest.max_samples, 128)
         self.assertEqual(forest.window_size, 128)
         self.assertEqual(forest.seed, 42)
 
     def test_initialization_validation(self):
         """Test parameter validation during initialization."""
-        # Test invalid n_estimators
+        # Test invalid n_trees
         with self.assertRaises(ValueError) as context:
-            ASDIsolationForest(n_estimators=0)
-        self.assertIn("n_estimators must be a positive integer", str(context.exception))
+            ASDIsolationForest(n_trees=0)
+        self.assertIn("n_trees must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError) as context:
-            ASDIsolationForest(n_estimators=-1)
-        self.assertIn("n_estimators must be a positive integer", str(context.exception))
+            ASDIsolationForest(n_trees=-1)
+        self.assertIn("n_trees must be a positive integer", str(context.exception))
 
         # Test invalid max_samples
         with self.assertRaises(ValueError) as context:
@@ -98,7 +98,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_periodically_retrains_full_forest_on_recent_window(self):
         forest = ASDIsolationForest(
-            n_estimators=3,
+            n_trees=3,
             max_samples=3,
             window_size=4,
             retrain_interval=2,
@@ -164,15 +164,15 @@ class TestASDIsolationForest(unittest.TestCase):
             forest.score_one({})
 
     def test_tree_limit_enforcement(self):
-        """Test that number of trees doesn't exceed n_estimators."""
-        forest = ASDIsolationForest(n_estimators=3, max_samples=2, seed=42)
+        """Test that number of trees doesn't exceed n_trees."""
+        forest = ASDIsolationForest(n_trees=3, max_samples=2, seed=42)
 
-        # Generate enough data to create more trees than n_estimators
+        # Generate enough data to create more trees than n_trees
         for i in range(20):  # This should trigger multiple tree creations
             forest.learn_one({"feature": float(i)})
 
         # Every replacement is a complete forest.
-        self.assertEqual(len(forest.trees), forest.n_estimators)
+        self.assertEqual(len(forest.trees), forest.n_trees)
 
     def test_score_before_trees_created(self):
         """Test scoring before any trees are created."""
@@ -212,8 +212,8 @@ class TestASDIsolationForest(unittest.TestCase):
     def test_reproducibility_with_seed(self):
         """Test that same seed produces reproducible results."""
         # Create two forests with same seed
-        forest1 = ASDIsolationForest(n_estimators=5, max_samples=10, seed=42)
-        forest2 = ASDIsolationForest(n_estimators=5, max_samples=10, seed=42)
+        forest1 = ASDIsolationForest(n_trees=5, max_samples=10, seed=42)
+        forest2 = ASDIsolationForest(n_trees=5, max_samples=10, seed=42)
 
         # Generate test data
         test_data = self.data_generator.generate_streaming_data(n=50, n_features=2)
@@ -240,8 +240,8 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_different_seeds_produce_different_results(self):
         """Test that different seeds produce different results."""
-        forest1 = ASDIsolationForest(n_estimators=8, max_samples=15, seed=42)
-        forest2 = ASDIsolationForest(n_estimators=8, max_samples=15, seed=123)
+        forest1 = ASDIsolationForest(n_trees=8, max_samples=15, seed=42)
+        forest2 = ASDIsolationForest(n_trees=8, max_samples=15, seed=123)
 
         test_data = self.data_generator.generate_streaming_data(n=80, n_features=2)
 
@@ -270,8 +270,8 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_max_samples_effect(self):
         """Test that different max_samples values affect behavior."""
-        forest_small = ASDIsolationForest(n_estimators=5, max_samples=10, seed=42)
-        forest_large = ASDIsolationForest(n_estimators=5, max_samples=50, seed=42)
+        forest_small = ASDIsolationForest(n_trees=5, max_samples=10, seed=42)
+        forest_large = ASDIsolationForest(n_trees=5, max_samples=50, seed=42)
 
         # Generate enough data for both forests
         training_data = self.data_generator.generate_streaming_data(n=100, n_features=2)
@@ -296,8 +296,8 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_n_estimators_effect(self):
         """Test that different numbers of estimators affect results."""
-        forest_few = ASDIsolationForest(n_estimators=3, max_samples=15, seed=42)
-        forest_many = ASDIsolationForest(n_estimators=20, max_samples=15, seed=42)
+        forest_few = ASDIsolationForest(n_trees=3, max_samples=15, seed=42)
+        forest_many = ASDIsolationForest(n_trees=20, max_samples=15, seed=42)
 
         # Train on same data
         training_data = self.data_generator.generate_streaming_data(n=100, n_features=3)
@@ -328,7 +328,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_repr_string(self):
         """Test string representation includes key parameters."""
-        forest = ASDIsolationForest(n_estimators=25, max_samples=64, seed=999)
+        forest = ASDIsolationForest(n_trees=25, max_samples=64, seed=999)
 
         # Add some trees to test n_trees display
         for i in range(70):  # Enough to create some trees
@@ -336,7 +336,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
         repr_str = repr(forest)
         self.assertIn("ASDIsolationForest", repr_str)
-        self.assertIn("n_estimators=25", repr_str)
+        self.assertIn("n_trees=25", repr_str)
         self.assertIn("max_samples=64", repr_str)
         self.assertIn("window_size=64", repr_str)
         self.assertIn("seed=999", repr_str)
@@ -344,7 +344,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_edge_cases(self):
         """Test edge cases and boundary conditions."""
-        forest = ASDIsolationForest(n_estimators=3, max_samples=5, seed=42)
+        forest = ASDIsolationForest(n_trees=3, max_samples=5, seed=42)
 
         # Test with zero values
         zero_point = {"a": 0.0, "b": 0.0}
@@ -380,7 +380,7 @@ class TestASDIsolationForest(unittest.TestCase):
 
     def test_tree_building_with_identical_values(self):
         """Test tree building when all values in a feature are identical."""
-        forest = ASDIsolationForest(n_estimators=2, max_samples=3, seed=42)
+        forest = ASDIsolationForest(n_trees=2, max_samples=3, seed=42)
 
         # Add identical points to create a tree
         identical_points = [
@@ -420,7 +420,7 @@ class TestASDIsolationForest(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
 
     def test_schema_change_raises_instead_of_zero_imputation(self):
-        forest = ASDIsolationForest(n_estimators=1, max_samples=2, seed=42)
+        forest = ASDIsolationForest(n_trees=1, max_samples=2, seed=42)
         forest.learn_one({"x": 1.0, "y": 2.0})
         forest.learn_one({"x": 2.0, "y": 3.0})
 
@@ -534,7 +534,7 @@ class TestASDIsolationForestExactness(unittest.TestCase):
 
     def test_flat_forest_walks_match_node_walks(self):
         events = score_sequences.make_stream(seed=3, n_events=300, n_features=4)
-        forest = ASDIsolationForest(n_estimators=40, max_samples=64, seed=4)
+        forest = ASDIsolationForest(n_trees=40, max_samples=64, seed=4)
         for event in events:
             forest.learn_one(event)
         flat = forest._flat

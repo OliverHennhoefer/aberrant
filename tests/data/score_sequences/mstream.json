@@ -518,8 +518,8 @@
   {
    "name": "time_buckets_with_categories",
    "params": {
-    "rows": 3,
-    "buckets": 64,
+    "n_hashes": 3,
+    "sketch_width": 64,
     "alpha": 0.8,
     "time_key": "t",
     "categorical_features": [
@@ -1042,13 +1042,13 @@
   {
    "name": "warm_up_one_row",
    "params": {
-    "rows": 1,
-    "buckets": 16,
+    "n_hashes": 1,
+    "sketch_width": 16,
     "time_key": "t",
     "categorical_features": [
      "c0"
     ],
-    "warm_up_buckets": 3,
+    "warm_up": 3,
     "seed": 235
    },
    "multi_aspect": {
@@ -1365,7 +1365,7 @@
   {
    "name": "categories_only",
    "params": {
-    "buckets": 32,
+    "sketch_width": 32,
     "categorical_features": [
      "c0",
      "c1",
@@ -1685,8 +1685,8 @@
   {
    "name": "single_bucket_no_decay",
    "params": {
-    "rows": 2,
-    "buckets": 1,
+    "n_hashes": 2,
+    "sketch_width": 1,
     "alpha": 1.0,
     "seed": 239
    },

@@ -3,4 +3,4 @@
 The public class is an experimental heuristic. It does not claim equivalence to
 a published incremental One-Class SVM optimizer.
 
-::: aberrant.model.svm.IncrementalOneClassSVMAdaptiveKernel
+::: aberrant.model.svm.AdaptiveOneClassSVM

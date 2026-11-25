@@ -51,7 +51,7 @@ def test_projection_retry_matches_clean_seeded_initialization():
 
 
 def test_online_pca_decomposition_failure_keeps_previous_components():
-    model = IncrementalPCA(n_components=1, n0=2)
+    model = IncrementalPCA(n_components=1, warm_up=2)
     for sample in [{"a": 1.0, "b": 0.0}, {"a": 2.0, "b": 0.0}]:
         model.learn_one(sample)
     before = pickle.dumps(model)

@@ -14,7 +14,7 @@ model = SignedGraphSketchDetector(
     shingle_size=2,
     num_clusters=8,
     max_graphs=256,
-    warm_up_graphs=16,
+    warm_up=16,
     normalize_score=False,
     seed=42,
 )

@@ -5,12 +5,12 @@ from aberrant.stream import Dataset, load
 from aberrant.transform import StandardScaler
 
 model = SDOStream(
-    k=128,
-    T=256.0,
-    qv=0.3,
-    x_neighbors=8,
+    max_observers=128,
+    time_scale=256.0,
+    inactive_quantile=0.3,
+    n_neighbors=8,
     distance="euclidean",
-    warm_up_observers=12,
+    warm_up=12,
     seed=42,
 )
 pipeline = StandardScaler() | model

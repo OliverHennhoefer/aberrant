@@ -23,9 +23,9 @@ class IncrementalPCA(BaseTransformer):
 
     Args:
         n_components: Number of principal components to keep.
-        n0: Initial number of samples for warm-up phase. Must be at least
+        warm_up: Initial number of samples for warm-up phase. Must be at least
             ``n_components`` to establish every output component.
-        keys: Feature names. If None, inferred from first sample.
+        features: Feature names. If None, inferred from first sample.
         tol: Finite, non-negative tolerance for considering residual significance.
         forgetting_factor: Weight for new values (0 < f < 1). If None, uses 1/t.
 
@@ -43,8 +43,8 @@ class IncrementalPCA(BaseTransformer):
         self,
         *,
         n_components: int,
-        n0: int = 50,
-        keys: list[str] | None = None,
+        warm_up: int = 50,
+        features: list[str] | None = None,
         tol: float = 1e-7,
         forgetting_factor: float | None = None,
     ) -> None:
@@ -53,8 +53,8 @@ class IncrementalPCA(BaseTransformer):
 
         Args:
             n_components (int): Number of principal components to keep.
-            n0 (int): Initial number of samples for warm-up phase before switching to online mode. Default is 50.
-            keys (Optional[list[str]]): List of feature names. If None, they will be inferred from the first sample. Default is None.
+            warm_up (int): Initial number of samples for warm-up phase before switching to online mode. Default is 50.
+            features (Optional[list[str]]): List of feature names. If None, they will be inferred from the first sample. Default is None.
             tol (float): Tolerance for considering whether a new data point contributes significantly to the subspace. Default is 1e-7.
             forgetting_factor (Optional[float]): If None (default) it is a stationary process. Larger f will give new values more weight. Must be in the interval ]0, 1[.
 
@@ -67,7 +67,7 @@ class IncrementalPCA(BaseTransformer):
         - Cardot, H. & Degras, D. (2015). "Online Principal Component Analysis in High Dimension: Which Algorithm to Choose?"
 
         Algorithm Steps:
-        1. Initialization phase: Collect n0 samples and perform uncentered PCA
+        1. Initialization phase: Collect warm_up samples and perform uncentered PCA
         2. Online phase: For each new sample x_t at time t:
            - Apply forgetting factor: λ ← (1-f)λ where f = 1/t
            - Scale new sample: x ← √f * x_t
@@ -80,17 +80,17 @@ class IncrementalPCA(BaseTransformer):
         super().__init__()
 
         n_components = coerce_integer_count(n_components, label="n_components")
-        n0 = coerce_integer_count(n0, label="n0")
-        if n0 < n_components:
-            raise ValueError("n0 must be at least n_components")
+        warm_up = coerce_integer_count(warm_up, label="warm_up")
+        if warm_up < n_components:
+            raise ValueError("warm_up must be at least n_components")
         if not np.isfinite(tol) or tol < 0:
             raise ValueError("tol must be non-negative and finite")
         if forgetting_factor is not None and not (0 < forgetting_factor < 1):
             raise ValueError("forgetting_factor must be 0 < forgetting_factor < 1")
 
         self.n_components: int = n_components
-        self.n0: int = n0
-        self._schema = ProjectionSchema(n_components, keys)
+        self.warm_up: int = warm_up
+        self._schema = ProjectionSchema(n_components, features)
         self.tol: float = tol
         self.forgetting_factor = forgetting_factor
 
@@ -105,7 +105,7 @@ class IncrementalPCA(BaseTransformer):
 
     @property
     def readiness(self) -> Readiness:
-        return Readiness(self.n0_reached, self.n_samples_seen, self.n0)
+        return Readiness(self.n0_reached, self.n_samples_seen, self.warm_up)
 
     @property
     def feature_names(self) -> list[str] | None:
@@ -193,13 +193,13 @@ class IncrementalPCA(BaseTransformer):
 
     def _initialize_pca(self, data_vector: np.ndarray) -> None:
         """
-        Handle initialization phase by collecting data until n0 samples.
+        Handle initialization phase by collecting data until warm_up samples.
 
         Args:
             data_vector: New data point to add to initialization window.
         """
         window = [*self.window, data_vector]
-        if len(window) >= self.n0:
+        if len(window) >= self.warm_up:
             # Perform initial full PCA and switch to online mode
             initial_data = np.array(window)
             _, s, vt = np.linalg.svd(initial_data, full_matrices=False)
@@ -254,7 +254,7 @@ class IncrementalPCA(BaseTransformer):
         if self.n0_reached:
             if data_vector is None:
                 raise RuntimeError(
-                    "Cannot transform before learning. Call learn_one() first or provide keys."
+                    "Cannot transform before learning. Call learn_one() first or pass features."
                 )
 
             transformed_x = self.vectors.T @ data_vector
@@ -266,6 +266,6 @@ class IncrementalPCA(BaseTransformer):
     def __repr__(self) -> str:
         """Return string representation of the transformer."""
         return (
-            f"IncrementalPCA(n_components={self.n_components}, n0={self.n0}, "
+            f"IncrementalPCA(n_components={self.n_components}, warm_up={self.warm_up}, "
             f"tol={self.tol}, forgetting_factor={self.forgetting_factor})"
         )

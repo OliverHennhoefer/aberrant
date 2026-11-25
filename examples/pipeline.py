@@ -14,7 +14,7 @@ baseline_pipeline = MinMaxScaler() | KNN(
 # PCA pipeline: scaling + incremental PCA + KNN.
 pca_pipeline = (
     StandardScaler()
-    | IncrementalPCA(n_components=3, n0=100)
+    | IncrementalPCA(n_components=3, warm_up=100)
     | KNN(
         k=55,
         similarity_engine=FaissSimilaritySearchEngine(window_size=250, warm_up=50),

@@ -16,8 +16,8 @@ class TestMStream(unittest.TestCase):
         is detectable even when every singleton attribute value is common.
         """
         model = MStream(
-            rows=4,
-            buckets=2048,
+            n_hashes=4,
+            sketch_width=2048,
             alpha=0.5,
             time_key="t",
             seed=42,
