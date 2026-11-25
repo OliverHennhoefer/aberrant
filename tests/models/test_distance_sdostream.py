@@ -131,6 +131,49 @@ class TestSDOStream(unittest.TestCase):
             places=12,
         )
 
+    def test_replacement_evicts_the_lowest_fading_normalized_activity(self) -> None:
+        # The reference compares observations / (1 - fading**age): an old
+        # observer that stays popular outranks a young one that is barely hit.
+        model = self.create_model(k=2, T=10.0, x_neighbors=1, warm_up_observers=2)
+        model.learn_one({"t": 0.0, "a": 0.0, "b": 0.0})
+        assert model._observations is not None
+        assert model._time_added is not None and model._time_touched is not None
+        model._n_observers = 2
+        now = 100.0
+        model._observations[:2] = [8.0, 1.0]
+        model._time_added[:2] = [0.0, 95.0]
+        model._time_touched[:2] = [now, now]
+        fading = np.exp(-1.0 / model.T)
+        normalized = [8.0 / (1 - fading**100.0), 1.0 / (1 - fading**5.0)]
+        self.assertEqual(int(np.argmin(normalized)), 1)
+        self.assertEqual(model._choose_replacement_index(now), 1)
+
+    def test_observer_sampling_does_not_depend_on_the_time_unit(self) -> None:
+        rng = np.random.default_rng(3)
+        points = rng.normal(size=(400, 2))
+
+        def scores(unit: float) -> list[float]:
+            model = self.create_model(k=16, T=32.0 * unit, seed=11)
+            out = []
+            for i, (a, b) in enumerate(points):
+                point = {"t": i * unit, "a": float(a), "b": float(b)}
+                out.append(model.score_one(point))
+                model.learn_one(point)
+            return out
+
+        reference = scores(1.0)
+        for unit in (0.01, 60.0):
+            with self.subTest(unit=unit):
+                np.testing.assert_allclose(scores(unit), reference, rtol=1e-9)
+
+    def test_no_observer_is_sampled_without_elapsed_time(self) -> None:
+        # The sampling prefactor k**2 / (x_neighbors * T) is 4096 here, so any
+        # elapsed time at all would admit nearly every point.
+        model = self.create_model(k=64, T=1.0, x_neighbors=1, warm_up_observers=2)
+        for i in range(50):
+            model.learn_one({"t": 5.0, "a": float(i), "b": float(-i)})
+        self.assertEqual(model.n_observers, 1)
+
     def test_outlier_scores_higher_than_normal(self) -> None:
         model = self.create_model(
             k=96,

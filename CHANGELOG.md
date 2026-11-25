@@ -7,6 +7,19 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `SDOStream` now replaces the observer with the lowest
+  `observations / (1 - exp(-age / T))`, as in the authors' reference
+  implementation. Dividing by the plain age evicted long-lived observers that
+  were still popular. On SHUTTLE, HTTP and COVER, prequential ROC-AUC and AP
+  stay level or rise (COVER ROC-AUC 0.62 to 0.68).
+- `SDOStream` samples observers in proportion to the elapsed event time
+  rather than at least one time unit, so results no longer depend on the unit
+  of an explicit `time_key` (with `T` in the same unit), and a point at the
+  same instant as the last sampled one is not sampled. With implicit arrival
+  order the sampling is unchanged.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
