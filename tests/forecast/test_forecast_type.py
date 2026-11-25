@@ -44,6 +44,15 @@ def test_quantile_interpolates_on_the_grid() -> None:
         Forecast(origin=0, leads=(1,), mean=(0.0,)).quantile(1, 0.5)
 
 
+def test_single_level_grid_answers_only_its_level() -> None:
+    forecast = Forecast(
+        origin=0, leads=(1,), mean=(0.0,), levels=(0.5,), quantiles=((3.0,),)
+    )
+    assert forecast.quantile(1, 0.5) == 3.0
+    with pytest.raises(ValueError, match="grid"):
+        forecast.quantile(1, 0.4)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -58,6 +67,7 @@ def test_quantile_interpolates_on_the_grid() -> None:
         {"mean": (1.0, 2.0)},
         {"mean": (math.nan,)},
         {"mean": (True,)},
+        {"mean": [1.0]},
         {"scale": (0.0,)},
         {"scale": (math.inf,)},
         {"scale": (1.0, 1.0)},
@@ -67,6 +77,7 @@ def test_quantile_interpolates_on_the_grid() -> None:
         {"levels": (0.4, 0.6), "quantiles": ((2.0, 1.0),)},
         {"levels": (0.4, 0.6), "quantiles": ((1.0,),)},
         {"quantiles": ((1.0,),)},
+        {"levels": (0.5,), "quantiles": [(1.0,)]},
     ],
 )
 def test_rejects_inconsistent_values(kwargs: dict[str, object]) -> None:

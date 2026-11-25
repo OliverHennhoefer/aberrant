@@ -1,9 +1,30 @@
+import math
 import unittest
+from typing import Any
 
 import numpy as np
+import pytest
 
 from aberrant.transform.preprocessing.scaler import MinMaxScaler, StandardScaler
 from aberrant.transform.projection.random_projection import RandomProjection
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"feature_range": (1.0, 1.0)}, "lower bound must be less"),
+        ({"feature_range": (2.0, 1.0)}, "lower bound must be less"),
+        ({"feature_range": (0.0, 1.0, 2.0)}, "exactly two values"),
+        ({"feature_range": (0.0, math.inf)}, "must be finite"),
+        ({"feature_range": (math.nan, 1.0)}, "must be finite"),
+        ({"clip": 1}, "clip must be a boolean"),
+    ],
+)
+def test_min_max_scaler_rejects_invalid_configuration(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        MinMaxScaler(**kwargs)
 
 
 class TestMinMaxScaler(unittest.TestCase):
@@ -61,10 +82,7 @@ class TestMinMaxScaler(unittest.TestCase):
         self.assertAlmostEqual(result["feature1"], 0.0, places=10)
         self.assertAlmostEqual(result["feature2"], 0.0, places=10)
 
-    def test_invalid_feature_range_and_non_finite_learning_value(self):
-        with self.assertRaisesRegex(ValueError, "lower bound must be less"):
-            MinMaxScaler(feature_range=(1.0, 1.0))
-
+    def test_non_finite_learning_value_does_not_record_bounds(self):
         with self.assertRaisesRegex(ValueError, "must be finite"):
             self.scaler.learn_one({"x": float("nan")})
         self.assertNotIn("x", self.scaler.min)

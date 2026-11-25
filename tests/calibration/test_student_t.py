@@ -6,6 +6,7 @@ import pytest
 
 from aberrant.calibration._stats import (
     StudentT,
+    _bracketed_newton,
     betai,
     lgamma,
     norm_cdf,
@@ -86,3 +87,21 @@ def test_mixture_quantile_of_the_boundaries_is_infinite(p, expected):
 
 def test_mixture_without_weight_has_no_quantile():
     assert math.isnan(t_mixture_quantile(_MIXTURE, [0.0, 0.0, 0.0], 0.5))
+
+
+def test_newton_doubles_outwards_then_bisects_without_a_density():
+    # A CDF without a usable density forces the bracket search: the step
+    # doubles until the root is bracketed, then bisection narrows it.
+    def evaluate(x):
+        return 1 / (1 + math.exp(-x)), 0.0
+
+    root = _bracketed_newton(evaluate=evaluate, p=0.9, mean=0.0, scale=1.0, guess=None)
+    assert root == pytest.approx(math.log(9), abs=1e-6)
+
+
+def test_newton_stops_at_a_jump_it_cannot_hit():
+    def evaluate(x):
+        return (0.0 if x < 0.3 else 1.0), 0.0
+
+    root = _bracketed_newton(evaluate=evaluate, p=0.5, mean=0.0, scale=1.0, guess=5.0)
+    assert root == pytest.approx(0.3, abs=1e-9)
