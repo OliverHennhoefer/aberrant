@@ -2,6 +2,8 @@
 
 import unittest
 
+import numpy as np
+
 from aberrant.model.graph import SignedGraphSketchDetector as StreamSpot
 
 
@@ -218,6 +220,30 @@ class TestStreamSpot(unittest.TestCase):
 
         self.assertLessEqual(len(model._graph_states), 5)
         self.assertLessEqual(len(model._graph_last_seen), 5)
+
+    def test_eviction_drops_the_least_recently_seen_graph(self) -> None:
+        model = self.create_model(
+            edge_type_key=None, max_graphs=8, num_clusters=2, warm_up_graphs=1
+        )
+        rng = np.random.default_rng(4)
+        last_seen: dict[float, int] = {}
+        for i in range(600):
+            graph = float(rng.integers(20))
+            event = {
+                "graph": graph,
+                "src": float(rng.integers(5)),
+                "dst": float(rng.integers(5)),
+                "t": float(i),
+            }
+            model.score_one(event)
+            model.learn_one(event)
+            last_seen[graph] = i
+            while len(last_seen) > 8:
+                del last_seen[min(last_seen, key=lambda g: (last_seen[g], g))]
+            self.assertEqual(set(model._graph_states), set(last_seen))
+            self.assertEqual(
+                list(model._graph_last_seen), sorted(last_seen, key=last_seen.get)
+            )
 
     def test_reset_restores_cold_state(self) -> None:
         model = self.create_model(edge_type_key=None, shingle_size=1, warm_up_graphs=2)
