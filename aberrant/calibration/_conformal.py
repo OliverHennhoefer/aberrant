@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Hashable, Sequence
 
@@ -93,9 +94,7 @@ class DtACI:
             return
         # beta_t = sup{beta : score <= Q_{1-beta}} on the current window.
         ordered = self.history.window_sorted
-        below = 0
-        while below < len(ordered) and ordered[below] < score:
-            below += 1
+        below = bisect.bisect_left(ordered, score)
         beta = 1 - below / (len(ordered) + 1)
         k = len(self.alphas)
         total = 0.0
