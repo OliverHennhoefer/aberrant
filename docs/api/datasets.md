@@ -13,3 +13,7 @@
 ::: aberrant.datasets.DATASETS
 
 ::: aberrant.datasets.DatasetStream
+
+::: aberrant.datasets.Sample
+
+::: aberrant.datasets.RELEASE_URL

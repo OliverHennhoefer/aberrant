@@ -9,6 +9,7 @@ from aberrant.base.readiness import Readiness
 from aberrant.exceptions import PipelineError
 
 INPUT = "$input"
+"""The node ID of the event a graph receives."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +38,7 @@ class MergeNode:
 
 
 GraphComponent: TypeAlias = GraphNode | MergeNode
+"""A node of a `GraphPipeline`."""
 FeatureValues: TypeAlias = tuple[tuple[str, float], ...]
 
 
@@ -68,6 +70,7 @@ class NodeObservation:
 
 
 Observer: TypeAlias = Callable[[NodeObservation], None]
+"""A callback that receives each node's observation after it ran."""
 
 
 class GraphExecutionError(PipelineError):

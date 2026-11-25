@@ -36,7 +36,9 @@ import numpy as np
 RELEASE_URL = (
     "https://github.com/OliverHennhoefer/nonconform/releases/download/v0.9.17-datasets"
 )
+"""Where `download` fetches each dataset's archive from."""
 Sample = tuple[dict[str, float], int]
+"""One event: its features by name and its label, 1 for an anomaly."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,6 +382,7 @@ DATASETS: Mapping[Dataset, DatasetInfo] = MappingProxyType(
         ),
     }
 )
+"""Every dataset's `DatasetInfo`, read-only."""
 
 
 class DatasetStream:

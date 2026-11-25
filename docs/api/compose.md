@@ -10,6 +10,12 @@ for execution and failure semantics.
 
 ::: aberrant.compose.MergeNode
 
+::: aberrant.compose.INPUT
+
+::: aberrant.compose.GraphComponent
+
+::: aberrant.compose.Observer
+
 ::: aberrant.compose.LearningOutcome
 
 ::: aberrant.compose.NodeState

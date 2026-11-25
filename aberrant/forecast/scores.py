@@ -9,6 +9,7 @@ from aberrant._utils.validation import coerce_event_number, coerce_finite_number
 from aberrant.base.forecast import Forecast
 
 NonconformityScore = Literal["absolute", "scaled", "cqr"]
+"""How `nonconformity` compares a realised value with its forecast."""
 SCORES: tuple[NonconformityScore, ...] = ("absolute", "scaled", "cqr")
 
 

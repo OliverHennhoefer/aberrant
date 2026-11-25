@@ -60,7 +60,7 @@ catalog or changing executable fingerprints.
 its public import path, family, optional extra, availability in the current
 environment, constructor parameter schema, and operational capabilities.
 Identifiers and the versioned configuration shape are part of the public API;
-new catalog entries may be added compatibly within 1.x.
+new catalog entries may be added compatibly within 2.x.
 
 ```python
 from aberrant.catalog import get_model_spec, model_capabilities

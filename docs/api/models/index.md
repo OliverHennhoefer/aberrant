@@ -6,7 +6,7 @@ Model documentation is split by event structure and method family.
 
 -   **[Core utility models](core.md)**
 
-    Static/adaptive thresholds and null/random baselines.
+    A fixed-bound threshold and null/random baselines.
 
 -   **[Forests](forest.md)**
 
@@ -15,29 +15,29 @@ Model documentation is split by event structure and method family.
 
 -   **[Distance and neighborhood](distance.md)**
 
-    KNN, LOF, observer-distance, and point-scoring cell adaptations.
+    KNN, LOF, SDOStream and a cell-neighborhood detector.
 
 -   **[Sketch detectors](sketch.md)**
 
-    MStream, streaming LODA, and streaming RS-Hash adaptations.
+    MStream, LODA and RS-Hash.
 
 -   **[Graph streams](graph.md)**
 
-    AnoEdge-L, ISCONNA, MIDAS, and signed graph sketches.
+    AnoEdge-L, ISCONNA, MIDAS and StreamSpot.
 
 -   **[Time series](timeseries.md)**
 
-    Seasonal forecast residuals, exact rolling matrix-profile scores, and
-    X-Lag Amnesic DAMP.
+    Exact rolling matrix-profile scores, univariate and multivariate, and
+    DAMP.
 
 -   **[Statistical models](stat.md)**
 
-    Candidate-induced changes in moving univariate/bivariate statistics and
-    squared Mahalanobis distance.
+    Moving z-score and MAD, moving covariance and correlation, squared
+    Mahalanobis distance, and online ECOD and COPOD.
 
 -   **[SVM models](svm.md)**
 
-    Experimental budgeted and graph-gated one-class heuristics.
+    A budgeted one-class SVM with an adaptive kernel width.
 
 -   **[Reconstruction models](deep.md)**
 

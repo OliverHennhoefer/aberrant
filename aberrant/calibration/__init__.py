@@ -13,7 +13,7 @@ from aberrant.calibration._registry import (
     Coverage,
     OnlineCalibrator,
 )
-from aberrant.calibration._window import ScoreHistory, conformal_quantile, pinball
+from aberrant.calibration._window import ScoreHistory
 
 __all__ = [
     "CALIBRATORS",
@@ -22,6 +22,4 @@ __all__ = [
     "OnlineCalibrator",
     "ScoreCalibrator",
     "ScoreHistory",
-    "conformal_quantile",
-    "pinball",
 ]

@@ -27,11 +27,21 @@ configuration format and ownership boundary.
 
 ## Metadata
 
+::: aberrant.catalog.CONFIG_FORMAT_VERSION
+
+::: aberrant.catalog.MODEL_CATALOG
+
+::: aberrant.catalog.TRANSFORMER_CATALOG
+
+::: aberrant.catalog.FORECASTER_CATALOG
+
 ::: aberrant.catalog.ComponentSpec
 
 ::: aberrant.catalog.ModelSpec
 
 ::: aberrant.catalog.TransformerSpec
+
+::: aberrant.catalog.ComponentDependency
 
 ::: aberrant.catalog.ModelCapabilities
 
@@ -40,6 +50,8 @@ configuration format and ownership boundary.
 ::: aberrant.catalog.model_capabilities
 
 ::: aberrant.catalog.catalog_manifest
+
+::: aberrant.catalog.CATALOG_FORMAT_VERSION
 
 ::: aberrant.catalog.get_model_spec
 

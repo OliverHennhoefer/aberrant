@@ -20,8 +20,8 @@ Semantic Versioning.
   reading used to score 0, so a broken sensor never raised an alarm.
 - `ISCONNA` no longer scores an edge 0 when its combined statistic leaves the
   float range, and no longer raises `OverflowError` for large `alpha`, `beta`
-  or `gamma`. Such a score saturates at the largest float (1 with
-  `normalize_score=True`), and a zero component still gives 0. Scores inside
+  or `gamma`. Such a score saturates at the largest float, and a zero
+  component still gives 0. Scores inside
   the float range are unchanged.
 - `SDOStream` now replaces the observer with the lowest
   `observations / (1 - exp(-age / T))`, as in the authors' reference
@@ -33,14 +33,14 @@ Semantic Versioning.
   of an explicit `time_key` (with `T` in the same unit), and a point at the
   same instant as the last sampled one is not sampled. With implicit arrival
   order the sampling is unchanged.
-- `StreamingLODA` scores the mean negative log bin probability instead of the
+- `LODA` scores the mean negative log bin probability instead of the
   mean negative log density floored at 0. Features with a narrow range give
   densities above 1, so the floor clipped most scores, and some outliers, to 0;
   on Gaussian data scaled by 0.1 it lowered ROC-AUC from 0.999 to 0.92. The
   bins of a projection share one width, so the new score differs from the
   unclipped density score by a constant per model and ranks events the same
   way, now independently of the feature scale. Score values change, so revisit
-  any `predict_threshold` tuned on the old scale.
+  any threshold tuned on the old scale.
 - `KSWIN` uses the exact two-sample KS p-value, as the authors'
   implementation does, instead of the asymptotic one. For the default 30
   against 30 samples the asymptotic p-value is too small: on 5,000 samples of
@@ -48,13 +48,13 @@ Semantic Versioning.
   After a drift the most recent `stat_size` samples become the new window, as
   in the paper, instead of clearing it, so the next test comes
   `window_size - stat_size` samples later.
-- `StreamingRSHash` normalizes bucket occupancy by the faded number of
+- `RSHash` normalizes bucket occupancy by the faded number of
   learned samples instead of the total count. With fading, occupancy settles
   while the total keeps growing, so every score drifted towards 1 as a stream
   grew: the only point ever seen scored 0.33 after 1,000 samples. Without
   fading (`decay=0`) scores are unchanged. On SHUTTLE, HTTP and COVER,
   prequential ROC-AUC and AP stay level or rise.
-- The docstrings of `XStream`, `StreamingLODA` and `OnlineIsolationForest`
+- The docstrings of `XStream`, `LODA` and `OnlineIsolationForest`
   state where they differ from their papers or reference implementations:
   XStream's chain aggregation, LODA's sign projection weights and the
   logarithm base of the online isolation forest's depth limit.
@@ -88,7 +88,8 @@ Semantic Versioning.
   and `minimum` or `exclusiveMinimum` bounds, in the shape the catalog gives
   components. `ScoreCalibrator` raises `ConfigurationError`, with an issue per
   failure, for an unknown method or an unknown, mistyped or out-of-range
-  parameter; integer parameters reject floats such as `8.0`.
+  parameter; integer parameters reject floats such as `8.0`. `CALIBRATORS` is
+  read-only, like the component catalogs.
 
 - **Breaking:** every model, transformer, forecaster, regressor and pipeline
   reports `readiness`: a `Readiness(ready, observed, required, unit)` saying
@@ -146,8 +147,7 @@ Semantic Versioning.
 - **Breaking:** every constructor takes keyword arguments only, for example
   `HalfSpaceTrees(n_trees=25, height=8)` instead of `HalfSpaceTrees(25, 8)`.
   The wrapped component stays positional in `ResidualDetector(model, target=...)`
-  and the method in `ScoreCalibrator(method, alpha=...)`. `DatasetManager`
-  takes keyword arguments too.
+  and the method in `ScoreCalibrator(method, alpha=...)`.
 - **Breaking:** classes named after their method without a prefix:
   `StreamingLODA` is `LODA`, `StreamingRSHash` is `RSHash`, `XLagDAMP` is
   `DAMP`, `IncrementalOneClassSVMAdaptiveKernel` is `AdaptiveOneClassSVM`,
@@ -158,7 +158,7 @@ Semantic Versioning.
   `sdostream`.
 - **Breaking:** one name per concept across all constructors.
   - Tree count: `n_trees` (was `n_estimators` on `ASDIsolationForest`,
-    `MondrianIsolationForest` and `StreamRandomHistogramForest`, `num_trees`
+    `MondrianIsolationForest` and `RHF`, `num_trees`
     on `OnlineIsolationForest`).
   - Warm-up: `warm_up`, in the unit the docstring names (was
     `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`,
@@ -175,9 +175,9 @@ Semantic Versioning.
     `lambda_` is `lifetime`, and `SDOStream`'s `k`, `T`, `qv` and
     `x_neighbors` are `max_observers`, `time_scale`, `inactive_quantile` and
     `n_neighbors`.
-  - `LODA`, `CellNeighborhoodDetector` and `SignedGraphSketchDetector` no
-    longer take `eps`; `DAMP`'s threshold for constant subsequences is
-    `min_std`. `SignedGraphSketchDetector` scores `d / (1 + d)` without the
+  - `LODA`, `CellNeighborhoodDetector` and `StreamSpot` no longer take
+    `eps`; `DAMP`'s threshold for constant subsequences is `min_std`.
+    `StreamSpot` scores `d / (1 + d)` without the
     `1e-9` it added to the denominator.
   - `MovingCovariance`, `MovingCorrelationCoefficient` and
     `MovingMahalanobisDistance` default to `window_size=256`.
@@ -188,30 +188,26 @@ Semantic Versioning.
   - `aberrant.model.iforest` is now `aberrant.model.forest`.
   - The exceptions moved from `aberrant.base` to `aberrant.exceptions`.
   - `Forecast` is imported from `aberrant.forecast` only.
-  - `BaseSimilaritySearchEngine` and `FaissSimilaritySearchEngine` live in
-    `aberrant.similarity`; `aberrant.utils.similar` is gone.
   - `Architecture`, `VanillaAutoencoder` and `VanillaLSTMAutoencoder` load
     from `aberrant.model.deep`; `aberrant.base.Architecture` and
     `aberrant.utils.deep` are gone.
   - `Readiness`, `Select`, `Rename` and `Passthrough` are no longer
     re-exported from `aberrant.compose`; import them from `aberrant.base` and
     `aberrant.transform`.
-  - `aberrant.transform.preprocessing`, `aberrant.transform.projection`,
-    `aberrant.stream.dataset` and `aberrant.utils` became private; import from
-    `aberrant.transform` and `aberrant.stream`, which now also export the
-    dataset cache and download classes.
+  - `aberrant.transform.preprocessing`, `aberrant.transform.projection` and
+    `aberrant.utils` became private; import from `aberrant.transform`.
 - **Breaking:** `ADWIN.update`, `KSWIN.update` and `PageHinkley.update` return
   whether this value completed a drift, the same flag `drift_detected` then
   holds, so a stream loop reads `if detector.update(value):`. They used to
   return the detector for chaining.
 - **Breaking:** integer constructor parameters, such as `n_trees`, `window_size`
-  or `warm_up_samples`, reject fractions and booleans with `ValueError`.
-  `HalfSpaceTrees(n_trees=2.5)` or `StreamingLODA(n_bins=True)` used to be
+  or `warm_up`, reject fractions and booleans with `ValueError`.
+  `HalfSpaceTrees(n_trees=2.5)` or `LODA(n_bins=True)` used to be
   accepted and truncated or read as 1. Pass an `int` (NumPy integers work too);
   a float such as `25.0`, for example from a JSON config, needs `int(...)`.
 - `MissingOptionalDependencyError` subclasses `ImportError`, so
-  `except ImportError` catches a missing extra. `FaissSimilaritySearchEngine`
-  raises it instead of `RuntimeError` when FAISS is not installed.
+  `except ImportError` catches a missing extra. `KNN(backend="faiss")`
+  raises it when FAISS is not installed.
 - SciPy is no longer a dependency, which removes about 95 MB from an
   installation and cuts `import aberrant.drift` from about 0.7 s to under
   0.1 s. `KSWIN` computes the exact two-sample KS test itself and the matrix
@@ -229,17 +225,12 @@ Semantic Versioning.
   `ValueError` and `ConfigurationError`. `IncrementalPCA` and
   `RandomProjection` raise it instead of `KeyError` for a missing feature.
 - Runtime and optional dependencies have no upper version bounds, so
-  aberrant no longer blocks an application from upgrading NumPy, tqdm,
-  filelock, scikit-learn, PyTorch or FAISS. CI installs the lowest supported
+  aberrant no longer blocks an application from upgrading NumPy,
+  scikit-learn, PyTorch or FAISS. CI installs the lowest supported
   versions and runs a smoke stream on Python 3.11.
 - The `all` extra installs only `eval`, `dl` and `faiss`.
 - The package declares its license as the SPDX expression `MIT` (PEP 639).
-- `MovingMedian`, `MovingQuantile` and `MovingInterquartileRange` keep their
-  window sorted as they learn, so a score reads the order statistics in
-  logarithmic time instead of sorting the window twice. Scores are
-  bit-identical; at a window of 10,000 an event costs about 4 µs instead of
-  1-2 ms.
-- `SignedGraphSketchDetector` keeps its graphs in least-recently-seen order,
+- `StreamSpot` keeps its graphs in least-recently-seen order,
   so evicting one at `max_graphs` no longer scans every graph. Scores and the
   evicted graphs are unchanged; with the default 4,096 graphs and a new graph
   every other event, an event costs 50 µs instead of 180 µs.
@@ -291,6 +282,8 @@ Semantic Versioning.
   delete that directory to clear the cache.
 - **Breaking:** `CalibratorParameter`, with its editor hints `low`, `high` and
   `step`. Use `CalibratorSpec.parameters` or `CalibratorSpec.schema()`.
+- **Breaking:** `conformal_quantile` and `pinball` from `aberrant.calibration`.
+  They were helpers of the built-in methods.
 - **Breaking:** `ReadinessProtocol`, `WarmupRequirement`, `WarmupUnit`,
   `GraphNotReadyError`, `GraphNode.minimum_updates`,
   `GraphPipeline(model_minimum_updates=...)`, the forecasters' `is_ready`, and
@@ -329,9 +322,8 @@ Semantic Versioning.
   methods adapt to drift. Compare each score with `predict(t)` before calling
   `update(t, score)`. The catalog's `score` event kind went with it.
 - **Breaking:** `predict_one` and `predict_threshold` on
-  `CellNeighborhoodDetector`, `AnoEdgeL`, `SignedGraphSketchDetector` and
-  `StreamingLODA`, and `predict_one` on
-  `IncrementalOneClassSVMAdaptiveKernel`. Compare `score_one` with a threshold
+  `CellNeighborhoodDetector`, `AnoEdgeL`, `StreamSpot` and `LODA`, and
+  `predict_one` on `AdaptiveOneClassSVM`. Compare `score_one` with a threshold
   instead, ideally one learned by a `ScoreCalibrator`.
 - **Breaking:** `StationaryRegionNeighborDetector` and its catalog ID
   `stationary_region_neighbor_detector`. It scored exactly like

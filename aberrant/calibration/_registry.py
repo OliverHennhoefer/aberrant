@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal, Protocol, cast
 
 from aberrant.base.descriptors import (
@@ -73,6 +74,8 @@ def _parameter(
 
 
 Coverage = Literal["exchangeable", "long_run", "none"]
+"""What a method's threshold guarantees: finite-sample coverage under
+exchangeable scores, long-run average coverage, or no guarantee."""
 Factory = Callable[[ScoreHistory, float, Mapping[str, float]], OnlineCalibrator]
 
 
@@ -148,7 +151,7 @@ def _discount(
 
 _RANGE = "Step as a fraction of the recent score range."
 
-CALIBRATORS: dict[str, CalibratorSpec] = {
+CALIBRATORS: Mapping[str, CalibratorSpec] = MappingProxyType({
     spec.id: spec
     for spec in (
         CalibratorSpec(
@@ -298,4 +301,5 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             lambda h, a, p: DiscountedBayes(h, a, p["delta"]),
         ),
     )
-}  # fmt: skip
+})  # fmt: skip
+"""Every calibration method by ID, read-only."""
