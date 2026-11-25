@@ -7,6 +7,13 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- The docstrings of `XStream`, `StreamingLODA` and `OnlineIsolationForest`
+  state where they differ from their papers or reference implementations:
+  XStream's chain aggregation, LODA's sign projection weights and the
+  logarithm base of the online isolation forest's depth limit.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
