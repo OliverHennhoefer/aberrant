@@ -20,10 +20,12 @@ class StreamingLODA(BaseModel):
 
     LODA projects each sample to multiple random one-dimensional views and
     maintains per-view streaming histograms. The anomaly score is the mean
-    negative log-density across projections. It uses a fixed number of
-    projections and fixed warm-up bin edges, so it is a bounded streaming
-    adaptation rather than an exact reproduction of the paper's model-selection
-    procedure.
+    negative log bin probability across projections. The bins of a projection
+    share one width, so this ranks events exactly as the paper's mean negative
+    log-density does, but stays non-negative and does not depend on the scale
+    of the features. It uses a fixed number of projections and fixed warm-up
+    bin edges, so it is a bounded streaming adaptation rather than an exact
+    reproduction of the paper's model-selection procedure.
 
     Notes:
     - Scores are continuous and non-negative.
@@ -47,7 +49,8 @@ class StreamingLODA(BaseModel):
         pseudocount: Positive additive smoothing count for each bin.
         predict_threshold: Non-negative score boundary used by ``predict_one``.
         seed: Seed for model-local sparse projection generation.
-        eps: Positive numerical floor for bin widths and log-density scoring.
+        eps: Positive width below which a projection's warm-up range counts
+            as constant and is widened to one unit.
 
     References:
         Pevny, T. (2016). Loda: Lightweight on-line detector of anomalies.
@@ -111,7 +114,6 @@ class StreamingLODA(BaseModel):
         # (n_bins - 1, n_projections), each bin's floored width, and the index
         # of each projection's last bin in the flattened (C-order) histograms.
         self._inner_edges: np.ndarray | None = None
-        self._bin_widths: np.ndarray | None = None
         self._last_bins: np.ndarray = (
             np.arange(self.n_projections, dtype=np.intp) * self.n_bins + self.n_bins - 1
         )
@@ -209,7 +211,6 @@ class StreamingLODA(BaseModel):
 
         self._bin_edges = edges
         self._inner_edges = inner_edges
-        self._bin_widths = np.maximum(np.diff(edges, axis=1), self.eps)
         self._bin_counts = counts.astype(np.float64).reshape(
             self.n_projections, self.n_bins
         )
@@ -240,7 +241,6 @@ class StreamingLODA(BaseModel):
     def _score_projected(self, projected: np.ndarray) -> float:
         if (
             self._inner_edges is None
-            or self._bin_widths is None
             or self._bin_counts is None
             or self._bin_totals is None
         ):
@@ -248,16 +248,13 @@ class StreamingLODA(BaseModel):
 
         bins = self._flat_bins(projected, self._inner_edges)
         counts = self._bin_counts.take(bins)
-        widths = self._bin_widths.take(bins)
 
         mass = (counts + self.pseudocount) / (
             self._bin_totals + self.pseudocount * float(self.n_bins)
         )
-        density = mass / widths
-        # The mean of the negative log-densities; np.add.reduce is the sum that
-        # np.mean takes, without its Python-level overhead.
-        score = float(np.add.reduce(-np.log(density + self.eps))) / self.n_projections
-        return float(max(score, 0.0))
+        # The mean of the negative log bin probabilities; np.add.reduce is the
+        # sum that np.mean takes, without its Python-level overhead.
+        return float(np.add.reduce(-np.log(mass))) / self.n_projections
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""
