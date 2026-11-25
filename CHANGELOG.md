@@ -91,6 +91,12 @@ Semantic Versioning.
 
 ### Changed
 
+- `XStream` keeps the projected points of its two windows while they take
+  no more memory than one count-min sketch, and its pickles then store those
+  points instead of the sketches, which loading counts again. With the
+  defaults a pickle shrinks from about 25 MB to 0.55 MB and writes 30 times
+  faster; loading takes about 65 ms longer. Scores do not change.
+
 - **Breaking:** `OnlineECOD.explain_one` and `OnlineCOPOD.explain_one` are
   now `attribute_one`, the name every model that splits its score among
   features uses. `explain_one` stays on `ResidualDetector` and

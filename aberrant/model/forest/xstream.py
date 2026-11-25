@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 from collections import OrderedDict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from typing import Any
 
 import numpy as np
 
@@ -52,6 +53,13 @@ class _XStreamState:
     hash_coeffs_mod: np.ndarray
     hash_offsets_mod: np.ndarray
     levels: _ChainLevels
+    # The projected points of the current window, in its first
+    # ``samples_in_window`` rows, and of the last complete window, or
+    # ``None`` where they would take more memory than a sketch. Each sketch
+    # is the count of its window's points, so a pickle stores the points and
+    # the sketches are counted again on loading.
+    current_points: np.ndarray | None
+    reference_points: np.ndarray | None
     # The last projected point and its sketch cells, so that learning a point
     # right after scoring it descends the chains once.
     last_point: bytes = b""
@@ -66,6 +74,12 @@ class _XStreamState:
         return self.completed_windows > 0
 
 
+# What a pickle leaves out of the state: what the chain parameters give, and
+# the sketches where the window points give them.
+_DERIVED = ("levels", "last_point", "last_cells")
+_SKETCHES = ("cms_current", "cms_reference")
+
+
 class XStream(BaseModel):
     """StreamHash and half-space-chain detector for evolving feature streams.
 
@@ -77,6 +91,12 @@ class XStream(BaseModel):
     ``2 / minimum``, in ``(0, 1]``. The score is the mean over chains. The
     authors' implementation averages ``log2(minimum)`` over chains instead,
     so the two can rank points differently when chains disagree.
+
+    State holds ``2 * n_chains * depth * n_hashes * sketch_width`` counters.
+    While ``window_size * k`` floats take no more memory than one sketch, it
+    also keeps the projected points of both windows; a pickle then stores the
+    points instead of the counters and counts the sketches again on loading.
+    With the defaults that is 0.4 MB instead of 25 MB.
 
     Args:
         k: Dimension of the StreamHash feature projection.
@@ -145,12 +165,74 @@ class XStream(BaseModel):
 
         self._reset_state()
 
+    _transient = ("_feature_cache",)
+
     def _reset_state(self) -> None:
         self.rng = np.random.default_rng(self.seed)
         self._state: _XStreamState | None = None
         self._init_buffer: deque[np.ndarray] = deque(maxlen=self.warm_up)
         self._feature_cache: OrderedDict[str, tuple[np.ndarray, np.ndarray]] = (
             OrderedDict()
+        )
+
+    def __getstate__(self) -> dict[str, Any]:
+        """The state without sketches, which the window points reproduce."""
+        state = super().__getstate__()
+        if self._state is not None:
+            left_out: tuple[str, ...] = _DERIVED
+            if self._state.current_points is not None:
+                left_out += _SKETCHES
+            state["_state"] = None
+            state["_saved_state"] = {
+                field.name: getattr(self._state, field.name)
+                for field in fields(self._state)
+                if field.name not in left_out
+            }
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore the state and count both windows into fresh sketches."""
+        super().__setstate__(state)
+        self._feature_cache = OrderedDict()
+        saved = self.__dict__.pop("_saved_state", None)
+        if saved is not None:
+            self._state = self._restored(saved)
+
+    def _restored(self, saved: dict[str, Any]) -> _XStreamState:
+        counted = saved["current_points"] is not None
+        if counted:
+            saved["cms_current"] = self._sketch()
+            saved["cms_reference"] = self._sketch()
+        state = _XStreamState(
+            levels=self._chain_levels(
+                saved["chain_dims"],
+                saved["shift"],
+                saved["deltamax"],
+                saved["hash_coeffs_mod"],
+                saved["hash_offsets_mod"],
+            ),
+            **saved,
+        )
+        if counted:
+            assert state.current_points is not None
+            assert state.reference_points is not None
+            windows = [
+                (state.cms_current, state.current_points[: state.samples_in_window])
+            ]
+            if state.reference_ready:
+                windows.append((state.cms_reference, state.reference_points))
+            for sketch, points in windows:
+                flat = sketch.reshape(-1)
+                for point in points:
+                    flat[self._sketch_cells(state, point)] += 1
+            state.last_cells = None
+        return state
+
+    def _sketch(self) -> np.ndarray:
+        """Empty counters for one window."""
+        return np.zeros(
+            (self.n_chains, self.depth, self.n_hashes, self.sketch_width),
+            dtype=_counter_dtype(self.window_size),
         )
 
     @staticmethod
@@ -215,16 +297,8 @@ class XStream(BaseModel):
         shift = (
             self.rng.uniform(low=0.0, high=1.0, size=(self.n_chains, self.k)) * deltamax
         )
-        # A bucket can receive every observation in a window. Use the smallest
-        # counters that hold a full window, since every learned point updates
-        # counters spread across both sketches.
-        for counter_dtype in (np.int8, np.int16, np.int32, np.int64):
-            if self.window_size <= np.iinfo(counter_dtype).max:
-                break
-        cms_current = np.zeros(
-            (self.n_chains, self.depth, self.n_hashes, self.sketch_width),
-            dtype=counter_dtype,
-        )
+        cms_current = self._sketch()
+        keeps_points = self.window_size * self.k * 8 <= cms_current.nbytes
         hash_coeffs = self.rng.integers(
             1,
             np.iinfo(np.int32).max,
@@ -249,6 +323,12 @@ class XStream(BaseModel):
             hash_offsets_mod=hash_offsets_mod,
             levels=self._chain_levels(
                 chain_dims, shift, deltamax, hash_coeffs_mod, hash_offsets_mod
+            ),
+            current_points=(
+                np.zeros((self.window_size, self.k)) if keeps_points else None
+            ),
+            reference_points=(
+                np.zeros((self.window_size, self.k)) if keeps_points else None
             ),
         )
 
@@ -352,12 +432,18 @@ class XStream(BaseModel):
 
     def _learn_projected(self, state: _XStreamState, y: np.ndarray) -> None:
         state.cms_current.reshape(-1)[self._sketch_cells(state, y)] += 1
+        if state.current_points is not None:
+            state.current_points[state.samples_in_window] = y
         state.samples_seen += 1
         state.samples_in_window += 1
         if state.samples_in_window >= self.window_size:
             state.cms_reference, state.cms_current = (
                 state.cms_current,
                 state.cms_reference,
+            )
+            state.reference_points, state.current_points = (
+                state.current_points,
+                state.reference_points,
             )
             state.cms_current.fill(0)
             state.samples_in_window = 0
@@ -408,3 +494,15 @@ class XStream(BaseModel):
         if state is None or not state.reference_ready:
             return 0.0
         return self._score_projected(state, self._project_one(x))
+
+
+def _counter_dtype(window_size: int) -> type[np.signedinteger[Any]]:
+    """The smallest counter that holds a full window.
+
+    A bucket can receive every observation in a window, and every learned
+    point updates counters spread across both sketches.
+    """
+    for dtype in (np.int8, np.int16, np.int32):
+        if window_size <= np.iinfo(dtype).max:
+            return dtype
+    return np.int64
