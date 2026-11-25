@@ -168,6 +168,23 @@ class TestLODA(unittest.TestCase):
         self.assertGreaterEqual(normal_score, 0.0)
         self.assertGreater(outlier_score, normal_score)
 
+    def test_scores_do_not_depend_on_the_feature_scale(self) -> None:
+        # Narrow features give bin densities above 1, which must not clip
+        # scores to zero and erase the ranking. Powers of two rescale the bin
+        # edges exactly, so every event falls into the same bins.
+        events = score_sequences.make_stream(seed=5, n_events=400, n_features=4)
+        reference = score_sequences.score_then_learn(
+            self.create_model(time_key=None), events
+        )
+        self.assertGreater(min(reference[40:]), 0.0)
+        for scale in (2.0**-12, 2.0**12):
+            with self.subTest(scale=scale):
+                scaled = [{k: v * scale for k, v in event.items()} for event in events]
+                scores = score_sequences.score_then_learn(
+                    self.create_model(time_key=None), scaled
+                )
+                self.assertEqual(scores, reference)
+
     def test_state_shapes_are_bounded(self) -> None:
         model = self.create_model(
             n_projections=12,

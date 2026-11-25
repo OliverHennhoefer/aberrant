@@ -7,6 +7,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `StreamingLODA` scores the mean negative log bin probability instead of the
+  mean negative log density floored at 0. Features with a narrow range give
+  densities above 1, so the floor clipped most scores, and some outliers, to 0;
+  on Gaussian data scaled by 0.1 it lowered ROC-AUC from 0.999 to 0.92. The
+  bins of a projection share one width, so the new score differs from the
+  unclipped density score by a constant per model and ranks events the same
+  way, now independently of the feature scale. Score values change, so revisit
+  any `predict_threshold` tuned on the old scale.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

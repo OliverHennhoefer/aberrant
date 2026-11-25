@@ -128,7 +128,7 @@ observer and exponential-fading structure described in the
 | Class | Default score | Built-in warm-up | State policy |
 | --- | --- | --- | --- |
 | `MStream` | Non-negative `log1p` transform of candidate-inclusive multi-aspect sketch statistics | A bucket-index distance of `warm_up_buckets` from the first learned bucket; default `0` | Fixed numeric, categorical, and record sketches |
-| `StreamingLODA` | Non-negative mean negative log histogram density | Exactly `warm_up_samples` learned events | Fixed projections and histograms; bin edges freeze after warm-up, counts optionally decay |
+| `StreamingLODA` | Non-negative mean negative log histogram bin probability, which ranks like the negative log density | Exactly `warm_up_samples` learned events | Fixed projections and histograms; bin edges freeze after warm-up, counts optionally decay |
 | `StreamingRSHash` | `[0, 1]` from low faded hash occupancy | Exactly `warm_up_samples` learned events | Fixed subspaces and count tables with fading |
 
 These are bounded streaming adaptations. `StreamingLODA` fixes its projection
