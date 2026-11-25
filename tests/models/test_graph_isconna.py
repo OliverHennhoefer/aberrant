@@ -2,9 +2,11 @@
 
 import copy
 import pickle
+import sys
 import time
 import unittest
 from dataclasses import fields
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -268,6 +270,30 @@ class TestISCONNA(unittest.TestCase):
         score = model.score_one({"src": 1.0, "dst": 2.0, "t": 20.0})
         self.assertGreaterEqual(score, 0.0)
         self.assertLess(score, 1.0)
+
+    def test_score_saturates_when_the_product_overflows(self) -> None:
+        event = {"src": 1.0, "dst": 2.0, "t": 1.0}
+        cases = [
+            # The finite powers multiply to more than the float range.
+            ((1e200, 1e200, 4.0), {}, sys.float_info.max),
+            # The power itself leaves the float range.
+            ((10.0, 1.0, 1.0), {"alpha": 400.0}, sys.float_info.max),
+            # A component that vanishes keeps the product at zero.
+            ((0.0, 1e300, 1e300), {"beta": 2.0}, 0.0),
+            # Underflow and overflow cancel to a representable product.
+            ((1e-200, 1e200, 1.0), {"alpha": 2.0, "beta": 2.0}, 1.0),
+        ]
+        for components, exponents, expected in cases:
+            for normalize in (False, True):
+                with self.subTest(components=components, normalize=normalize):
+                    model = self.create_model(normalize_score=normalize, **exponents)
+                    model.learn_one(event)
+                    with mock.patch.object(
+                        model, "_component_scores", return_value=components
+                    ):
+                        score = model.score_one(event)
+                    want = expected / (1.0 + expected) if normalize else expected
+                    self.assertEqual(score, pytest.approx(want, rel=1e-12))
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(count_min_rows=9, count_min_cols=257)
