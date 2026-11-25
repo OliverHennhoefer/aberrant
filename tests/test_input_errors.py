@@ -8,7 +8,7 @@ import pytest
 from aberrant.catalog import create_model, create_transformer
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.exceptions import ValidationError
-from aberrant.forecast import HoltWinters, SeasonalNaive
+from aberrant.forecast import HoltWinters, KalmanForecaster, SeasonalNaive
 from tests.catalog_cases import (
     MODEL_IDS,
     TRANSFORMER_IDS,
@@ -90,6 +90,13 @@ def test_drift_detectors_reject_malformed_values(detector, value):
 def test_forecasters_reject_malformed_values(forecaster, value):
     with pytest.raises(ValidationError):
         forecaster().learn_one(value)
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, "x"])
+def test_kalman_forecaster_rejects_malformed_values(value):
+    # None is not malformed here: it is a missing value.
+    with pytest.raises(ValidationError):
+        KalmanForecaster().learn_one(value)
 
 
 def test_validation_error_is_a_value_error():

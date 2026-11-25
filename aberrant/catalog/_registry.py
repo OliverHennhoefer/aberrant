@@ -769,6 +769,13 @@ _FORECASTER_SPECS = (
         import_path="aberrant.forecast.HoltWinters",
     ),
     ComponentSpec(
+        id="kalman_forecaster",
+        display_name="KalmanForecaster",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.KalmanForecaster",
+    ),
+    ComponentSpec(
         id="rls_regressor",
         display_name="RLSRegressor",
         kind=ComponentKind.FORECASTER,
