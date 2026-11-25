@@ -288,11 +288,19 @@ class StreamingRSHash(BaseModel):
 
         # No bucket can hold more than the faded mass of all learned samples,
         # so the score keeps its scale on an endless fading stream.
-        normalizer = math.log(1.0 + max(self._mass * query_scale, 1.0))
+        mass = max(self._mass * query_scale, 1.0)
+        normalizer = math.log(1.0 + mass)
 
         occupancy = self._counts[self._components, self._tables, buckets] * query_scale
         occupancy_min = np.maximum(occupancy.min(axis=1), 0.0)
-        component_scores = np.clip(1.0 - np.log1p(occupancy_min) / normalizer, 0.0, 1.0)
+        # A bucket holding the whole mass scores exactly 0. Its count and the
+        # mass take the same float steps, but NumPy's log1p and math.log can
+        # round one ulp apart, so the ratio of the two logs is not reliably 1.
+        component_scores = np.where(
+            occupancy_min >= mass,
+            0.0,
+            np.clip(1.0 - np.log1p(occupancy_min) / normalizer, 0.0, 1.0),
+        )
         return float(np.mean(component_scores))
 
     def learn_one(self, x: dict[str, float]) -> None:
