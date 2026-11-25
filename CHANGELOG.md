@@ -14,6 +14,14 @@ Semantic Versioning.
 - The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
   skips without FAISS and so ran in no job.
 
+### Removed
+
+- `GraphGatedOneClassSVM`. Its node models scored `rho - w·x` on unscaled
+  features, which is negative for almost every point, and the score was
+  clipped at 0, so it returned 0 for every sample on SHUTTLE and COVER
+  (ROC-AUC 0.50). Its child nodes never trained. It followed no published
+  method, so there was nothing to correct it towards.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

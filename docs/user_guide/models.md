@@ -471,12 +471,8 @@ print(detector.explain_one({"cpu": 0.95, "latency_ms": 11.5}))
 `IncrementalOneClassSVMAdaptiveKernel` is a custom, budgeted RBF-kernel
 heuristic with running standardization and adaptive gamma. It returns the
 negative decision function, so higher values are more anomalous, and bounds
-support-vector state with `sv_budget`.
-
-`GraphGatedOneClassSVM` routes updates and scoring through a user-supplied graph
-of incremental linear one-class SVM heuristics. It is unrelated to the
-published GADGET distributed optimization algorithm. Both classes are marked
-experimental; they do not claim parity with a published one-class SVM solver.
+support-vector state with `sv_budget`. It is experimental and does not claim
+parity with a published one-class SVM solver.
 
 ### Reconstruction detectors
 

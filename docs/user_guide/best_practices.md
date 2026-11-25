@@ -141,7 +141,7 @@ they describe retained observations and arrays, excluding exact lifetime counter
 | `KNN`, `LocalOutlierFactor`, `SDOStream`, `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector` | Configured point windows, observer budgets, cells, and bounded indexes. A custom KNN engine owns its own retention policy. |
 | `MStream`, `StreamingLODA`, `StreamingRSHash` | Fixed sketches, projections, histograms, and feature statistics. Novel values do not create a persistent key per value. |
 | `MIDAS`, `ISCONNA`, `AnoEdgeL`, `SignedGraphSketchDetector` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
-| `GraphGatedOneClassSVM`, `IncrementalOneClassSVMAdaptiveKernel` | Fixed support-vector, feature-map, and neighborhood budgets. |
+| `IncrementalOneClassSVMAdaptiveKernel` | Fixed support-vector and feature-map budgets. |
 | `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `XLagDAMP`, `SeasonalResidualDetector` | Configured rolling series, lag, season, and residual arrays. DAMP rejects constant subsequences. |
 | All ten univariate moving statistics, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
 | `QuantileThreshold`, `ThresholdModel`, `NullModel`, `RandomModel` | Configured score window, fixed rule configuration, or generator state. |

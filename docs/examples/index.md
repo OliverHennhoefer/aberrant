@@ -72,7 +72,6 @@ rows are a scientifically meaningful graph benchmark.
 | Example | Purpose | Additional requirement |
 | --- | --- | --- |
 | [`adaptive_svm.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/adaptive_svm.py) | Budgeted adaptive-kernel SVM heuristic | Registered SHUTTLE dataset |
-| [`graph_gated_svm.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/graph_gated_svm.py) | Graph-gated linear SVM heuristic | Registered FRAUD dataset |
 | [`online_autoencoder_ensemble.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/online_autoencoder_ensemble.py) | NumPy online autoencoder ensemble | Registered SHUTTLE dataset |
 | [`autoencoder.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/autoencoder.py) | User-supplied PyTorch architecture and optimizer | `aberrant[dl,eval]` and registered SHUTTLE dataset |
 | [`knn.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/knn.py) | FAISS-backed KNN distance | `aberrant[faiss,eval]` and registered SHUTTLE dataset |
