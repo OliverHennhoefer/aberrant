@@ -354,7 +354,6 @@ class TestLocalOutlierFactorStreaming(unittest.TestCase):
             self.assertFalse(math.isnan(score))
 
 
-
 @pytest.mark.parametrize(("k", "window_size"), [(3, 40), (10, 100)])
 @pytest.mark.parametrize("distance", ["euclidean", "manhattan"])
 def test_scores_match_scikit_learn_novelty_lof(
