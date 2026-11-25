@@ -7,6 +7,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- `MovingMedian`, `MovingQuantile` and `MovingInterquartileRange` keep their
+  window sorted as they learn, so a score reads the order statistics in
+  logarithmic time instead of sorting the window twice. Scores are
+  bit-identical; at a window of 10,000 an event costs about 4 µs instead of
+  1-2 ms.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

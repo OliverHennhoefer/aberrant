@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from aberrant.model.stat._univariate_base import _BaseMovingUnivariate
+from aberrant.model.stat._univariate_base import (
+    _BaseMovingOrderStatistic,
+    _BaseMovingUnivariate,
+)
 from aberrant.utils.statistics import linear_quantile
 
 
@@ -15,11 +18,6 @@ def _mean(values: Sequence[float]) -> float:
 def _variance(values: Sequence[float]) -> float:
     mean = _mean(values)
     return sum((value - mean) ** 2 for value in values) / len(values)
-
-
-def _interquartile_range(values: Sequence[float]) -> float:
-    ordered = sorted(values)
-    return linear_quantile(ordered, 0.75) - linear_quantile(ordered, 0.25)
 
 
 def _average_absolute_deviation(values: Sequence[float]) -> float:
@@ -71,11 +69,11 @@ class MovingVariance(_BaseMovingUnivariate):
         )
 
 
-class MovingInterquartileRange(_BaseMovingUnivariate):
+class MovingInterquartileRange(_BaseMovingOrderStatistic):
     """Score the change in linearly interpolated interquartile range."""
 
-    def score_one(self, x: dict[str, float]) -> float:
-        return self._score_statistic_change(x, _interquartile_range)
+    def _statistic(self, ordered: Sequence[float]) -> float:
+        return linear_quantile(ordered, 0.75) - linear_quantile(ordered, 0.25)
 
 
 class MovingAverageAbsoluteDeviation(_BaseMovingUnivariate):
