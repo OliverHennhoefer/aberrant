@@ -1,6 +1,7 @@
 """KSWIN (Kolmogorov-Smirnov WINdowing) drift detector."""
 
 import random
+import warnings
 from collections import deque
 
 from scipy.stats import ks_2samp
@@ -18,7 +19,9 @@ class KSWIN(BaseDriftDetector):
     the underlying data distribution.
 
     The detector maintains a sliding window and compares the most recent
-    samples with a random sample from the earlier part of the window.
+    samples with a random sample from the earlier part of the window, using
+    the exact two-sample KS p-value. After a drift, the most recent
+    ``stat_size`` samples become the new window.
 
     Args:
         alpha: Significance level for the KS test. Lower values require
@@ -45,6 +48,8 @@ class KSWIN(BaseDriftDetector):
         Prototype Computing for Concept Drift Streams.
         Neurocomputing, 416, 340-351.
         https://doi.org/10.1016/j.neucom.2019.11.111
+        Reference implementation:
+        https://github.com/scikit-multiflow/scikit-multiflow/blob/master/src/skmultiflow/drift_detection/kswin.py
     """
 
     def __init__(
@@ -138,8 +143,15 @@ class KSWIN(BaseDriftDetector):
         )
         historical = [window_values[i] for i in sample_indices]
 
-        # Perform KS test
-        statistic, p_value = ks_2samp(recent, historical, method="asymp")
+        # SciPy warns and uses the asymptotic p-value where the exact one
+        # cannot be computed; that fallback is expected here.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="ks_2samp: Exact calculation unsuccessful",
+                category=RuntimeWarning,
+            )
+            statistic, p_value = ks_2samp(recent, historical, method="exact")
         self._statistic = statistic
         self._p_value = p_value
 
@@ -147,9 +159,8 @@ class KSWIN(BaseDriftDetector):
         if p_value <= self.alpha and statistic > 0.1:
             self._drift_detected = True
             self._n_detections += 1
-            # Reset window and RNG on drift
-            self._window.clear()
-            self._rng = random.Random(self.seed)
+            # The recent samples start the window of the new concept.
+            self._window = deque(recent, maxlen=self.window_size)
 
     def __repr__(self) -> str:
         return (
