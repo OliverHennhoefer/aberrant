@@ -7,6 +7,7 @@ import unittest
 from collections import deque
 
 import numpy as np
+import pytest
 
 from aberrant.model.distance.lof import LocalOutlierFactor, _sum_rows
 from tests import score_sequences
@@ -351,6 +352,31 @@ class TestLocalOutlierFactorStreaming(unittest.TestCase):
             self.assertIsInstance(score, float)
             self.assertGreaterEqual(score, 0.0)
             self.assertFalse(math.isnan(score))
+
+
+@pytest.mark.parametrize(("k", "window_size"), [(3, 40), (10, 100)])
+@pytest.mark.parametrize("distance", ["euclidean", "manhattan"])
+def test_scores_match_scikit_learn_novelty_lof(
+    k: int, window_size: int, distance: str
+) -> None:
+    neighbors = pytest.importorskip("sklearn.neighbors")
+    rng = np.random.default_rng(k)
+    # Continuous data has no tied distances, where the two may differ.
+    points = np.vstack([rng.normal(size=(120, 3)), 4 + rng.normal(size=(30, 3))])
+    rng.shuffle(points)
+    model = LocalOutlierFactor(k=k, window_size=window_size, distance=distance)
+    window: deque[np.ndarray] = deque(maxlen=window_size)
+    for point in points:
+        event = {f"f{index}": float(value) for index, value in enumerate(point)}
+        if len(window) > k:
+            reference = neighbors.LocalOutlierFactor(
+                n_neighbors=k, novelty=True, metric=distance
+            ).fit(np.array(window))
+            expected = -reference.score_samples(point[np.newaxis, :])[0]
+            # scikit-learn adds 1e-10 to every reachability sum.
+            assert model.score_one(event) == pytest.approx(expected, rel=1e-8)
+        model.learn_one(event)
+        window.append(point)
 
 
 if __name__ == "__main__":
