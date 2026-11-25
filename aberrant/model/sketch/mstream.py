@@ -66,7 +66,9 @@ class _MStreamState:
 class MStream(BaseModel):
     """Bounded multi-aspect stream anomaly detector.
 
-    Numeric attributes use ``log10(1 + x)`` and online min-max normalization.
+    Numeric attributes use ``sign(x) * log10(1 + |x|)`` and online min-max
+    normalization. For non-negative values this is the paper's ``log10(1 + x)``;
+    the sign keeps centred or standardized features usable.
     Names in ``categorical_features`` must contain integer-like values. Scoring
     previews rollover, normalization, and insertion without mutating state.
 
@@ -80,8 +82,7 @@ class MStream(BaseModel):
             bucket. ``None`` assigns a new one-based bucket to every learned
             arrival. The field is excluded from modeled features.
         categorical_features: Feature names treated as integer-like categorical
-            identifiers. Every other feature is numeric and must be greater
-            than ``-1`` for the logarithmic transform.
+            identifiers. Every other feature is numeric.
         warm_up_buckets: Required integer bucket-index distance from the first
             learned bucket before scoring begins. With explicit time, skipped
             bucket numbers contribute to this distance.
@@ -182,8 +183,6 @@ class MStream(BaseModel):
         categorical_indices: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
         numeric = values[numeric_indices]
-        if np.any(numeric <= -1.0):
-            raise ValueError("Numeric MStream features must be greater than -1")
         if categorical_indices.size == 0:
             return numeric, _NO_CATEGORIES
 
@@ -292,7 +291,7 @@ class MStream(BaseModel):
         *,
         update: bool,
     ) -> np.ndarray:
-        transformed = np.log10(1.0 + numeric)
+        transformed = np.sign(numeric) * np.log10(1.0 + np.abs(numeric))
         minimum = np.minimum(state.minimum, transformed)
         maximum = np.maximum(state.maximum, transformed)
         ranges = maximum - minimum

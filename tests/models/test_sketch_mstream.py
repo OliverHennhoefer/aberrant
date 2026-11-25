@@ -54,6 +54,17 @@ class TestMStream(unittest.TestCase):
         with self.assertRaises(ValueError):
             MStream(warm_up_buckets=-1)
 
+    def test_standardized_features_are_scored(self) -> None:
+        """Values at or below -1 use the mirrored log transform, not an error."""
+        model = self.create_model(time_key=None, categorical_features=())
+        rng = np.random.default_rng(0)
+        scores = []
+        for _ in range(200):
+            event = {"x": float(rng.normal()), "y": float(rng.normal())}
+            scores.append(model.score_one(event))
+            model.learn_one(event)
+        self.assertTrue(all(math.isfinite(score) for score in scores))
+
     def test_input_validation(self) -> None:
         model = self.create_model()
         with self.assertRaises(ValueError):
@@ -64,8 +75,6 @@ class TestMStream(unittest.TestCase):
             model.learn_one({"x": 1.0, "category": 1.0})
         with self.assertRaises(ValueError):
             model.learn_one({"t": float("nan"), "x": 1.0, "category": 1.0})
-        with self.assertRaises(ValueError):
-            model.learn_one({"t": 1.0, "x": -1.0, "category": 1.0})
         with self.assertRaises(ValueError):
             model.learn_one({"t": 1.0, "x": 1.0, "category": 1.5})
 
