@@ -6,8 +6,12 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from aberrant.transform.preprocessing import MinMaxScaler, StandardScaler
-from aberrant.transform.projection import IncrementalPCA, RandomProjection
+from aberrant.transform import (
+    IncrementalPCA,
+    MinMaxScaler,
+    RandomProjection,
+    StandardScaler,
+)
 
 
 @pytest.mark.parametrize("factory", [MinMaxScaler, StandardScaler])

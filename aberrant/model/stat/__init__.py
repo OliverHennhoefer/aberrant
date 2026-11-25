@@ -12,10 +12,7 @@ from aberrant.model.stat._univariate_moments import (
     MovingSkewness,
     MovingVariance,
 )
-from aberrant.model.stat._univariate_order import (
-    MovingMedian,
-    MovingQuantile,
-)
+from aberrant.model.stat._univariate_order import MovingMedian, MovingQuantile
 from aberrant.model.stat.ecdf import OnlineCOPOD, OnlineECOD
 from aberrant.model.stat.multi import (
     MovingCorrelationCoefficient,

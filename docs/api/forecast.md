@@ -3,7 +3,9 @@
 Forecasters learn one series with `learn_one(y)` and forecast it with
 `forecast_one()`. Regressors learn a target from covariates with
 `learn_one(x, y)` and predict it with `predict_one(x)`. Both issue a
-[`Forecast`](base.md#aberrant.base.Forecast).
+[`Forecast`](#aberrant.forecast.Forecast).
+
+::: aberrant.forecast.Forecast
 
 ::: aberrant.forecast.SeasonalNaive
 

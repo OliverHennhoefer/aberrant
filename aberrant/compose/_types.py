@@ -4,9 +4,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
-from aberrant.base.exceptions import PipelineError
 from aberrant.base.protocols import TransformerProtocol
 from aberrant.base.readiness import Readiness
+from aberrant.exceptions import PipelineError
 
 INPUT = "$input"
 

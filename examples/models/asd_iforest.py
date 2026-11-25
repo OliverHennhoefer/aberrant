@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest.asd import ASDIsolationForest
-from aberrant.stream.dataset import Dataset, load
+from aberrant.model.forest.asd import ASDIsolationForest
+from aberrant.stream import Dataset, load
 
 model = ASDIsolationForest(
     n_estimators=100,

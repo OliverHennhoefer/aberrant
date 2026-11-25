@@ -63,6 +63,22 @@ Semantic Versioning.
   The wrapped component stays positional in `ResidualDetector(model, target=...)`
   and the method in `ScoreCalibrator(method, alpha=...)`. `DatasetManager`
   takes keyword arguments too.
+- **Breaking:** every public class and function has exactly one import path.
+  - `aberrant.model.iforest` is now `aberrant.model.forest`.
+  - The exceptions moved from `aberrant.base` to `aberrant.exceptions`.
+  - `Forecast` is imported from `aberrant.forecast` only.
+  - `BaseSimilaritySearchEngine` and `FaissSimilaritySearchEngine` live in
+    `aberrant.similarity`; `aberrant.utils.similar` is gone.
+  - `Architecture`, `VanillaAutoencoder` and `VanillaLSTMAutoencoder` load
+    from `aberrant.model.deep`; `aberrant.base.Architecture` and
+    `aberrant.utils.deep` are gone.
+  - `Readiness`, `Select`, `Rename` and `Passthrough` are no longer
+    re-exported from `aberrant.compose`; import them from `aberrant.base` and
+    `aberrant.transform`.
+  - `aberrant.transform.preprocessing`, `aberrant.transform.projection`,
+    `aberrant.stream.dataset` and `aberrant.utils` became private; import from
+    `aberrant.transform` and `aberrant.stream`, which now also export the
+    dataset cache and download classes.
 - **Breaking:** `ADWIN.update`, `KSWIN.update` and `PageHinkley.update` return
   whether this value completed a drift, the same flag `drift_detected` then
   holds, so a stream loop reads `if detector.update(value):`. They used to

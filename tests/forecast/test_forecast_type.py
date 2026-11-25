@@ -5,8 +5,8 @@ import math
 
 import pytest
 
-from aberrant.base import Forecast, ForecasterProtocol, RegressorProtocol
-from aberrant.forecast import HoltWinters, RLSRegressor, SeasonalNaive
+from aberrant.base import ForecasterProtocol, RegressorProtocol
+from aberrant.forecast import Forecast, HoltWinters, RLSRegressor, SeasonalNaive
 
 
 def test_lookups_by_lead() -> None:

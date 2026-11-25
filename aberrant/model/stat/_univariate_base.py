@@ -6,9 +6,9 @@ from bisect import bisect_left, bisect_right, insort
 from collections import deque
 from collections.abc import Callable, Sequence
 
-from aberrant.base.exceptions import ValidationError
+from aberrant._utils.validation import coerce_event_number
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import coerce_event_number
+from aberrant.exceptions import ValidationError
 
 _Statistic = Callable[[Sequence[float]], float]
 

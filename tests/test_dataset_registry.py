@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from aberrant.stream.dataset.registry import (
+from aberrant.stream import (
     DATASET_REGISTRY,
     Dataset,
     get_categories,

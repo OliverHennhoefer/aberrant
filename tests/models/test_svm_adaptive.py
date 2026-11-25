@@ -3,9 +3,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.svm.adaptive import (
-    IncrementalOneClassSVMAdaptiveKernel,
-)
+from aberrant.model.svm.adaptive import IncrementalOneClassSVMAdaptiveKernel
 from tests import score_sequences
 
 

@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from aberrant.base.exceptions import ConfigurationError, ConfigurationIssue
+from aberrant.exceptions import ConfigurationError, ConfigurationIssue
 
 Location = tuple[str | int, ...]
 

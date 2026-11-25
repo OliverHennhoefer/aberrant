@@ -7,8 +7,8 @@ from collections.abc import Callable
 
 import numpy as np
 
+from aberrant._utils.validation import EdgeEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import EdgeEventBoundary, coerce_integer_count
 
 _MatrixValue = Callable[[int, int], float]
 

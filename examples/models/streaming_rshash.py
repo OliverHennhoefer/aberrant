@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from aberrant.model.sketch import StreamingRSHash
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 
 model = StreamingRSHash(
     components_num=24,

@@ -7,6 +7,7 @@ from typing import ClassVar, Literal
 
 import numpy as np
 
+from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
 from aberrant.base.readiness import Readiness
 from aberrant.model.stat._tail_reference import (
@@ -14,7 +15,6 @@ from aberrant.model.stat._tail_reference import (
     _SketchReference,
     _WindowReference,
 )
-from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 _DEFAULT_WINDOW_SIZE = 1024
 _DEFAULT_COMPRESSION = 100.0

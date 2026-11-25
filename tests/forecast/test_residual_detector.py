@@ -3,10 +3,11 @@
 import numpy as np
 import pytest
 
-from aberrant.base import BaseModel, Forecast
+from aberrant.base import BaseModel
 from aberrant.calibration import ScoreCalibrator
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.forecast import (
+    Forecast,
     HoltWinters,
     ResidualDetector,
     RLSRegressor,

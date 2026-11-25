@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from aberrant._utils.validation import EdgeEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import EdgeEventBoundary, coerce_integer_count
 
 # Width and gap occurrence counters stop growing at the signed int64 maximum.
 _COUNTER_LIMIT = int(np.iinfo(np.int64).max) - 1

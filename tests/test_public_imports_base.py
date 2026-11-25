@@ -1,6 +1,7 @@
 """Public API import contract tests for base install."""
 
 import importlib
+import pkgutil
 import sys
 
 import pytest
@@ -9,16 +10,15 @@ import aberrant.base as base_api
 import aberrant.model as model_api
 import aberrant.model.deep as deep_api
 import aberrant.model.distance as distance_api
+import aberrant.model.forest as forest_api
 import aberrant.model.graph as graph_api
-import aberrant.model.iforest as iforest_api
 import aberrant.model.sketch as sketch_api
 import aberrant.model.svm as svm_api
-import aberrant.stream.dataset as dataset_api
+import aberrant.stream._dataset as dataset_api
 from aberrant import __version__
 from aberrant.base import (
     BaseModel,
     BaseTransformer,
-    ConfigurationError,
     ModelProtocol,
     Pipeline,
     TransformerProtocol,
@@ -27,8 +27,8 @@ from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
+from aberrant.exceptions import ConfigurationError
 from aberrant.forecast import (
-    Forecast,
     HoltWinters,
     ResidualDetector,
     RLSRegressor,
@@ -43,13 +43,7 @@ from aberrant.model.distance import (
     LocalOutlierFactor,
     SDOStream,
 )
-from aberrant.model.graph import (
-    ISCONNA,
-    MIDAS,
-    AnoEdgeL,
-    SignedGraphSketchDetector,
-)
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
@@ -58,6 +52,7 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
+from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
 from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 from aberrant.model.stat import MovingAverage, MovingCovariance
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
@@ -66,15 +61,15 @@ from aberrant.model.timeseries import (
     RollingMatrixProfile,
     XLagDAMP,
 )
-from aberrant.stream import Dataset, load
-from aberrant.stream.dataset import BatchStreamer, NpzStreamer
-from aberrant.transform.preprocessing import (
+from aberrant.stream import BatchStreamer, Dataset, NpzStreamer, load
+from aberrant.transform import (
     FeatureSchemaGuard,
+    IncrementalPCA,
     MinMaxScaler,
+    RandomProjection,
     RollingRobustScaler,
     StandardScaler,
 )
-from aberrant.transform.projection import IncrementalPCA, RandomProjection
 
 
 def test_public_imports_base_smoke() -> None:
@@ -137,7 +132,6 @@ def test_calibration_public_imports_base_smoke() -> None:
 
 
 def test_forecast_public_imports_base_smoke() -> None:
-    assert Forecast is base_api.Forecast
     assert base_api.ForecasterProtocol is not None
     assert base_api.RegressorProtocol is not None
     for component in (HoltWinters, ResidualDetector, RLSRegressor, SeasonalNaive):
@@ -163,7 +157,7 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (model_api, "QuantileThreshold"),
         (distance_api, "StationaryRegionNeighborDetector"),
         (graph_api, "StreamSpot"),
-        (iforest_api, "MondrianForest"),
+        (forest_api, "MondrianForest"),
         (sketch_api, "LODA"),
         (sketch_api, "RSHash"),
         (svm_api, "GADGETSVM"),
@@ -178,13 +172,14 @@ def test_removed_compatibility_exports_stay_removed() -> None:
 
 
 def test_optional_exports_are_excluded_from_wildcard_contracts() -> None:
-    assert "Architecture" not in base_api.__all__
-    assert "Autoencoder" not in deep_api.__all__
+    assert deep_api.__all__ == ["OnlineAutoencoderEnsemble"]
 
 
 _LAZY_TORCH_EXPORTS = [
-    (base_api, "Architecture", "aberrant.base.architecture"),
+    (deep_api, "Architecture", "aberrant.model.deep._architecture"),
     (deep_api, "Autoencoder", "aberrant.model.deep.autoencoder"),
+    (deep_api, "VanillaAutoencoder", "aberrant.model.deep._autoencoders"),
+    (deep_api, "VanillaLSTMAutoencoder", "aberrant.model.deep._autoencoders"),
 ]
 
 
@@ -213,7 +208,49 @@ def test_torch_exports_load_on_first_access(
     assert module.__dict__[name] is exported
 
 
-@pytest.mark.parametrize("module", [base_api, deep_api])
+@pytest.mark.parametrize("module", [deep_api])
 def test_unknown_attributes_are_still_attribute_errors(module) -> None:
     with pytest.raises(AttributeError, match="has no attribute 'Missing'"):
         _ = module.Missing
+
+
+def _public_packages() -> list[str]:
+    import aberrant  # noqa: PLC0415
+
+    return [
+        info.name
+        for info in pkgutil.walk_packages(aberrant.__path__, "aberrant.")
+        if info.ispkg and not any(part.startswith("_") for part in info.name.split("."))
+    ]
+
+
+def test_every_export_has_one_public_home() -> None:
+    homes: dict[int, list[str]] = {}
+    for package in _public_packages():
+        module = importlib.import_module(package)
+        for name in module.__all__:
+            value = getattr(module, name)
+            if isinstance(value, int | str):
+                continue
+            homes.setdefault(id(value), []).append(f"{package}.{name}")
+    assert [paths for paths in homes.values() if len(paths) > 1] == []
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "aberrant.model.iforest",
+        "aberrant.base.exceptions",
+        "aberrant.base.similarity",
+        "aberrant.base.architecture",
+        "aberrant._utils.similar",
+        "aberrant._utils.deep",
+        "aberrant.transform.preprocessing",
+        "aberrant.transform.projection",
+        "aberrant.stream.dataset",
+        "aberrant.utils",
+    ],
+)
+def test_moved_modules_are_gone(module: str) -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(module)

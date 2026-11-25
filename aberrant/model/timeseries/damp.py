@@ -7,13 +7,13 @@ from collections import deque
 
 import numpy as np
 
-from aberrant.base.exceptions import ValidationError
+from aberrant._utils.validation import coerce_finite_number
 from aberrant.base.model import BaseModel
+from aberrant.exceptions import ValidationError
 from aberrant.model.timeseries._matrix_profile import (
     _normalized_window,
     _window_statistics,
 )
-from aberrant.utils.validation import coerce_finite_number
 
 
 def _next_power_of_two(value: int) -> int:

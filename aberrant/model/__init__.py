@@ -2,8 +2,8 @@
 
 Available submodules:
     - distance: Distance-based models (KNN, LocalOutlierFactor)
+    - forest: Tree ensembles (isolation, half-space, random-cut and histogram forests)
     - graph: Graph-stream models (ISCONNA)
-    - iforest: Isolation forest variants
     - sketch: Sketch-based streaming models
     - stat: Statistical models
     - svm: SVM-based models

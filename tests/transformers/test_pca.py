@@ -2,9 +2,9 @@ import unittest
 
 import numpy as np
 
-from aberrant.base import ValidationError
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.projection.incremental_pca import IncrementalPCA
+from aberrant.exceptions import ValidationError
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import IncrementalPCA
 
 
 class TestIncrementalPCA(unittest.TestCase):

@@ -7,7 +7,7 @@ import math
 from collections import deque
 from itertools import islice
 
-from aberrant.utils.validation import coerce_integer_count
+from aberrant._utils.validation import coerce_integer_count
 
 # The longest lookback a method asks of the history, beyond its window.
 LOOKBACK = 1024

@@ -3,7 +3,7 @@
 import abc
 import math
 
-from aberrant.base.exceptions import ValidationError
+from aberrant.exceptions import ValidationError
 
 
 def _finite_observation(x: float) -> float:

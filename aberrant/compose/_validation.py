@@ -3,11 +3,11 @@
 from collections.abc import Sequence
 from heapq import heappop, heappush
 
-from aberrant.base.exceptions import ConfigurationError
+from aberrant._utils.validation import coerce_event_number, coerce_integer_count
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
 from aberrant.base.readiness import ReadinessProtocol
 from aberrant.compose._types import INPUT, GraphComponent, GraphNode, MergeNode
-from aberrant.utils.validation import coerce_event_number, coerce_integer_count
+from aberrant.exceptions import ConfigurationError
 
 
 def predecessors(node: GraphComponent) -> tuple[str, ...]:

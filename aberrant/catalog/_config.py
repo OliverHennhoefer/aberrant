@@ -10,14 +10,9 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import cast
 
-from aberrant.base import (
-    BaseSimilaritySearchEngine,
-    ConfigurationError,
-    ConfigurationIssue,
-    ModelProtocol,
-    Pipeline,
-    TransformerProtocol,
-)
+from aberrant.base import ModelProtocol, Pipeline, TransformerProtocol
+from aberrant.exceptions import ConfigurationError, ConfigurationIssue
+from aberrant.similarity._base import BaseSimilaritySearchEngine
 
 from ._parameters import (
     ConstructorParameters,

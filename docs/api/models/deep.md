@@ -1,15 +1,18 @@
 # Reconstruction Models API
 
 `OnlineAutoencoderEnsemble` is NumPy-backed and part of the base installation.
-`Autoencoder`, `Architecture`, and `VanillaAutoencoder` require
+`Autoencoder`, `Architecture`, `VanillaAutoencoder` and
+`VanillaLSTMAutoencoder` require
 `aberrant[dl]`.
 
 ::: aberrant.model.deep.OnlineAutoencoderEnsemble
 
 ## Optional PyTorch model
 
-::: aberrant.model.deep.autoencoder.Autoencoder
+::: aberrant.model.deep.Autoencoder
 
-::: aberrant.base.architecture.Architecture
+::: aberrant.model.deep.Architecture
 
-::: aberrant.utils.deep.architecture.VanillaAutoencoder
+::: aberrant.model.deep.VanillaAutoencoder
+
+::: aberrant.model.deep.VanillaLSTMAutoencoder

@@ -5,7 +5,6 @@ import math
 
 import pytest
 
-from aberrant.base import ConfigurationError, UnknownComponentError
 from aberrant.catalog import (
     FORECASTER_CATALOG,
     ComponentKind,
@@ -16,12 +15,8 @@ from aberrant.catalog import (
     get_forecaster_spec,
     get_model_spec,
 )
-from aberrant.forecast import (
-    HoltWinters,
-    ResidualDetector,
-    RLSRegressor,
-    SeasonalNaive,
-)
+from aberrant.exceptions import ConfigurationError, UnknownComponentError
+from aberrant.forecast import HoltWinters, ResidualDetector, RLSRegressor, SeasonalNaive
 
 
 def _config(forecaster: dict, **params: object) -> DetectorConfig:

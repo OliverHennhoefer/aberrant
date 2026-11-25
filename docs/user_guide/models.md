@@ -57,7 +57,7 @@ The raw and normalized Random Cut Forest forms preserve ranking but not numeric
 scale:
 
 ```python
-from aberrant.model.iforest import RandomCutForest
+from aberrant.model.forest import RandomCutForest
 
 history = [
     {"x": 0.0, "y": 0.1},
@@ -97,7 +97,7 @@ Primary method sources include
 [Online Isolation Forest](https://proceedings.mlr.press/v235/leveni24a.html),
 [Random Cut Forest](https://proceedings.mlr.press/v48/guha16.html), and
 [xStream](https://doi.org/10.1145/3219819.3220107). Class docstrings and the
-[isolation API](../api/models/iforest.md) identify the exact source used by each
+[isolation API](../api/models/forest.md) identify the exact source used by each
 implementation.
 
 ### Distance and neighborhood detectors

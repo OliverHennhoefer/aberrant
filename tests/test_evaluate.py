@@ -5,9 +5,9 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-from aberrant.base import MissingOptionalDependencyError
 from aberrant.catalog import ComponentConfig, DetectorConfig
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
+from aberrant.exceptions import MissingOptionalDependencyError
 from aberrant.model import NullModel
 from aberrant.model.stat import MovingGeometricAverage, MovingHarmonicAverage
 from aberrant.transform import StandardScaler

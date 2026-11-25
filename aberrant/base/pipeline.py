@@ -5,7 +5,8 @@ from __future__ import annotations
 from contextlib import ExitStack
 from typing import NoReturn, overload
 
-from .exceptions import IncompatibleComponentError, PipelineError
+from aberrant.exceptions import IncompatibleComponentError, PipelineError
+
 from .protocols import (
     FeatureMap,
     ModelProtocol,

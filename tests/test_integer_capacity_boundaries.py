@@ -7,18 +7,18 @@ from collections.abc import Callable, Iterator
 import numpy as np
 import pytest
 
+from aberrant._utils.validation import coerce_integer_count
 from aberrant.drift import ADWIN
-from aberrant.model.graph import SignedGraphSketchDetector
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     MondrianIsolationForest,
     StreamRandomHistogramForest,
     XStream,
 )
+from aberrant.model.graph import SignedGraphSketchDetector
 from aberrant.model.sketch import StreamingLODA
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
-from aberrant.stream.dataset.streamers import BatchStreamer, Sample
+from aberrant.stream import BatchStreamer, Sample
 from aberrant.transform import IncrementalPCA
-from aberrant.utils.validation import coerce_integer_count
 
 
 class _EmptyStream:

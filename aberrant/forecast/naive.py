@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from aberrant._utils.validation import coerce_event_number, coerce_integer_count
 from aberrant.base.forecast import Forecast
 from aberrant.forecast._arithmetic import LeadErrors, fsum
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
-from aberrant.utils.validation import coerce_event_number, coerce_integer_count
 
 
 class SeasonalNaive(BaseForecaster):

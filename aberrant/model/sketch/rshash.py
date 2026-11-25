@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 
+from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 _HASH_MODULUS = np.int64(2_147_483_647)  # Large Mersenne prime.
 

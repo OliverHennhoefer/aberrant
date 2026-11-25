@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections import deque
 from typing import Literal
 
-from aberrant.base.exceptions import ValidationError
+from aberrant._utils.validation import coerce_event_number, coerce_integer_count
 from aberrant.base.forecast import Forecast
 from aberrant.base.model import BaseModel
 from aberrant.base.protocols import FeatureMap, ForecasterProtocol, RegressorProtocol
+from aberrant.exceptions import ValidationError
 from aberrant.forecast.scores import nonconformity
-from aberrant.utils.validation import coerce_event_number, coerce_integer_count
 
 _SCORES = ("absolute", "scaled")
 

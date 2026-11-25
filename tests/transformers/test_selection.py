@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from aberrant.base import ValidationError
+from aberrant.exceptions import ValidationError
 from aberrant.transform import Rename, Select
 
 

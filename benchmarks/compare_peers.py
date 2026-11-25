@@ -80,7 +80,7 @@ from scipy.stats import rankdata
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
@@ -91,7 +91,7 @@ from aberrant.model.iforest import (
 )
 from aberrant.model.sketch import StreamingLODA, StreamingRSHash
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 
 try:
     from river import anomaly as river_anomaly

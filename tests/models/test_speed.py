@@ -12,8 +12,7 @@ from typing import Any
 import pytest
 
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.graph import ISCONNA
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     OnlineIsolationForest,
@@ -21,7 +20,8 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.iforest.mondrian import MondrianIsolationForest
+from aberrant.model.forest.mondrian import MondrianIsolationForest
+from aberrant.model.graph import ISCONNA
 from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 from aberrant.model.stat import MovingCovariance
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel

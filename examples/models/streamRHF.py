@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest import StreamRandomHistogramForest
-from aberrant.stream.dataset import Dataset, load
+from aberrant.model.forest import StreamRandomHistogramForest
+from aberrant.stream import Dataset, load
 
 model = StreamRandomHistogramForest(
     n_estimators=5, max_depth=6, window_size=128, seed=1

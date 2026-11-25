@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from aberrant._utils.statistics import linear_quantile
 from aberrant.model.stat._univariate_base import _BaseMovingOrderStatistic
-from aberrant.utils.statistics import linear_quantile
 
 
 class MovingMedian(_BaseMovingOrderStatistic):

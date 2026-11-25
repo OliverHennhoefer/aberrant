@@ -10,10 +10,10 @@ from typing import Literal, cast
 import numpy as np
 
 from aberrant import __version__
+from aberrant._utils.validation import coerce_event_number, coerce_finite_number
 from aberrant.base import ModelProtocol
 from aberrant.base.protocols import FeatureMap
 from aberrant.catalog import DetectorConfig, WarmupUnit
-from aberrant.utils.validation import coerce_event_number, coerce_finite_number
 
 from ._metrics import RankingMetrics
 from ._records import EvaluationRecord, EvaluationResult

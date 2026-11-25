@@ -6,8 +6,8 @@ from typing import cast
 
 import numpy as np
 
+from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 # Bound on the comparisons of warm-up rows with interior bin edges held at
 # once, so fitting the histograms needs about 1 MiB of temporaries.

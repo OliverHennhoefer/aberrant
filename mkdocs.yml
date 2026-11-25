@@ -51,7 +51,7 @@ nav:
     - Models:
       - Overview: api/models/index.md
       - Core Models: api/models/core.md
-      - Isolation Forest: api/models/iforest.md
+      - Forests: api/models/forest.md
       - Distance: api/models/distance.md
       - Sketch: api/models/sketch.md
       - Graph: api/models/graph.md
@@ -65,6 +65,8 @@ nav:
     - Forecasting: api/forecast.md
     - Stream Datasets: api/stream.md
     - Evaluation: api/evaluate.md
+    - Similarity Search: api/similarity.md
+    - Exceptions: api/exceptions.md
   - Contributing: contributing.md
   - Changelog: changelog.md
 

@@ -41,12 +41,13 @@ jobs:
           uv run --locked --no-dev python - <<'PY'
           import aberrant
           from aberrant.base import Pipeline
-          from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
+          from aberrant.compose import GraphNode, GraphPipeline, MergeNode
+          from aberrant.transform import Select
           from aberrant.calibration import ScoreCalibrator
           from aberrant.model import NullModel, RandomModel, ThresholdModel
-          from aberrant.model.iforest import OnlineIsolationForest
+          from aberrant.model.forest import OnlineIsolationForest
           from aberrant.model.stat import MovingCovariance
-          from aberrant.transform.preprocessing import StandardScaler
+          from aberrant.transform import StandardScaler
 
           assert isinstance(aberrant.__version__, str)
           assert NullModel().score_one({"x": 1.0}) == 0.0
@@ -81,7 +82,7 @@ jobs:
           import numpy
 
           from aberrant.drift import ADWIN, KSWIN
-          from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
+          from aberrant.model.forest import HalfSpaceTrees, OnlineIsolationForest
           from aberrant.model.timeseries import XLagDAMP
           from aberrant.transform import StandardScaler
 

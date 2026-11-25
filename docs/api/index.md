@@ -16,6 +16,8 @@ public methods, properties, return types, and model-specific caveats. Use the
 - [Forecasters and regressors](forecast.md)
 - [Dataset registry, cache, and streams](stream.md)
 - [Prequential evaluation](evaluate.md)
+- [Similarity search engines](similarity.md)
+- [Exceptions](exceptions.md)
 
 Objects exported from the documented package `__init__.py` files are public.
 Private names beginning with `_` are implementation details. Optional

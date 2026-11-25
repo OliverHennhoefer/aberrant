@@ -67,8 +67,8 @@ scores each evaluated event before learning it.
 ```python
 import numpy as np
 
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.preprocessing import StandardScaler
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import StandardScaler
 
 rng = np.random.default_rng(42)
 values = np.vstack(

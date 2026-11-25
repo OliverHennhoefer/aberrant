@@ -4,7 +4,6 @@ import pytest
 
 pytest.importorskip("faiss")
 
-from aberrant.base import ConfigurationError, UnknownComponentError
 from aberrant.catalog import (
     ComponentSpec,
     DetectorConfig,
@@ -12,6 +11,7 @@ from aberrant.catalog import (
     create_model,
     create_similarity_engine,
 )
+from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.similarity import FaissSimilaritySearchEngine
 
 

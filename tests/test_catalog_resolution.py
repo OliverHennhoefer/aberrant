@@ -8,13 +8,6 @@ from typing import Literal, Protocol
 
 import pytest
 
-from aberrant.base import (
-    BaseSimilaritySearchEngine,
-    ConfigurationError,
-    ConfigurationIssue,
-    MissingOptionalDependencyError,
-    UnknownComponentError,
-)
 from aberrant.catalog import (
     ComponentConfig,
     ComponentKind,
@@ -25,6 +18,13 @@ from aberrant.catalog import (
     resolve_detector_config,
 )
 from aberrant.evaluate import PrequentialEvaluator
+from aberrant.exceptions import (
+    ConfigurationError,
+    ConfigurationIssue,
+    MissingOptionalDependencyError,
+    UnknownComponentError,
+)
+from aberrant.similarity import BaseSimilaritySearchEngine
 
 
 def example():

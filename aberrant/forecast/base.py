@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import abc
 
+from aberrant._utils.validation import coerce_finite_number, coerce_integer_count
 from aberrant.base.forecast import Forecast
 from aberrant.base.protocols import FeatureMap
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
 
 
 def check_spread_parameters(

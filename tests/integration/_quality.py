@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 
 Features = dict[str, float]
 Adapter = Callable[[int, Features], Features]

@@ -1,5 +1,5 @@
 from aberrant.base.model import BaseModel
-from aberrant.base.similarity import BaseSimilaritySearchEngine
+from aberrant.similarity._base import BaseSimilaritySearchEngine
 
 
 class KNN(BaseModel):

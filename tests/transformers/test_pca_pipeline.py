@@ -6,10 +6,9 @@ import pytest
 pytest.importorskip("faiss")
 
 from aberrant.model.distance.knn import KNN
-from aberrant.stream.dataset import Dataset, load
-from aberrant.transform.preprocessing.scaler import StandardScaler
-from aberrant.transform.projection.incremental_pca import IncrementalPCA
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
+from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.stream import Dataset, load
+from aberrant.transform import IncrementalPCA, StandardScaler
 
 
 class TestPCAPipelineIntegration(unittest.TestCase):

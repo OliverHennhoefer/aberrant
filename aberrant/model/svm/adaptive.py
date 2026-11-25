@@ -2,12 +2,12 @@ from collections import deque
 
 import numpy as np
 
-from aberrant.base.model import BaseModel
-from aberrant.utils.validation import (
+from aberrant._utils.validation import (
     FeatureSchema,
     PreparedFeatures,
     coerce_integer_count,
 )
+from aberrant.base.model import BaseModel
 
 
 class IncrementalOneClassSVMAdaptiveKernel(BaseModel):

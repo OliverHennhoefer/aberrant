@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 
 from aberrant.base.model import BaseModel
+from aberrant.model.forest import StreamRandomHistogramForest, XStream
 from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
-from aberrant.model.iforest import StreamRandomHistogramForest, XStream
 from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 

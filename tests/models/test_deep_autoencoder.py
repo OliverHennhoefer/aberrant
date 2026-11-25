@@ -18,8 +18,8 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 if TORCH_AVAILABLE:
+    from aberrant.model.deep import VanillaAutoencoder
     from aberrant.model.deep.autoencoder import Autoencoder
-    from aberrant.utils.deep.architecture import VanillaAutoencoder
 from tests.utils import DataGenerator
 
 

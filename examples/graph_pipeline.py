@@ -1,9 +1,8 @@
 """Branched preprocessing, raw feature bypass and staged online initialization."""
 
-from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
+from aberrant.compose import GraphNode, GraphPipeline, MergeNode
 from aberrant.model.stat import MovingCovariance
-from aberrant.transform.preprocessing import StandardScaler
-from aberrant.transform.projection import IncrementalPCA
+from aberrant.transform import IncrementalPCA, Select, StandardScaler
 
 
 def main() -> None:

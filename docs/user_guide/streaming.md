@@ -1,6 +1,6 @@
 # Streaming Datasets
 
-`aberrant.stream.dataset` provides two related capabilities:
+`aberrant.stream` provides two related capabilities:
 
 1. a registry, downloader, validator, and local cache for built-in benchmark
    datasets;
@@ -16,7 +16,7 @@ Registry metadata is immutable. `list_available` returns a new mapping whose
 values are frozen `DatasetInfo` objects.
 
 ```python
-from aberrant.stream.dataset import get_categories, list_available
+from aberrant.stream import get_categories, list_available
 
 available = list_available()
 print(f"datasets={len(available)}")
@@ -48,7 +48,7 @@ rejects before reuse.
 ```python
 from itertools import islice
 
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 
 dataset = load(Dataset.SHUTTLE)
 
@@ -75,7 +75,7 @@ Set `auto_download=False` when a missing or invalid cache entry should raise
 `FileNotFoundError` instead of using the network:
 
 ```python
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 
 try:
     cached_only = load(Dataset.SHUTTLE, auto_download=False)
@@ -98,7 +98,7 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 
-from aberrant.stream.dataset import NpzStreamer
+from aberrant.stream import NpzStreamer
 
 with TemporaryDirectory() as directory:
     path = Path(directory) / "example.npz"
@@ -127,7 +127,7 @@ smaller than `batch_size`.
 ```python
 from collections.abc import Iterator
 
-from aberrant.stream.dataset import BatchStreamer, DatasetInfo, Sample
+from aberrant.stream import BatchStreamer, DatasetInfo, Sample
 
 
 class InMemoryStream:
@@ -155,7 +155,7 @@ dependency injection, or separate caches:
 ```python
 from tempfile import TemporaryDirectory
 
-from aberrant.stream.dataset import DatasetManager
+from aberrant.stream import DatasetManager
 
 with TemporaryDirectory() as directory:
     manager = DatasetManager(cache_dir=directory, show_progress=False)

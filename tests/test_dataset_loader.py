@@ -18,13 +18,16 @@ from urllib.error import URLError
 import numpy as np
 import pytest
 
-import aberrant.stream.dataset as dataset_api
-from aberrant.stream.dataset import Dataset
-from aberrant.stream.dataset import loader as loader_module
-from aberrant.stream.dataset.cache import CacheEntry, DatasetCacheStore
-from aberrant.stream.dataset.download import UrlLibDownloadBackend
-from aberrant.stream.dataset.loader import DatasetManager
-from aberrant.stream.dataset.registry import get_dataset_info
+import aberrant.stream._dataset as dataset_api
+from aberrant.stream import (
+    CacheEntry,
+    Dataset,
+    DatasetCacheStore,
+    DatasetManager,
+    UrlLibDownloadBackend,
+    get_dataset_info,
+)
+from aberrant.stream._dataset import loader as loader_module
 
 
 def _publish_metadata_in_process(
@@ -166,7 +169,7 @@ def test_manager_download_publishes_typed_metadata(tmp_path: Path) -> None:
     )
 
     with patch(
-        "aberrant.stream.dataset.loader.get_dataset_info",
+        "aberrant.stream._dataset.loader.get_dataset_info",
         return_value=trusted_info,
     ):
         cached_path = manager.download(Dataset.SHUTTLE, force=True)
@@ -202,7 +205,7 @@ def test_manager_reuses_validated_cached_artifact_without_downloading(
     )
 
     with patch(
-        "aberrant.stream.dataset.loader.get_dataset_info",
+        "aberrant.stream._dataset.loader.get_dataset_info",
         return_value=trusted_info,
     ):
         result = manager.download(Dataset.SHUTTLE)
@@ -334,7 +337,7 @@ def test_failed_metadata_publication_restores_previous_cache(
 
     with (
         patch(
-            "aberrant.stream.dataset.cache.os.replace",
+            "aberrant.stream._dataset.cache.os.replace",
             side_effect=fail_metadata_replace,
         ),
         pytest.raises(OSError, match="metadata publication failed"),
@@ -361,7 +364,7 @@ def test_failed_metadata_publication_restores_previous_cache(
     )
     manager = DatasetManager(cache_dir=tmp_path, release_tag="test-release")
     with patch(
-        "aberrant.stream.dataset.loader.get_dataset_info", return_value=trusted_info
+        "aberrant.stream._dataset.loader.get_dataset_info", return_value=trusted_info
     ):
         streamer = manager.load(Dataset.SHUTTLE, auto_download=False)
     assert list(streamer.stream()) == [
@@ -392,7 +395,7 @@ def test_failed_artifact_restoration_retains_backup(tmp_path: Path) -> None:
 
     with (
         patch(
-            "aberrant.stream.dataset.cache.os.replace",
+            "aberrant.stream._dataset.cache.os.replace",
             side_effect=fail_metadata_and_restoration,
         ),
         pytest.raises(OSError, match="cannot replace"),
@@ -584,7 +587,7 @@ def _published_manager(
 
 def _trusting(payload: bytes):
     return patch(
-        "aberrant.stream.dataset.loader.get_dataset_info",
+        "aberrant.stream._dataset.loader.get_dataset_info",
         return_value=replace(
             get_dataset_info(Dataset.SHUTTLE),
             sha256=hashlib.sha256(payload).hexdigest(),
@@ -642,7 +645,7 @@ def test_failed_backup_copy_leaves_the_cache_untouched(tmp_path: Path) -> None:
 
     with (
         patch(
-            "aberrant.stream.dataset.cache.copyfile", side_effect=OSError("disk full")
+            "aberrant.stream._dataset.cache.copyfile", side_effect=OSError("disk full")
         ),
         pytest.raises(OSError, match="disk full"),
     ):

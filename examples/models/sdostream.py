@@ -1,8 +1,8 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from aberrant.model.distance.sdostream import SDOStream
-from aberrant.stream.dataset import Dataset, load
-from aberrant.transform.preprocessing.scaler import StandardScaler
+from aberrant.stream import Dataset, load
+from aberrant.transform import StandardScaler
 
 model = SDOStream(
     k=128,

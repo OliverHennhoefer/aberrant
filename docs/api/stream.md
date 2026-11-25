@@ -6,62 +6,62 @@ dependency injection.
 
 ## Registry
 
-::: aberrant.stream.dataset.Dataset
+::: aberrant.stream.Dataset
 
-::: aberrant.stream.dataset.DatasetInfo
+::: aberrant.stream.DatasetInfo
 
-::: aberrant.stream.dataset.DATASET_REGISTRY
+::: aberrant.stream.DATASET_REGISTRY
 
-::: aberrant.stream.dataset.get_dataset_info
+::: aberrant.stream.get_dataset_info
 
-::: aberrant.stream.dataset.list_available
+::: aberrant.stream.list_available
 
-::: aberrant.stream.dataset.list_by_category
+::: aberrant.stream.list_by_category
 
-::: aberrant.stream.dataset.get_categories
+::: aberrant.stream.get_categories
 
 ## Default-manager functions
 
-::: aberrant.stream.dataset.load
+::: aberrant.stream.load
 
-::: aberrant.stream.dataset.download
+::: aberrant.stream
 
-::: aberrant.stream.dataset.list_cached
+::: aberrant.stream.list_cached
 
-::: aberrant.stream.dataset.clear_cache
+::: aberrant.stream.clear_cache
 
-::: aberrant.stream.dataset.get_cache_info
+::: aberrant.stream.get_cache_info
 
-::: aberrant.stream.dataset.get_default_manager
+::: aberrant.stream.get_default_manager
 
-::: aberrant.stream.dataset.set_cache_dir
+::: aberrant.stream.set_cache_dir
 
 ## Orchestration and cache values
 
-::: aberrant.stream.dataset.DatasetManager
+::: aberrant.stream.DatasetManager
 
-::: aberrant.stream.dataset.DatasetCacheStore
+::: aberrant.stream.DatasetCacheStore
 
-::: aberrant.stream.dataset.CacheEntry
+::: aberrant.stream.CacheEntry
 
-::: aberrant.stream.dataset.CacheMetadata
+::: aberrant.stream.CacheMetadata
 
-::: aberrant.stream.dataset.CacheInfo
+::: aberrant.stream.CacheInfo
 
 ## Download and validation
 
-::: aberrant.stream.dataset.DownloadBackend
+::: aberrant.stream.DownloadBackend
 
-::: aberrant.stream.dataset.UrlLibDownloadBackend
+::: aberrant.stream.UrlLibDownloadBackend
 
-::: aberrant.stream.dataset.DatasetArtifactValidator
+::: aberrant.stream.DatasetArtifactValidator
 
 ## Streams
 
-::: aberrant.stream.dataset.DatasetStream
+::: aberrant.stream.DatasetStream
 
-::: aberrant.stream.dataset.Sample
+::: aberrant.stream.Sample
 
-::: aberrant.stream.dataset.NpzStreamer
+::: aberrant.stream.NpzStreamer
 
-::: aberrant.stream.dataset.BatchStreamer
+::: aberrant.stream.BatchStreamer

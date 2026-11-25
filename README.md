@@ -43,7 +43,7 @@ from aberrant.calibration import ScoreCalibrator
 from aberrant.drift import ADWIN
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.model.distance import SDOStream
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, StandardScaler
 
 stream = load(Dataset.SHUTTLE).stream()
@@ -191,7 +191,7 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 Transformers compose left to right, with at most one terminal model:
 
 ```python
-from aberrant.model.iforest import OnlineIsolationForest
+from aberrant.model.forest import OnlineIsolationForest
 from aberrant.transform import IncrementalPCA, StandardScaler
 
 detector = (

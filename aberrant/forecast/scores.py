@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 from typing import Literal
 
+from aberrant._utils.validation import coerce_event_number, coerce_finite_number
 from aberrant.base.forecast import Forecast
-from aberrant.utils.validation import coerce_event_number, coerce_finite_number
 
 NonconformityScore = Literal["absolute", "scaled", "cqr"]
 SCORES: tuple[NonconformityScore, ...] = ("absolute", "scaled", "cqr")

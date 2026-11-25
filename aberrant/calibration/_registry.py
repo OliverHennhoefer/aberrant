@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from aberrant._utils.validation import coerce_finite_number
 from aberrant.calibration._bayesian import (
     BOCPDACI,
     BayesianBelief,
@@ -28,7 +29,6 @@ from aberrant.calibration._conformal import (
     RollingSplit,
 )
 from aberrant.calibration._window import ScoreHistory
-from aberrant.utils.validation import coerce_finite_number
 
 
 class OnlineCalibrator(Protocol):

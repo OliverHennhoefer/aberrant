@@ -9,8 +9,8 @@ from typing import TypeAlias
 
 import numpy as np
 
+from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import NumericEventBoundary, coerce_integer_count
 
 _Cell: TypeAlias = tuple[int, ...]
 _Entry: TypeAlias = tuple[int, _Cell]

@@ -26,7 +26,7 @@ been learned. A downstream schema-owning model normally makes a fixed key set
 necessary for the complete pipeline.
 
 ```python
-from aberrant.transform.preprocessing import StandardScaler
+from aberrant.transform import StandardScaler
 
 scaler = StandardScaler()
 for event in [
@@ -110,7 +110,7 @@ order and reject missing or additional keys afterward. Set `keys=` when schema
 order must be explicit before the first event.
 
 ```python
-from aberrant.transform.projection import IncrementalPCA
+from aberrant.transform import IncrementalPCA
 
 pca = IncrementalPCA(
     n_components=2,
@@ -138,8 +138,8 @@ online state then determines the coordinate system seen by PCA.
 This example is standalone and uses no optional dependency:
 
 ```python
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.preprocessing import StandardScaler
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import StandardScaler
 
 detector = StandardScaler() | OnlineIsolationForest(
     num_trees=10,

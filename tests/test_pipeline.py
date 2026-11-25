@@ -8,14 +8,13 @@ import pytest
 from aberrant.base import (
     BaseModel,
     BaseTransformer,
-    IncompatibleComponentError,
     ModelPipeline,
     ModelProtocol,
     Pipeline,
-    PipelineError,
     TransformerPipeline,
     TransformerProtocol,
 )
+from aberrant.exceptions import IncompatibleComponentError, PipelineError
 from aberrant.model import NullModel
 from aberrant.model.stat import MovingAverage
 from aberrant.transform import (

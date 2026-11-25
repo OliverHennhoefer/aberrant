@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 
 from aberrant.drift import ADWIN, PageHinkley
-from aberrant.model.iforest import HalfSpaceTrees
-from aberrant.stream.dataset import Dataset
-from aberrant.transform.preprocessing import MinMaxScaler
+from aberrant.model.forest import HalfSpaceTrees
+from aberrant.stream import Dataset
+from aberrant.transform import MinMaxScaler
 from tests.integration._quality import Case, assert_detects, prequential
 from tests.integration.test_detection_quality import CASES, N_TEST, WARM_UP
 

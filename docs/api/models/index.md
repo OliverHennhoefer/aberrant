@@ -8,7 +8,7 @@ Model documentation is split by event structure and method family.
 
     Static/adaptive thresholds and null/random baselines.
 
--   **[Isolation forests](iforest.md)**
+-   **[Forests](forest.md)**
 
     Incremental, window-replaced, half-space, Mondrian, random-cut, histogram,
     and xStream variants.

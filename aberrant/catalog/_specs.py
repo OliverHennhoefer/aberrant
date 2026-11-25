@@ -8,10 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
-from aberrant.base.exceptions import (
-    ConfigurationError,
-    MissingOptionalDependencyError,
-)
+from aberrant.exceptions import ConfigurationError, MissingOptionalDependencyError
 
 from ._parameters import ConstructorParameters
 

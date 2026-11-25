@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest import MondrianIsolationForest
-from aberrant.stream.dataset import Dataset, load
+from aberrant.model.forest import MondrianIsolationForest
+from aberrant.stream import Dataset, load
 
 # lambda_ is the Mondrian lifetime budget: larger values allow finer partitions.
 model = MondrianIsolationForest(
