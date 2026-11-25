@@ -10,7 +10,7 @@ from aberrant.base import ReadinessUnit
 from aberrant.calibration import ScoreCalibrator
 from aberrant.catalog import create_model, create_transformer, model_capabilities
 from aberrant.compose import GraphNode, GraphPipeline, MergeNode
-from aberrant.drift import ADWIN, KSWIN, PageHinkley
+from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.forecast import HoltWinters, RLSRegressor, SeasonalNaive
 from aberrant.model.forest import HalfSpaceTrees
 from aberrant.model.stat import MovingCovariance
@@ -229,7 +229,7 @@ def test_regressor_contract():
     assert predictions(regressor) == expected
 
 
-@pytest.mark.parametrize("detector", [ADWIN, KSWIN, PageHinkley])
+@pytest.mark.parametrize("detector", [ADWIN, CUSUM, KSWIN, PageHinkley])
 def test_drift_detector_contract(detector):
     signal = [0.0] * 200 + [5.0] * 200
     built = detector()
