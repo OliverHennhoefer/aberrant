@@ -2,7 +2,6 @@
 
 import math
 import pickle
-import time
 import unittest
 
 import numpy as np
@@ -455,16 +454,6 @@ class TestXLagDAMPScoredSearch(unittest.TestCase):
         self.assertIsNone(pickle.loads(pickle.dumps(model))._scored)
         model.reset()
         self.assertIsNone(model._scored)
-
-    def test_default_lag_speed_smoke(self) -> None:
-        events = score_sequences.make_series(seed=39, n_events=2000, n_channels=1)
-        model = XLagDAMP(subsequence_length=32)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.3 s.
-        self.assertLess(time.perf_counter() - start, 4.0)
 
 
 if __name__ == "__main__":

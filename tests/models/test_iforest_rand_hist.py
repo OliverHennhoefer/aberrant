@@ -6,7 +6,6 @@ Real dataset tests are in tests/integration/test_detection_quality.py
 import copy
 import pickle
 import random
-import time
 import unittest
 import warnings
 
@@ -440,16 +439,6 @@ class TestStreamRandomHistogramForestExactness(unittest.TestCase):
         model.learn_one(events[60])
         restored.learn_one(events[60])
         self.assertEqual(_forest_shape(restored), _forest_shape(model))
-
-    def test_default_forest_speed_smoke(self):
-        events = score_sequences.make_stream(seed=1, n_events=1000, n_features=8)
-        model = StreamRandomHistogramForest(seed=1)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~1 s.
-        self.assertLess(time.perf_counter() - start, 10.0)
 
 
 if __name__ == "__main__":

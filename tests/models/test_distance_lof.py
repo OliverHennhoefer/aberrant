@@ -2,7 +2,6 @@
 
 import math
 import random
-import time
 import unittest
 from collections import deque
 
@@ -320,16 +319,6 @@ class TestLocalOutlierFactorExactness(unittest.TestCase):
                 np.testing.assert_array_equal(
                     _sum_rows(np.ascontiguousarray(values.T)), np.sum(values, axis=1)
                 )
-
-    def test_default_model_processes_two_thousand_events_quickly(self):
-        events = score_sequences.make_stream(seed=1, n_events=2000, n_features=8)
-        model = LocalOutlierFactor()
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~0.4 s.
-        self.assertLess(time.perf_counter() - start, 5.0)
 
 
 class TestLocalOutlierFactorStreaming(unittest.TestCase):

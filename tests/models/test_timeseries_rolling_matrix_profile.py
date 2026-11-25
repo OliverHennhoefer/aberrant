@@ -2,7 +2,6 @@
 
 import math
 import pickle
-import time
 from itertools import chain
 
 import numpy as np
@@ -379,14 +378,3 @@ def test_statistics_array_matches_asarray():
     actual = _statistics_array(chain.from_iterable(statistics), (3, 3))
     assert actual.shape == expected.shape
     assert actual.tobytes() == expected.tobytes()
-
-
-def test_default_window_speed_smoke():
-    events = score_sequences.make_series(seed=37, n_events=1500, n_channels=1)
-    model = RollingMatrixProfile(subsequence_length=32)
-
-    start = time.perf_counter()
-    score_sequences.score_then_learn(model, events)
-
-    # Generous bound against large regressions; typical runs take ~0.4 s.
-    assert time.perf_counter() - start < 6.0

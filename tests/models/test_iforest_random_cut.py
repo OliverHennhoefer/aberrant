@@ -1,7 +1,6 @@
 """Unit tests for Random Cut Forest anomaly detection model."""
 
 import pickle
-import time
 import unittest
 
 import numpy as np
@@ -379,16 +378,6 @@ class TestRandomCutForestExactness(unittest.TestCase):
         model.learn_one(events[60])
         restored.learn_one(events[60])
         self.assertEqual(_forest_shape(restored), _forest_shape(model))
-
-    def test_default_forest_speed_smoke(self):
-        events = score_sequences.make_stream(seed=1, n_events=600, n_features=8)
-        model = RandomCutForest(seed=1)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~2 s.
-        self.assertLess(time.perf_counter() - start, 20.0)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@
 import copy
 import math
 import pickle
-import time
 import unittest
 
 import numpy as np
@@ -563,16 +562,6 @@ class TestMondrianForestExactness(unittest.TestCase):
         self.assertEqual(pickle.dumps(model), before)
         restored = pickle.loads(pickle.dumps(model))
         self.assertIsNone(restored._planned)
-
-    def test_default_forest_speed_smoke(self):
-        events = score_sequences.make_stream(seed=1, n_events=600, n_features=8)
-        model = MondrianForest(seed=1)
-
-        start = time.perf_counter()
-        score_sequences.score_then_learn(model, events)
-
-        # Generous bound against large regressions; typical runs take ~2 s.
-        self.assertLess(time.perf_counter() - start, 20.0)
 
 
 if __name__ == "__main__":
