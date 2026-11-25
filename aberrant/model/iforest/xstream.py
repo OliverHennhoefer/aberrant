@@ -70,6 +70,12 @@ class XStream(BaseModel):
     Scores remain zero until ``init_sample_size`` projected points initialize
     the chains and one complete reference window has been observed.
 
+    Each chain takes its smallest depth-scaled reference count, the minimum
+    over levels ``1..depth`` of ``(count + 1) * 2**level``, and scores
+    ``2 / minimum``, in ``(0, 1]``. The score is the mean over chains. The
+    authors' implementation averages ``log2(minimum)`` over chains instead,
+    so the two can rank points differently when chains disagree.
+
     Args:
         k: Dimension of the StreamHash feature projection.
         n_chains: Number of independently sampled half-space chains.

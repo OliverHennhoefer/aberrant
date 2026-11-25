@@ -19,7 +19,9 @@ class OnlineIsolationForest(BaseModel):
 
     Scores are path-length isolation scores in ``[0, 1]``. Learned batches are
     retained until ``window_size`` is exceeded, then the oldest points are
-    unlearned from the trees.
+    unlearned from the trees. The depth limit and the path-length
+    normalization take logarithms to base ``2 * branching_factor``, as the
+    authors' implementation does; the paper writes base 2.
 
     Args:
         num_trees: Number of independently seeded online isolation trees.

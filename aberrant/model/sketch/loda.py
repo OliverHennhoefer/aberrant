@@ -32,6 +32,8 @@ class StreamingLODA(BaseModel):
     - Scores are ``0.0`` until warm-up is complete.
     - Memory is bounded by fixed-size projection and histogram state.
     - Feature schema is fixed after the first ``learn_one`` call.
+    - Each projection weights its active features by ``-1`` or ``1`` times
+      ``1 / sqrt(active features)``; the paper draws normal weights.
 
     Args:
         n_projections: Number of random one-dimensional projections and
