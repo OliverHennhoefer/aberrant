@@ -14,6 +14,7 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 from aberrant.exceptions import ValidationError
 
 # Scales the MAD to the standard deviation of a normal distribution.
@@ -49,6 +50,11 @@ class _UnivariateWindow(BaseModel):
     def n_samples_seen(self) -> int:
         """Number of values in the window."""
         return len(self._window)
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` values have been learned."""
+        return Readiness.after(len(self._window), self.warm_up)
 
     def _value(self, x: dict[str, float]) -> tuple[str, float]:
         if len(x) != 1:
@@ -125,9 +131,9 @@ class MovingZScore(_UnivariateWindow):
     def score_one(self, x: dict[str, float]) -> float:
         """Return the absolute z-score of the event's value."""
         _, value = self._value(x)
-        count = len(self._window)
-        if count < self.warm_up:
+        if not self.readiness.ready:
             return 0.0
+        count = len(self._window)
         std = math.sqrt(max(self._m2, 0.0) / count)
         return abs(value - self._mean) / max(std, self.min_std)
 
@@ -181,6 +187,6 @@ class MovingMAD(_UnivariateWindow):
     def score_one(self, x: dict[str, float]) -> float:
         """Return the robust z-score of the event's value."""
         _, value = self._value(x)
-        if len(self._window) < self.warm_up:
+        if not self.readiness.ready:
             return 0.0
         return abs(value - self._median) / max(self._scale, self.min_mad)

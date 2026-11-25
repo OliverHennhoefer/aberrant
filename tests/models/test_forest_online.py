@@ -275,7 +275,9 @@ if __name__ == "__main__":
 
 
 def test_subsampled_forest_population_stays_within_window():
-    model = OnlineIsolationForest(n_trees=2, window_size=8, subsample=0.5, seed=42)
+    model = OnlineIsolationForest(
+        n_trees=2, window_size=8, max_leaf_samples=2, subsample=0.5, seed=42
+    )
     for i in range(1000):
         model.learn_one({"x": float(i)})
         for tree in model.trees:
@@ -373,7 +375,7 @@ def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn():
 
 @pytest.mark.filterwarnings("ignore:overflow encountered in cast:RuntimeWarning")
 def test_single_rows_reject_float32_overflow():
-    model = OnlineIsolationForest(n_trees=2, window_size=8, seed=1)
+    model = OnlineIsolationForest(n_trees=2, window_size=8, max_leaf_samples=4, seed=1)
     with pytest.raises(ValueError, match="only finite values"):
         model.learn_one({"a": 1e39, "b": 0.0})
     assert model._n_features is None

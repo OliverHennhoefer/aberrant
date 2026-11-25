@@ -78,7 +78,7 @@ class RollingMatrixProfile(_BaseRollingMatrixProfile[float, tuple[int, float, fl
         query; later learning may evict the corresponding samples.
         """
         prepared = self._schema.preview(x)
-        if not self.is_ready:
+        if not self.readiness.ready:
             return 0.0, None
         series, query, statistics, window_start = self._query(float(prepared.values[0]))
         distance, local_start = _nearest_match(

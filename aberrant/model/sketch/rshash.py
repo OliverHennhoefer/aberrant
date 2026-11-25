@@ -8,6 +8,7 @@ import numpy as np
 
 from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 _HASH_MODULUS = np.int64(2_147_483_647)  # Large Mersenne prime.
 
@@ -297,6 +298,11 @@ class RSHash(BaseModel):
             np.clip(1.0 - np.log1p(occupancy_min) / normalizer, 0.0, 1.0),
         )
         return float(np.mean(component_scores))
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` events, and at least one, have been learned."""
+        return Readiness.after(self._samples_seen, max(self.warm_up, 1))
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""

@@ -12,7 +12,7 @@ from aberrant.base.protocols import (
     TransactionalTransformerProtocol,
     TransformerProtocol,
 )
-from aberrant.base.readiness import Readiness, ReadinessProtocol
+from aberrant.base.readiness import Readiness, ReadinessUnit
 from aberrant.base.transformer import BaseTransformer
 
 __all__ = [
@@ -25,7 +25,7 @@ __all__ = [
     "ModelProtocol",
     "Pipeline",
     "Readiness",
-    "ReadinessProtocol",
+    "ReadinessUnit",
     "RegressorProtocol",
     "TransactionalLearnerProtocol",
     "TransactionalTransformerProtocol",

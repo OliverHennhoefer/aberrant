@@ -6,7 +6,8 @@ from collections.abc import Callable
 
 import pytest
 
-from aberrant.catalog import create_model, create_transformer
+from aberrant.base import ReadinessUnit
+from aberrant.catalog import create_model, create_transformer, model_capabilities
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.forecast import HoltWinters, RLSRegressor, SeasonalNaive
 from tests.catalog_cases import (
@@ -15,10 +16,9 @@ from tests.catalog_cases import (
     TRANSFORMER_PARAMS,
     event_factory,
     model_params,
+    quick_params,
 )
 
-# Baselines and rules have no learned reference, so they judge from the start.
-_JUDGE_FROM_START = {"null", "random", "threshold"}
 # The random baseline draws a new score on every call by design.
 _STATEFUL_SCORES = {"random"}
 
@@ -75,10 +75,40 @@ def test_model_parameters_rebuild_the_model(component_id):
 
 
 @pytest.mark.parametrize("component_id", MODEL_IDS)
-def test_model_scores_zero_before_learning(component_id):
-    if component_id in _JUDGE_FROM_START:
-        pytest.skip("baselines and rules judge from the first event")
-    assert _model(component_id).score_one(_events(component_id)[0]) == 0.0
+def test_model_scores_zero_until_ready_and_judges_soon_after(component_id):
+    model = create_model(component_id, quick_params(component_id))
+    ready_at = first_score = None
+    for index, event in enumerate(_events(component_id, 200)):
+        ready = model.readiness.ready
+        score = model.score_one(event)
+        if not ready:
+            assert score == 0.0, f"scored {score} while not ready at event {index}"
+        elif ready_at is None:
+            ready_at = index
+        if score != 0.0 and first_score is None:
+            first_score = index
+        model.learn_one(event)
+    if first_score is not None:
+        # A model that forgot to declare its warm-up would sit at zero long
+        # after claiming to be ready.
+        assert ready_at is not None
+        assert first_score - ready_at <= 5
+
+
+@pytest.mark.parametrize("component_id", MODEL_IDS)
+def test_catalog_warmup_is_the_learned_events_readiness_needs(component_id):
+    params = quick_params(component_id)
+    model = create_model(component_id, params)
+    capabilities = model_capabilities(component_id, params)
+    assert capabilities.warmup == model.readiness.required
+    assert capabilities.warmup_unit is model.readiness.unit
+    if capabilities.warmup_unit is not ReadinessUnit.EVENTS:
+        pytest.skip("only an event count maps onto learned events")
+    assert capabilities.warmup is not None
+    for index, event in enumerate(_events(component_id, capabilities.warmup)):
+        assert not model.readiness.ready, f"ready after {index} events"
+        model.learn_one(event)
+    assert model.readiness.ready
 
 
 @pytest.mark.parametrize("component_id", MODEL_IDS)

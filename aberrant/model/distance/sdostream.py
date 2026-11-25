@@ -12,6 +12,7 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness, ReadinessUnit
 
 
 class SDOStream(BaseModel):
@@ -259,6 +260,15 @@ class SDOStream(BaseModel):
 
     def _advance(self) -> None:
         self._sample_index += 1
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` and ``n_neighbors`` observers exist."""
+        return Readiness.after(
+            self._n_observers,
+            max(self.warm_up, self.n_neighbors),
+            ReadinessUnit.OBSERVERS,
+        )
 
     def learn_one(self, x: dict[str, float]) -> None:
         """

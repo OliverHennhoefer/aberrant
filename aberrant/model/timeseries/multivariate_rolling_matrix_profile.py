@@ -90,7 +90,7 @@ class MultivariateRollingMatrixProfile(
         ``(0.0, None, {})``. This method does not learn or advance indices.
         """
         prepared = self._schema.preview(x)
-        if not self.is_ready:
+        if not self.readiness.ready:
             return 0.0, None, {}
         series, query, statistics, window_start = self._query(prepared.values)
         distance, local_start, channel_distances = _nearest_multivariate_match(

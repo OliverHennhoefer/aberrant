@@ -176,7 +176,7 @@ def test_numpy_ensemble_state_has_fixed_shapes_after_warmup(adaptive: bool) -> N
         }
         assert math.isfinite(model.score_one(point))
         model.learn_one(point)
-        if model.is_ready:
+        if model.readiness.ready:
             current = [
                 (ae.w1.shape, ae.b1.shape, ae.w2.shape, ae.b2.shape)
                 for ae in [*model._ensemble, model._output_ae]
@@ -204,7 +204,7 @@ def test_numpy_ensemble_rejects_overflowing_feature_moments_without_poisoning() 
         np.testing.assert_array_equal(actual, expected)
     assert model._samples_seen == 1 and model._feature_map_samples == 1
     model.learn_one({"x": 0.3})
-    assert model.is_ready and math.isfinite(model.score_one({"x": 0.4}))
+    assert model.readiness.ready and math.isfinite(model.score_one({"x": 0.4}))
 
 
 def test_rejected_first_ensemble_event_does_not_lock_feature_dimensions() -> None:
@@ -214,7 +214,7 @@ def test_rejected_first_ensemble_event_does_not_lock_feature_dimensions() -> Non
     assert model._schema.names is None and model._sum is None
     model.learn_one({"other": 0.2})
     model.learn_one({"other": 0.3})
-    assert model.is_ready
+    assert model.readiness.ready
 
 
 def test_numpy_autoencoder_stages_overflowing_updates_before_publishing_weights() -> (

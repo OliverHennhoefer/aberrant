@@ -10,6 +10,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 _OPEN_UNIT_LOW = float(np.nextafter(0.0, 1.0))
 
@@ -461,6 +462,12 @@ class RHF(BaseModel):
             tree.build(points)
             self._trees.append(tree)
         self._forest_size = len(points)
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the first window has built the forest."""
+        observed = self._forest_size if self._trees else len(self._initial_window)
+        return Readiness(bool(self._trees), observed, self.window_size)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Insert one sample and replace the forest at window boundaries."""

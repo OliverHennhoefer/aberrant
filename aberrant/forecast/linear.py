@@ -14,6 +14,7 @@ from aberrant._utils.validation import (
 )
 from aberrant.base.forecast import Forecast
 from aberrant.base.protocols import FeatureMap
+from aberrant.base.readiness import Readiness
 from aberrant.forecast._arithmetic import blend
 from aberrant.forecast.base import BaseRegressor, check_spread_parameters
 
@@ -86,9 +87,14 @@ class RLSRegressor(BaseRegressor):
         self._reset_state()
 
     @property
-    def is_ready(self) -> bool:
-        """Whether a spread has been measured, after ``d + 1`` events."""
-        return self._mae is not None
+    def readiness(self) -> Readiness:
+        """Ready once a spread has been measured, after ``d + 1`` events.
+
+        ``required`` is ``None`` until the first event sets ``d``.
+        """
+        names = self._schema.names
+        required = None if names is None else len(names) + 1
+        return Readiness(self._mae is not None, self.n_samples_seen, required)
 
     @property
     def feature_names(self) -> tuple[str, ...] | None:

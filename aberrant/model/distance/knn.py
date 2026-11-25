@@ -9,6 +9,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 from aberrant.exceptions import MissingOptionalDependencyError, ValidationError
 
 
@@ -82,6 +83,11 @@ class KNN(BaseModel):
     def n_samples_seen(self) -> int:
         """Number of events in the reference window."""
         return self._count
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the window holds ``k`` events."""
+        return Readiness.after(self._count, self.k)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Append one event to the reference window, evicting the oldest."""

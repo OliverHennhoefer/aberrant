@@ -16,7 +16,6 @@ def main() -> None:
         ],
         MovingCovariance(window_size=32),
         output="features",
-        model_minimum_updates=2,
     )
     for index in range(20):
         event = {

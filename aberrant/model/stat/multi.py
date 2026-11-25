@@ -8,6 +8,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 def _float_array(values: np.ndarray | Collection[float]) -> np.ndarray:
@@ -59,6 +60,11 @@ def _covariance(
         return 0.0
 
     return float(np.cov(x_array, y_array, ddof=ddof)[0, 1])
+
+
+def _paired_length(window: dict[str, deque[float]]) -> int:
+    """Number of paired values in a bivariate window, ``0`` before learning."""
+    return min((len(values) for values in window.values()), default=0)
 
 
 def _initialize_bivariate_windows(
@@ -119,6 +125,11 @@ class MovingCovariance(BaseModel):
                 self._schema.names,
                 self.window_size,
             )
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the window holds two events."""
+        return Readiness.after(_paired_length(self.window), 2)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -217,6 +228,11 @@ class MovingCorrelationCoefficient(BaseModel):
                 self.window_size,
             )
 
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the window holds two events."""
+        return Readiness.after(_paired_length(self.window), 2)
+
     def learn_one(self, x: dict[str, float]) -> None:
         """Append one validated, finite bivariate observation.
 
@@ -270,7 +286,7 @@ class MovingCorrelationCoefficient(BaseModel):
         """
         prepared = self._schema.preview(x)
         names = self._schema.names
-        if names is None:
+        if names is None or not self.readiness.ready:
             return 0.0
         score_window_0 = list(self.window[names[0]])
         score_window_1 = list(self.window[names[1]])
@@ -312,6 +328,11 @@ class MovingMahalanobisDistance(BaseModel):
         self.features = None if features is None else list(features)
         self._schema = FeatureSchema(names=features)
         self.bias = bias
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the window holds three events."""
+        return Readiness.after(len(self.window), 3)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Append one validated, finite observation.

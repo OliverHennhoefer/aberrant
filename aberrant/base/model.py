@@ -4,6 +4,7 @@ import abc
 from collections.abc import Iterable
 
 from aberrant.base._parameters import Parameterized
+from aberrant.base.readiness import Readiness
 
 
 class BaseModel(Parameterized, abc.ABC):
@@ -17,7 +18,8 @@ class BaseModel(Parameterized, abc.ABC):
     Every model follows one score convention: a higher score is more
     anomalous, the score is 0.0 until the model has learned enough to judge,
     and it is the model's raw statistic. Map scores to a common scale with
-    ``aberrant.calibration``.
+    ``aberrant.calibration``. ``readiness`` says whether the model can judge;
+    the default suits a model that judges from the first event.
 
     Subclasses implement ``learn_one`` and ``score_one`` and store every
     constructor parameter under its own name. ``get_params``, ``clone``,
@@ -47,10 +49,15 @@ class BaseModel(Parameterized, abc.ABC):
                 and the values are the corresponding feature values.
 
         Returns:
-            The model-specific anomaly score for the data point. Consult the
-            concrete model for its range and orientation.
+            The anomaly score: higher is more anomalous, and ``0.0`` while
+            the model is not ready.
         """
         raise NotImplementedError
+
+    @property
+    def readiness(self) -> Readiness:
+        """Whether the model has learned enough to score; ``0.0`` until then."""
+        return Readiness(True)
 
     def learn_many(self, xs: Iterable[dict[str, float]]) -> None:
         """Learn the events of ``xs`` in order."""

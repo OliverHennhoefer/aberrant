@@ -11,6 +11,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +195,12 @@ class ASDIsolationForest(BaseModel):
             return 1.0
         harmonic = math.log(n - 1) + ASDIsolationForest.EULER_MASCHERONI
         return 2.0 * harmonic - 2.0 * (n - 1) / n
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the first full window has been fitted."""
+        ready = self._flat is not None and self.c_n > 0.0
+        return Readiness(ready, len(self.window), self.window_size)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Add one sample to the sliding window and retrain when due."""

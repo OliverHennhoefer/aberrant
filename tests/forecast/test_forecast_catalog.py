@@ -5,15 +5,16 @@ import math
 
 import pytest
 
+from aberrant.base import ReadinessUnit
 from aberrant.catalog import (
     FORECASTER_CATALOG,
     ComponentKind,
     DetectorConfig,
     EventKind,
-    WarmupUnit,
     catalog_manifest,
     get_forecaster_spec,
     get_model_spec,
+    model_capabilities,
 )
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.forecast import HoltWinters, ResidualDetector, RLSRegressor, SeasonalNaive
@@ -110,8 +111,8 @@ def test_forecaster_warmup_matches_the_first_forecast(forecaster, lead) -> None:
         1,
         1,
     )
-    assert capabilities.warmup.unit is WarmupUnit.EVENTS
-    assert capabilities.warmup.minimum == _first_forecast(config.build())
+    assert capabilities.warmup_unit is ReadinessUnit.EVENTS
+    assert capabilities.warmup == _first_forecast(config.build())
 
 
 def test_regressor_takes_covariates_and_its_warmup_is_left_to_the_events() -> None:
@@ -120,21 +121,21 @@ def test_regressor_takes_covariates_and_its_warmup_is_left_to_the_events() -> No
 
     assert capabilities.event_kind is EventKind.TABULAR
     assert capabilities.feature_count.minimum == 2
-    assert capabilities.warmup.minimum is None
+    assert capabilities.warmup is None
     detector = config.build()
     assert isinstance(detector.model, RLSRegressor)
     assert detector.lead == 0
 
 
 def test_directly_created_detectors_resolve_the_same_capabilities() -> None:
-    spec = get_model_spec("residual_detector")
-
-    forecaster = spec.capabilities(
-        {"model": HoltWinters(season_length=4), "target": "y"}
+    forecaster = model_capabilities(
+        "residual_detector", {"model": HoltWinters(season_length=4), "target": "y"}
     )
-    regressor = spec.capabilities({"model": RLSRegressor(), "target": "y"})
+    regressor = model_capabilities(
+        "residual_detector", {"model": RLSRegressor(), "target": "y"}
+    )
 
-    assert forecaster.warmup.minimum == 8
+    assert forecaster.warmup == 8
     assert regressor.event_kind is EventKind.TABULAR
 
 

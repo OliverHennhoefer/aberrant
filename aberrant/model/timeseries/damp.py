@@ -9,6 +9,7 @@ import numpy as np
 
 from aberrant._utils.validation import coerce_finite_number
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 from aberrant.exceptions import ValidationError
 from aberrant.model.timeseries._matrix_profile import (
     _normalized_window,
@@ -239,10 +240,11 @@ class DAMP(BaseModel):
         return self._last_score
 
     @property
-    def is_ready(self) -> bool:
-        """Whether the next event starts a processable subsequence."""
-        query_start = self._samples_seen - self.subsequence_length + 2
-        return query_start >= self.start_index
+    def readiness(self) -> Readiness:
+        """Ready once the next event completes a subsequence after ``start_index``."""
+        return Readiness.after(
+            self._samples_seen, self.start_index + self.subsequence_length - 2
+        )
 
     def _extract_value(self, x: dict[str, float], *, mutate_schema: bool) -> float:
         if not x:
@@ -336,7 +338,7 @@ class DAMP(BaseModel):
         return approximate_distance, best_so_far
 
     def _candidate_result(self, value: float) -> tuple[float, float] | None:
-        if not self.is_ready:
+        if not self.readiness.ready:
             return None
 
         combined = np.fromiter(

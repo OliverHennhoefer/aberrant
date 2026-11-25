@@ -8,6 +8,7 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 class AdaptiveOneClassSVM(BaseModel):
@@ -260,6 +261,11 @@ class AdaptiveOneClassSVM(BaseModel):
 
         kernel_values = self._compute_kernel_row(x, std)
         return float(np.dot(self.alpha, kernel_values) - self.rho)
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the first event is a support vector."""
+        return Readiness(bool(self.support_vectors), self.n_samples, 1)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Incrementally learn from one sample."""

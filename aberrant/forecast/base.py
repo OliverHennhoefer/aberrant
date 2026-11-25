@@ -8,6 +8,7 @@ from aberrant._utils.validation import coerce_finite_number, coerce_integer_coun
 from aberrant.base._parameters import Parameterized
 from aberrant.base.forecast import Forecast
 from aberrant.base.protocols import FeatureMap
+from aberrant.base.readiness import Readiness
 
 
 def check_spread_parameters(
@@ -37,7 +38,7 @@ class BaseForecaster(Parameterized, abc.ABC):
 
     @property
     @abc.abstractmethod
-    def is_ready(self) -> bool:
+    def readiness(self) -> Readiness:
         """Whether ``forecast_one`` returns a forecast."""
 
     @abc.abstractmethod
@@ -58,7 +59,7 @@ class BaseRegressor(Parameterized, abc.ABC):
 
     @property
     @abc.abstractmethod
-    def is_ready(self) -> bool:
+    def readiness(self) -> Readiness:
         """Whether ``predict_one`` returns a prediction."""
 
     @abc.abstractmethod

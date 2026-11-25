@@ -6,10 +6,11 @@ import hashlib
 import json
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import cast
 
+from aberrant import __version__
 from aberrant.base import ModelProtocol, Pipeline, TransformerProtocol
 from aberrant.exceptions import ConfigurationError, ConfigurationIssue
 
@@ -21,6 +22,10 @@ from ._parameters import (
     copy_parameter,
 )
 from ._registry import (
+    CATALOG_FORMAT_VERSION,
+    FORECASTER_CATALOG,
+    MODEL_CATALOG,
+    TRANSFORMER_CATALOG,
     get_forecaster_spec,
     get_model_spec,
     get_transformer_spec,
@@ -232,7 +237,7 @@ class DetectorConfig:
         return _fingerprint(self.normalized())
 
     def resolve(self) -> ResolvedDetectorConfig:
-        """Resolve parameters and capabilities once, without learning or construction."""
+        """Resolve parameters and capabilities once, without learning."""
         return resolve_detector_config(self)
 
     def normalized(self) -> DetectorConfig:
@@ -523,6 +528,7 @@ def _capabilities(
     assert isinstance(model.spec, ModelSpec)
     with _at((*model.loc, "params")):
         capabilities = model.spec._resolved_capabilities(model.params)
+    capabilities = _with_warmup(capabilities, _model_instance(model))
     if feature_count is not None and not capabilities.feature_count.accepts(
         feature_count
     ):
@@ -543,10 +549,63 @@ def _capabilities(
     return capabilities
 
 
+def _with_warmup(
+    capabilities: ModelCapabilities, model: ModelProtocol
+) -> ModelCapabilities:
+    readiness = model.readiness
+    if readiness.unit is not capabilities.warmup_unit:  # pragma: no cover
+        raise RuntimeError(
+            f"{type(model).__name__} counts its warm-up in {readiness.unit.value}, "
+            f"but the catalog declares {capabilities.warmup_unit.value}"
+        )
+    return replace(capabilities, warmup=readiness.required)
+
+
+def model_capabilities(
+    component_id: str,
+    params: Mapping[str, object] | None = None,
+) -> ModelCapabilities:
+    """Describe a built-in model configuration, including its warm-up.
+
+    The warm-up is read from a freshly built model's ``readiness``; it is
+    ``None`` when ``params`` lack a required parameter.
+    """
+    spec = get_model_spec(component_id)
+    resolved = (
+        spec.resolved_parameters(params) if spec.available else dict(params or {})
+    )
+    capabilities = spec._resolved_capabilities(resolved)
+    try:
+        model = create_model(component_id, params)
+    except ConfigurationError:
+        return capabilities
+    return _with_warmup(capabilities, model)
+
+
+def catalog_manifest() -> dict[str, object]:
+    """Describe every built-in component without importing optional runtimes."""
+    models = []
+    for spec in MODEL_CATALOG.values():
+        entry = spec.as_dict()
+        entry["capabilities"] = (
+            model_capabilities(spec.id).as_dict()
+            if spec.dependency_module is None
+            else None
+        )
+        models.append(entry)
+    return {
+        "version": CATALOG_FORMAT_VERSION,
+        "aberrant_version": __version__,
+        "models": models,
+        "transformers": [spec.as_dict() for spec in TRANSFORMER_CATALOG.values()],
+        "forecasters": [spec.as_dict() for spec in FORECASTER_CATALOG.values()],
+    }
+
+
 def resolve_detector_config(
     config: DetectorConfig | Mapping[str, object],
 ) -> ResolvedDetectorConfig:
-    """Resolve a reusable configuration without constructing any algorithms."""
+    """Resolve a reusable configuration, building the model once for its warm-up."""
     normalized, model, transformers = _resolve_components(config)
     capabilities = _capabilities(model, transformers)
     return ResolvedDetectorConfig(normalized, capabilities, model, transformers)

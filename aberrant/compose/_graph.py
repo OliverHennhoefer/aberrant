@@ -6,16 +6,15 @@ from collections.abc import Callable, Sequence
 from time import perf_counter_ns
 from typing import Literal, TypeVar, cast
 
-from aberrant._utils.validation import coerce_finite_number, coerce_integer_count
-from aberrant.base.protocols import ModelProtocol
-from aberrant.base.readiness import Readiness, ReadinessProtocol
+from aberrant._utils.validation import coerce_finite_number
+from aberrant.base.protocols import ModelProtocol, TransformerProtocol
+from aberrant.base.readiness import Readiness
 from aberrant.compose._learning import LearningPass, LearningTransactions
 from aberrant.compose._types import (
     INPUT,
     GraphComponent,
     GraphExecutionError,
     GraphNode,
-    GraphNotReadyError,
     GraphStateUncertainError,
     LearningOutcome,
     MergeNode,
@@ -34,7 +33,7 @@ class GraphPipeline:
 
     Learning uses each transformer's post-update representation, but only when
     all of its inputs are ready. A newly ready output may feed successors in
-    the same observation. Scoring never learns and rejects unready graphs.
+    the same observation. Scoring never learns and is 0.0 until the graph is ready.
     One caller owns execution; concurrent use is not supported.
 
     This is model-ending composition, not a transformer with provisional
@@ -48,15 +47,11 @@ class GraphPipeline:
         model: ModelProtocol,
         output: str,
         *,
-        model_minimum_updates: int = 0,
         observer: Observer | None = None,
     ) -> None:
         self.nodes = ordered_nodes(tuple(nodes), model, output)
         self.model = model
         self.output = output
-        self.model_minimum_updates = coerce_integer_count(
-            model_minimum_updates, label="model_minimum_updates", minimum=0
-        )
         self.observer = observer
         self.observer_error_count = 0
         self.model_updates = 0
@@ -165,9 +160,7 @@ class GraphPipeline:
             node.id, "learn", current, lambda: node.transformer.learn_one(dict(current))
         )
         execution.updates[node.id] += 1
-        ready = self._component_readiness(
-            node.transformer, execution.updates[node.id], node.minimum_updates or 0
-        )
+        ready = self._component_readiness(node.transformer)
         if ready.ready:
             execution.phase = "transform"
             execution.available[node.id] = self._transform(
@@ -189,10 +182,14 @@ class GraphPipeline:
         execution.model_updated = True
 
     def score_one(self, x: dict[str, float]) -> float:
-        """Execute one read-only pass using the previously committed state."""
+        """Execute one read-only pass using the previously committed state.
+
+        The score is ``0.0`` until the complete path and the model are ready.
+        """
         self._require_usable()
         if not self.readiness.ready:
-            raise GraphNotReadyError(self.readiness.reason or "Graph is not ready")
+            self._input(x)
+            return 0.0
         available = {INPUT: self._input(x)}
         schemas = dict(self._schemas)
         node_id, phase = INPUT, "transform"
@@ -303,19 +300,11 @@ class GraphPipeline:
 
     @staticmethod
     def _component_readiness(
-        component: object, updates: int, minimum: int
+        component: TransformerProtocol | ModelProtocol,
     ) -> Readiness:
-        declared = (
-            component.readiness
-            if isinstance(component, ReadinessProtocol)
-            else Readiness(True, updates, minimum)
-        )
+        declared = component.readiness
         if not isinstance(declared, Readiness):
             raise TypeError("Component readiness must be a Readiness value")
-        if not declared.ready:
-            return declared
-        if updates < minimum:
-            return Readiness(False, updates, minimum, "Learning reference")
         return declared
 
     def _initial_states(self) -> tuple[NodeState, ...]:
@@ -324,9 +313,7 @@ class GraphPipeline:
         for node in self.nodes:
             blocked = tuple(key for key in predecessors(node) if key not in ready)
             state = (
-                self._component_readiness(
-                    node.transformer, 0, node.minimum_updates or 0
-                )
+                self._component_readiness(node.transformer)
                 if isinstance(node, GraphNode)
                 else Readiness(True)
             )
@@ -341,17 +328,13 @@ class GraphPipeline:
         self, model_updated: bool, states: tuple[NodeState, ...]
     ) -> LearningOutcome:
         updates = self.model_updates + int(model_updated)
-        model_readiness = self._component_readiness(
-            self.model, updates, self.model_minimum_updates
-        )
+        model_readiness = self._component_readiness(self.model)
         features_ready = self.output == INPUT or any(
             state.node_id == self.output and state.readiness.ready for state in states
         )
         ready = (
             model_readiness
             if features_ready
-            else Readiness(
-                False, updates, self.model_minimum_updates, "Waiting for feature graph"
-            )
+            else Readiness(False, reason="Waiting for feature graph")
         )
         return LearningOutcome(model_updated, updates, states, ready)

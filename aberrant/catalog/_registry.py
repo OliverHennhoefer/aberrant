@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TypeVar, cast
 
-from aberrant import __version__
+from aberrant.base.readiness import ReadinessUnit
 from aberrant.exceptions import UnknownComponentError
 
 from ._specs import (
@@ -21,8 +21,6 @@ from ._specs import (
     ScoreKind,
     StateKind,
     TransformerSpec,
-    WarmupRequirement,
-    WarmupUnit,
 )
 
 Parameters = Mapping[str, object]
@@ -30,7 +28,6 @@ FeatureCountValue = FeatureCount | Callable[[Parameters], FeatureCount]
 FeatureSchemaValue = FeatureSchemaKind | Callable[[Parameters], FeatureSchemaKind]
 ScoreKindValue = ScoreKind | Callable[[Parameters], ScoreKind]
 StateKindValue = StateKind | Callable[[Parameters], StateKind]
-OrientationValue = bool | None | Callable[[Parameters], bool | None]
 EventKindValue = EventKind | Callable[[Parameters], EventKind]
 
 ANY_FEATURES = FeatureCount()
@@ -47,24 +44,6 @@ def _as_int(value: object) -> int:
     return int(value)
 
 
-def _events(count: int | None) -> WarmupRequirement:
-    return WarmupRequirement(count, WarmupUnit.EVENTS)
-
-
-def _fixed_warmup(
-    count: int, unit: WarmupUnit = WarmupUnit.EVENTS
-) -> Callable[[Parameters], WarmupRequirement]:
-    return lambda _params: WarmupRequirement(count, unit)
-
-
-def _parameter_warmup(name: str) -> Callable[[Parameters], WarmupRequirement]:
-    def resolve(params: Parameters) -> WarmupRequirement:
-        value = params.get(name)
-        return _events(None if value is None else _as_int(value))
-
-    return resolve
-
-
 def _resolve_value(value: object, params: Parameters) -> object:
     return value(params) if callable(value) else value
 
@@ -75,34 +54,31 @@ def _capabilities(
     feature_count: FeatureCountValue = ANY_FEATURES,
     feature_schema: FeatureSchemaValue = FeatureSchemaKind.FIXED,
     score_kind: ScoreKindValue,
-    warmup: Callable[[Parameters], WarmupRequirement],
     state: StateKindValue,
-    resettable: bool,
-    higher_is_more_anomalous: OrientationValue = True,
+    warmup_unit: ReadinessUnit = ReadinessUnit.EVENTS,
     requires_unit_interval: bool = False,
 ) -> Callable[[Parameters], ModelCapabilities]:
+    """Declare what a model accepts and keeps; its warm-up comes from an instance."""
+
     def resolve(params: Parameters) -> ModelCapabilities:
         resolved_feature_count = _resolve_value(feature_count, params)
         resolved_feature_schema = _resolve_value(feature_schema, params)
         resolved_score_kind = _resolve_value(score_kind, params)
         resolved_state = _resolve_value(state, params)
-        resolved_orientation = _resolve_value(higher_is_more_anomalous, params)
         resolved_event_kind = _resolve_value(event_kind, params)
         assert isinstance(resolved_event_kind, EventKind)
         assert isinstance(resolved_feature_count, FeatureCount)
         assert isinstance(resolved_feature_schema, FeatureSchemaKind)
         assert isinstance(resolved_score_kind, ScoreKind)
         assert isinstance(resolved_state, StateKind)
-        assert isinstance(resolved_orientation, bool) or resolved_orientation is None
         return ModelCapabilities(
             event_kind=resolved_event_kind,
             feature_count=resolved_feature_count,
             feature_schema=resolved_feature_schema,
             score_kind=resolved_score_kind,
-            higher_is_more_anomalous=resolved_orientation,
-            warmup=warmup(params),
+            warmup=None,
+            warmup_unit=warmup_unit,
             state=resolved_state,
-            resettable=resettable,
             requires_unit_interval=requires_unit_interval,
         )
 
@@ -138,11 +114,11 @@ def _graph_edge_features(params: Parameters) -> FeatureCount:
 _REGRESSORS = frozenset({"rls_regressor"})
 
 
-def _residual_model(params: Parameters) -> tuple[bool, Parameters]:
-    """Whether the residual detector wraps a regressor, and its parameters.
+def _wraps_regressor(params: Parameters) -> bool:
+    """Whether the residual detector wraps a regressor rather than a forecaster.
 
-    The model is a nested ``{"id", "params"}`` configuration, or an instance
-    when a model is created directly from Python objects.
+    The model is a nested ``{"id", "params"}`` configuration, whose parameters
+    are checked here, or an instance created directly from Python objects.
     """
     model = params.get("model")
     if isinstance(model, Mapping):
@@ -152,95 +128,17 @@ def _residual_model(params: Parameters) -> tuple[bool, Parameters]:
         nested = model.get("params") or {}
         if not isinstance(nested, Mapping):
             raise TypeError("model params must be a mapping")
-        resolved = get_forecaster_spec(component_id).resolved_parameters(nested)
-        return component_id in _REGRESSORS, resolved
-    if hasattr(model, "predict_one"):
-        return True, {}
-    return False, {"season_length": getattr(model, "season_length", None)}
+        get_forecaster_spec(component_id).resolved_parameters(nested)
+        return component_id in _REGRESSORS
+    return hasattr(model, "predict_one")
 
 
 def _residual_event_kind(params: Parameters) -> EventKind:
-    regressor, _ = _residual_model(params)
-    return EventKind.TABULAR if regressor else EventKind.UNIVARIATE
+    return EventKind.TABULAR if _wraps_regressor(params) else EventKind.UNIVARIATE
 
 
 def _residual_features(params: Parameters) -> FeatureCount:
-    regressor, _ = _residual_model(params)
-    return FeatureCount(2) if regressor else ONE_FEATURE
-
-
-def _residual_warmup(params: Parameters) -> WarmupRequirement:
-    """Learned events before the first score that compares with a forecast.
-
-    A forecaster forecasts once it has seen two seasons, and the detector
-    scores an event against the forecast issued ``lead`` events earlier. A
-    regressor's readiness depends on how many covariates the events carry.
-    """
-    regressor, model = _residual_model(params)
-    season_length = model.get("season_length")
-    if regressor or season_length is None:
-        return _events(None)
-    lead = params.get("lead")
-    return _events(
-        2 * _as_int(season_length) + _as_int(1 if lead is None else lead) - 1
-    )
-
-
-def _kitnet_warmup(params: Parameters) -> WarmupRequirement:
-    feature_map = _as_int(params.get("feature_map_grace", 5000))
-    detector = _as_int(params.get("ad_grace", 50000))
-    return _events(feature_map + detector)
-
-
-def _knn_warmup(params: Parameters) -> WarmupRequirement:
-    return _events(_as_int(params.get("k", 10)))
-
-
-def _cell_warmup(params: Parameters) -> WarmupRequirement:
-    slides = _as_int(params.get("warm_up", 1))
-    slide_size = _as_int(params.get("slide_size", 500))
-    neighbors = _as_int(params.get("k", 50)) + 1
-    return _events(max(slides * slide_size, neighbors))
-
-
-def _sdo_warmup(params: Parameters) -> WarmupRequirement:
-    k = _as_int(params.get("max_observers", 256))
-    configured = params.get("warm_up")
-    minimum = max(_as_int(params.get("n_neighbors", 6)), 2)
-    if configured is not None:
-        minimum = max(minimum, _as_int(configured))
-    return WarmupRequirement(min(k, minimum), WarmupUnit.OBSERVERS)
-
-
-def _active_graph_warmup(params: Parameters) -> WarmupRequirement:
-    return WarmupRequirement(
-        _as_int(params.get("warm_up", 32)),
-        WarmupUnit.ACTIVE_GRAPHS,
-    )
-
-
-def _asd_warmup(params: Parameters) -> WarmupRequirement:
-    window_size = params.get("window_size")
-    return _events(
-        _as_int(params.get("max_samples", 256) if window_size is None else window_size)
-    )
-
-
-def _random_cut_warmup(params: Parameters) -> WarmupRequirement:
-    configured = params.get("warm_up")
-    warmup = _as_int(
-        params.get("sample_size", 256) if configured is None else configured
-    )
-    return _events(warmup + _as_int(params.get("shingle_size", 1)) - 1)
-
-
-def _xstream_warmup(params: Parameters) -> WarmupRequirement:
-    return _events(
-        max(
-            _as_int(params.get("warm_up", 256)),
-            _as_int(params.get("window_size", 256)),
-        )
-    )
+    return FeatureCount(2) if _wraps_regressor(params) else ONE_FEATURE
 
 
 def _xstream_state(params: Parameters) -> StateKind:
@@ -251,45 +149,8 @@ def _xstream_state(params: Parameters) -> StateKind:
     )
 
 
-def _mstream_warmup(params: Parameters) -> WarmupRequirement:
-    return WarmupRequirement(
-        _as_int(params.get("warm_up", 0)),
-        WarmupUnit.BUCKETS,
-    )
-
-
-def _damp_warmup(params: Parameters) -> WarmupRequirement:
-    subsequence_length = params.get("subsequence_length")
-    if subsequence_length is None:
-        return _events(None)
-    start_index = params.get("start_index")
-    resolved = (
-        4 * _as_int(subsequence_length) if start_index is None else _as_int(start_index)
-    )
-    return _events(resolved + _as_int(subsequence_length) - 2)
-
-
-def _matrix_profile_warmup(params: Parameters) -> WarmupRequirement:
-    subsequence_length = params.get("subsequence_length")
-    if subsequence_length is None:
-        return _events(None)
-    length = _as_int(subsequence_length)
-    exclusion_zone = params.get("exclusion_zone")
-    zone = (length + 3) // 4 if exclusion_zone is None else _as_int(exclusion_zone)
-    return _events(length + zone)
-
-
-def _moving_warmup(params: Parameters) -> WarmupRequirement:
-    warm_up = params.get("warm_up")
-    return _events(
-        _as_int(params.get("window_size", 256) if warm_up is None else warm_up)
-    )
-
-
 def _moving_capabilities(
     feature_count: FeatureCount,
-    *,
-    warmup: int | Callable[[Parameters], WarmupRequirement],
 ) -> Callable[[Parameters], ModelCapabilities]:
     return _capabilities(
         event_kind=(
@@ -299,9 +160,7 @@ def _moving_capabilities(
         ),
         feature_count=feature_count,
         score_kind=ScoreKind.NON_NEGATIVE,
-        warmup=_fixed_warmup(warmup) if isinstance(warmup, int) else warmup,
         state=StateKind.BOUNDED,
-        resettable=True,
     )
 
 
@@ -341,10 +200,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_schema=FeatureSchemaKind.UNRESTRICTED,
             score_kind=ScoreKind.ZERO,
-            warmup=_fixed_warmup(0),
             state=StateKind.STATELESS,
-            resettable=False,
-            higher_is_more_anomalous=None,
         ),
     ),
     _model(
@@ -356,9 +212,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_schema=FeatureSchemaKind.UNRESTRICTED,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_fixed_warmup(0),
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -370,9 +224,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_schema=FeatureSchemaKind.UNRESTRICTED,
             score_kind=ScoreKind.BINARY,
-            warmup=_fixed_warmup(0),
             state=StateKind.STATELESS,
-            resettable=False,
         ),
     ),
     _model(
@@ -383,9 +235,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_kitnet_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -396,9 +246,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.CUSTOM,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_fixed_warmup(0),
             state=StateKind.EXTERNAL,
-            resettable=False,
         ),
         optional_extra="dl",
         dependency_module="torch",
@@ -412,9 +260,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_knn_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -425,9 +271,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=lambda params: _events(_as_int(params.get("k", 10)) + 1),
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -439,9 +283,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_cell_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -453,9 +295,8 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_sdo_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
+            warmup_unit=ReadinessUnit.OBSERVERS,
         ),
     ),
     _model(
@@ -467,9 +308,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -481,9 +320,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -495,9 +332,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.EDGE,
             feature_count=_edge_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -509,9 +344,8 @@ _MODEL_SPECS = (
             event_kind=EventKind.GRAPH_EDGE,
             feature_count=_graph_edge_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_active_graph_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
+            warmup_unit=ReadinessUnit.ACTIVE_GRAPHS,
         ),
     ),
     _model(
@@ -522,9 +356,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_asd_warmup,
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -535,9 +367,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_parameter_warmup("window_size"),
             state=StateKind.BOUNDED,
-            resettable=False,
             requires_unit_interval=True,
         ),
     ),
@@ -549,9 +379,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_fixed_warmup(2),
             state=_mondrian_state,
-            resettable=False,
         ),
     ),
     _model(
@@ -562,9 +390,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_fixed_warmup(1),
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -575,9 +401,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_random_cut_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -588,9 +412,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("window_size"),
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -602,9 +424,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_schema=FeatureSchemaKind.EVOLVING,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_xstream_warmup,
             state=_xstream_state,
-            resettable=True,
         ),
     ),
     _model(
@@ -616,9 +436,8 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_mstream_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
+            warmup_unit=ReadinessUnit.BUCKETS,
         ),
     ),
     _model(
@@ -630,9 +449,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -644,9 +461,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.ZERO_TO_ONE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     *(
@@ -655,7 +470,7 @@ _MODEL_SPECS = (
             class_name,
             "aberrant.model.stat",
             "statistical",
-            _moving_capabilities(ONE_FEATURE, warmup=_moving_warmup),
+            _moving_capabilities(ONE_FEATURE),
         )
         for component_id, class_name in (
             ("moving_zscore", "MovingZScore"),
@@ -667,14 +482,14 @@ _MODEL_SPECS = (
         "MovingCorrelationCoefficient",
         "aberrant.model.stat",
         "statistical",
-        _moving_capabilities(TWO_FEATURES, warmup=2),
+        _moving_capabilities(TWO_FEATURES),
     ),
     _model(
         "moving_covariance",
         "MovingCovariance",
         "aberrant.model.stat",
         "statistical",
-        _moving_capabilities(TWO_FEATURES, warmup=2),
+        _moving_capabilities(TWO_FEATURES),
     ),
     _model(
         "moving_mahalanobis_distance",
@@ -684,9 +499,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_fixed_warmup(3),
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -698,9 +511,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -712,9 +523,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.TABULAR,
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_parameter_warmup("warm_up"),
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -725,9 +534,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.SIGNED,
-            warmup=_fixed_warmup(1),
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
     ),
     _model(
@@ -738,9 +545,7 @@ _MODEL_SPECS = (
         _capabilities(
             event_kind=EventKind.TABULAR,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_matrix_profile_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -752,9 +557,7 @@ _MODEL_SPECS = (
             event_kind=_residual_event_kind,
             feature_count=_residual_features,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_residual_warmup,
             state=StateKind.BOUNDED,
-            resettable=False,
         ),
         dependencies=(ComponentDependency("model", ComponentKind.FORECASTER),),
     ),
@@ -767,9 +570,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.UNIVARIATE,
             feature_count=ONE_FEATURE,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_matrix_profile_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
     _model(
@@ -781,9 +582,7 @@ _MODEL_SPECS = (
             event_kind=EventKind.UNIVARIATE,
             feature_count=ONE_FEATURE,
             score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_damp_warmup,
             state=StateKind.BOUNDED,
-            resettable=True,
         ),
     ),
 )
@@ -1018,14 +817,3 @@ def get_forecaster_spec(component_id: str) -> ComponentSpec:
             ComponentKind.FORECASTER.value,
             component_id,
         ) from exc
-
-
-def catalog_manifest() -> dict[str, object]:
-    """Describe every built-in component without importing optional runtimes."""
-    return {
-        "version": CATALOG_FORMAT_VERSION,
-        "aberrant_version": __version__,
-        "models": [spec.as_dict() for spec in MODEL_CATALOG.values()],
-        "transformers": [spec.as_dict() for spec in TRANSFORMER_CATALOG.values()],
-        "forecasters": [spec.as_dict() for spec in FORECASTER_CATALOG.values()],
-    }

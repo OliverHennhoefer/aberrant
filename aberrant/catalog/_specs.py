@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
+from aberrant.base.readiness import ReadinessUnit
 from aberrant.exceptions import ConfigurationError, MissingOptionalDependencyError
 
 from ._parameters import ConstructorParameters
@@ -59,15 +60,6 @@ class StateKind(str, Enum):
     EXTERNAL = "external"
 
 
-class WarmupUnit(str, Enum):
-    """Unit used to express a model's readiness requirement."""
-
-    EVENTS = "events"
-    BUCKETS = "buckets"
-    OBSERVERS = "observers"
-    ACTIVE_GRAPHS = "active_graphs"
-
-
 @dataclass(frozen=True, slots=True)
 class FeatureCount:
     """Inclusive feature-count bounds for one model input event."""
@@ -91,46 +83,21 @@ class FeatureCount:
 
 
 @dataclass(frozen=True, slots=True)
-class WarmupRequirement:
-    """Minimum learned history before a model's score contract is ready."""
-
-    minimum: int | None
-    unit: WarmupUnit = WarmupUnit.EVENTS
-
-    def __post_init__(self) -> None:
-        if self.minimum is not None and self.minimum < 0:
-            raise ValueError("warm-up minimum must be non-negative or None")
-
-    def as_dict(self) -> dict[str, int | str | None]:
-        """Return a JSON-compatible representation."""
-        return {"minimum": self.minimum, "unit": self.unit.value}
-
-    def remaining(self, observed: int) -> int | None:
-        """Return the remaining count in ``unit``, or ``None`` if indeterminate."""
-        if observed < 0:
-            raise ValueError("observed history must be non-negative")
-        if self.minimum is None:
-            return None
-        return max(0, self.minimum - observed)
-
-    def is_satisfied(self, observed: int) -> bool | None:
-        """Return readiness, or ``None`` when the catalog cannot determine it."""
-        remaining = self.remaining(observed)
-        return None if remaining is None else remaining == 0
-
-
-@dataclass(frozen=True, slots=True)
 class ModelCapabilities:
-    """Resolved operational facts for one model configuration."""
+    """Resolved operational facts for one model configuration.
+
+    ``warmup`` is the ``required`` count of a freshly built model's
+    ``readiness``, in ``warmup_unit``. It is ``None`` when the configuration
+    cannot be built yet or the count depends on the data.
+    """
 
     event_kind: EventKind
     feature_count: FeatureCount
     feature_schema: FeatureSchemaKind
     score_kind: ScoreKind
-    higher_is_more_anomalous: bool | None
-    warmup: WarmupRequirement
+    warmup: int | None
+    warmup_unit: ReadinessUnit
     state: StateKind
-    resettable: bool
     requires_unit_interval: bool = False
 
     def as_dict(self) -> dict[str, object]:
@@ -140,10 +107,8 @@ class ModelCapabilities:
             "feature_count": self.feature_count.as_dict(),
             "feature_schema": self.feature_schema.value,
             "score_kind": self.score_kind.value,
-            "higher_is_more_anomalous": self.higher_is_more_anomalous,
-            "warmup": self.warmup.as_dict(),
+            "warmup": {"required": self.warmup, "unit": self.warmup_unit.value},
             "state": self.state.value,
-            "resettable": self.resettable,
             "requires_unit_interval": self.requires_unit_interval,
         }
 
@@ -255,36 +220,16 @@ class ModelSpec(ComponentSpec):
 
     _capability_resolver: CapabilityResolver = field(repr=False, compare=False)
 
-    def capabilities(
-        self, params: Mapping[str, object] | None = None
-    ) -> ModelCapabilities:
-        """Resolve operational capabilities using constructor defaults."""
-        resolved = (
-            self.resolved_parameters(params) if self.available else dict(params or {})
-        )
-        return self._resolved_capabilities(resolved)
-
     def _resolved_capabilities(
         self, resolved: Mapping[str, object]
     ) -> ModelCapabilities:
+        """Declared capabilities for resolved parameters, without a warm-up."""
         try:
             return self._capability_resolver(resolved)
         except (KeyError, TypeError, ValueError) as exc:
             raise ConfigurationError(
                 f"Cannot resolve capabilities for model '{self.id}': {exc}"
             ) from exc
-
-    def as_dict(self) -> dict[str, object]:
-        result = ComponentSpec.as_dict(self)
-        try:
-            result["capabilities"] = (
-                self.capabilities().as_dict()
-                if self.dependency_module is None
-                else None
-            )
-        except ConfigurationError:
-            result["capabilities"] = None
-        return result
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

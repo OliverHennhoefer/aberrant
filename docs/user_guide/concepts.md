@@ -57,11 +57,15 @@ from silently acquiring different meanings across model families.
     measured. The terminology follows Gama, Sebastião, and Rodrigues,
     [*Issues in Evaluation of Stream Learning Algorithms*](https://doi.org/10.1145/1557019.1557060).
 
-**Warm-up**
+**Warm-up and readiness**
 :   An initial period in which state is being established and scores are omitted
-    from evaluation or alerting. A model may enforce warm-up by returning
-    `0.0`, but application-defined warm-up can be longer. Zero is therefore not
-    always evidence of normality.
+    from evaluation or alerting. Every model, transformer, forecaster and
+    pipeline reports `readiness`: whether it has learned enough, how much it has
+    `observed` and how much it `required`, counted in events, buckets, observers
+    or active graphs. A model that is not ready scores `0.0`, and
+    `PrequentialEvaluator` excludes those events. An application can still
+    require a longer calibration period, so zero is not always evidence of
+    normality.
 
 **Candidate-inclusive score**
 :   A score whose mathematical definition includes a provisional insertion of

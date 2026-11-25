@@ -11,6 +11,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 def _point_box(point: np.ndarray) -> np.ndarray:
@@ -554,6 +555,17 @@ class RandomCutForest(BaseModel):
         # Planned walks are a cache of the trees, not part of the model.
         state["_planned"] = None
         return state
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` shingles have been inserted."""
+        lag = self.shingle_size - 1
+        observed = (
+            self._inserted_shingles + lag
+            if self._inserted_shingles
+            else len(self._history)
+        )
+        return Readiness(self._ready, observed, self.warm_up + lag)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update forest state with one sample."""

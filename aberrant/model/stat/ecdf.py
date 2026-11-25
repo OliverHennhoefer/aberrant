@@ -126,18 +126,9 @@ class _OnlineTailDetector(BaseModel):
         return self._samples_seen
 
     @property
-    def is_ready(self) -> bool:
-        """Whether ``warm_up`` samples have been learned."""
-        return self._samples_seen >= self.warm_up
-
-    @property
     def readiness(self) -> Readiness:
-        """Return a detached description of the warm-up state."""
-        return Readiness(
-            self.is_ready,
-            min(self._samples_seen, self.warm_up),
-            self.warm_up,
-        )
+        """Ready once ``warm_up`` events have been learned."""
+        return Readiness.after(self._samples_seen, self.warm_up)
 
     def _create_references(self, n_features: int) -> None:
         if self.memory == "sketch":
@@ -179,7 +170,7 @@ class _OnlineTailDetector(BaseModel):
     def score_one(self, x: dict[str, float]) -> float:
         """Score one sample against the reference without learning it."""
         event = self._boundary.preview(x)
-        if self._primary is None or not self.is_ready:
+        if self._primary is None or not self.readiness.ready:
             return 0.0
         score, _ = self._evaluate(event.features.values)
         return score
@@ -193,7 +184,7 @@ class _OnlineTailDetector(BaseModel):
         """
         event = self._boundary.preview(x)
         names = event.features.names
-        if self._primary is None or not self.is_ready:
+        if self._primary is None or not self.readiness.ready:
             return dict.fromkeys(names, 0.0)
         _, terms = self._evaluate(event.features.values)
         return dict(zip(names, terms.tolist(), strict=True))

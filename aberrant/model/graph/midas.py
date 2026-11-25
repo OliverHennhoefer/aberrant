@@ -9,6 +9,7 @@ import numpy as np
 
 from aberrant._utils.validation import EdgeEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 class _CountMinSketch:
@@ -291,6 +292,11 @@ class MIDAS(BaseModel):
         indices = current.indices(payload)
         current.update_indices(indices)
         total.update_indices(indices)
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` edges have been learned."""
+        return Readiness.after(self._samples_seen, self.warm_up)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one edge."""

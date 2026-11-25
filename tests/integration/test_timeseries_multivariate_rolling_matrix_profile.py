@@ -39,7 +39,7 @@ def test_phase_change_with_familiar_individual_channels():
         event = {"a": float(values[0]), "b": float(values[1])}
         score, start, channels = direct.explain_one(event)
         assert detector.score_one(event) == score
-        if direct.is_ready:
+        if direct.readiness.ready:
             assert (
                 max(0, index - params["window_size"] + 1) <= start <= index - 2 * m + 1
             )
@@ -67,4 +67,4 @@ def test_phase_change_with_familiar_individual_channels():
     assert max(individual_scores[novel]) < 0.1
     assert scores[novel] > 30 * np.quantile(scores[4 * m : change], 0.99)
     assert np.max(scores[-2 * m :]) < 0.1
-    assert direct.is_ready and direct.n_history == params["window_size"]
+    assert direct.readiness.ready and direct.n_history == params["window_size"]

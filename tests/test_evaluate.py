@@ -5,6 +5,7 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
+from aberrant.base import Readiness
 from aberrant.catalog import ComponentConfig, DetectorConfig
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
 from aberrant.exceptions import MissingOptionalDependencyError
@@ -20,6 +21,10 @@ class RecordingModel:
     def score_one(self, x):
         self.calls.append(("score", x["x"]))
         return float(len(self.values))
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(True)
 
     def learn_one(self, x):
         self.calls.append(("learn", x["x"]))
@@ -60,9 +65,14 @@ def test_score_before_learn_and_warmup_boundary():
     assert result.metric_samples == 0
 
 
-def test_readiness_uses_prior_model_state():
-    model = RecordingModel()
-    evaluator = PrequentialEvaluator(model, readiness=lambda m: len(m.values) >= 2)
+class GatedModel(RecordingModel):
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness.after(len(self.values), 2)
+
+
+def test_model_readiness_uses_prior_model_state():
+    evaluator = PrequentialEvaluator(GatedModel())
     records = list(evaluator.iter_evaluate([({"x": 1.0}, None)] * 3))
     assert [r.exclusion for r in records] == ["not_ready", "not_ready", None]
     assert records[-1].score == 2
@@ -251,8 +261,6 @@ def test_learning_failure_does_not_advance_evaluator():
         {"metric_window_size": -1},
         {"metrics": 1},
         {"measure_time": "yes"},
-        {"higher_is_more_anomalous": 1},
-        {"readiness": False},
         {"learn_filter": False},
         {"learn_filter": lambda x, s: True},
         {"learn_filter": lambda x, s: True, "learn_policy_name": " "},
@@ -272,7 +280,6 @@ def test_reject_nonmodel():
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"readiness": lambda m: 1},
         {"learn_filter": lambda x, s: 1, "learn_policy_name": "bad"},
     ],
 )
@@ -286,32 +293,33 @@ def test_callback_result_requires_boolean(kwargs):
 def test_config_constructs_fresh_model_and_resolves_metadata():
     config = DetectorConfig(
         ComponentConfig(
-            "online_isolation_forest", {"window_size": 16, "n_trees": 2, "seed": 19}
+            "online_isolation_forest", {"window_size": 64, "n_trees": 2, "seed": 19}
         )
     )
     first = PrequentialEvaluator(config)
     second = PrequentialEvaluator(config)
     assert first.model is not second.model
-    assert first.result().warmup == config.capabilities().warmup.minimum
+    assert first.result().warmup == 0
     assert first.result().config_fingerprint == config.fingerprint()
     assert first.result().config.as_dict()["model"]["params"]["seed"] == 19
 
 
-def test_warmup_in_other_units_needs_a_readiness_callback():
+def test_readiness_in_other_units_excludes_events_until_the_model_is_ready():
     config = DetectorConfig(ComponentConfig("sdostream", {"seed": 1}))
-    with pytest.raises(ValueError, match="warmup or readiness"):
-        PrequentialEvaluator(config)
-    evaluator = PrequentialEvaluator(
-        config, readiness=lambda model: model.n_observers >= 6, measure_time=False
-    )
-    assert evaluator.result().uses_readiness_callback
+    evaluator = PrequentialEvaluator(config, measure_time=False)
+    for index in range(400):
+        ready = evaluator.model.readiness.ready
+        record = evaluator.update({"x": float(index % 7)})
+        assert (record.exclusion is None) == ready
+    assert 0 < evaluator.result().n_not_ready < 400
 
 
-def test_readiness_callback_excludes_unready_scores_and_metrics():
+def test_model_readiness_excludes_unready_scores_and_metrics():
     metrics = pytest.importorskip("sklearn.metrics")
     evaluator = PrequentialEvaluator(
-        DetectorConfig(ComponentConfig("moving_zscore", {"window_size": 10})),
-        readiness=lambda model: model.n_samples_seen >= 3,
+        DetectorConfig(
+            ComponentConfig("moving_zscore", {"window_size": 10, "warm_up": 3})
+        ),
         metrics=True,
         measure_time=False,
     )
@@ -327,41 +335,13 @@ def test_readiness_callback_excludes_unready_scores_and_metrics():
     assert result.roc_auc == metrics.roc_auc_score([0, 1], scores)
 
 
-@pytest.mark.parametrize(
-    "config",
-    [
-        DetectorConfig(ComponentConfig("sdostream")),
-        DetectorConfig(ComponentConfig("null"), (ComponentConfig("standard_scaler"),)),
-    ],
-)
-def test_non_event_and_pipeline_readiness_is_explicit(config):
-    with pytest.raises(ValueError, match="warmup or readiness"):
-        PrequentialEvaluator(config)
-    assert (
-        PrequentialEvaluator(config, warmup=10, higher_is_more_anomalous=True)
-        .result()
-        .warmup
-        == 10
+def test_pipeline_readiness_includes_its_transformers():
+    config = DetectorConfig(
+        ComponentConfig("null"), (ComponentConfig("standard_scaler"),)
     )
-    assert (
-        PrequentialEvaluator(
-            config, readiness=lambda _m: False, higher_is_more_anomalous=True
-        )
-        .result()
-        .uses_readiness_callback
-    )
-
-
-def test_unknown_catalog_orientation_is_explicit():
-    config = DetectorConfig(ComponentConfig("null", {}))
-    with pytest.raises(ValueError, match="orientation"):
-        PrequentialEvaluator(config)
-    assert (
-        PrequentialEvaluator(config, higher_is_more_anomalous=False)
-        .result()
-        .higher_is_more_anomalous
-        is False
-    )
+    evaluator = PrequentialEvaluator(config, measure_time=False)
+    records = list(evaluator.iter_evaluate([({"x": 1.0}, None)] * 2))
+    assert [record.exclusion for record in records] == ["not_ready", None]
 
 
 def test_missing_optional_dependency_is_actionable_and_disabled_mode_works(monkeypatch):
@@ -402,14 +382,13 @@ def test_window_metrics_match_reference_and_retain_only_labeled_scored_events():
     assert result.roc_auc == 1.0
 
 
-def test_full_stream_metrics_and_orientation():
+def test_full_stream_metrics_rank_higher_scores_as_more_anomalous():
     metrics = pytest.importorskip("sklearn.metrics")
-    scores, labels = [3.0, -2.0, 0.0, -1.0], [0, 1, 0, 1]
+    scores, labels = [-3.0, 2.0, 0.0, 1.0], [0, 1, 0, 1]
     evaluator = PrequentialEvaluator(
         ValueModel(),
         metrics=True,
         metric_window_size=None,
-        higher_is_more_anomalous=False,
     )
     records = list(
         evaluator.iter_evaluate(
@@ -420,7 +399,7 @@ def test_full_stream_metrics_and_orientation():
     assert [r.score for r in records] == scores
     assert result.metric_samples == 4 and result.metric_window_size is None
     assert result.average_precision == pytest.approx(
-        metrics.average_precision_score(labels, [-x for x in scores])
+        metrics.average_precision_score(labels, scores)
     )
     assert result.roc_auc == 1.0
 

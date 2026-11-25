@@ -13,6 +13,7 @@ from .protocols import (
     TransactionalLearnerProtocol,
     TransformerProtocol,
 )
+from .readiness import Readiness
 
 
 class Pipeline:
@@ -101,6 +102,15 @@ class Pipeline:
         """Whether this pipeline can transform output and accept another stage."""
         return isinstance(self, TransformerPipeline)
 
+    @property
+    def readiness(self) -> Readiness:
+        """The first stage that is not ready, otherwise the terminal's readiness."""
+        for transformer in self._prefix:
+            readiness = transformer.readiness
+            if not readiness.ready:
+                return readiness
+        return self._terminal.readiness
+
     def learn_one(self, x: FeatureMap) -> None:
         """Learn from one sample using each prefix transformer's updated state."""
         with ExitStack() as transaction:
@@ -178,7 +188,12 @@ class ModelPipeline(Pipeline):
     _terminal: ModelProtocol
 
     def score_one(self, x: FeatureMap) -> float:
-        """Transform and score an event without calling any stage's ``learn_one``."""
+        """Transform and score an event without calling any stage's ``learn_one``.
+
+        The score is ``0.0`` while any stage is not ready.
+        """
+        if not self.readiness.ready:
+            return 0.0
         score = self._terminal.score_one(self._transform_prefix(x))
         if not isinstance(score, int | float):
             raise PipelineError(

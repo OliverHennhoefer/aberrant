@@ -191,7 +191,7 @@ class TestXLagDAMP(unittest.TestCase):
             self.assertEqual(model.score_one({"value": value}), 0.0)
             model.learn_one({"value": value})
 
-        self.assertFalse(model.is_ready)
+        self.assertFalse(model.readiness.ready)
         self.assertEqual(model.n_subsequences_processed, 0)
 
     def test_first_processed_query_matches_exact_left_discord(self) -> None:

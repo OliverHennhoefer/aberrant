@@ -7,19 +7,19 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-from aberrant.base import ModelProtocol
+from aberrant.base import ModelProtocol, Readiness
 from aberrant.catalog import create_transformer, get_transformer_spec
 from aberrant.compose import (
     INPUT,
     GraphExecutionError,
     GraphNode,
-    GraphNotReadyError,
     GraphPipeline,
     GraphStateUncertainError,
     MergeNode,
 )
 from aberrant.exceptions import ConfigurationError
 from aberrant.model.forest import OnlineIsolationForest
+from aberrant.model.null import NullModel
 from aberrant.model.stat import (
     MovingCovariance,
     MovingZScore,
@@ -48,7 +48,6 @@ def test_branched_pca_raw_bypass_matches_explicit_numeric_reference():
         ],
         model,
         "features",
-        model_minimum_updates=2,
     )
     assert isinstance(graph, ModelProtocol)
     reference_scaler = StandardScaler()
@@ -93,7 +92,6 @@ def test_shared_node_updates_once_and_score_is_read_only():
         ],
         MovingCovariance(window_size=20),
         "joined",
-        model_minimum_updates=2,
     )
     for index in range(3):
         graph.learn_one({"a": float(index), "b": float(index + 2)})
@@ -120,7 +118,6 @@ def test_staggered_branches_gate_downstream_initialization():
         ],
         model,
         "joined",
-        model_minimum_updates=1,
     )
     for index in range(1, 5):
         graph.learn_one({"a": float(index), "b": float(index + 1)})
@@ -128,11 +125,12 @@ def test_staggered_branches_gate_downstream_initialization():
         assert graph.last_learning_outcome.model_updated == (index == 4)
         if index < 4:
             assert not model.window
-            with pytest.raises(GraphNotReadyError):
-                graph.score_one({"a": 5.0, "b": 6.0})
+            assert graph.score_one({"a": 5.0, "b": 6.0}) == 0.0
     counts = {state.node_id: state.updates for state in graph.node_states}
     assert counts["left_name"] == 3
     assert counts["right_name"] == 1
+    assert not graph.readiness.ready
+    graph.learn_one({"a": 5.0, "b": 6.0})
     assert graph.readiness.ready
 
 
@@ -176,6 +174,10 @@ def test_branch_rejection_rolls_back_sibling_and_retains_last_outcome():
 
 def test_mutating_custom_transformer_cannot_corrupt_raw_sibling():
     class MutatesInput:
+        @property
+        def readiness(self) -> Readiness:
+            return Readiness(True)
+
         def learn_one(self, x):
             x.clear()
 
@@ -186,7 +188,7 @@ def test_mutating_custom_transformer_cannot_corrupt_raw_sibling():
     model = MovingCovariance(window_size=5)
     graph = GraphPipeline(
         [
-            GraphNode("a_mutates", MutatesInput(), minimum_updates=0),
+            GraphNode("a_mutates", MutatesInput()),
             GraphNode("b_raw", Passthrough()),
             MergeNode("joined", ("a_mutates", "b_raw")),
         ],
@@ -206,7 +208,7 @@ def test_observations_are_detached_and_do_not_reexecute_components():
     scaler = StandardScaler()
     graph = GraphPipeline(
         [GraphNode("scaled", scaler)],
-        MovingZScore(window_size=5),
+        NullModel(),
         "scaled",
         observer=observations.append,
     )
@@ -235,12 +237,14 @@ def test_observer_failure_never_changes_learning_or_score():
 
     graph = GraphPipeline(
         [GraphNode("scaled", StandardScaler())],
-        MovingZScore(window_size=5),
+        MovingZScore(window_size=5, warm_up=2),
         "scaled",
         observer=broken,
     )
     clean = GraphPipeline(
-        [GraphNode("scaled", StandardScaler())], MovingZScore(window_size=5), "scaled"
+        [GraphNode("scaled", StandardScaler())],
+        MovingZScore(window_size=5, warm_up=2),
+        "scaled",
     )
     for value in (1.0, 2.0, 3.0):
         graph.learn_one({"x": value})
@@ -363,21 +367,27 @@ def test_select_rename_and_clip_are_public_catalog_components():
     assert clipped.transform_one({"x": -1.0}) == {"x": 0.0}
 
 
-def test_custom_initialization_minimum_gates_each_node():
+def test_custom_readiness_gates_each_node():
     class LearnsReference:
+        def __init__(self):
+            self.count = 0
+
+        @property
+        def readiness(self):
+            return Readiness.after(self.count, 3)
+
         def learn_one(self, x):
-            return None
+            self.count += 1
 
         def transform_one(self, x):
             return x
 
     graph = GraphPipeline(
         [
-            GraphNode("custom", LearnsReference(), minimum_updates=3),
+            GraphNode("custom", LearnsReference()),
         ],
-        MovingZScore(window_size=5),
+        MovingZScore(window_size=5, warm_up=2),
         "custom",
-        model_minimum_updates=2,
     )
     for index in range(1, 5):
         graph.learn_one({"x": float(index)})
@@ -410,6 +420,10 @@ def test_rollback_failure_disables_graph():
 
 def test_cancellation_after_nontransactional_model_update_disables_graph():
     class InterruptedModel:
+        @property
+        def readiness(self) -> Readiness:
+            return Readiness(True)
+
         def learn_one(self, x):
             raise KeyboardInterrupt()
 
@@ -472,7 +486,7 @@ class _UndeclaredTransformer:
         (
             [GraphNode("a", _UndeclaredTransformer())],
             MovingZScore(window_size=5),
-            "minimum_updates",
+            "unambiguous transformer",
         ),
         ([MergeNode("a", ())], MovingZScore(window_size=5), "named inputs"),
         (
@@ -501,18 +515,18 @@ def test_merge_inputs_must_name_nodes_not_one_string():
 
 
 def test_scoring_failures_name_the_node_and_keep_the_graph_usable():
-    class RejectsNegative(_UndeclaredTransformer):
+    class RejectsNegative(Passthrough):
         def transform_one(self, x):
             if x["x"] < 0:
                 raise ValueError("negative reading")
             return x
 
-    model, reference = MovingZScore(window_size=5), MovingZScore(window_size=5)
-    graph = GraphPipeline(
-        [GraphNode("guard", RejectsNegative(), minimum_updates=0)], model, "guard"
-    )
-    graph.learn_one({"x": 1.0})
-    reference.learn_one({"x": 1.0})
+    model = MovingZScore(window_size=5, warm_up=2)
+    reference = MovingZScore(window_size=5, warm_up=2)
+    graph = GraphPipeline([GraphNode("guard", RejectsNegative())], model, "guard")
+    for value in (1.0, 3.0):
+        graph.learn_one({"x": value})
+        reference.learn_one({"x": value})
 
     with pytest.raises(GraphExecutionError, match="negative reading") as error:
         graph.score_one({"x": -1.0})
@@ -522,12 +536,12 @@ def test_scoring_failures_name_the_node_and_keep_the_graph_usable():
 
 
 def test_transformers_must_emit_string_feature_names():
-    class NumberedKeys(_UndeclaredTransformer):
+    class NumberedKeys(Passthrough):
         def transform_one(self, x):
             return {1: x["x"]}
 
     graph = GraphPipeline(
-        [GraphNode("numbered", NumberedKeys(), minimum_updates=0)],
+        [GraphNode("numbered", NumberedKeys())],
         MovingZScore(window_size=5),
         "numbered",
     )

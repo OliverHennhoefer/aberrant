@@ -9,6 +9,9 @@ Semantic Versioning.
 
 ### Fixed
 
+- `MovingCorrelationCoefficient` scores `0.0` until its window holds two
+  pairs. With one, it scored the full correlation of the two-point window,
+  always 1.
 - `MStream` scores numeric features with `sign(x) * log10(1 + |x|)`. It used
   to reject every value at or below -1, so a standardized stream such as
   `StandardScaler() | MStream()` failed after a few events. Non-negative
@@ -58,6 +61,34 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** every model, transformer, forecaster, regressor and pipeline
+  reports `readiness`: a `Readiness(ready, observed, required, unit)` saying
+  whether it has learned enough, counted in events, buckets, observers or
+  active graphs (`ReadinessUnit`). `BaseModel` and `BaseTransformer` default to
+  ready from the first event, and the protocols require the property, so a
+  duck-typed component must define it. A model scores `0.0`, a pipeline scores
+  `0.0` and a forecaster returns `None` while not ready. `is_ready` is gone;
+  read `readiness.ready`.
+- **Breaking:** the catalog reads each model's warm-up from a freshly built
+  instance's `readiness` instead of recomputing it, so the two cannot drift.
+  `ModelCapabilities.warmup` is that `required` count or `None`, and
+  `warmup_unit` its unit. `model_capabilities(id, params)` replaces
+  `ModelSpec.capabilities(params)`. Resolving a `DetectorConfig` now builds the
+  model once, so constructor errors surface at resolution.
+- **Breaking:** `PrequentialEvaluator` excludes events while the model's
+  `readiness` is not ready, for any unit and for pipelines. `warmup` (default
+  `0`) excludes further learned events on top of that. The `readiness` callback
+  and `higher_is_more_anomalous` are gone, and metrics always rank higher
+  scores as more anomalous.
+- **Breaking:** `GraphPipeline.score_one` returns `0.0` until the graph is
+  ready instead of raising `GraphNotReadyError`, and the graph reads each
+  node's and the model's `readiness` instead of `minimum_updates` and
+  `model_minimum_updates`.
+- **Breaking:** `OnlineIsolationForest` rejects a `window_size` that cannot hold
+  more than `max_leaf_samples / subsample` events. Such a forest never scored.
+- **Breaking:** `MStream` starts scoring once learned events span `warm_up`
+  buckets, so the first event of the bucket that ends the warm-up scores
+  `0.0`. Earlier, an unlearned candidate's own bucket could end it.
 - **Breaking:** `MovingZScore` and `MovingMAD` (IDs `moving_zscore` and
   `moving_mad`) replace the ten univariate moving statistics. Each scores
   how far a value lies from the last `window_size` learned values, as
@@ -213,6 +244,11 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `ReadinessProtocol`, `WarmupRequirement`, `WarmupUnit`,
+  `GraphNotReadyError`, `GraphNode.minimum_updates`,
+  `GraphPipeline(model_minimum_updates=...)`, the forecasters' `is_ready`, and
+  `resettable` and `higher_is_more_anomalous` in model capabilities. Every
+  component resets, and every score is higher when more anomalous.
 - **Breaking:** `MovingAverage`, `MovingVariance`, `MovingSkewness`,
   `MovingKurtosis`, `MovingMedian`, `MovingQuantile`,
   `MovingInterquartileRange`, `MovingAverageAbsoluteDeviation`,

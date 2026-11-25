@@ -10,6 +10,7 @@ import numpy as np
 
 from aberrant._utils.validation import coerce_event_number, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 from aberrant.exceptions import ValidationError
 
 
@@ -361,6 +362,20 @@ class XStream(BaseModel):
             state.cms_current.fill(0)
             state.samples_in_window = 0
             state.completed_windows += 1
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once a complete reference window exists."""
+        state = self._state
+        if state is None:
+            return Readiness(
+                False, len(self._init_buffer), max(self.warm_up, self.window_size)
+            )
+        return Readiness(
+            state.reference_ready,
+            state.samples_seen,
+            max(self.warm_up, self.window_size),
+        )
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update model state with one sample."""

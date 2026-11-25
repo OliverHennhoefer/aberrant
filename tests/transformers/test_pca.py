@@ -41,7 +41,9 @@ class TestIncrementalPCA(unittest.TestCase):
 
     def test_minimum_warmup_preserves_pipeline_feature_schema(self):
         ipca = IncrementalPCA(n_components=3, warm_up=3)
-        pipeline = ipca | OnlineIsolationForest(n_trees=1, window_size=8, seed=1)
+        pipeline = ipca | OnlineIsolationForest(
+            n_trees=1, window_size=8, max_leaf_samples=4, seed=1
+        )
         samples = [
             {"x": 1.0, "y": 0.0, "z": 0.0, "w": 0.0},
             {"x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0},

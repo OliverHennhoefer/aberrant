@@ -56,6 +56,4 @@ class EvaluationResult:
     config: DetectorConfig | None
     config_fingerprint: str | None
     warmup: int
-    uses_readiness_callback: bool
     learn_policy_name: str
-    higher_is_more_anomalous: bool

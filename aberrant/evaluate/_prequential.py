@@ -13,12 +13,11 @@ from aberrant import __version__
 from aberrant._utils.validation import coerce_event_number, coerce_finite_number
 from aberrant.base import ModelProtocol
 from aberrant.base.protocols import FeatureMap
-from aberrant.catalog import DetectorConfig, WarmupUnit
+from aberrant.catalog import DetectorConfig
 
 from ._metrics import RankingMetrics
 from ._records import EvaluationRecord, EvaluationResult
 
-Readiness = Callable[[ModelProtocol], bool]
 LearnFilter = Callable[[FeatureMap, float | None], bool]
 
 
@@ -42,13 +41,10 @@ class PrequentialEvaluator:
     Args:
         model: An existing structural model, or a catalog configuration from
             which a fresh model is built. Existing models are never reset.
-        warmup: Number of successful learns excluded before scoring. For a
-            configuration without transformers, None uses catalog event-based
-            warm-up. Pipelines and other warm-up units require an explicit
-            value or readiness callback. Existing model instances default to 0.
-        readiness: Optional predicate evaluated against current model state
-            before scoring, after warm-up. False excludes the candidate from
-            scoring while still permitting learning. It must not mutate state.
+        warmup: Number of successful learns excluded before scoring, on top
+            of the model's own warm-up. After them, an event is excluded as
+            ``"not_ready"`` while the model's ``readiness`` is not ready, and
+            still learned.
         learn_filter: Optional decision receiving the event and its raw score
             (None during exclusion). Labels are never supplied to this callback
             or the model. Returning False skips learning, including in warm-up.
@@ -60,9 +56,6 @@ class PrequentialEvaluator:
         metric_window_size: Retain at most this many labeled, scored events.
             None explicitly opts into O(n) retention for exact full-stream AP
             and ROC AUC. The window counts labeled scored events, not arrivals.
-        higher_is_more_anomalous: Ranking orientation; None uses the catalog
-            value, or True for an existing model. Unknown catalog orientation
-            requires an explicit value. Trace scores remain in their raw scale.
         measure_time: Measure separate scoring and learning call durations.
 
     Calls to update, iter_evaluate and evaluate continue the same model and
@@ -72,34 +65,24 @@ class PrequentialEvaluator:
     state rollback is governed by the supplied model's own contract.
     """
 
-    def __init__(  # noqa: PLR0912, PLR0915
+    def __init__(
         self,
         model: ModelProtocol | DetectorConfig,
         *,
-        warmup: int | None = None,
-        readiness: Readiness | None = None,
+        warmup: int = 0,
         learn_filter: LearnFilter | None = None,
         learn_policy_name: str | None = None,
         metrics: bool = False,
         metric_window_size: int | None = 1000,
-        higher_is_more_anomalous: bool | None = None,
         measure_time: bool = True,
     ) -> None:
-        if warmup is not None:
-            _nonnegative_int(warmup, "warmup")
+        _nonnegative_int(warmup, "warmup")
         if metric_window_size is not None:
             _nonnegative_int(metric_window_size, "metric_window_size")
             if metric_window_size == 0:
                 raise ValueError("metric_window_size must be positive or None")
         if type(metrics) is not bool or type(measure_time) is not bool:
             raise ValueError("metrics and measure_time must be booleans")
-        if (
-            higher_is_more_anomalous is not None
-            and type(higher_is_more_anomalous) is not bool
-        ):
-            raise ValueError("higher_is_more_anomalous must be a boolean or None")
-        if readiness is not None and not callable(readiness):
-            raise ValueError("readiness must be callable or None")
         if learn_filter is not None and not callable(learn_filter):
             raise ValueError("learn_filter must be callable or None")
         if learn_filter is not None and (
@@ -116,24 +99,6 @@ class PrequentialEvaluator:
             resolved = model.resolve()
             self._config = resolved.config
             self._fingerprint = resolved.fingerprint
-            capabilities = resolved.capabilities
-            if warmup is None and readiness is None:
-                requirement = capabilities.warmup
-                if (
-                    self._config.transformers
-                    or requirement.unit is not WarmupUnit.EVENTS
-                    or requirement.minimum is None
-                ):
-                    raise ValueError(
-                        "Configure warmup or readiness explicitly for this detector"
-                    )
-                warmup = requirement.minimum
-            if higher_is_more_anomalous is None:
-                higher_is_more_anomalous = capabilities.higher_is_more_anomalous
-                if higher_is_more_anomalous is None:
-                    raise ValueError(
-                        "Configure score orientation explicitly for this detector"
-                    )
         elif not isinstance(model, ModelProtocol):
             raise TypeError("model must satisfy ModelProtocol or be a DetectorConfig")
 
@@ -142,14 +107,10 @@ class PrequentialEvaluator:
         self.model: ModelProtocol = (
             resolved.build() if resolved is not None else cast(ModelProtocol, model)
         )
-        self._warmup = 0 if warmup is None else warmup
-        self._readiness = readiness
+        self._warmup = warmup
         self._learn_filter = learn_filter
         self._policy_name = learn_policy_name or "learn_all"
         self._window_size = metric_window_size
-        self._higher = (
-            True if higher_is_more_anomalous is None else higher_is_more_anomalous
-        )
         self._measure_time = measure_time
         self._n_seen = self._n_scored = self._n_learned = 0
         self._n_warmup = self._n_not_ready = 0
@@ -174,12 +135,8 @@ class PrequentialEvaluator:
         exclusion: Literal["warmup", "not_ready"] | None = None
         if self._n_learned < self._warmup:
             exclusion = "warmup"
-        elif self._readiness is not None:
-            ready = self._readiness(self.model)
-            if type(ready) is not bool:
-                raise ValueError("readiness must return a boolean")
-            if not ready:
-                exclusion = "not_ready"
+        elif not self.model.readiness.ready:
+            exclusion = "not_ready"
 
         score = None
         score_ns = learn_ns = None
@@ -222,7 +179,7 @@ class PrequentialEvaluator:
             if y is not None:
                 self._n_labeled += 1
                 self._n_positive += y
-            self._ranking.update(y, score if self._higher else -score)
+            self._ranking.update(y, score)
         return record
 
     def iter_evaluate(
@@ -262,7 +219,5 @@ class PrequentialEvaluator:
             config=self._config,
             config_fingerprint=self._fingerprint,
             warmup=self._warmup,
-            uses_readiness_callback=self._readiness is not None,
             learn_policy_name=self._policy_name,
-            higher_is_more_anomalous=self._higher,
         )

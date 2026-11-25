@@ -14,7 +14,18 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 from aberrant.model.forest._online_tree import OnlineIsolationTree, _Bounds
+
+
+def _events_to_normalize(max_leaf_samples: int, subsample: float) -> int:
+    """Fewest retained events whose subsampled count exceeds a leaf's capacity."""
+    count = math.floor(max_leaf_samples / subsample) + 1
+    while count * subsample <= max_leaf_samples:
+        count += 1
+    while count > 1 and (count - 1) * subsample > max_leaf_samples:
+        count -= 1
+    return count
 
 
 class OnlineIsolationForest(BaseModel):
@@ -75,6 +86,12 @@ class OnlineIsolationForest(BaseModel):
             raise ValueError("subsample must be in (0.0, 1.0]")
         if metric != "axisparallel":
             raise ValueError("metric must be 'axisparallel'")
+        required = _events_to_normalize(max_leaf_samples, subsample)
+        if window_size < required:
+            raise ValueError(
+                "window_size must be at least max_leaf_samples / subsample + 1, "
+                f"{required}, or the forest never scores"
+            )
 
         self.n_trees = n_trees
         self.max_leaf_samples = max_leaf_samples
@@ -116,6 +133,12 @@ class OnlineIsolationForest(BaseModel):
         if not all(map(math.isfinite, values)):
             raise ValueError("data must contain only finite values")
         return point, values
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the window holds more events than a leaf, after subsampling."""
+        required = _events_to_normalize(self.max_leaf_samples, self.subsample)
+        return Readiness(self.normalization_factor > 0.0, self.data_size, required)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Learn one validated feature mapping."""

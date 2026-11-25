@@ -21,7 +21,6 @@ graph = GraphPipeline(
     ],
     MovingCovariance(window_size=32),
     output="features",
-    model_minimum_updates=2,
 )
 
 for index in range(20):
@@ -62,17 +61,14 @@ can remain ready while another branch initializes; the merge waits for both
 outputs from the current observation. It never reuses an older branch output.
 
 `model_updates` counts successful terminal updates. Transformer initialization
-does not advance that count. `model_minimum_updates` and a model's optional
-public readiness must both be satisfied before scoring. Models without public
-readiness use the supplied update count; choose it from the model's contract or
-catalog metadata. Geometric/harmonic means report retained positive/nonzero
-history, rather than counting ignored observations. These descriptions do not
+does not advance that count. Every node and the model report `readiness`, and
+the graph is ready once the whole path and the model are. Readiness does not
 guarantee that an arbitrary candidate satisfies a model's input domain.
 
 `last_learning_outcome` contains the terminal-update flag, cumulative model
 updates, per-node update counts, readiness and blocked predecessors. Snapshots
-are frozen dataclasses. `score_one` is read-only and raises `GraphNotReadyError`
-until the complete path and terminal are ready. Use one serial owner for graph
+are frozen dataclasses. `score_one` is read-only and returns `0.0` until the
+complete path and terminal are ready, like every model. Use one serial owner for graph
 execution; concurrent calls are not supported.
 
 The graph API does not change existing `Pipeline` or `DetectorConfig` version 1.
@@ -94,9 +90,9 @@ configured range. Its default remains `False`, preserving extrapolation.
 
 ## Custom components, failures and observations
 
-Custom nodes satisfy `TransformerProtocol`. Supply `minimum_updates` explicitly
-when a transformer has no `readiness: Readiness` property, including zero for a
-stateless transform. Inputs and outputs are detached finite mappings; one
+Custom nodes satisfy `TransformerProtocol`, including its `readiness` property;
+subclasses of `BaseTransformer` are ready from the start unless they override
+it. Inputs and outputs are detached finite mappings; one
 component cannot mutate a sibling branch's input. The first successful learning
 pass preserves the caller's input mapping order and fixes each feature schema.
 Reordered mappings retain their established feature order. A terminal model may
