@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.validation import coerce_feature_values
@@ -43,7 +44,7 @@ class Select(Passthrough):
         values = coerce_feature_values(x)
         missing = set(self.features).difference(values)
         if missing:
-            raise ValueError(f"Missing selected features: {sorted(missing)}")
+            raise ValidationError(f"Missing selected features: {sorted(missing)}")
         return {key: values[key] for key in self.features}
 
 
@@ -65,11 +66,13 @@ class Rename(Passthrough):
         values = coerce_feature_values(x)
         missing = set(self.mapping).difference(values)
         if missing:
-            raise ValueError(f"Missing renamed features: {sorted(missing)}")
+            raise ValidationError(f"Missing renamed features: {sorted(missing)}")
         result: dict[str, float] = {}
         for key, value in values.items():
             renamed = self.mapping.get(key, key)
             if renamed in result:
-                raise ValueError(f"Renaming produces duplicate feature {renamed!r}")
+                raise ValidationError(
+                    f"Renaming produces duplicate feature {renamed!r}"
+                )
             result[renamed] = value
         return result

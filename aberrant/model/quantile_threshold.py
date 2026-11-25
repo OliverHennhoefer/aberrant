@@ -4,6 +4,7 @@ import math
 from bisect import bisect_left, insort
 from collections import deque
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.model import BaseModel
 from aberrant.utils.statistics import linear_quantile
 
@@ -93,9 +94,9 @@ class QuantileThreshold(BaseModel):
         try:
             score = float(value)
         except (TypeError, ValueError) as e:
-            raise ValueError("score must be numeric") from e
+            raise ValidationError("score must be numeric") from e
         if not math.isfinite(score):
-            raise ValueError("score must be finite")
+            raise ValidationError("score must be finite")
         return score
 
     def learn_one(self, x: dict[str, float]) -> None:
@@ -106,7 +107,7 @@ class QuantileThreshold(BaseModel):
             x: Dictionary containing the score. Must have the score_key.
         """
         if self.score_key not in x:
-            raise ValueError(f"Input must contain '{self.score_key}' key")
+            raise ValidationError(f"Input must contain '{self.score_key}' key")
 
         score = self._validated_score(x[self.score_key])
         if len(self._scores) == self.window_size:
@@ -140,7 +141,7 @@ class QuantileThreshold(BaseModel):
             - 0.0 if threshold not yet computed (warmup period)
         """
         if self.score_key not in x:
-            raise ValueError(f"Input must contain '{self.score_key}' key")
+            raise ValidationError(f"Input must contain '{self.score_key}' key")
 
         score = self._validated_score(x[self.score_key])
 

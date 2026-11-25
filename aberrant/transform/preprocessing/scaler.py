@@ -6,6 +6,7 @@ from collections.abc import Iterator, MutableMapping
 from contextlib import contextmanager
 from typing import TypeVar
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.validation import coerce_feature_values
@@ -128,7 +129,7 @@ class MinMaxScaler(BaseTransformer):
         scaled_x = {}
         for feature, numeric_value in values.items():
             if feature not in self.min or feature not in self.max:
-                raise ValueError(
+                raise ValidationError(
                     f"Feature '{feature}' has not been seen during learning."
                 )
 
@@ -257,7 +258,7 @@ class StandardScaler(BaseTransformer):
         scaled_x = {}
         for feature, numeric_value in values.items():
             if feature not in self.means:
-                raise ValueError(
+                raise ValidationError(
                     f"Feature '{feature}' has not been seen during learning."
                 )
 

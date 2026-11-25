@@ -14,11 +14,8 @@ from aberrant.base.exceptions import (
     ConfigurationIssue,
     IncompatibleComponentError,
     MissingOptionalDependencyError,
-    ModelNotFittedError,
     PipelineError,
-    TransformationError,
     UnknownComponentError,
-    UnsupportedFeatureError,
     ValidationError,
 )
 from aberrant.base.forecast import Forecast
@@ -52,7 +49,6 @@ __all__ = [
     "ForecasterProtocol",
     "IncompatibleComponentError",
     "MissingOptionalDependencyError",
-    "ModelNotFittedError",
     "AberrantError",
     "Pipeline",
     "ModelPipeline",
@@ -63,12 +59,10 @@ __all__ = [
     "ReadinessProtocol",
     "ModelProtocol",
     "RegressorProtocol",
-    "TransformationError",
     "TransformerProtocol",
     "TransactionalLearnerProtocol",
     "TransactionalTransformerProtocol",
     "UnknownComponentError",
-    "UnsupportedFeatureError",
     "ValidationError",
 ]
 

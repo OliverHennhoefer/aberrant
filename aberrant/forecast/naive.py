@@ -5,7 +5,7 @@ from __future__ import annotations
 from aberrant.base.forecast import Forecast
 from aberrant.forecast._arithmetic import LeadErrors, fsum
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
+from aberrant.utils.validation import coerce_event_number, coerce_integer_count
 
 
 class SeasonalNaive(BaseForecaster):
@@ -81,7 +81,7 @@ class SeasonalNaive(BaseForecaster):
 
     def learn_one(self, y: float) -> None:
         """Learn the next value of the series."""
-        value = coerce_finite_number(y, label="y")
+        value = coerce_event_number(y, label="y")
         m = self.season_length
         if self.n_samples_seen + 1 < 2 * m:
             self._values.append(value)

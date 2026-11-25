@@ -8,11 +8,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import (
     MonotonicClock,
     PreparedTimestamp,
-    coerce_finite_number,
+    coerce_event_number,
     coerce_integer_count,
 )
 
@@ -245,36 +246,40 @@ class SignedGraphSketchDetector(BaseModel):
         x: dict[str, float],
     ) -> _PreparedGraphEvent:
         if not x:
-            raise ValueError("Input dictionary cannot be empty")
+            raise ValidationError("Input dictionary cannot be empty")
 
         if self.graph_key not in x:
-            raise ValueError(f"Missing graph_key '{self.graph_key}' in input sample")
+            raise ValidationError(
+                f"Missing graph_key '{self.graph_key}' in input sample"
+            )
         if self.source_key not in x:
-            raise ValueError(f"Missing source_key '{self.source_key}' in input sample")
+            raise ValidationError(
+                f"Missing source_key '{self.source_key}' in input sample"
+            )
         if self.destination_key not in x:
-            raise ValueError(
+            raise ValidationError(
                 f"Missing destination_key '{self.destination_key}' in input sample"
             )
         if self.edge_type_key is not None and self.edge_type_key not in x:
-            raise ValueError(
+            raise ValidationError(
                 f"Missing edge_type_key '{self.edge_type_key}' in input sample"
             )
 
-        graph_id = coerce_finite_number(
+        graph_id = coerce_event_number(
             x[self.graph_key],
             label=f"Feature '{self.graph_key}'",
         )
-        source = coerce_finite_number(
+        source = coerce_event_number(
             x[self.source_key],
             label=f"Feature '{self.source_key}'",
         )
-        destination = coerce_finite_number(
+        destination = coerce_event_number(
             x[self.destination_key],
             label=f"Feature '{self.destination_key}'",
         )
         edge_type: float | None = None
         if self.edge_type_key is not None:
-            edge_type = coerce_finite_number(
+            edge_type = coerce_event_number(
                 x[self.edge_type_key],
                 label=f"Feature '{self.edge_type_key}'",
             )
@@ -283,7 +288,9 @@ class SignedGraphSketchDetector(BaseModel):
             timestamp = self._clock.preview(implicit=True)
         else:
             if self.time_key not in x:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
+                raise ValidationError(
+                    f"Missing time_key '{self.time_key}' in input sample"
+                )
             timestamp = self._clock.preview(
                 x[self.time_key],
                 implicit=False,

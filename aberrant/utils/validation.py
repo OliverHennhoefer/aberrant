@@ -9,6 +9,8 @@ from typing import cast
 
 import numpy as np
 
+from aberrant.base.exceptions import ValidationError
+
 # Built once: an ``int | float | np.number`` expression creates a union per call.
 _NUMERIC_TYPES = (int, float, np.number)
 # Exact value types whose float value is the value itself, so a well-formed
@@ -35,27 +37,36 @@ def coerce_integer_count(value: object, *, label: str, minimum: int = 1) -> int:
     return result
 
 
-def coerce_finite_number(value: object, *, label: str) -> float:
-    """Return a finite float or raise a consistently worded error."""
+def _finite_float(value: object, label: str, error: type[ValueError]) -> float:
     if not isinstance(value, _NUMERIC_TYPES):
-        raise ValueError(f"{label} must be numeric")
+        raise error(f"{label} must be numeric")
     try:
         result = float(value)
     except OverflowError as exc:
-        raise ValueError(f"{label} must be finite") from exc
+        raise error(f"{label} must be finite") from exc
     if not math.isfinite(result):
-        raise ValueError(f"{label} must be finite")
+        raise error(f"{label} must be finite")
     return result
+
+
+def coerce_finite_number(value: object, *, label: str) -> float:
+    """Return a finite float parameter or raise a consistently worded error."""
+    return _finite_float(value, label, ValueError)
+
+
+def coerce_event_number(value: object, *, label: str) -> float:
+    """Return a finite float event value or raise ``ValidationError``."""
+    return _finite_float(value, label, ValidationError)
 
 
 def coerce_integer_feature(value: object, key: str) -> int:
     """Return an integer-like finite feature value."""
     if isinstance(value, int | np.integer):
         return int(value)
-    as_float = coerce_finite_number(value, label=f"Feature '{key}'")
+    as_float = coerce_event_number(value, label=f"Feature '{key}'")
     as_int = int(round(as_float))
     if abs(as_float - float(as_int)) > _INTEGER_TOLERANCE:
-        raise ValueError(f"Feature '{key}' must be integer-like")
+        raise ValidationError(f"Feature '{key}' must be integer-like")
     return as_int
 
 
@@ -66,8 +77,8 @@ def coerce_feature_values(features: Mapping[str, float]) -> dict[str, float]:
         try:
             numeric = float(value)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"Feature '{key}' must be numeric") from exc
-        validated[key] = coerce_finite_number(numeric, label=f"Feature '{key}'")
+            raise ValidationError(f"Feature '{key}' must be numeric") from exc
+        validated[key] = coerce_event_number(numeric, label=f"Feature '{key}'")
     return validated
 
 
@@ -177,26 +188,26 @@ class FeatureSchema:
         if plain_values is not None:
             return self._prepare(plain_values)
         if not features:
-            raise ValueError("Input dictionary cannot be empty")
+            raise ValidationError("Input dictionary cannot be empty")
 
         validated: dict[str, float] = {}
         for key, value in features.items():
             if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            validated[key] = coerce_finite_number(
+                raise ValidationError("All feature keys must be strings")
+            validated[key] = coerce_event_number(
                 value,
                 label=f"Feature '{key}'",
             )
 
         names = self._names or tuple(sorted(features) if self._sort_names else features)
         if self._expected_size is not None and len(features) != self._expected_size:
-            raise ValueError(
+            raise ValidationError(
                 f"Expected {self._expected_size} features, got {len(features)}"
             )
         if set(features) != set(names):
             expected_keys = ", ".join(names)
             received_keys = ", ".join(sorted(features))
-            raise ValueError(
+            raise ValidationError(
                 "Inconsistent feature keys. "
                 f"Expected [{expected_keys}], received [{received_keys}]."
             )
@@ -262,15 +273,15 @@ class MonotonicClock:
         elif isinstance(value, int | np.integer):
             current_time = int(value)
         else:
-            current_time = coerce_finite_number(value, label="Timestamp value")
+            current_time = coerce_event_number(value, label="Timestamp value")
             if self._integer_like:
                 rounded = int(round(current_time))
                 if abs(current_time - float(rounded)) > _INTEGER_TOLERANCE:
-                    raise ValueError("Timestamp value must be integer-like")
+                    raise ValidationError("Timestamp value must be integer-like")
                 current_time = rounded
 
         if current_time < self._max_time:
-            raise ValueError(
+            raise ValidationError(
                 f"Non-monotonic timestamp: received {current_time}, "
                 f"current {self._max_time}"
             )
@@ -331,22 +342,26 @@ class NumericEventBoundary:
             return PreparedNumericEvent(timestamp, self.schema._prepare(plain_values))
 
         if not sample:
-            raise ValueError("Input dictionary cannot be empty")
+            raise ValidationError("Input dictionary cannot be empty")
         if any(not isinstance(key, str) for key in sample):
-            raise ValueError("All feature keys must be strings")
+            raise ValidationError("All feature keys must be strings")
 
         if self.time_key is None:
             timestamp = self.clock.preview(implicit=True)
             features = sample
         else:
             if self.time_key not in sample:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
+                raise ValidationError(
+                    f"Missing time_key '{self.time_key}' in input sample"
+                )
             timestamp = self.clock.preview(sample[self.time_key], implicit=False)
             features = {
                 name: value for name, value in sample.items() if name != self.time_key
             }
             if not features:
-                raise ValueError("Input must contain at least one non-time feature")
+                raise ValidationError(
+                    "Input must contain at least one non-time feature"
+                )
 
         return PreparedNumericEvent(
             timestamp=timestamp,
@@ -404,11 +419,13 @@ class EdgeEventBoundary:
     def preview(self, sample: Mapping[str, object]) -> PreparedEdgeEvent:
         """Validate an edge event without advancing its clock."""
         if not sample:
-            raise ValueError("Input dictionary cannot be empty")
+            raise ValidationError("Input dictionary cannot be empty")
         if self.source_key not in sample:
-            raise ValueError(f"Missing source_key '{self.source_key}' in input sample")
+            raise ValidationError(
+                f"Missing source_key '{self.source_key}' in input sample"
+            )
         if self.destination_key not in sample:
-            raise ValueError(
+            raise ValidationError(
                 f"Missing destination_key '{self.destination_key}' in input sample"
             )
 
@@ -420,7 +437,9 @@ class EdgeEventBoundary:
             timestamp = self.clock.preview(implicit=True)
         else:
             if self.time_key not in sample:
-                raise ValueError(f"Missing time_key '{self.time_key}' in input sample")
+                raise ValidationError(
+                    f"Missing time_key '{self.time_key}' in input sample"
+                )
             timestamp = self.clock.preview(sample[self.time_key], implicit=False)
         return PreparedEdgeEvent(
             timestamp=timestamp,

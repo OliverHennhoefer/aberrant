@@ -9,7 +9,11 @@ from aberrant.forecast._arithmetic import (
     holt_winters_initialize,
 )
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
+from aberrant.utils.validation import (
+    coerce_event_number,
+    coerce_finite_number,
+    coerce_integer_count,
+)
 
 
 class HoltWinters(BaseForecaster):
@@ -106,7 +110,7 @@ class HoltWinters(BaseForecaster):
 
     def learn_one(self, y: float) -> None:
         """Learn the next value of the series."""
-        value = coerce_finite_number(y, label="y")
+        value = coerce_event_number(y, label="y")
         origin = self.n_samples_seen + 1
         if not self.is_ready:
             if origin < 2 * self.season_length:

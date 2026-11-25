@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.utils.validation import (
     FeatureSchema,
     PreparedFeatures,
@@ -10,7 +11,7 @@ from aberrant.utils.validation import (
 
 
 class ProjectionSchema(FeatureSchema):
-    """Preserve projection feature order and missing-key error semantics."""
+    """Preserve projection feature order and check dimensions."""
 
     def __init__(self, n_components: int, keys: list[str] | None) -> None:
         super().__init__(keys, sort_names=False)
@@ -28,12 +29,14 @@ class ProjectionSchema(FeatureSchema):
     def prepare(self, x: Mapping[str, float]) -> PreparedFeatures:
         values = coerce_feature_values(x)
         if self.names is not None:
-            for name in self.names:
-                if name not in values:
-                    raise KeyError(name)
+            missing = [name for name in self.names if name not in values]
+            if missing:
+                raise ValidationError(f"Input is missing feature(s): {missing}")
             unexpected = sorted(set(values).difference(self.names))
             if unexpected:
-                raise ValueError(f"Input contains unexpected feature(s): {unexpected}")
+                raise ValidationError(
+                    f"Input contains unexpected feature(s): {unexpected}"
+                )
         self._check_dimensions(len(values))
         return self.preview(values)
 

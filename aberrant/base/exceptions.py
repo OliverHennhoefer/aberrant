@@ -27,29 +27,20 @@ class AberrantError(Exception):
     pass
 
 
-class ModelNotFittedError(AberrantError):
-    """Raised when a model method is called before the model has been fitted."""
-
-    def __init__(self, message: str = "Model has not been fitted yet.") -> None:
-        super().__init__(message)
-
-
-class TransformationError(AberrantError):
-    """Raised when a transformation operation fails."""
-
-    pass
-
-
 class PipelineError(AberrantError):
     """Raised when a pipeline operation fails."""
 
     pass
 
 
-class ValidationError(AberrantError):
-    """Raised when input validation fails."""
+class ValidationError(AberrantError, ValueError):
+    """Raised when a stream event or batch is rejected at the input boundary.
 
-    pass
+    Learning and scoring raise it for missing, extra, non-string, non-numeric
+    and non-finite fields, and for out-of-order timestamps, so a service can
+    tell a bad event from a fault in its own code. It subclasses
+    ``ValueError``.
+    """
 
 
 class ConfigurationError(AberrantError):
@@ -99,14 +90,6 @@ class MissingOptionalDependencyError(ConfigurationError):
         )
         self.component_id = component_id
         self.extra = extra
-
-
-class UnsupportedFeatureError(AberrantError):
-    """Raised when an unsupported feature is encountered."""
-
-    def __init__(self, feature_name: str) -> None:
-        super().__init__(f"Feature '{feature_name}' has not been seen during training.")
-        self.feature_name = feature_name
 
 
 class IncompatibleComponentError(PipelineError):

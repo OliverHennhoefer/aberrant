@@ -185,6 +185,31 @@ With no explicit `features`, the first successfully learned event establishes a
 sorted schema. The guard does not remove message metadata or choose which fields
 belong to a model; that remains an application boundary decision.
 
+## Handle rejected events
+
+Every model, transformer, drift detector and forecaster raises
+`aberrant.base.ValidationError` for an event it rejects: a missing, extra,
+non-string, non-numeric or non-finite field, or an out-of-order timestamp. It
+subclasses `ValueError`. Catch it to route bad events to a dead-letter queue
+while letting configuration errors and faults in your own code stop the
+service.
+
+```python
+from aberrant.base import ValidationError
+from aberrant.model.iforest import HalfSpaceTrees
+
+detector = HalfSpaceTrees(seed=7)
+dead_letters = []
+for event in [{"x": 0.2}, {"x": float("nan")}, {"x": 0.4}]:
+    try:
+        score = detector.score_one(event)
+        detector.learn_one(event)
+    except ValidationError as error:
+        dead_letters.append((event, str(error)))
+
+assert len(dead_letters) == 1
+```
+
 ## Configure KNN and FAISS
 
 FAISS has a stable public import at `aberrant.similarity`. Declarative KNN

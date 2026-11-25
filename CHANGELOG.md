@@ -9,6 +9,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- `ThresholdModel` rejects non-numeric and non-finite features. A NaN
+  reading used to score 0, so a broken sensor never raised an alarm.
 - `ISCONNA` no longer scores an edge 0 when its combined statistic leaves the
   float range, and no longer raises `OverflowError` for large `alpha`, `beta`
   or `gamma`. Such a score saturates at the largest float (1 with
@@ -52,6 +54,14 @@ Semantic Versioning.
 
 ### Changed
 
+- Models, transformers, drift detectors, forecasters, calibrators and the
+  evaluator raise `ValidationError` for every rejected event: a missing,
+  extra, non-string, non-numeric or non-finite field, or an out-of-order
+  timestamp. `ValidationError` now subclasses `ValueError`, so existing
+  `except ValueError` handlers still catch it, and services can catch it alone
+  to set bad events aside. Constructor and configuration errors keep raising
+  `ValueError` and `ConfigurationError`. `IncrementalPCA` and
+  `RandomProjection` raise it instead of `KeyError` for a missing feature.
 - `MovingMedian`, `MovingQuantile` and `MovingInterquartileRange` keep their
   window sorted as they learn, so a score reads the order statistics in
   logarithmic time instead of sorting the window twice. Scores are
@@ -74,6 +84,8 @@ Semantic Versioning.
 
 ### Removed
 
+- `ModelNotFittedError`, `TransformationError` and `UnsupportedFeatureError`
+  from `aberrant.base`. Nothing raised them.
 - `GraphGatedOneClassSVM`. Its node models scored `rho - w·x` on unscaled
   features, which is negative for almost every point, and the score was
   clipped at 0, so it returned 0 for every sample on SHUTTLE and COVER
