@@ -53,6 +53,7 @@ class KSWIN(BaseDriftDetector):
 
     def __init__(
         self,
+        *,
         alpha: float = 0.005,
         window_size: int = 100,
         stat_size: int = 30,

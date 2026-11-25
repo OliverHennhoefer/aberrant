@@ -57,6 +57,7 @@ class SDOStream(BaseModel):
 
     def __init__(
         self,
+        *,
         k: int = 256,
         T: float = 512.0,
         qv: float = 0.3,

@@ -51,6 +51,7 @@ class OnlineIsolationForest(BaseModel):
 
     def __init__(
         self,
+        *,
         num_trees: int = 100,
         max_leaf_samples: int = 32,
         tree_type: Literal["fixed", "adaptive"] = "adaptive",

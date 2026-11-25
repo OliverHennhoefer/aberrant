@@ -241,6 +241,7 @@ class ChangepointCP:
 
     def __init__(
         self,
+        *,
         history: ScoreHistory,
         alpha: float,
         lam: float,

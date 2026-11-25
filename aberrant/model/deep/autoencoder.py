@@ -47,6 +47,7 @@ class Autoencoder(BaseModel):
 
     def __init__(
         self,
+        *,
         model: Architecture,
         optimizer: optim.Optimizer,
         criterion: AutoencoderLoss,

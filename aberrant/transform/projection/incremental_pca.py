@@ -41,6 +41,7 @@ class IncrementalPCA(BaseTransformer):
 
     def __init__(
         self,
+        *,
         n_components: int,
         n0: int = 50,
         keys: list[str] | None = None,

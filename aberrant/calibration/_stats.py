@@ -193,10 +193,13 @@ def t_mixture_quantile(
             )
         return cdf / weight_sum, density / weight_sum
 
-    return _bracketed_newton(evaluate, p, mean, scale, guess, tol)
+    return _bracketed_newton(
+        evaluate=evaluate, p=p, mean=mean, scale=scale, guess=guess, tol=tol
+    )
 
 
 def _bracketed_newton(
+    *,
     evaluate: Callable[[float], tuple[float, float]],
     p: float,
     mean: float,

@@ -23,11 +23,11 @@ def _series(n: int, season: int, seed: int = 0) -> list[float]:
         lambda: SeasonalNaive(horizon=0),
         lambda: SeasonalNaive(residual_alpha=0.0),
         lambda: SeasonalNaive(min_scale=0.0),
-        lambda: HoltWinters(1),
-        lambda: HoltWinters(2.0),  # type: ignore[arg-type]
-        lambda: HoltWinters(2, alpha=1.1),
-        lambda: HoltWinters(2, alpha=0.9, gamma=0.2),
-        lambda: HoltWinters(2, horizon=True),  # type: ignore[arg-type]
+        lambda: HoltWinters(season_length=1),
+        lambda: HoltWinters(season_length=2.0),  # type: ignore[arg-type]
+        lambda: HoltWinters(season_length=2, alpha=1.1),
+        lambda: HoltWinters(season_length=2, alpha=0.9, gamma=0.2),
+        lambda: HoltWinters(season_length=2, horizon=True),  # type: ignore[arg-type]
     ],
 )
 def test_rejects_invalid_configuration(factory) -> None:
@@ -63,7 +63,7 @@ def test_naive_spread_fades_per_lead_against_the_forecast_issued_that_far_back()
 
 
 def test_holt_winters_multi_step_follows_component_equations() -> None:
-    model = HoltWinters(2, horizon=3, alpha=0.25, beta=0.5, gamma=0.125)
+    model = HoltWinters(season_length=2, horizon=3, alpha=0.25, beta=0.5, gamma=0.125)
     for y in (9.0, 13.0, 11.0, 15.0):
         model.learn_one(y)
     # Initialized: level 13.5, trend 1, seasons [-1.5, 1.5], next phase 0.
@@ -86,7 +86,11 @@ def test_holt_winters_lead_one_scores_do_not_depend_on_the_horizon(
 ) -> None:
     params = {"alpha": 0.3, "beta": 0.1, "gamma": 0.2, "residual_alpha": 0.1}
     detectors = [
-        ResidualDetector(HoltWinters(season, horizon=horizon, **params), "v", score=s)
+        ResidualDetector(
+            HoltWinters(season_length=season, horizon=horizon, **params),
+            target="v",
+            score=s,
+        )
         for horizon in (1, 5)
         for s in ("scaled", "absolute")
     ]
@@ -102,7 +106,7 @@ def test_holt_winters_lead_one_scores_do_not_depend_on_the_horizon(
 
 
 def test_overflow_leaves_state_unchanged_and_pickle_continues() -> None:
-    model = HoltWinters(2, horizon=3)
+    model = HoltWinters(season_length=2, horizon=3)
     for y in _series(20, 2):
         model.learn_one(y)
     model.learn_one(1.7e308)
@@ -118,7 +122,7 @@ def test_overflow_leaves_state_unchanged_and_pickle_continues() -> None:
 
 
 def test_invalid_values_and_reset() -> None:
-    for model in (SeasonalNaive(), HoltWinters(2)):
+    for model in (SeasonalNaive(), HoltWinters(season_length=2)):
         with pytest.raises(ValueError):
             model.learn_one(math.nan)
         with pytest.raises(ValueError):
@@ -145,7 +149,7 @@ def test_spreads_grow_with_the_lead_on_a_random_walk() -> None:
 
 @pytest.mark.parametrize(("season", "horizon"), [(1, 3), (4, 1), (5, 12), (24, 7)])
 def test_seasonal_naive_matches_the_textbook_formula(season: int, horizon: int) -> None:
-    model = SeasonalNaive(season, horizon=horizon)
+    model = SeasonalNaive(season_length=season, horizon=horizon)
     history: list[float] = []
     for y in _series(6 * season + 3, max(season, 2), seed=season):
         model.learn_one(y)

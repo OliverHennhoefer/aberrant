@@ -564,7 +564,7 @@ class _Centroids:
         "weights",
     )
 
-    def __init__(
+    def __init__(  # noqa: PLR0917 - built positionally from arrays()
         self,
         means: np.ndarray,
         weights: np.ndarray,
@@ -601,13 +601,13 @@ class _Centroids:
 
     def scaled(self, factor: float) -> _Centroids:
         return _Centroids(
-            self.means,
-            self.weights * factor,
-            self.lows,
-            self.highs,
-            self.low_weights * factor,
-            self.high_weights * factor,
-            self.m2s * factor,
+            means=self.means,
+            weights=self.weights * factor,
+            lows=self.lows,
+            highs=self.highs,
+            low_weights=self.low_weights * factor,
+            high_weights=self.high_weights * factor,
+            m2s=self.m2s * factor,
         )
 
     def merged(
@@ -632,15 +632,15 @@ class _Centroids:
         if descending:
             order = order[::-1]
         merged = _compress(
-            np.concatenate((self.means, values))[order],
-            all_weights[order],
-            np.concatenate((self.lows, values))[order],
-            np.concatenate((self.highs, values))[order],
-            np.concatenate((self.low_weights, weights))[order],
-            np.concatenate((self.high_weights, weights))[order],
-            np.concatenate((self.m2s, np.zeros(len(values))))[order],
-            compression,
-            weight_scale,
+            means=np.concatenate((self.means, values))[order],
+            weights=all_weights[order],
+            lows=np.concatenate((self.lows, values))[order],
+            highs=np.concatenate((self.highs, values))[order],
+            low_weights=np.concatenate((self.low_weights, weights))[order],
+            high_weights=np.concatenate((self.high_weights, weights))[order],
+            m2s=np.concatenate((self.m2s, np.zeros(len(values))))[order],
+            compression=compression,
+            weight_scale=weight_scale,
         )
         if descending:
             merged = _Centroids(*(array[::-1] for array in merged.arrays()))
@@ -648,6 +648,7 @@ class _Centroids:
 
 
 def _compress(
+    *,
     means: np.ndarray,
     weights: np.ndarray,
     lows: np.ndarray,
@@ -672,7 +673,15 @@ def _compress(
     """
     total = float(np.sum(weights))
     if total <= 0.0 or len(means) <= 1:
-        return _Centroids(means, weights, lows, highs, low_weights, high_weights, m2s)
+        return _Centroids(
+            means=means,
+            weights=weights,
+            lows=lows,
+            highs=highs,
+            low_weights=low_weights,
+            high_weights=high_weights,
+            m2s=m2s,
+        )
     # Z(n) uses the effective sample size; stored weights carry the lazy decay
     # inflation, which must not make the digest coarser over time.
     effective = total / weight_scale

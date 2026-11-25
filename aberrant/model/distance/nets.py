@@ -49,6 +49,7 @@ class CellNeighborhoodDetector(_RadiusNeighborDetector):
 
     def __init__(
         self,
+        *,
         k: int = 50,
         radius: float = 1.5,
         window_size: int = 10_000,

@@ -110,6 +110,7 @@ class HalfSpaceTrees(BaseModel):
 
     def __init__(
         self,
+        *,
         n_trees: int = 10,
         height: int = 8,
         window_size: int = 250,

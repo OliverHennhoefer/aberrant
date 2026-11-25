@@ -71,6 +71,7 @@ class LocalOutlierFactor(BaseModel):
 
     def __init__(
         self,
+        *,
         k: int = 10,
         window_size: int = 1000,
         distance: Literal["euclidean", "manhattan"] = "euclidean",

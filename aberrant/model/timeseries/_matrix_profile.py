@@ -61,9 +61,9 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
 
     def __init__(
         self,
+        *,
         subsequence_length: int,
         window_size: int | None = None,
-        *,
         normalize: bool = True,
         exclusion_zone: int | None = None,
     ) -> None:

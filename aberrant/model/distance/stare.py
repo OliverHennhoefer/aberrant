@@ -47,6 +47,7 @@ class StationaryRegionNeighborDetector(_RadiusNeighborDetector):
 
     def __init__(
         self,
+        *,
         k: int = 50,
         radius: float = 1.0,
         window_size: int = 2048,

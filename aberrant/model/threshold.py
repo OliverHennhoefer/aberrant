@@ -44,6 +44,7 @@ class ThresholdModel(BaseModel):
 
     def __init__(
         self,
+        *,
         ceiling: float | dict[str, float] | None = None,
         floor: float | dict[str, float] | None = None,
     ) -> None:

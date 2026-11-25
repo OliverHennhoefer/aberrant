@@ -31,7 +31,7 @@ class Passthrough(BaseTransformer):
 class Select(Passthrough):
     """Select named features in the explicitly supplied order."""
 
-    def __init__(self, features: list[str]) -> None:
+    def __init__(self, *, features: list[str]) -> None:
         if isinstance(features, str | bytes):
             raise ValueError("features must be a sequence of names, not a string")
         if not features or any(not isinstance(key, str) or not key for key in features):
@@ -51,7 +51,7 @@ class Select(Passthrough):
 class Rename(Passthrough):
     """Rename selected keys, preserving order and rejecting name collisions."""
 
-    def __init__(self, mapping: dict[str, str]) -> None:
+    def __init__(self, *, mapping: dict[str, str]) -> None:
         if any(
             not isinstance(key, str)
             or not key

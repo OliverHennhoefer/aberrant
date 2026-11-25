@@ -18,7 +18,7 @@ class Architecture(abc.ABC, nn.Module):
     Subclasses must implement the `forward` and `input_size` methods.
     """
 
-    def __init__(self, device: torch.device | None = None) -> None:
+    def __init__(self, *, device: torch.device | None = None) -> None:
         """
         Initialize the architecture.
 

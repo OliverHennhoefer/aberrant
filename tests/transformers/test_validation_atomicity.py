@@ -35,8 +35,8 @@ def test_failed_first_projection_sample_does_not_lock_schema(factory):
 
 
 def test_projection_retry_matches_clean_seeded_initialization():
-    failed = RandomProjection(2, seed=42)
-    clean = RandomProjection(2, seed=42)
+    failed = RandomProjection(n_components=2, seed=42)
+    clean = RandomProjection(n_components=2, seed=42)
     with pytest.raises(ValueError):
         failed.learn_one({"x": 1.0})
     sample = {"b": 2.0, "a": 1.0, "c": 3.0}

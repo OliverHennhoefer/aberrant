@@ -89,12 +89,13 @@ class MovingGeometricAverage(_BaseMovingUnivariate):
 
     def __init__(
         self,
+        *,
         window_size: int,
         key: str | None = None,
         absoluteValues: bool = False,
         abs_diff: bool = True,
     ) -> None:
-        super().__init__(window_size, key, abs_diff)
+        super().__init__(window_size=window_size, key=key, abs_diff=abs_diff)
         self.absoluteValues = absoluteValues
 
     def learn_one(self, x: dict[str, float]) -> None:

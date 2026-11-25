@@ -218,6 +218,7 @@ class ISCONNA(BaseModel):
 
     def __init__(
         self,
+        *,
         source_key: str = "src",
         destination_key: str = "dst",
         time_key: str | None = "t",

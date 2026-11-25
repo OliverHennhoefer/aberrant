@@ -382,7 +382,7 @@ class TestRandomProjections(unittest.TestCase):
         )
 
     def test_transform_rejects_extra_features(self):
-        projection = RandomProjection(1, keys=["x", "y"], seed=42)
+        projection = RandomProjection(n_components=1, keys=["x", "y"], seed=42)
 
         with self.assertRaisesRegex(ValueError, "unexpected feature"):
             projection.transform_one({"x": 1.0, "y": 2.0, "z": 3.0})
@@ -470,7 +470,7 @@ class TestRandomProjections(unittest.TestCase):
         self.assertEqual(rp.random_matrix.shape, (5, 4))
 
     def test_random_state(self):
-        rp = RandomProjection(3, seed=42)
+        rp = RandomProjection(n_components=3, seed=42)
         rng = np.random.default_rng(42)
         datapoint = {f"feature_{i}": rng.random() for i in range(5)}
         rp.learn_one(datapoint)
@@ -505,13 +505,13 @@ class TestRandomProjections(unittest.TestCase):
 
     def test_projection_owns_configured_feature_names(self):
         keys = ["a", "b", "c"]
-        projection = RandomProjection(2, keys=keys, seed=42)
+        projection = RandomProjection(n_components=2, keys=keys, seed=42)
         keys[0] = "changed"
 
         self.assertEqual(projection.feature_names, ["a", "b", "c"])
 
     def test_projection_rejects_non_finite_values_before_learning_schema(self):
-        projection = RandomProjection(1)
+        projection = RandomProjection(n_components=1)
 
         with self.assertRaisesRegex(ValueError, "must be finite"):
             projection.learn_one({"x": float("nan")})

@@ -38,10 +38,10 @@ def test_branched_pca_raw_bypass_matches_explicit_numeric_reference():
     model = MovingCovariance(window_size=20)
     graph = GraphPipeline(
         [
-            GraphNode("selected", Select(["a", "b"])),
+            GraphNode("selected", Select(features=["a", "b"])),
             GraphNode("scaled", scaler, "selected"),
             GraphNode("pca", pca, "scaled"),
-            GraphNode("raw", Select(["temperature"])),
+            GraphNode("raw", Select(features=["temperature"])),
             MergeNode("features", ("pca", "raw")),
         ],
         model,
@@ -85,11 +85,11 @@ def test_shared_node_updates_once_and_score_is_read_only():
     graph = GraphPipeline(
         [
             GraphNode("shared", scaler),
-            GraphNode("a", Select(["a"]), "shared"),
-            GraphNode("b", Select(["b"]), "shared"),
+            GraphNode("a", Select(features=["a"]), "shared"),
+            GraphNode("b", Select(features=["b"]), "shared"),
             MergeNode("joined", ("b", "a")),
         ],
-        MovingCovariance(20),
+        MovingCovariance(window_size=20),
         "joined",
         model_minimum_updates=2,
     )
@@ -103,14 +103,17 @@ def test_shared_node_updates_once_and_score_is_read_only():
 
 
 def test_staggered_branches_gate_downstream_initialization():
-    left, right = IncrementalPCA(1, n0=2), IncrementalPCA(1, n0=4)
-    model = MovingCovariance(20)
+    left, right = (
+        IncrementalPCA(n_components=1, n0=2),
+        IncrementalPCA(n_components=1, n0=4),
+    )
+    model = MovingCovariance(window_size=20)
     graph = GraphPipeline(
         [
             GraphNode("left", left),
             GraphNode("right", right),
-            GraphNode("left_name", Rename({"component_0": "left"}), "left"),
-            GraphNode("right_name", Rename({"component_0": "right"}), "right"),
+            GraphNode("left_name", Rename(mapping={"component_0": "left"}), "left"),
+            GraphNode("right_name", Rename(mapping={"component_0": "right"}), "right"),
             MergeNode("joined", ("left_name", "right_name")),
         ],
         model,
@@ -133,7 +136,9 @@ def test_staggered_branches_gate_downstream_initialization():
 
 def test_terminal_rejection_restores_all_transformers_and_disables_graph():
     scaler = StandardScaler()
-    graph = GraphPipeline([GraphNode("scaled", scaler)], MovingAverage(5), "scaled")
+    graph = GraphPipeline(
+        [GraphNode("scaled", scaler)], MovingAverage(window_size=5), "scaled"
+    )
     previous = pickle.dumps(scaler)
     with pytest.raises(GraphStateUncertainError, match="exactly one"):
         graph.learn_one({"a": 1.0, "b": 2.0})
@@ -153,10 +158,10 @@ def test_branch_rejection_rolls_back_sibling_and_retains_last_outcome():
     graph = GraphPipeline(
         [
             GraphNode("a", scaler),
-            GraphNode("b", Rename({"missing": "named"})),
+            GraphNode("b", Rename(mapping={"missing": "named"})),
             MergeNode("joined", ("a", "b")),
         ],
-        MovingCovariance(5),
+        MovingCovariance(window_size=5),
         "joined",
     )
     before = pickle.dumps(graph)
@@ -176,7 +181,7 @@ def test_mutating_custom_transformer_cannot_corrupt_raw_sibling():
             x.clear()
             return {"processed": 3.0}
 
-    model = MovingCovariance(5)
+    model = MovingCovariance(window_size=5)
     graph = GraphPipeline(
         [
             GraphNode("a_mutates", MutatesInput(), minimum_updates=0),
@@ -199,7 +204,7 @@ def test_observations_are_detached_and_do_not_reexecute_components():
     scaler = StandardScaler()
     graph = GraphPipeline(
         [GraphNode("scaled", scaler)],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "scaled",
         observer=observations.append,
     )
@@ -228,12 +233,12 @@ def test_observer_failure_never_changes_learning_or_score():
 
     graph = GraphPipeline(
         [GraphNode("scaled", StandardScaler())],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "scaled",
         observer=broken,
     )
     clean = GraphPipeline(
-        [GraphNode("scaled", StandardScaler())], MovingAverage(5), "scaled"
+        [GraphNode("scaled", StandardScaler())], MovingAverage(window_size=5), "scaled"
     )
     for value in (1.0, 2.0, 3.0):
         graph.learn_one({"x": value})
@@ -245,8 +250,8 @@ def test_observer_failure_never_changes_learning_or_score():
 @pytest.mark.parametrize(
     "model,values,required",
     [
-        (MovingGeometricAverage(5), [-1.0, 0.0, 1.0, 2.0], 2),
-        (MovingHarmonicAverage(5), [0.0, 0.0, 2.0], 1),
+        (MovingGeometricAverage(window_size=5), [-1.0, 0.0, 1.0, 2.0], 2),
+        (MovingHarmonicAverage(window_size=5), [0.0, 0.0, 2.0], 1),
     ],
 )
 def test_model_readiness_uses_retained_values(model, values, required):
@@ -265,7 +270,7 @@ def test_duplicate_keys_are_rejected_before_terminal_learning():
             GraphNode("b", Passthrough()),
             MergeNode("joined", ("a", "b")),
         ],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "joined",
     )
     with pytest.raises(GraphExecutionError, match="duplicate"):
@@ -286,20 +291,22 @@ def test_duplicate_keys_are_rejected_before_terminal_learning():
 )
 def test_invalid_graphs_are_rejected(nodes, output):
     with pytest.raises(ConfigurationError):
-        GraphPipeline(nodes, MovingAverage(5), output)
+        GraphPipeline(nodes, MovingAverage(window_size=5), output)
 
 
 def test_component_instances_cannot_be_owned_by_two_nodes():
     scaler = StandardScaler()
     with pytest.raises(ConfigurationError, match="one node"):
         GraphPipeline(
-            [GraphNode("a", scaler), GraphNode("b", scaler, "a")], MovingAverage(5), "b"
+            [GraphNode("a", scaler), GraphNode("b", scaler, "a")],
+            MovingAverage(window_size=5),
+            "b",
         )
 
 
 def test_input_schema_and_nonfinite_values_reject_before_learning():
     graph = GraphPipeline(
-        [GraphNode("scaled", StandardScaler())], MovingAverage(5), "scaled"
+        [GraphNode("scaled", StandardScaler())], MovingAverage(window_size=5), "scaled"
     )
     graph.learn_one({"x": 1.0})
     before = pickle.dumps(graph)
@@ -382,7 +389,7 @@ def test_custom_initialization_minimum_gates_each_node():
         [
             GraphNode("custom", LearnsReference(), minimum_updates=3),
         ],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "custom",
         model_minimum_updates=2,
     )
@@ -404,9 +411,9 @@ def test_rollback_failure_disables_graph():
     graph = GraphPipeline(
         [
             GraphNode("a", BrokenRollback()),
-            GraphNode("b", Rename({"missing": "x"}), "a"),
+            GraphNode("b", Rename(mapping={"missing": "x"}), "a"),
         ],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "b",
     )
     with pytest.raises(GraphStateUncertainError, match="rollback failed"):
@@ -442,7 +449,7 @@ def test_old_minmax_checkpoint_restores_default_extrapolation():
 
 def test_online_pca_keeps_a_real_orthogonal_basis_on_degenerate_stream():
     scaler = StandardScaler()
-    projection = IncrementalPCA(2, n0=3)
+    projection = IncrementalPCA(n_components=2, n0=3)
     for index in range(30):
         data = {"a": float(index), "b": float(index**2), "c": float(index % 3)}
         scaler.learn_one(data)

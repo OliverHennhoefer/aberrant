@@ -27,7 +27,7 @@ class RandomModel(BaseModel):
         ```
     """
 
-    def __init__(self, seed: int = 1) -> None:
+    def __init__(self, *, seed: int = 1) -> None:
         """Initialize the random model with a specified seed."""
         super().__init__()
         self.seed = seed

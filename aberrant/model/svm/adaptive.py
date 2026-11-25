@@ -39,6 +39,7 @@ class IncrementalOneClassSVMAdaptiveKernel(BaseModel):
 
     def __init__(
         self,
+        *,
         nu: float = 0.1,
         initial_gamma: float = 1.0,
         gamma_bounds: tuple[float, float] = (0.001, 100.0),

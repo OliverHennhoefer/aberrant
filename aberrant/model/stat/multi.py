@@ -99,6 +99,7 @@ class MovingCovariance(BaseModel):
 
     def __init__(
         self,
+        *,
         window_size: int,
         bias: bool = True,
         keys: list[str] | None = None,
@@ -208,6 +209,7 @@ class MovingCorrelationCoefficient(BaseModel):
 
     def __init__(
         self,
+        *,
         window_size: int,
         bias: bool = True,
         keys: list[str] | None = None,
@@ -310,7 +312,7 @@ class MovingMahalanobisDistance(BaseModel):
     """
 
     def __init__(
-        self, window_size: int, bias: bool = True, keys: list[str] | None = None
+        self, *, window_size: int, bias: bool = True, keys: list[str] | None = None
     ) -> None:
         """Initialize the bounded multivariate window."""
         if window_size <= 0:

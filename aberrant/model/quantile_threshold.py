@@ -49,6 +49,7 @@ class QuantileThreshold(BaseModel):
 
     def __init__(
         self,
+        *,
         quantile: float = 0.95,
         window_size: int = 1000,
         score_key: str = "score",

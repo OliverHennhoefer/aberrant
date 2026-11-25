@@ -25,8 +25,8 @@ class FeatureSchemaGuard(BaseTransformer):
 
     def __init__(
         self,
-        features: Sequence[str] | None = None,
         *,
+        features: Sequence[str] | None = None,
         sort_features: bool = True,
     ) -> None:
         if isinstance(features, str | bytes):

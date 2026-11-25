@@ -214,7 +214,7 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
                     help="In units of the recent score range.",
                 ),
             ),
-            lambda h, a, p: ConformalPID(h, a, p["lr"], 100, p["ki"], 1000),
+            lambda h, a, p: ConformalPID(history=h, alpha=a, lr=p["lr"], scale_window=100, ki=p["ki"], horizon_guess=1000),
         ),
         CalibratorSpec(
             "nexcp", "NexCP", "Barber, Candes, Ramdas & Tibshirani, Ann. Stat. 2023",
@@ -241,7 +241,7 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
                     help="Apply the error term only beyond this share of the range.",
                 ),
             ),
-            lambda h, a, p: ECI(h, a, p["lr"], p["c"], p["h"]),
+            lambda h, a, p: ECI(history=h, alpha=a, lr=p["lr"], c=p["c"], cutoff=p["h"]),
         ),
         CalibratorSpec(
             "sfogd", "SF-OGD", "Orabona & Pal 2016; Bhatnagar et al., ICML 2023",
@@ -286,7 +286,7 @@ CALIBRATORS: dict[str, CalibratorSpec] = {
             "Weighted split conformal; a past score's weight is the posterior "
             "probability it is in the current regime.",
             "bayesian", "none", (_run_length(),),
-            lambda h, a, p: ChangepointCP(h, a, p["lambda"]),
+            lambda h, a, p: ChangepointCP(history=h, alpha=a, lam=p["lambda"]),
         ),
         CalibratorSpec(
             "bocpd", "BOCPD", "Adams & MacKay 2007",

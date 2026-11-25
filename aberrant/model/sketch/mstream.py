@@ -96,6 +96,7 @@ class MStream(BaseModel):
 
     def __init__(
         self,
+        *,
         rows: int = 2,
         buckets: int = 1024,
         alpha: float = 0.6,

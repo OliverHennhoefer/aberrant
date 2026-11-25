@@ -9,6 +9,10 @@ Semantic Versioning.
 
 ### Fixed
 
+- `MStream` scores numeric features with `sign(x) * log10(1 + |x|)`. It used
+  to reject every value at or below -1, so a standardized stream such as
+  `StandardScaler() | MStream()` failed after a few events. Non-negative
+  values score as before.
 - `ThresholdModel` rejects non-numeric and non-finite features. A NaN
   reading used to score 0, so a broken sensor never raised an alarm.
 - `ISCONNA` no longer scores an edge 0 when its combined statistic leaves the
@@ -54,6 +58,11 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** every constructor takes keyword arguments only, for example
+  `HalfSpaceTrees(n_trees=25, height=8)` instead of `HalfSpaceTrees(25, 8)`.
+  The wrapped component stays positional in `ResidualDetector(model, target=...)`
+  and the method in `ScoreCalibrator(method, alpha=...)`. `DatasetManager`
+  takes keyword arguments too.
 - SciPy is no longer a dependency, which removes about 95 MB from an
   installation and cuts `import aberrant.drift` from about 0.7 s to under
   0.1 s. `KSWIN` computes the exact two-sample KS test itself and the matrix
@@ -115,6 +124,10 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `SeasonalResidualDetector` and its catalog ID
+  `seasonal_residual_detector`. `ResidualDetector(HoltWinters(season_length=m),
+  target="x")` scores the same events identically; in a configuration use the
+  `residual_detector` ID with a nested `holt_winters` model.
 - `ModelNotFittedError`, `TransformationError` and `UnsupportedFeatureError`
   from `aberrant.base`. Nothing raised them.
 - The `dev`, `docs`, `security` and `benchmark` extras. They are dependency

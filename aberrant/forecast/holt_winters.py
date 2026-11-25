@@ -50,8 +50,8 @@ class HoltWinters(BaseForecaster):
 
     def __init__(
         self,
-        season_length: int,
         *,
+        season_length: int,
         horizon: int = 1,
         alpha: float = 0.2,
         beta: float = 0.05,
@@ -59,7 +59,7 @@ class HoltWinters(BaseForecaster):
         residual_alpha: float = 0.05,
         min_scale: float = 1e-6,
     ) -> None:
-        super().__init__(horizon)
+        super().__init__(horizon=horizon)
         self.season_length = coerce_integer_count(
             season_length, label="season_length", minimum=2
         )

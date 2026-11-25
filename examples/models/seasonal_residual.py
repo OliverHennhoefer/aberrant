@@ -9,7 +9,7 @@ season_length = 24
 noise_scale = 0.5
 # Set the spread floor in requests to the simulated observation noise.
 detector = ResidualDetector(
-    HoltWinters(season_length=season_length, min_scale=noise_scale), "requests"
+    HoltWinters(season_length=season_length, min_scale=noise_scale), target="requests"
 )
 normal_scores = []
 peak: tuple[float, int, float, float, float] | None = None

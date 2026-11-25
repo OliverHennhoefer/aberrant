@@ -152,6 +152,7 @@ class SignedGraphSketchDetector(BaseModel):
 
     def __init__(
         self,
+        *,
         graph_key: str = "graph",
         source_key: str = "src",
         destination_key: str = "dst",

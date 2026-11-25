@@ -165,6 +165,7 @@ def test_canonical_fingerprints_are_unchanged(config, fingerprint):
 class AnnotatedParameters:
     def __init__(
         self,
+        *,
         pair: tuple[int, float],
         values: tuple[int, ...] = (1, 2),
         weights: list[float] | None = None,

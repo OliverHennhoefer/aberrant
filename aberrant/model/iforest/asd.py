@@ -145,6 +145,7 @@ class ASDIsolationForest(BaseModel):
 
     def __init__(
         self,
+        *,
         n_estimators: int = 100,
         max_samples: int = 256,
         window_size: int | None = None,

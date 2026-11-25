@@ -17,7 +17,9 @@ class KNN(BaseModel):
         similarity_engine: Mutable search engine that owns the reference window.
     """
 
-    def __init__(self, k: int, similarity_engine: BaseSimilaritySearchEngine) -> None:
+    def __init__(
+        self, *, k: int, similarity_engine: BaseSimilaritySearchEngine
+    ) -> None:
         """Initialize a nearest-neighbor scorer."""
         if k <= 0:
             raise ValueError("k must be a positive integer")

@@ -77,7 +77,7 @@ def test_rejects_inconsistent_values(kwargs: dict[str, object]) -> None:
 
 
 def test_protocols_tell_forecasters_from_regressors() -> None:
-    for forecaster in (SeasonalNaive(), HoltWinters(2)):
+    for forecaster in (SeasonalNaive(), HoltWinters(season_length=2)):
         assert isinstance(forecaster, ForecasterProtocol)
         assert not isinstance(forecaster, RegressorProtocol)
     assert isinstance(RLSRegressor(), RegressorProtocol)

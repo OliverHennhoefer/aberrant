@@ -42,13 +42,13 @@ class SeasonalNaive(BaseForecaster):
 
     def __init__(
         self,
-        season_length: int = 1,
         *,
+        season_length: int = 1,
         horizon: int = 1,
         residual_alpha: float = 0.05,
         min_scale: float = 1e-6,
     ) -> None:
-        super().__init__(horizon)
+        super().__init__(horizon=horizon)
         self.season_length = coerce_integer_count(season_length, label="season_length")
         self.residual_alpha, self.min_scale = check_spread_parameters(
             residual_alpha, min_scale

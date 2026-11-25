@@ -136,6 +136,7 @@ class OnlineIsolationTree:
 
     def __init__(
         self,
+        *,
         max_leaf_samples: int,
         tree_type: str,
         subsample: float,

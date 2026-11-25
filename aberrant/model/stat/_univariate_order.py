@@ -23,12 +23,13 @@ class MovingQuantile(_BaseMovingOrderStatistic):
 
     def __init__(
         self,
+        *,
         window_size: int,
         key: str | None = None,
         quantile: float = 0.5,
         abs_diff: bool = True,
     ) -> None:
-        super().__init__(window_size, key, abs_diff)
+        super().__init__(window_size=window_size, key=key, abs_diff=abs_diff)
         if not 0 <= quantile <= 1:
             raise ValueError("quantile must be between 0 and 1.")
         self.quantile = quantile

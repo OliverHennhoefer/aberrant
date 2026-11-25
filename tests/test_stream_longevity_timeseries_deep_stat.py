@@ -277,11 +277,11 @@ def test_numpy_autoencoder_stages_overflowing_updates_before_publishing_weights(
 
 def test_retained_python_memory_plateaus_after_warmup_across_model_families() -> None:
     models = [
-        MovingAverage(23),
-        MovingCovariance(23),
-        RollingMatrixProfile(4, 23),
-        MultivariateRollingMatrixProfile(4, 23),
-        XLagDAMP(4, 23, 8),
+        MovingAverage(window_size=23),
+        MovingCovariance(window_size=23),
+        RollingMatrixProfile(subsequence_length=4, window_size=23),
+        MultivariateRollingMatrixProfile(subsequence_length=4, window_size=23),
+        XLagDAMP(subsequence_length=4, x_lag=23, start_index=8),
         QuantileThreshold(window_size=23),
         OnlineAutoencoderEnsemble(
             feature_map_grace=13,
@@ -328,7 +328,9 @@ def test_torch_autoencoder_reuses_storage_and_releases_event_graphs(
     architecture_type = VanillaLSTMAutoencoder if recurrent else VanillaAutoencoder
     architecture = architecture_type(input_size=2, seed=7)
     model = Autoencoder(
-        architecture, torch.optim.Adam(architecture.parameters()), torch.nn.MSELoss()
+        model=architecture,
+        optimizer=torch.optim.Adam(architecture.parameters()),
+        criterion=torch.nn.MSELoss(),
     )
     input_identity = id(model.x_tensor)
     outputs: deque[weakref.ReferenceType] = deque(maxlen=8)
@@ -372,7 +374,9 @@ def test_torch_autoencoder_rejects_finite_input_that_overflows_tensor_or_loss() 
 
     architecture = VanillaAutoencoder(input_size=1, seed=7)
     model = Autoencoder(
-        architecture, torch.optim.Adam(architecture.parameters()), torch.nn.MSELoss()
+        model=architecture,
+        optimizer=torch.optim.Adam(architecture.parameters()),
+        criterion=torch.nn.MSELoss(),
     )
     before = [parameter.detach().clone() for parameter in architecture.parameters()]
     for value in (1e300, 1e30):
@@ -397,7 +401,9 @@ def test_external_adam_counter_keeps_advancing_after_float32_integer_limit() -> 
     torch = pytest.importorskip("torch")
     architecture = VanillaAutoencoder(input_size=1, seed=7)
     model = Autoencoder(
-        architecture, torch.optim.Adam(architecture.parameters()), torch.nn.MSELoss()
+        model=architecture,
+        optimizer=torch.optim.Adam(architecture.parameters()),
+        criterion=torch.nn.MSELoss(),
     )
     model.learn_one({"x": 0.5})
     for state in model.optimizer.state.values():
@@ -417,7 +423,9 @@ def test_external_adam_moments_remain_finite_for_finite_loss_and_gradients() -> 
     torch = pytest.importorskip("torch")
     architecture = VanillaAutoencoder(input_size=1, seed=7)
     model = Autoencoder(
-        architecture, torch.optim.Adam(architecture.parameters()), torch.nn.MSELoss()
+        model=architecture,
+        optimizer=torch.optim.Adam(architecture.parameters()),
+        criterion=torch.nn.MSELoss(),
     )
     # The wrapper's loss/gradient guards pass, while Adam squares gradients in
     # its supplied parameter dtype and overflows its accumulated second moment.

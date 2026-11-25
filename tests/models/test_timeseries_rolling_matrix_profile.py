@@ -35,7 +35,7 @@ def _direct_distance(left, right, normalize):
     return float(np.sqrt(np.sum((normalized[0] - normalized[1]) ** 2)))
 
 
-def _oracle(history, candidate, m, window_size, exclusion_zone, normalize):
+def _oracle(*, history, candidate, m, window_size, exclusion_zone, normalize):
     if len(history) < m + exclusion_zone:
         return 0.0, {}
     series = np.asarray([*history, candidate], dtype=np.float64)
@@ -51,12 +51,12 @@ def _oracle(history, candidate, m, window_size, exclusion_zone, normalize):
 
 def _assert_matches_oracle(model, history, value):
     expected, distances = _oracle(
-        history,
-        value,
-        model.subsequence_length,
-        model.window_size,
-        model.exclusion_zone,
-        model.normalize,
+        history=history,
+        candidate=value,
+        m=model.subsequence_length,
+        window_size=model.window_size,
+        exclusion_zone=model.exclusion_zone,
+        normalize=model.normalize,
     )
     score, match = model.match_one({"value": float(value)})
     tolerance = 1e-12 if model.normalize else 0.0
@@ -73,7 +73,12 @@ def _assert_matches_oracle(model, history, value):
     "m,window,zone", [(2, 4, 0), (4, 6, 1), (5, 17, 4), (7, 23, 0)]
 )
 def test_stream_matches_direct_oracle(normalize, m, window, zone):
-    model = RollingMatrixProfile(m, window, normalize=normalize, exclusion_zone=zone)
+    model = RollingMatrixProfile(
+        subsequence_length=m,
+        window_size=window,
+        normalize=normalize,
+        exclusion_zone=zone,
+    )
     history = []
     for value in np.random.default_rng(42).normal(size=200):
         _assert_matches_oracle(model, history, value)
@@ -86,7 +91,9 @@ def test_stream_matches_direct_oracle(normalize, m, window, zone):
     "offset,scale", [(1e12, 1.0), (0.0, 1e-300), (0.0, 1e300), (1.0, 1e-14)]
 )
 def test_extreme_scales_and_small_variations(normalize, offset, scale):
-    model = RollingMatrixProfile(8, 31, normalize=normalize)
+    model = RollingMatrixProfile(
+        subsequence_length=8, window_size=31, normalize=normalize
+    )
     history = []
     series = offset + scale * np.random.default_rng(18).normal(size=120)
     with np.errstate(over="raise", invalid="raise", divide="raise"):
@@ -111,7 +118,9 @@ def test_ambiguous_fft_minima_are_all_considered(normalize):
         *rng.normal(size=7),
         *pattern[:-1],
     ]
-    model = RollingMatrixProfile(8, 64, normalize=normalize)
+    model = RollingMatrixProfile(
+        subsequence_length=8, window_size=64, normalize=normalize
+    )
     for value in history:
         model.learn_one({"value": float(value)})
     _assert_matches_oracle(model, history, pattern[-1])
@@ -120,7 +129,9 @@ def test_ambiguous_fft_minima_are_all_considered(normalize):
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_constant_runs_and_transitions_keep_scoring(normalize):
-    model = RollingMatrixProfile(4, 13, normalize=normalize)
+    model = RollingMatrixProfile(
+        subsequence_length=4, window_size=13, normalize=normalize
+    )
     history = []
     for value in [0.0] * 20 + [1.0, 2.0, 3.0, 4.0] * 4 + [5.0] * 20:
         _assert_matches_oracle(model, history, value)
@@ -136,7 +147,9 @@ def test_huge_query_preserves_reference_fft_precision():
         *np.ldexp(rng.normal(size=30), -10),
         value,
     ]
-    model = RollingMatrixProfile(13, 57, exclusion_zone=8)
+    model = RollingMatrixProfile(
+        subsequence_length=13, window_size=57, exclusion_zone=8
+    )
     for item in history:
         model.learn_one({"value": float(item)})
     _assert_matches_oracle(model, history, value)
@@ -151,14 +164,14 @@ def test_huge_query_preserves_reference_fft_precision():
     ],
 )
 def test_normalized_constant_convention(history, candidate, expected):
-    model = RollingMatrixProfile(3, 6, exclusion_zone=2)
+    model = RollingMatrixProfile(subsequence_length=3, window_size=6, exclusion_zone=2)
     for value in history:
         model.learn_one({"value": value})
     assert model.match_one({"value": candidate}) == (expected, 0)
 
 
 def test_default_parameters_and_warmup_boundary():
-    model = RollingMatrixProfile(5)
+    model = RollingMatrixProfile(subsequence_length=5)
     assert model.window_size == 80
     assert model.exclusion_zone == 2
     assert model.normalize is True
@@ -173,7 +186,9 @@ def test_default_parameters_and_warmup_boundary():
 
 @pytest.mark.parametrize("zone", [0, 1, 3, 8])
 def test_minimum_capacity_keeps_one_eligible_reference(zone):
-    model = RollingMatrixProfile(4, 4 + zone + 1, exclusion_zone=zone)
+    model = RollingMatrixProfile(
+        subsequence_length=4, window_size=4 + zone + 1, exclusion_zone=zone
+    )
     for index in range(80):
         score, match = model.match_one({"value": float(index % 7)})
         if model.is_ready:
@@ -183,7 +198,9 @@ def test_minimum_capacity_keeps_one_eligible_reference(zone):
 
 
 def test_expired_nearest_match_is_removed_before_scoring():
-    model = RollingMatrixProfile(2, 5, normalize=False, exclusion_zone=1)
+    model = RollingMatrixProfile(
+        subsequence_length=2, window_size=5, normalize=False, exclusion_zone=1
+    )
     for value in [1.0, 2.0, 9.0, 1.0]:
         model.learn_one({"value": value})
     assert model.match_one({"value": 2.0}) == (0.0, 0)
@@ -193,7 +210,9 @@ def test_expired_nearest_match_is_removed_before_scoring():
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_equal_matches_choose_earliest_retained_start(normalize):
-    model = RollingMatrixProfile(3, 11, normalize=normalize)
+    model = RollingMatrixProfile(
+        subsequence_length=3, window_size=11, normalize=normalize
+    )
     for index in range(35):
         if model.is_ready:
             assert model.match_one({"value": 2.0}) == (
@@ -204,8 +223,8 @@ def test_equal_matches_choose_earliest_retained_start(normalize):
 
 
 def test_scoring_is_read_only_and_learning_does_not_depend_on_it():
-    queried = RollingMatrixProfile(4, 16)
-    learn_only = RollingMatrixProfile(4, 16)
+    queried = RollingMatrixProfile(subsequence_length=4, window_size=16)
+    learn_only = RollingMatrixProfile(subsequence_length=4, window_size=16)
     assert queried.score_one({"unused_name": 1.0}) == 0.0
     for value in np.random.default_rng(9).normal(size=70):
         event = {"value": float(value)}
@@ -233,7 +252,7 @@ def test_scoring_is_read_only_and_learning_does_not_depend_on_it():
     ],
 )
 def test_invalid_input_leaves_ready_state_unchanged(event):
-    model = RollingMatrixProfile(3, 8)
+    model = RollingMatrixProfile(subsequence_length=3, window_size=8)
     for index in range(12):
         model.learn_one({"value": float(index)})
     before = pickle.dumps(model)
@@ -245,7 +264,9 @@ def test_invalid_input_leaves_ready_state_unchanged(event):
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_long_stream_has_bounded_state_and_forgets_old_prefix(normalize):
-    model = RollingMatrixProfile(5, 32, normalize=normalize)
+    model = RollingMatrixProfile(
+        subsequence_length=5, window_size=32, normalize=normalize
+    )
     history = []
     for index, value in enumerate(np.random.default_rng(12).normal(size=3000)):
         score = model.score_one({"value": float(value)})
@@ -257,18 +278,24 @@ def test_long_stream_has_bounded_state_and_forgets_old_prefix(normalize):
         history.append(value)
         assert model.n_history == min(index + 1, 32)
         assert len(model._statistics) <= 28
-    other = RollingMatrixProfile(5, 32, normalize=normalize)
+    other = RollingMatrixProfile(
+        subsequence_length=5, window_size=32, normalize=normalize
+    )
     for value in [-100.0] * (len(history) - 32) + history[-32:]:
         other.learn_one({"value": float(value)})
     assert model.match_one({"value": 1.5}) == other.match_one({"value": 1.5})
 
 
 def test_reset_clears_schema_indices_and_readiness():
-    model = RollingMatrixProfile(4, 16, normalize=False, exclusion_zone=3)
+    model = RollingMatrixProfile(
+        subsequence_length=4, window_size=16, normalize=False, exclusion_zone=3
+    )
     for index in range(30):
         model.learn_one({"old": float(index)})
     model.reset()
-    fresh = RollingMatrixProfile(4, 16, normalize=False, exclusion_zone=3)
+    fresh = RollingMatrixProfile(
+        subsequence_length=4, window_size=16, normalize=False, exclusion_zone=3
+    )
     assert pickle.dumps(model) == pickle.dumps(fresh)
     for index in range(20):
         event = {"new": float(index)}
@@ -300,7 +327,9 @@ def test_invalid_configuration(params):
 
 
 def test_unrepresentable_raw_distance_does_not_mutate_state():
-    model = RollingMatrixProfile(2, 4, normalize=False, exclusion_zone=1)
+    model = RollingMatrixProfile(
+        subsequence_length=2, window_size=4, normalize=False, exclusion_zone=1
+    )
     for value in [-1e308, -1e308, 1e308]:
         model.learn_one({"value": value})
     before = pickle.dumps(model)

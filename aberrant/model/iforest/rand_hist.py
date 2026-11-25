@@ -415,6 +415,7 @@ class StreamRandomHistogramForest(BaseModel):
 
     def __init__(
         self,
+        *,
         n_estimators: int = 25,
         max_depth: int = 5,
         window_size: int = 256,

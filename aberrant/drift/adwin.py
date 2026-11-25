@@ -56,12 +56,12 @@ class ADWIN(BaseDriftDetector):
 
     def __init__(
         self,
+        *,
         delta: float = 0.002,
         clock: int = 32,
         max_buckets: int = 5,
         min_window_length: int = 5,
         grace_period: int = 10,
-        *,
         max_window_size: int | None = None,
     ) -> None:
         if not 0 < delta < 1:
