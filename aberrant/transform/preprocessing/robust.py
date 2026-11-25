@@ -40,6 +40,7 @@ class RollingRobustScaler(BaseTransformer):
 
     def __init__(
         self,
+        *,
         window_size: int = 256,
         min_samples: int = 1,
         fallback_scale: float = 1.0,

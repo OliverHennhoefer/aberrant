@@ -75,8 +75,10 @@ each event by name:
 ```python
 from aberrant.forecast import HoltWinters, ResidualDetector, RLSRegressor
 
-seasonal = ResidualDetector(HoltWinters(season_length=24, horizon=3), "load", lead=3)
-virtual_sensor = ResidualDetector(RLSRegressor(), "output")
+seasonal = ResidualDetector(
+    HoltWinters(season_length=24, horizon=3), target="load", lead=3
+)
+virtual_sensor = ResidualDetector(RLSRegressor(), target="output")
 
 for x in stream:  # {"output": 4.2, "input_a": 1.1, "input_b": 0.3}
     score = virtual_sensor.score_one(x)
@@ -101,8 +103,6 @@ if forecast is not None:
     spread = forecast.spread(seasonal.lead)
 ```
 
-`ResidualDetector(HoltWinters(m, ...), target)` scores exactly as
-`SeasonalResidualDetector(m, ...)` does.
 
 ## Calibrating forecast scores
 

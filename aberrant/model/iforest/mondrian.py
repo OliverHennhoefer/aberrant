@@ -428,6 +428,7 @@ class MondrianIsolationForest(BaseModel):
 
     def __init__(
         self,
+        *,
         n_estimators: int = 100,
         subspace_size: int = 256,
         lambda_: float = 1.0,

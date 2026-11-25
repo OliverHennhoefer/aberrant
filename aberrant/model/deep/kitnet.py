@@ -174,6 +174,7 @@ class OnlineAutoencoderEnsemble(BaseModel):
 
     def __init__(
         self,
+        *,
         max_ae_size: int = 10,
         feature_map_grace: int = 5_000,
         ad_grace: int = 50_000,

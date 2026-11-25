@@ -34,10 +34,10 @@ class HoltWinters(BaseForecaster):
         min_scale: Positive floor for the reported spread, in target units.
 
     Notes:
-        Two cycles initialize the model as in
-        :class:`~aberrant.model.timeseries.SeasonalResidualDetector`, whose
-        scores equal this forecaster's lead-1 residual divided by its lead-1
-        spread. Every lead's spread starts at the mean absolute error of the
+        Exactly two cycles initialize the model. Their mean difference gives
+        the per-observation trend, the detrended values at each seasonal
+        position give the seasonal components, and the second cycle's mean,
+        advanced to its last position, gives the level. Every lead's spread starts at the mean absolute error of the
         fitted warm-up model, then fades towards that lead's own errors. State
         is O(season_length + horizon^2) and each event costs O(horizon).
         Unrepresentable arithmetic raises OverflowError without changing state.
@@ -50,8 +50,8 @@ class HoltWinters(BaseForecaster):
 
     def __init__(
         self,
-        season_length: int,
         *,
+        season_length: int,
         horizon: int = 1,
         alpha: float = 0.2,
         beta: float = 0.05,
@@ -59,7 +59,7 @@ class HoltWinters(BaseForecaster):
         residual_alpha: float = 0.05,
         min_scale: float = 1e-6,
     ) -> None:
-        super().__init__(horizon)
+        super().__init__(horizon=horizon)
         self.season_length = coerce_integer_count(
             season_length, label="season_length", minimum=2
         )

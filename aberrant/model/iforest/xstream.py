@@ -103,6 +103,7 @@ class XStream(BaseModel):
 
     def __init__(
         self,
+        *,
         k: int = 100,
         n_chains: int = 100,
         depth: int = 15,

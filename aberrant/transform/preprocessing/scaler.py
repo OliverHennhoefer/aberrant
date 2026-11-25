@@ -48,7 +48,7 @@ class MinMaxScaler(BaseTransformer):
     """
 
     def __init__(
-        self, feature_range: tuple[float, float] = (0, 1), clip: bool = False
+        self, *, feature_range: tuple[float, float] = (0, 1), clip: bool = False
     ) -> None:
         """
         Initialize the MinMaxScaler.
@@ -180,7 +180,7 @@ class StandardScaler(BaseTransformer):
         ```
     """
 
-    def __init__(self, with_std: bool = True) -> None:
+    def __init__(self, *, with_std: bool = True) -> None:
         """
         Initialize the StandardScaler.
 

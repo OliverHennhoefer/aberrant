@@ -62,6 +62,7 @@ class VanillaAutoencoder(Architecture):
 
     def __init__(
         self,
+        *,
         input_size: int,
         seed: int | None = None,
         device: torch.device | None = None,
@@ -140,6 +141,7 @@ class VanillaLSTMAutoencoder(Architecture):
 
     def __init__(
         self,
+        *,
         input_size: int,
         seed: int | None = None,
         device: torch.device | None = None,

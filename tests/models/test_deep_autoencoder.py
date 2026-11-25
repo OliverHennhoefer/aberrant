@@ -299,7 +299,9 @@ class TestAutoencoder(unittest.TestCase):
     def test_supplied_double_architecture_controls_input_dtype(self) -> None:
         architecture = VanillaAutoencoder(input_size=3, seed=42).double()
         model = Autoencoder(
-            architecture, optim.SGD(architecture.parameters()), nn.MSELoss()
+            model=architecture,
+            optimizer=optim.SGD(architecture.parameters()),
+            criterion=nn.MSELoss(),
         )
         point = {"a": 1.0, "b": 2.0, "c": 3.0}
 

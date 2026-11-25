@@ -31,7 +31,7 @@ class BaseForecaster(abc.ABC):
     irregular or missing readings before learning them.
     """
 
-    def __init__(self, horizon: int) -> None:
+    def __init__(self, *, horizon: int) -> None:
         self.horizon = coerce_integer_count(horizon, label="horizon")
 
     @property

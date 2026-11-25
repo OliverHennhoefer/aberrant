@@ -81,7 +81,10 @@ def _assert_matches_oracle(model, history, candidate):
 )
 def test_stream_matches_direct_joint_oracle(normalize, channels, m, window, zone):
     model = MultivariateRollingMatrixProfile(
-        m, window, normalize=normalize, exclusion_zone=zone
+        subsequence_length=m,
+        window_size=window,
+        normalize=normalize,
+        exclusion_zone=zone,
     )
     history = []
     for values in np.random.default_rng(42).normal(size=(120, channels)):
@@ -94,7 +97,9 @@ def test_joint_winner_need_not_be_any_channels_nearest_match():
     series = np.array(
         [[0, 10], [0, 10], [5, 5], [5, 5], [10, 0], [10, 0], [0, 0], [0, 0]]
     )
-    model = MultivariateRollingMatrixProfile(2, 8, normalize=False, exclusion_zone=1)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=2, window_size=8, normalize=False, exclusion_zone=1
+    )
     for values in series[:-1]:
         model.learn_one(_event(values))
     score, start, channels = model.explain_one(_event(series[-1]))
@@ -118,7 +123,9 @@ def test_joint_winner_need_not_be_any_channels_nearest_match():
     ],
 )
 def test_channel_scales_offsets_and_tiny_variation(normalize, offsets, scales):
-    model = MultivariateRollingMatrixProfile(8, 31, normalize=normalize)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=8, window_size=31, normalize=normalize
+    )
     history = []
     series = np.array(offsets) + np.array(scales) * np.random.default_rng(18).normal(
         size=(90, 3)
@@ -144,7 +151,9 @@ def test_ambiguous_joint_minima_are_all_refined(normalize):
             pattern[:-1],
         )
     )
-    model = MultivariateRollingMatrixProfile(8, 64, normalize=normalize)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=8, window_size=64, normalize=normalize
+    )
     for values in history:
         model.learn_one(_event(values))
     _assert_matches_oracle(model, list(history), pattern[-1])
@@ -165,7 +174,9 @@ def test_huge_query_preserves_small_reference_precision():
             [huge, 0.0],
         )
     )
-    model = MultivariateRollingMatrixProfile(13, 57, exclusion_zone=8)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=13, window_size=57, exclusion_zone=8
+    )
     for values in history:
         model.learn_one(_event(values))
     _assert_matches_oracle(model, list(history), [huge, 0.0])
@@ -173,7 +184,9 @@ def test_huge_query_preserves_small_reference_precision():
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_constant_runs_and_transitions(normalize):
-    model = MultivariateRollingMatrixProfile(4, 13, normalize=normalize)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=4, window_size=13, normalize=normalize
+    )
     values = np.array([0.0] * 20 + [1.0, 2.0, 3.0, 4.0] * 4 + [5.0] * 20)
     series = np.column_stack((values, values[::-1], np.ones(len(values))))
     history = []
@@ -184,7 +197,9 @@ def test_constant_runs_and_transitions(normalize):
 
 
 def test_constant_distances_are_explained_per_channel():
-    model = MultivariateRollingMatrixProfile(3, 6, exclusion_zone=2)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=3, window_size=6, exclusion_zone=2
+    )
     series = np.array(
         [[4, 0, 4], [4, 1, 4], [4, 2, 4], [7, 7, 1], [7, 7, 2], [7, 7, 3]]
     )
@@ -199,9 +214,15 @@ def test_constant_distances_are_explained_per_channel():
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_one_channel_equivalence_and_extra_matching_channels(normalize):
-    scalar = RollingMatrixProfile(4, 19, normalize=normalize)
-    single = MultivariateRollingMatrixProfile(4, 19, normalize=normalize)
-    extended = MultivariateRollingMatrixProfile(4, 19, normalize=normalize)
+    scalar = RollingMatrixProfile(
+        subsequence_length=4, window_size=19, normalize=normalize
+    )
+    single = MultivariateRollingMatrixProfile(
+        subsequence_length=4, window_size=19, normalize=normalize
+    )
+    extended = MultivariateRollingMatrixProfile(
+        subsequence_length=4, window_size=19, normalize=normalize
+    )
     values = [1.0] * 8 + list(np.random.default_rng(5).normal(size=90)) + [2.0] * 25
     for value in values:
         event = {"value": float(value)}
@@ -217,7 +238,7 @@ def test_one_channel_equivalence_and_extra_matching_channels(normalize):
 
 
 def test_defaults_and_first_valid_score():
-    model = MultivariateRollingMatrixProfile(5)
+    model = MultivariateRollingMatrixProfile(subsequence_length=5)
     assert (model.window_size, model.exclusion_zone, model.normalize) == (80, 2, True)
     for index in range(7):
         assert not model.is_ready
@@ -230,7 +251,9 @@ def test_defaults_and_first_valid_score():
 
 @pytest.mark.parametrize("zone", [0, 1, 3, 8])
 def test_minimum_capacity_continues_scoring_during_eviction(zone):
-    model = MultivariateRollingMatrixProfile(4, 4 + zone + 1, exclusion_zone=zone)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=4, window_size=4 + zone + 1, exclusion_zone=zone
+    )
     for index in range(80):
         event = {"a": float(index % 7), "b": float(index % 5)}
         score, match = model.match_one(event)
@@ -242,7 +265,9 @@ def test_minimum_capacity_continues_scoring_during_eviction(zone):
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_ties_choose_earliest_retained_interval(normalize):
-    model = MultivariateRollingMatrixProfile(3, 11, normalize=normalize)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=3, window_size=11, normalize=normalize
+    )
     for index in range(35):
         if model.is_ready:
             assert model.match_one({"a": 2.0, "b": 3.0}) == (0.0, max(0, index - 10))
@@ -250,7 +275,9 @@ def test_ties_choose_earliest_retained_interval(normalize):
 
 
 def test_expired_nearest_match_is_removed_before_scoring():
-    model = MultivariateRollingMatrixProfile(2, 5, normalize=False, exclusion_zone=1)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=2, window_size=5, normalize=False, exclusion_zone=1
+    )
     for value in [1.0, 2.0, 9.0, 1.0]:
         model.learn_one({"a": value, "b": 2 * value})
     assert model.match_one({"a": 2.0, "b": 4.0}) == (0.0, 0)
@@ -259,8 +286,8 @@ def test_expired_nearest_match_is_removed_before_scoring():
 
 
 def test_queries_are_read_only_and_learning_is_independent():
-    queried = MultivariateRollingMatrixProfile(4, 16)
-    learn_only = MultivariateRollingMatrixProfile(4, 16)
+    queried = MultivariateRollingMatrixProfile(subsequence_length=4, window_size=16)
+    learn_only = MultivariateRollingMatrixProfile(subsequence_length=4, window_size=16)
     assert queried.explain_one({"unused_name": 1.0}) == (0.0, None, {})
     for values in np.random.default_rng(9).normal(size=(70, 3)):
         event = _event(values)
@@ -293,7 +320,7 @@ def test_queries_are_read_only_and_learning_is_independent():
     ],
 )
 def test_invalid_input_is_atomic_before_and_after_readiness(learned, event):
-    model = MultivariateRollingMatrixProfile(3, 8)
+    model = MultivariateRollingMatrixProfile(subsequence_length=3, window_size=8)
     for index in range(learned):
         model.learn_one({"a": float(index), "b": 0.0})
     before = pickle.dumps(model)
@@ -312,7 +339,7 @@ def test_invalid_input_is_atomic_before_and_after_readiness(learned, event):
     "event", [{"a": 1.0}, {"a": 1.0, "c": 2.0}, {"a": 1.0, "b": 2.0, "c": 3.0}]
 )
 def test_first_successful_learning_commits_fixed_schema(event):
-    model = MultivariateRollingMatrixProfile(3, 8)
+    model = MultivariateRollingMatrixProfile(subsequence_length=3, window_size=8)
     model.learn_one({"a": 1.0, "b": 2.0})
     before = pickle.dumps(model)
     for method in (
@@ -328,7 +355,9 @@ def test_first_successful_learning_commits_fixed_schema(event):
 
 @pytest.mark.parametrize("normalize", [True, False])
 def test_long_stream_stays_ready_bounded_and_forgets_old_prefix(normalize):
-    model = MultivariateRollingMatrixProfile(5, 32, normalize=normalize)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=5, window_size=32, normalize=normalize
+    )
     history = []
     for index, values in enumerate(np.random.default_rng(12).normal(size=(2000, 3))):
         score = model.score_one(_event(values))
@@ -342,18 +371,24 @@ def test_long_stream_stays_ready_bounded_and_forgets_old_prefix(normalize):
         assert len(model._statistics) == max(0, model.n_history - 4)
         assert sum(len(item) for item in model._statistics) <= 3 * 28
     assert model.n_samples_seen == len(history)
-    other = MultivariateRollingMatrixProfile(5, 32, normalize=normalize)
+    other = MultivariateRollingMatrixProfile(
+        subsequence_length=5, window_size=32, normalize=normalize
+    )
     for values in [[-100.0] * 3] * (len(history) - 32) + history[-32:]:
         other.learn_one(_event(values))
     assert model.explain_one(_event([1.5] * 3)) == other.explain_one(_event([1.5] * 3))
 
 
 def test_reset_clears_schema_indices_and_readiness():
-    model = MultivariateRollingMatrixProfile(4, 16, normalize=False, exclusion_zone=3)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=4, window_size=16, normalize=False, exclusion_zone=3
+    )
     for index in range(30):
         model.learn_one({"old": float(index)})
     model.reset()
-    fresh = MultivariateRollingMatrixProfile(4, 16, normalize=False, exclusion_zone=3)
+    fresh = MultivariateRollingMatrixProfile(
+        subsequence_length=4, window_size=16, normalize=False, exclusion_zone=3
+    )
     assert pickle.dumps(model) == pickle.dumps(fresh)
     for index in range(20):
         event = {"a": float(index), "b": 0.0}
@@ -384,7 +419,9 @@ def test_invalid_configuration(params):
 
 
 def test_unrepresentable_joint_raw_distance_does_not_mutate_state():
-    model = MultivariateRollingMatrixProfile(2, 4, normalize=False, exclusion_zone=1)
+    model = MultivariateRollingMatrixProfile(
+        subsequence_length=2, window_size=4, normalize=False, exclusion_zone=1
+    )
     for value in [-1e308, -1e308, 1e308]:
         model.learn_one({"large": value, "normal": 1.0})
     before = pickle.dumps(model)

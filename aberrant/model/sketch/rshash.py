@@ -84,6 +84,7 @@ class StreamingRSHash(BaseModel):
 
     def __init__(
         self,
+        *,
         components_num: int = 24,
         hash_num: int = 4,
         bins: int = 256,

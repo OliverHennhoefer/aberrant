@@ -38,6 +38,7 @@ class _OnlineTailDetector(BaseModel):
 
     def __init__(
         self,
+        *,
         memory: Literal["sketch", "window", "hybrid"] = "sketch",
         window_size: int | None = None,
         half_life: float | None = None,

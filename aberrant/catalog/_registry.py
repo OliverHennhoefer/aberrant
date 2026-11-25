@@ -158,11 +158,6 @@ def _quantile_warmup(params: Parameters) -> WarmupRequirement:
     return _events(min(window_size, max(10, int(window_size * 0.1))))
 
 
-def _seasonal_warmup(params: Parameters) -> WarmupRequirement:
-    season_length = params.get("season_length")
-    return _events(None if season_length is None else 2 * _as_int(season_length))
-
-
 # Forecasters that predict the target from the event's other features at lead 0
 # instead of forecasting the series ahead.
 _REGRESSORS = frozenset({"rls_regressor"})
@@ -908,20 +903,6 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "seasonal_residual_detector",
-        "SeasonalResidualDetector",
-        "aberrant.model.timeseries",
-        "time_series",
-        _capabilities(
-            event_kind=EventKind.UNIVARIATE,
-            feature_count=ONE_FEATURE,
-            score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_seasonal_warmup,
-            state=StateKind.BOUNDED,
-            resettable=True,
-        ),
-    ),
-    _model(
         "x_lag_damp",
         "XLagDAMP",
         "aberrant.model.timeseries",
@@ -1010,6 +991,7 @@ def _renamed_names(
 
 
 def _transformer(
+    *,
     component_id: str,
     class_name: str,
     module: str,
@@ -1033,71 +1015,71 @@ def _transformer(
 
 _TRANSFORMER_SPECS = (
     _transformer(
-        "select",
-        "Select",
-        "aberrant.transform.preprocessing",
-        "composition",
-        _selected_count,
-        _selected_names,
+        component_id="select",
+        class_name="Select",
+        module="aberrant.transform.preprocessing",
+        family="composition",
+        resolver=_selected_count,
+        names_resolver=_selected_names,
     ),
     _transformer(
-        "rename",
-        "Rename",
-        "aberrant.transform.preprocessing",
-        "composition",
-        _preserve_features,
-        _renamed_names,
+        component_id="rename",
+        class_name="Rename",
+        module="aberrant.transform.preprocessing",
+        family="composition",
+        resolver=_preserve_features,
+        names_resolver=_renamed_names,
     ),
     _transformer(
-        "passthrough",
-        "Passthrough",
-        "aberrant.transform.preprocessing",
-        "composition",
-        _preserve_features,
+        component_id="passthrough",
+        class_name="Passthrough",
+        module="aberrant.transform.preprocessing",
+        family="composition",
+        resolver=_preserve_features,
     ),
     _transformer(
-        "feature_schema_guard",
-        "FeatureSchemaGuard",
-        "aberrant.transform.preprocessing",
-        "validation",
-        _schema_features,
+        component_id="feature_schema_guard",
+        class_name="FeatureSchemaGuard",
+        module="aberrant.transform.preprocessing",
+        family="validation",
+        resolver=_schema_features,
     ),
     _transformer(
-        "min_max_scaler",
-        "MinMaxScaler",
-        "aberrant.transform.preprocessing",
-        "preprocessing",
-        _preserve_features,
+        component_id="min_max_scaler",
+        class_name="MinMaxScaler",
+        module="aberrant.transform.preprocessing",
+        family="preprocessing",
+        resolver=_preserve_features,
     ),
     _transformer(
-        "standard_scaler",
-        "StandardScaler",
-        "aberrant.transform.preprocessing",
-        "preprocessing",
-        _preserve_features,
+        component_id="standard_scaler",
+        class_name="StandardScaler",
+        module="aberrant.transform.preprocessing",
+        family="preprocessing",
+        resolver=_preserve_features,
     ),
     _transformer(
-        "rolling_robust_scaler",
-        "RollingRobustScaler",
-        "aberrant.transform.preprocessing",
-        "preprocessing",
-        _preserve_features,
+        component_id="rolling_robust_scaler",
+        class_name="RollingRobustScaler",
+        module="aberrant.transform.preprocessing",
+        family="preprocessing",
+        resolver=_preserve_features,
     ),
     _transformer(
-        "incremental_pca",
-        "IncrementalPCA",
-        "aberrant.transform.projection",
-        "projection",
-        _projected_features,
-        _projected_names,
+        component_id="incremental_pca",
+        class_name="IncrementalPCA",
+        module="aberrant.transform.projection",
+        family="projection",
+        resolver=_projected_features,
+        names_resolver=_projected_names,
     ),
     _transformer(
-        "random_projection",
-        "RandomProjection",
-        "aberrant.transform.projection",
-        "projection",
-        _projected_features,
-        _projected_names,
+        component_id="random_projection",
+        class_name="RandomProjection",
+        module="aberrant.transform.projection",
+        family="projection",
+        resolver=_projected_features,
+        names_resolver=_projected_names,
     ),
 )
 

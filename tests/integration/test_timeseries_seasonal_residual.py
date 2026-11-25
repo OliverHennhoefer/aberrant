@@ -1,4 +1,4 @@
-"""A declarative seasonal detector flags a value normal at other phases."""
+"""A declarative Holt-Winters residual detector flags a value normal at other phases."""
 
 import numpy as np
 
@@ -15,11 +15,13 @@ def test_fixed_cadence_seasonal_drop_is_explained_and_recovery_continues():
     model = DetectorConfig.from_mapping(
         {
             "model": {
-                "id": "seasonal_residual_detector",
+                "id": "residual_detector",
                 "params": {
-                    "season_length": period,
-                    "key": "requests",
-                    "min_scale": 0.5,
+                    "target": "requests",
+                    "model": {
+                        "id": "holt_winters",
+                        "params": {"season_length": period, "min_scale": 0.5},
+                    },
                 },
             }
         }

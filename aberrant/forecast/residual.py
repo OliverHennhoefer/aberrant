@@ -46,7 +46,7 @@ class ResidualDetector(BaseModel):
         ```python
         from aberrant.forecast import HoltWinters, ResidualDetector
 
-        detector = ResidualDetector(HoltWinters(season_length=24), "load")
+        detector = ResidualDetector(HoltWinters(season_length=24), target="load")
         for x in stream:
             score = detector.score_one(x)
             detector.learn_one(x)
@@ -56,8 +56,8 @@ class ResidualDetector(BaseModel):
     def __init__(
         self,
         model: ForecasterProtocol | RegressorProtocol,
-        target: str,
         *,
+        target: str,
         lead: int | None = None,
         score: Literal["absolute", "scaled"] = "scaled",
     ) -> None:

@@ -50,6 +50,7 @@ class PageHinkley(BaseDriftDetector):
 
     def __init__(
         self,
+        *,
         min_instances: int = 30,
         delta: float = 0.005,
         threshold: float = 50.0,

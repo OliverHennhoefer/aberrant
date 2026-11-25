@@ -13,10 +13,10 @@ from aberrant.transform.projection import IncrementalPCA
 
 graph = GraphPipeline(
     [
-        GraphNode("selected", Select(["voltage", "current"])),
+        GraphNode("selected", Select(features=["voltage", "current"])),
         GraphNode("scaled", StandardScaler(), "selected"),
-        GraphNode("pca", IncrementalPCA(1, n0=5), "scaled"),
-        GraphNode("raw", Select(["temperature"])),
+        GraphNode("pca", IncrementalPCA(n_components=1, n0=5), "scaled"),
+        GraphNode("raw", Select(features=["temperature"])),
         MergeNode("features", ("pca", "raw")),
     ],
     MovingCovariance(window_size=32),

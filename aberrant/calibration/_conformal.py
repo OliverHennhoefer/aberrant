@@ -210,6 +210,7 @@ class ConformalPID(QuantileTracker):
 
     def __init__(
         self,
+        *,
         history: ScoreHistory,
         alpha: float,
         lr: float,
@@ -277,6 +278,7 @@ class ECI:
 
     def __init__(
         self,
+        *,
         history: ScoreHistory,
         alpha: float,
         lr: float,

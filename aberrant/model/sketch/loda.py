@@ -62,6 +62,7 @@ class StreamingLODA(BaseModel):
 
     def __init__(
         self,
+        *,
         n_projections: int = 100,
         n_bins: int = 32,
         sparsity: float | None = None,

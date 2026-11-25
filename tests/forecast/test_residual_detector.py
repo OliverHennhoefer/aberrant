@@ -41,7 +41,7 @@ class _Recorder:
 
 @pytest.mark.parametrize("lead", [1, 2, 3])
 def test_scores_against_the_forecast_issued_lead_events_earlier(lead: int) -> None:
-    detector = ResidualDetector(_Recorder(), "y", lead=lead, score="absolute")
+    detector = ResidualDetector(_Recorder(), target="y", lead=lead, score="absolute")
     for event in range(1, 8):
         _, expected, _ = detector.explain_one({"y": 0.0})
         origin = event - lead
@@ -51,7 +51,7 @@ def test_scores_against_the_forecast_issued_lead_events_earlier(lead: int) -> No
 
 @pytest.mark.parametrize("lead", [1, 3])
 def test_forecast_for_gives_the_forecast_an_event_is_scored_against(lead: int) -> None:
-    detector = ResidualDetector(_Recorder(), "y", lead=lead, score="scaled")
+    detector = ResidualDetector(_Recorder(), target="y", lead=lead, score="scaled")
     for event in range(1, 8):
         # The target is not read: the forecast is known before the value.
         forecast = detector.forecast_for({})
@@ -69,7 +69,7 @@ def test_forecast_for_gives_the_forecast_an_event_is_scored_against(lead: int) -
 
 
 def test_forecast_for_a_regressor_is_its_prediction_from_the_covariates() -> None:
-    detector = ResidualDetector(RLSRegressor(forgetting=1.0, delta=1e8), "power")
+    detector = ResidualDetector(RLSRegressor(forgetting=1.0, delta=1e8), target="power")
     assert detector.forecast_for({"a": 1.0, "b": 1.0}) is None
     rng = np.random.default_rng(0)
     for _ in range(100):
@@ -82,7 +82,7 @@ def test_forecast_for_a_regressor_is_its_prediction_from_the_covariates() -> Non
 
 
 def test_regressor_scores_its_own_prediction_from_covariates() -> None:
-    detector = ResidualDetector(RLSRegressor(forgetting=1.0, delta=1e8), "power")
+    detector = ResidualDetector(RLSRegressor(forgetting=1.0, delta=1e8), target="power")
     rng = np.random.default_rng(0)
     for _ in range(100):
         a, b = rng.uniform(1, 2, size=2)
@@ -95,25 +95,25 @@ def test_regressor_scores_its_own_prediction_from_covariates() -> None:
 
 
 def test_construction_checks() -> None:
-    assert isinstance(ResidualDetector(SeasonalNaive(), "y"), BaseModel)
+    assert isinstance(ResidualDetector(SeasonalNaive(), target="y"), BaseModel)
     with pytest.raises(ValueError, match="horizon"):
-        ResidualDetector(HoltWinters(2, horizon=2), "y", lead=3)
+        ResidualDetector(HoltWinters(season_length=2, horizon=2), target="y", lead=3)
     with pytest.raises(ValueError):
-        ResidualDetector(HoltWinters(2), "y", lead=0)
+        ResidualDetector(HoltWinters(season_length=2), target="y", lead=0)
     with pytest.raises(ValueError, match="lead 0"):
-        ResidualDetector(RLSRegressor(), "y", lead=1)
+        ResidualDetector(RLSRegressor(), target="y", lead=1)
     with pytest.raises(ValueError):
-        ResidualDetector(SeasonalNaive(), "")
+        ResidualDetector(SeasonalNaive(), target="")
     with pytest.raises(ValueError):
-        ResidualDetector(SeasonalNaive(), "y", score="squared")  # type: ignore[arg-type]
+        ResidualDetector(SeasonalNaive(), target="y", score="squared")  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        ResidualDetector(object(), "y")  # type: ignore[arg-type]
+        ResidualDetector(object(), target="y")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="missing the target"):
-        ResidualDetector(SeasonalNaive(), "y").score_one({"z": 1.0})
+        ResidualDetector(SeasonalNaive(), target="y").score_one({"z": 1.0})
 
 
 def test_runs_in_prequential_evaluation() -> None:
-    detector = ResidualDetector(SeasonalNaive(season_length=4), "y")
+    detector = ResidualDetector(SeasonalNaive(season_length=4), target="y")
     events = [({"y": float(t % 4)}, 0) for t in range(40)] + [({"y": 9.0}, 1)]
     evaluator = PrequentialEvaluator(detector)
     scores = [evaluator.update(x, label).score or 0.0 for x, label in events]
@@ -123,7 +123,7 @@ def test_runs_in_prequential_evaluation() -> None:
 
 def test_lead_two_scores_feed_a_calibrator_with_delayed_feedback() -> None:
     rng = np.random.default_rng(4)
-    model = HoltWinters(12, horizon=2)
+    model = HoltWinters(season_length=12, horizon=2)
     calibrator = ScoreCalibrator("aci", alpha=0.1, window=200, gamma=0.005)
     pending: dict[int, tuple[Forecast, float]] = {}
     misses = []

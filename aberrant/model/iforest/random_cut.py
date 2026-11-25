@@ -511,6 +511,7 @@ class RandomCutForest(BaseModel):
 
     def __init__(
         self,
+        *,
         n_trees: int = 40,
         sample_size: int = 256,
         shingle_size: int = 1,

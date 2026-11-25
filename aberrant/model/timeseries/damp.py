@@ -161,6 +161,7 @@ class XLagDAMP(BaseModel):
 
     def __init__(
         self,
+        *,
         subsequence_length: int,
         x_lag: int | None = None,
         start_index: int | None = None,

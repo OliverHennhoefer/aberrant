@@ -34,7 +34,11 @@ class RandomProjection(BaseTransformer):
     """
 
     def __init__(
-        self, n_components: int, keys: list[str] | None = None, seed: int | None = None
+        self,
+        *,
+        n_components: int,
+        keys: list[str] | None = None,
+        seed: int | None = None,
     ) -> None:
         """Initialize the projection and, when possible, its random matrix."""
         super().__init__()

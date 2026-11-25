@@ -48,6 +48,7 @@ class DatasetManager:
 
     def __init__(
         self,
+        *,
         cache_dir: str | Path | None = None,
         github_repo: str = "OliverHennhoefer/nonconform",
         release_tag: str = "v0.9.17-datasets",

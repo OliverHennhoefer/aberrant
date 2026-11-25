@@ -21,43 +21,43 @@ from aberrant.model.stat import (
 
 class TestMovingAverage(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         self.assertEqual(ma.window.maxlen, 3)
 
     def test_initialization_with_non_positive_window_size_raises_error(self):
         with self.assertRaises(ValueError):
-            _ = MovingAverage(0)
+            _ = MovingAverage(window_size=0)
 
     def test_learn_one_updates_window_correctly(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         ma.learn_one({"value": 1.0})
         self.assertEqual(list(ma.window), [1.0])
         ma.learn_one({"value": 2.0})
         self.assertEqual(list(ma.window), [1.0, 2.0])
 
     def test_learn_one_with_multiple_keys_raises_assertion_error(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         with self.assertRaises(ValueError):
             ma.learn_one({"key1": 1.0, "key2": 2.0})
 
     def test_score_one_calculates_mean_correctly(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         ma.learn_one({"value": 1.0})
         ma.learn_one({"value": 2.0})
         self.assertEqual(ma.score_one({"value": 3}), 0.5)
 
     def test_score_one_with_empty_window(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         self.assertEqual(ma.score_one({"value": 3}), 0)
 
     def test_window_shifting(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingAverage(3)
+        ma = MovingAverage(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 0}), 0)
@@ -65,32 +65,32 @@ class TestMovingAverage(unittest.TestCase):
 
 class TestMovingHarmonicAverage(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
-        mah = MovingHarmonicAverage(3)
+        mah = MovingHarmonicAverage(window_size=3)
         self.assertEqual(len(mah.window), 0)
 
     def test_initialization_with_zero_window_size_raises_error(self):
         with self.assertRaises(ValueError) as context:
-            _ = MovingHarmonicAverage(0)
+            _ = MovingHarmonicAverage(window_size=0)
         self.assertEqual(
             str(context.exception), "Window size must be a positive integer."
         )
 
     def test_initialization_with_negative_window_size_raises_error(self):
         with self.assertRaises(ValueError) as context:
-            _ = MovingHarmonicAverage(-5)
+            _ = MovingHarmonicAverage(window_size=-5)
         self.assertEqual(
             str(context.exception), "Window size must be a positive integer."
         )
 
     def test_learn_one_with_single_value_dict(self):
-        mah = MovingHarmonicAverage(3)
+        mah = MovingHarmonicAverage(window_size=3)
         mah.learn_one({"value": 10.0})
         self.assertEqual(len(mah.window), 1)
         if mah.feature_name:
             self.assertIn("value", mah.feature_name)
 
     def test_learn_one_raises_assertion_error_if_more_than_one_key(self):
-        mah = MovingHarmonicAverage(3)
+        mah = MovingHarmonicAverage(window_size=3)
         with self.assertRaises(ValueError) as context:
             mah.learn_one({"a": 10.0, "b": 20.0})
         self.assertEqual(
@@ -98,7 +98,7 @@ class TestMovingHarmonicAverage(unittest.TestCase):
         )
 
     def test_learn_one_raises_assertion_error_if_empty_dict(self):
-        mah = MovingHarmonicAverage(3)
+        mah = MovingHarmonicAverage(window_size=3)
         with self.assertRaises(ValueError) as context:
             mah.learn_one({})
         self.assertEqual(
@@ -106,11 +106,11 @@ class TestMovingHarmonicAverage(unittest.TestCase):
         )
 
     def test_score_one_with_no_values_returns_zero(self):
-        mah = MovingHarmonicAverage(3)
+        mah = MovingHarmonicAverage(window_size=3)
         self.assertEqual(mah.score_one({"value": 4}), 0.0)
 
     def test_score_one_calculates_correct_harmonic_average(self):
-        mah = MovingHarmonicAverage(3, abs_diff=False)
+        mah = MovingHarmonicAverage(window_size=3, abs_diff=False)
         mah.learn_one({"value": 1.0})
         mah.learn_one({"value": 2.0})
         mah.learn_one({"value": 4.0})
@@ -118,20 +118,20 @@ class TestMovingHarmonicAverage(unittest.TestCase):
         self.assertAlmostEqual(mah.score_one({"value": 1}), expected_score, places=6)
 
     def test_window_shifting(self):
-        ma = MovingHarmonicAverage(3)
+        ma = MovingHarmonicAverage(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingHarmonicAverage(5)
+        ma = MovingHarmonicAverage(window_size=5)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 0}), 0)
         self.assertEqual(ma.score_one({"value": 1}), 0)
 
     def test_undefined_harmonic_mean_raises_value_error(self):
-        model = MovingHarmonicAverage(3)
+        model = MovingHarmonicAverage(window_size=3)
         model.learn_one({"value": 1.0})
         model.learn_one({"value": -1.0})
 
@@ -194,19 +194,19 @@ class TestMovingGeometricAverage(unittest.TestCase):
         self.assertAlmostEqual(m.score_one({"feature": 1.2}), expected_score)
 
     def test_window_shifting(self):
-        ma = MovingGeometricAverage(3)
+        ma = MovingGeometricAverage(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingGeometricAverage(3)
+        ma = MovingGeometricAverage(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 1}), 0)
 
     def test_score_one_rejects_nonpositive_value(self):
-        model = MovingGeometricAverage(3)
+        model = MovingGeometricAverage(window_size=3)
         model.learn_one({"value": 1.0})
         model.learn_one({"value": 2.0})
 
@@ -238,7 +238,7 @@ class TestMovingGeometricAverage(unittest.TestCase):
         for scale in (1e-200, 1.0, 1e200):
             for abs_diff in (False, True):
                 with self.subTest(scale=scale, abs_diff=abs_diff):
-                    model = MovingGeometricAverage(200, abs_diff=abs_diff)
+                    model = MovingGeometricAverage(window_size=200, abs_diff=abs_diff)
                     for _ in range(200):
                         model.learn_one({"value": scale})
 
@@ -253,7 +253,9 @@ class TestMovingGeometricAverage(unittest.TestCase):
                     )
 
     def test_growth_mode_avoids_overflowing_individual_ratios(self):
-        model = MovingGeometricAverage(3, absoluteValues=True, abs_diff=False)
+        model = MovingGeometricAverage(
+            window_size=3, absoluteValues=True, abs_diff=False
+        )
         for value in (1e-200, 1e200, 1e-200):
             model.learn_one({"value": value})
 
@@ -268,41 +270,41 @@ class TestMovingGeometricAverage(unittest.TestCase):
 
 class TestMovingMedian(unittest.TestCase):
     def test_repr_reports_configured_window_size_before_warmup(self):
-        self.assertIn("window_size=5", repr(MovingMedian(5)))
+        self.assertIn("window_size=5", repr(MovingMedian(window_size=5)))
 
     def test_initialization_invalid(self):
         # Testing if ValueError is raised for non-positive window size
         with self.assertRaises(ValueError):
-            MovingMedian(0)
+            MovingMedian(window_size=0)
         with self.assertRaises(ValueError):
-            MovingMedian(-5)
+            MovingMedian(window_size=-5)
 
     def test_learn_one_valid_input(self):
         # Test learning a single valid input
-        mm = MovingMedian(3)
+        mm = MovingMedian(window_size=3)
         mm.learn_one({"value": 10})
         self.assertEqual(list(mm.window), [10])
 
     def test_learn_one_invalid_input_dict_length(self):
         # Test assertion error for dictionary with more than one key-value pair
-        mm = MovingMedian(3)
+        mm = MovingMedian(window_size=3)
         with self.assertRaises(ValueError):
             mm.learn_one({"a": 1, "b": 2})
 
     def test_score_one_empty_window(self):
         # Test scoring when the window is empty
-        mm = MovingMedian(3)
+        mm = MovingMedian(window_size=3)
         self.assertEqual(mm.score_one({"value": 1}), 0)
 
     def test_score_one_single_element(self):
         # Test scoring with a single element in the window
-        mm = MovingMedian(1, abs_diff=False)
+        mm = MovingMedian(window_size=1, abs_diff=False)
         mm.learn_one({"value": 5})
         self.assertEqual(mm.score_one({"value": 10}), 2.5)
 
     def test_score_one_odd_window_size(self):
         # Test scoring for an odd-sized window
-        mm = MovingMedian(3)
+        mm = MovingMedian(window_size=3)
         mm.learn_one({"value": 10})
         mm.learn_one({"value": 20})
         mm.learn_one({"value": 30})
@@ -310,7 +312,7 @@ class TestMovingMedian(unittest.TestCase):
 
     def test_score_one_even_window_size(self):
         # Test scoring for an even-sized window
-        mm = MovingMedian(4, abs_diff=False)
+        mm = MovingMedian(window_size=4, abs_diff=False)
         mm.learn_one({"value": 10})
         mm.learn_one({"value": 20})
         mm.learn_one({"value": 30})
@@ -319,7 +321,7 @@ class TestMovingMedian(unittest.TestCase):
 
     def test_window_replacement(self):
         # Test that old values are replaced in a full window
-        mm = MovingMedian(3)
+        mm = MovingMedian(window_size=3)
         mm.learn_one({"value": 10})
         mm.learn_one({"value": 20})
         mm.learn_one({"value": 30})
@@ -330,7 +332,7 @@ class TestMovingMedian(unittest.TestCase):
         self.assertEqual(list(mm.window), [20, 30, 40])
 
     def test_zero_division(self):
-        ma = MovingMedian(3)
+        ma = MovingMedian(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 1}), 0)
@@ -413,13 +415,13 @@ class TestMovingQuantile(unittest.TestCase):
         )
 
     def test_window_shifting(self):
-        ma = MovingQuantile(3, quantile=0.6)
+        ma = MovingQuantile(window_size=3, quantile=0.6)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingQuantile(3, quantile=0.6)
+        ma = MovingQuantile(window_size=3, quantile=0.6)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 1}), 0)
@@ -428,16 +430,16 @@ class TestMovingQuantile(unittest.TestCase):
 class TestUnivariateFeatureSchema(unittest.TestCase):
     def test_all_moving_models_lock_to_first_learned_feature(self):
         models = [
-            MovingAverage(3),
-            MovingHarmonicAverage(3),
-            MovingGeometricAverage(3),
-            MovingMedian(3),
-            MovingQuantile(3),
-            MovingVariance(3),
-            MovingInterquartileRange(3),
-            MovingAverageAbsoluteDeviation(3),
-            MovingKurtosis(3),
-            MovingSkewness(3),
+            MovingAverage(window_size=3),
+            MovingHarmonicAverage(window_size=3),
+            MovingGeometricAverage(window_size=3),
+            MovingMedian(window_size=3),
+            MovingQuantile(window_size=3),
+            MovingVariance(window_size=3),
+            MovingInterquartileRange(window_size=3),
+            MovingAverageAbsoluteDeviation(window_size=3),
+            MovingKurtosis(window_size=3),
+            MovingSkewness(window_size=3),
         ]
 
         for model in models:
@@ -448,7 +450,7 @@ class TestUnivariateFeatureSchema(unittest.TestCase):
                     model.learn_one({"unexpected": 2.0})
 
     def test_invalid_values_are_rejected_before_feature_or_window_commit(self):
-        model = MovingAverage(3)
+        model = MovingAverage(window_size=3)
 
         with self.assertRaisesRegex(ValueError, "must be numeric"):
             model.learn_one({"value": "bad"})  # type: ignore[arg-type]
@@ -461,7 +463,7 @@ class TestUnivariateFeatureSchema(unittest.TestCase):
 
 class TestMovingVariance(unittest.TestCase):
     def test_repr_reports_configured_window_size_before_warmup(self):
-        self.assertIn("window_size=5", repr(MovingVariance(5)))
+        self.assertIn("window_size=5", repr(MovingVariance(window_size=5)))
 
     def test_initialization_with_valid_size(self):
         mv = MovingVariance(window_size=5)
@@ -519,7 +521,7 @@ class TestMovingVariance(unittest.TestCase):
         )
 
     def test_zero_division(self):
-        ma = MovingVariance(3)
+        ma = MovingVariance(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 0}), 0)
@@ -527,27 +529,27 @@ class TestMovingVariance(unittest.TestCase):
 
 class TestMovingInterquartileRange(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
-        ma = MovingInterquartileRange(3)
+        ma = MovingInterquartileRange(window_size=3)
         self.assertEqual(ma.window.maxlen, 3)
 
     def test_initialization_with_non_positive_window_size_raises_error(self):
         with self.assertRaises(ValueError):
-            _ = MovingInterquartileRange(0)
+            _ = MovingInterquartileRange(window_size=0)
 
     def test_learn_one_updates_window_correctly(self):
-        ma = MovingInterquartileRange(3)
+        ma = MovingInterquartileRange(window_size=3)
         ma.learn_one({"value": 1.0})
         self.assertEqual(list(ma.window), [1.0])
         ma.learn_one({"value": 2.0})
         self.assertEqual(list(ma.window), [1.0, 2.0])
 
     def test_learn_one_with_multiple_keys_raises_assertion_error(self):
-        ma = MovingInterquartileRange(3)
+        ma = MovingInterquartileRange(window_size=3)
         with self.assertRaises(ValueError):
             ma.learn_one({"key1": 1.0, "key2": 2.0})
 
     def test_score_one_calculates_mean_correctly(self):
-        ma = MovingInterquartileRange(10)
+        ma = MovingInterquartileRange(window_size=10)
         test_values = [1, 4, 2, 6, 7, 3, 9, 33, 34, -5]
         for x in test_values:
             ma.learn_one({"value": x})
@@ -557,17 +559,17 @@ class TestMovingInterquartileRange(unittest.TestCase):
         self.assertEqual(ma.score_one({"value": 1.0}), iqr_score - iqr_window)
 
     def test_score_one_with_empty_window(self):
-        ma = MovingInterquartileRange(3)
+        ma = MovingInterquartileRange(window_size=3)
         self.assertEqual(ma.score_one({"value": 1.0}), 0)
 
     def test_window_shifting(self):
-        ma = MovingInterquartileRange(3)
+        ma = MovingInterquartileRange(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingInterquartileRange(3)
+        ma = MovingInterquartileRange(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 0.0}), 0)
@@ -575,27 +577,27 @@ class TestMovingInterquartileRange(unittest.TestCase):
 
 class TestMovingAverageAbsoluteDeviation(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
-        ma = MovingAverageAbsoluteDeviation(3)
+        ma = MovingAverageAbsoluteDeviation(window_size=3)
         self.assertEqual(ma.window.maxlen, 3)
 
     def test_initialization_with_non_positive_window_size_raises_error(self):
         with self.assertRaises(ValueError):
-            _ = MovingAverageAbsoluteDeviation(0)
+            _ = MovingAverageAbsoluteDeviation(window_size=0)
 
     def test_learn_one_updates_window_correctly(self):
-        ma = MovingAverageAbsoluteDeviation(3)
+        ma = MovingAverageAbsoluteDeviation(window_size=3)
         ma.learn_one({"value": 1.0})
         self.assertEqual(list(ma.window), [1.0])
         ma.learn_one({"value": 2.0})
         self.assertEqual(list(ma.window), [1.0, 2.0])
 
     def test_learn_one_with_multiple_keys_raises_assertion_error(self):
-        ma = MovingAverageAbsoluteDeviation(3)
+        ma = MovingAverageAbsoluteDeviation(window_size=3)
         with self.assertRaises(ValueError):
             ma.learn_one({"key1": 1.0, "key2": 2.0})
 
     def test_score_one_calculates_mean_correctly(self):
-        ma = MovingAverageAbsoluteDeviation(10, abs_diff=False)
+        ma = MovingAverageAbsoluteDeviation(window_size=10, abs_diff=False)
         test_values = [1, 4, 2, 6, 7, 3, 9, 33, 34, -5]
         for x in test_values:
             ma.learn_one({"value": x})
@@ -609,17 +611,17 @@ class TestMovingAverageAbsoluteDeviation(unittest.TestCase):
         self.assertEqual(ma.score_one({"value": 1}), score_window - window)
 
     def test_score_one_with_empty_window(self):
-        ma = MovingAverageAbsoluteDeviation(3)
+        ma = MovingAverageAbsoluteDeviation(window_size=3)
         self.assertEqual(ma.score_one({"value": 1}), 0)
 
     def test_window_shifting(self):
-        ma = MovingAverageAbsoluteDeviation(3)
+        ma = MovingAverageAbsoluteDeviation(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingAverageAbsoluteDeviation(3)
+        ma = MovingAverageAbsoluteDeviation(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 0}), 0)
@@ -627,27 +629,27 @@ class TestMovingAverageAbsoluteDeviation(unittest.TestCase):
 
 class TestMovingKurtosis(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
-        ma = MovingKurtosis(3)
+        ma = MovingKurtosis(window_size=3)
         self.assertEqual(ma.window.maxlen, 3)
 
     def test_initialization_with_non_positive_window_size_raises_error(self):
         with self.assertRaises(ValueError):
-            _ = MovingKurtosis(0)
+            _ = MovingKurtosis(window_size=0)
 
     def test_learn_one_updates_window_correctly(self):
-        ma = MovingKurtosis(3)
+        ma = MovingKurtosis(window_size=3)
         ma.learn_one({"value": 1.0})
         self.assertEqual(list(ma.window), [1.0])
         ma.learn_one({"value": 2.0})
         self.assertEqual(list(ma.window), [1.0, 2.0])
 
     def test_learn_one_with_multiple_keys_raises_assertion_error(self):
-        ma = MovingKurtosis(3)
+        ma = MovingKurtosis(window_size=3)
         with self.assertRaises(ValueError):
             ma.learn_one({"key1": 1.0, "key2": 2.0})
 
     def test_score_one_calculates_pearson_correctly(self):
-        ma = MovingKurtosis(5, abs_diff=False)
+        ma = MovingKurtosis(window_size=5, abs_diff=False)
         test_values = [1, 2, 3, 4]
         for x in test_values:
             ma.learn_one({"value": x})
@@ -661,17 +663,17 @@ class TestMovingKurtosis(unittest.TestCase):
         )
 
     def test_score_one_with_empty_window(self):
-        ma = MovingKurtosis(3)
+        ma = MovingKurtosis(window_size=3)
         self.assertEqual(ma.score_one({"value": 1.0}), 0)
 
     def test_window_shifting(self):
-        ma = MovingKurtosis(3)
+        ma = MovingKurtosis(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingKurtosis(3)
+        ma = MovingKurtosis(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 1.0}), 0)
@@ -679,27 +681,27 @@ class TestMovingKurtosis(unittest.TestCase):
 
 class TestMovingSkewness(unittest.TestCase):
     def test_initialization_with_positive_window_size(self):
-        ma = MovingSkewness(3)
+        ma = MovingSkewness(window_size=3)
         self.assertEqual(ma.window.maxlen, 3)
 
     def test_initialization_with_non_positive_window_size_raises_error(self):
         with self.assertRaises(ValueError):
-            _ = MovingSkewness(0)
+            _ = MovingSkewness(window_size=0)
 
     def test_learn_one_updates_window_correctly(self):
-        ma = MovingSkewness(3)
+        ma = MovingSkewness(window_size=3)
         ma.learn_one({"value": 1.0})
         self.assertEqual(list(ma.window), [1.0])
         ma.learn_one({"value": 2.0})
         self.assertEqual(list(ma.window), [1.0, 2.0])
 
     def test_learn_one_with_multiple_keys_raises_assertion_error(self):
-        ma = MovingSkewness(3)
+        ma = MovingSkewness(window_size=3)
         with self.assertRaises(ValueError):
             ma.learn_one({"key1": 1.0, "key2": 2.0})
 
     def test_score_one_calculates_skewness_correctly(self):
-        ma = MovingSkewness(5, abs_diff=False)
+        ma = MovingSkewness(window_size=5, abs_diff=False)
         test_values = [1, 2, 3, 4, 43]
         for x in test_values:
             ma.learn_one({"value": x})
@@ -708,17 +710,17 @@ class TestMovingSkewness(unittest.TestCase):
         )
 
     def test_score_one_with_empty_window(self):
-        ma = MovingSkewness(3)
+        ma = MovingSkewness(window_size=3)
         self.assertEqual(ma.score_one({"value": 1}), 0)
 
     def test_window_shifting(self):
-        ma = MovingSkewness(3)
+        ma = MovingSkewness(window_size=3)
         for x in [1, 2, 3, 4]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.window, deque([2, 3, 4]))
 
     def test_zero_division(self):
-        ma = MovingSkewness(3)
+        ma = MovingSkewness(window_size=3)
         for x in [0, 0, 0, 0, 0]:
             ma.learn_one({"value": x})
         self.assertEqual(ma.score_one({"value": 0}), 0)

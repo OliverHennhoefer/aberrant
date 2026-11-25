@@ -42,7 +42,7 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
         it from retained observations.
     """
 
-    def __init__(self, window_size: int, warm_up: int) -> None:
+    def __init__(self, *, window_size: int, warm_up: int) -> None:
         if faiss is None:
             raise RuntimeError(
                 "faiss-cpu is required for FaissSimilaritySearchEngine. "

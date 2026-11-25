@@ -36,6 +36,7 @@ class _BaseMovingUnivariate(BaseModel):
 
     def __init__(
         self,
+        *,
         window_size: int,
         key: str | None = None,
         abs_diff: bool = True,
@@ -101,11 +102,12 @@ class _BaseMovingOrderStatistic(_BaseMovingUnivariate):
 
     def __init__(
         self,
+        *,
         window_size: int,
         key: str | None = None,
         abs_diff: bool = True,
     ) -> None:
-        super().__init__(window_size, key, abs_diff)
+        super().__init__(window_size=window_size, key=key, abs_diff=abs_diff)
         self._sorted: list[float] = []
 
     def learn_one(self, x: dict[str, float]) -> None:

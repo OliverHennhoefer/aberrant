@@ -162,7 +162,6 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "PLR0913", # too many arguments
-    "PLR0917", # preserve existing positional constructor APIs
     "PLR2004", # magic value used in comparison
 ]
 
