@@ -11,11 +11,10 @@ Available submodules:
     - deep: Deep learning models (requires torch)
 
 Also available directly:
-    - NullModel, RandomModel, ThresholdModel, QuantileThreshold
+    - NullModel, RandomModel, ThresholdModel
 """
 
 from aberrant.model.null import NullModel
-from aberrant.model.quantile_threshold import QuantileThreshold
 from aberrant.model.random import RandomModel
 from aberrant.model.threshold import ThresholdModel
 
@@ -23,5 +22,4 @@ __all__ = [
     "NullModel",
     "RandomModel",
     "ThresholdModel",
-    "QuantileThreshold",
 ]

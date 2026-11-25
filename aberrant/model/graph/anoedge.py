@@ -190,8 +190,6 @@ class AnoEdgeL(BaseModel):
         warm_up_samples: Number of learned edges before scoring begins.
         normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
             score.
-        predict_threshold: Boundary used by ``predict_one`` on the selected
-            raw or normalized score scale.
         seed: Seed for model-local sketch hash generation.
 
     References:
@@ -210,8 +208,6 @@ class AnoEdgeL(BaseModel):
         num_dense_submatrices: int,
         time_decay_factor: float,
         warm_up_samples: int,
-        normalize_score: bool,
-        predict_threshold: float,
     ) -> None:
         if count_min_rows <= 0:
             raise ValueError("count_min_rows must be positive")
@@ -229,14 +225,6 @@ class AnoEdgeL(BaseModel):
             raise ValueError("time_decay_factor must be in (0, 1]")
         if warm_up_samples < 0:
             raise ValueError("warm_up_samples must be non-negative")
-        if normalize_score and not (0.0 <= predict_threshold <= 1.0):
-            raise ValueError(
-                "predict_threshold must be in [0, 1] when normalize_score=True"
-            )
-        if not normalize_score and predict_threshold < 0.0:
-            raise ValueError(
-                "predict_threshold must be non-negative when normalize_score=False"
-            )
 
     def __init__(
         self,
@@ -251,7 +239,6 @@ class AnoEdgeL(BaseModel):
         time_decay_factor: float = 1.0,
         warm_up_samples: int = 0,
         normalize_score: bool = False,
-        predict_threshold: float = 0.5,
         seed: int | None = None,
     ) -> None:
         self._validate_parameters(
@@ -261,8 +248,6 @@ class AnoEdgeL(BaseModel):
             num_dense_submatrices=num_dense_submatrices,
             time_decay_factor=time_decay_factor,
             warm_up_samples=warm_up_samples,
-            normalize_score=normalize_score,
-            predict_threshold=predict_threshold,
         )
 
         self.source_key = source_key
@@ -275,7 +260,6 @@ class AnoEdgeL(BaseModel):
         self.time_decay_factor = time_decay_factor
         self.warm_up_samples = warm_up_samples
         self.normalize_score = normalize_score
-        self.predict_threshold = predict_threshold
         self.seed = seed
 
         self._reset_state()
@@ -418,10 +402,6 @@ class AnoEdgeL(BaseModel):
             return score / (1.0 + score)
         return score
 
-    def predict_one(self, x: dict[str, float]) -> int:
-        """Return binary anomaly prediction using ``predict_threshold``."""
-        return int(self.score_one(x) >= self.predict_threshold)
-
     def __repr__(self) -> str:
         return (
             "AnoEdgeL("
@@ -432,6 +412,6 @@ class AnoEdgeL(BaseModel):
             f"time_decay_factor={self.time_decay_factor}, "
             f"warm_up_samples={self.warm_up_samples}, "
             f"normalize_score={self.normalize_score}, "
-            f"predict_threshold={self.predict_threshold}, seed={self.seed}, "
+            f"seed={self.seed}, "
             f"samples_seen={self._samples_seen})"
         )

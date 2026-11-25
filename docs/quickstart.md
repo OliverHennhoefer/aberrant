@@ -61,32 +61,27 @@ An anomaly score is evidence, not a universal probability. A threshold is an
 application policy that must be calibrated on the selected detector's score
 distribution.
 
-`QuantileThreshold` maintains a sliding score window. Call its `score_one`
-before `learn_one` so the candidate score is compared with prior scores only:
+A `ScoreCalibrator` learns that threshold online. Ask for the threshold before
+reporting the score, so each score is compared with earlier scores only:
 
 ```python
-from aberrant.model import QuantileThreshold
+from aberrant.calibration import ScoreCalibrator
 
 score_stream = [0.10, 0.12, 0.09, 0.15, 0.11, 0.13, 0.92, 0.14]
-threshold = QuantileThreshold(quantile=0.8, window_size=5)
+threshold = ScoreCalibrator("split", alpha=0.2, window=5)
 
-for score in score_stream:
-    threshold_input = {"score": score}
-    thresholded_score = threshold.score_one(threshold_input)
-    is_anomaly = thresholded_score == 1.0
-    threshold.learn_one(threshold_input)
-    print(
-        f"score={score:.2f}, "
-        f"thresholded_score={thresholded_score:.2f}, "
-        f"anomaly={is_anomaly}"
-    )
+for t, score in enumerate(score_stream):
+    limit = threshold.predict(t)
+    threshold.update(t, score)
+    alarm = t >= 5 and score > limit  # let the window fill first
+    print(f"score={score:.2f}, threshold={limit:.2f}, alarm={alarm}")
 ```
 
-During its initial window, `QuantileThreshold.score_one` returns `0.0`. Once
-ready, it returns `1.0` at or above the learned quantile, including equality at
-zero or a negative threshold. Below a positive threshold it returns the score
-ratio clipped at zero; below a nonpositive threshold it returns `0.0`.
-It is not a calibrated anomaly probability.
+`split` uses the conformal quantile of the last `window` scores. Until the
+window holds enough scores for that quantile, the threshold is only the
+largest absolute score seen so far, so the example ignores alarms while the
+window fills. The
+[calibration guide](user_guide/calibration.md) compares the fifteen methods.
 
 ## Continue from here
 

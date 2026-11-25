@@ -57,8 +57,8 @@ assuming transform-then-learn is equivalent.
   values in `[0, 1]`. Boundedness is not probability calibration.
 - Preserve the raw detector score even when an external threshold produces a
   binary alert; it is needed for ranking metrics and incident analysis.
-- For `QuantileThreshold`, decide which scores enter its window. Learning every
-  score adapts to persistent anomalies and can raise the threshold.
+- For a `ScoreCalibrator`, decide which scores it learns. Learning every score
+  adapts to persistent anomalies and can raise the threshold.
 - Set thresholds from prior calibration data or an online policy available at
   the decision time, not from labels in the evaluated interval.
 - Monitor score distributions and alert rates separately. A stable alert rate
@@ -143,7 +143,7 @@ they describe retained observations and arrays, excluding exact lifetime counter
 | `IncrementalOneClassSVMAdaptiveKernel` | Fixed support-vector and feature-map budgets. |
 | `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `XLagDAMP` | Configured rolling series and lag arrays. DAMP rejects constant subsequences. |
 | All ten univariate moving statistics, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
-| `QuantileThreshold`, `ThresholdModel`, `NullModel`, `RandomModel` | Configured score window, fixed rule configuration, or generator state. |
+| `ThresholdModel`, `NullModel`, `RandomModel` | Fixed rule configuration or generator state. |
 | `OnlineAutoencoderEnsemble` | Fixed feature-map statistics and network weights; frozen and adaptive phases retain no observation history. |
 | `Autoencoder`, bundled feedforward/LSTM architectures | Fixed tensor buffers, network parameters, gradients, and ordinary optimizer state. Supplied architectures, losses, and optimizers can have their own unbounded state or numeric failures. |
 | `MinMaxScaler`, `StandardScaler`, `RollingRobustScaler` | State grows with **distinct feature names**. Place `FeatureSchemaGuard` first to enforce a finite schema. Robust windows are bounded per feature, not across an unlimited feature vocabulary. |

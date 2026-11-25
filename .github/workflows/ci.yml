@@ -42,7 +42,8 @@ jobs:
           import aberrant
           from aberrant.base import Pipeline
           from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
-          from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
+          from aberrant.calibration import ScoreCalibrator
+          from aberrant.model import NullModel, RandomModel, ThresholdModel
           from aberrant.model.iforest import OnlineIsolationForest
           from aberrant.model.stat import MovingCovariance
           from aberrant.transform.preprocessing import StandardScaler
@@ -51,9 +52,9 @@ jobs:
           assert NullModel().score_one({"x": 1.0}) == 0.0
           assert 0.0 <= RandomModel().score_one({"x": 1.0}) <= 1.0
           assert ThresholdModel(ceiling=1.0).score_one({"x": 2.0}) == 1.0
-          q = QuantileThreshold()
-          q.learn_one({"score": 0.1})
-          _ = q.score_one({"score": 0.1})
+          calibrator = ScoreCalibrator("split", alpha=0.1)
+          calibrator.update(0, 0.1)
+          assert calibrator.predict(1) == 0.1
           p = StandardScaler() | OnlineIsolationForest()
           assert isinstance(p, Pipeline)
           graph = GraphPipeline(

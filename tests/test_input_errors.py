@@ -58,8 +58,6 @@ def _event_factory(component_id: str) -> Callable[[int], dict[str, object]]:
             return event
 
         return edge
-    if component_id == "quantile_threshold":
-        return lambda index: {"score": float(index % 10)}
     univariate = component_id in _UNIVARIATE_MODELS or (
         component_id.startswith("moving_")
         and component_id not in _MULTIVARIATE_STATISTICS

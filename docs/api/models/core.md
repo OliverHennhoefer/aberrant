@@ -5,5 +5,3 @@
 ::: aberrant.model.RandomModel
 
 ::: aberrant.model.ThresholdModel
-
-::: aberrant.model.QuantileThreshold

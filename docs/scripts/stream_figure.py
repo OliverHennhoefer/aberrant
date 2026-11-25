@@ -2,7 +2,7 @@
 
 Three synthetic sensors receive one injected anomaly each: a spike, a level
 shift and a dropout. A scaled ``LocalOutlierFactor`` scores every event before
-learning it, and an online ``QuantileThreshold`` turns the scores into alerts.
+learning it, and an online ``ScoreCalibrator`` turns the scores into alerts.
 
 Requires matplotlib, which is not an aberrant dependency::
 
@@ -18,7 +18,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-from aberrant.model import QuantileThreshold
+from aberrant.calibration import ScoreCalibrator
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.transform import StandardScaler
 
@@ -69,19 +69,17 @@ def make_stream() -> np.ndarray:
 def score_stream(stream: np.ndarray) -> tuple[np.ndarray, list[int]]:
     """Score each event before learning it and collect threshold alerts."""
     detector = StandardScaler() | LocalOutlierFactor(k=10, window_size=300)
-    threshold = QuantileThreshold(quantile=0.998, window_size=1000)
+    threshold = ScoreCalibrator("split", alpha=0.002, window=1000)
     scores = np.zeros(len(stream))
     alerts = []
     for index, row in enumerate(stream):
         event = {"temperature": row[0], "pressure": row[1], "vibration": row[2]}
         if index > 0:  # the scaler needs one event before it can transform
             scores[index] = detector.score_one(event)
-            if (
-                index >= ALERT_START
-                and threshold.score_one({"score": scores[index]}) >= 1.0
-            ):
+            limit = threshold.predict(index)
+            if index >= ALERT_START and scores[index] >= limit:
                 alerts.append(index)
-            threshold.learn_one({"score": scores[index]})
+            threshold.update(index, scores[index])
         detector.learn_one(event)
     return scores, alerts
 

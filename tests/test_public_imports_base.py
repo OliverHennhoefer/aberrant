@@ -6,6 +6,7 @@ import sys
 import pytest
 
 import aberrant.base as base_api
+import aberrant.model as model_api
 import aberrant.model.deep as deep_api
 import aberrant.model.distance as distance_api
 import aberrant.model.graph as graph_api
@@ -35,7 +36,7 @@ from aberrant.forecast import (
     interval,
     nonconformity,
 )
-from aberrant.model import NullModel, QuantileThreshold, RandomModel, ThresholdModel
+from aberrant.model import NullModel, RandomModel, ThresholdModel
 from aberrant.model.distance import (
     KNN,
     CellNeighborhoodDetector,
@@ -90,7 +91,6 @@ def test_public_imports_base_smoke() -> None:
     assert NullModel is not None
     assert RandomModel is not None
     assert ThresholdModel is not None
-    assert QuantileThreshold is not None
     assert KNN is not None
     assert LocalOutlierFactor is not None
     assert CellNeighborhoodDetector is not None
@@ -160,6 +160,7 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (deep_api, "KitNET"),
         (distance_api, "NETS"),
         (distance_api, "STARE"),
+        (model_api, "QuantileThreshold"),
         (distance_api, "StationaryRegionNeighborDetector"),
         (graph_api, "StreamSpot"),
         (iforest_api, "MondrianForest"),

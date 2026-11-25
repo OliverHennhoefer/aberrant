@@ -12,7 +12,6 @@ model = StandardScaler() | StreamingLODA(
     decay=1.0,
     time_key=None,
     pseudocount=0.5,
-    predict_threshold=0.75,
     seed=42,
 )
 

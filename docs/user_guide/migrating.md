@@ -89,7 +89,7 @@ identical numbers.
 | — | `models.RSHash` | `model.sketch.StreamingRSHash` |
 | — | `models.RobustRandomCutForest` | `model.iforest.RandomCutForest` |
 | — | `models.IForestASD` | `model.iforest.ASDIsolationForest` |
-| `anomaly.QuantileFilter` | `transform.ConformalProbabilityCalibrator` (calibrated scores) | `model.QuantileThreshold` (adaptive alert threshold); for conformal p-values see [nonconform](https://github.com/OliverHennhoefer/nonconform) |
+| `anomaly.QuantileFilter` | `transform.ConformalProbabilityCalibrator` (calibrated scores) | `calibration.ScoreCalibrator` (adaptive alarm threshold); for conformal p-values see [nonconform](https://github.com/OliverHennhoefer/nonconform) |
 | `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` | — | `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` (same `update` / `drift_detected` interface) |
 | `preprocessing.StandardScaler`, `preprocessing.MinMaxScaler` | — | `transform.StandardScaler`, `transform.MinMaxScaler` |
 | `compose.Pipeline` or `\|` | — | `\|` (see [Pipelines](pipelines.md)) |

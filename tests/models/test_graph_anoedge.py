@@ -71,7 +71,6 @@ class TestAnoEdgeL(unittest.TestCase):
             "time_decay_factor": 1.0,
             "warm_up_samples": 0,
             "normalize_score": False,
-            "predict_threshold": 0.5,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -118,10 +117,6 @@ class TestAnoEdgeL(unittest.TestCase):
             AnoEdgeL(time_decay_factor=0.0)
         with self.assertRaises(ValueError):
             AnoEdgeL(warm_up_samples=-1)
-        with self.assertRaises(ValueError):
-            AnoEdgeL(normalize_score=True, predict_threshold=1.1)
-        with self.assertRaises(ValueError):
-            AnoEdgeL(normalize_score=False, predict_threshold=-0.1)
 
     def test_input_validation(self) -> None:
         model = self.create_model()
@@ -263,11 +258,6 @@ class TestAnoEdgeL(unittest.TestCase):
         score = model.score_one({"src": 1.0, "dst": 2.0, "t": 1.0})
         self.assertGreaterEqual(score, 0.0)
         self.assertLess(score, 1.0)
-
-    def test_predict_one_is_binary(self) -> None:
-        model = self.create_model(normalize_score=True, predict_threshold=0.2)
-        prediction = model.predict_one({"src": 1.0, "dst": 2.0, "t": 1.0})
-        self.assertIn(prediction, (0, 1))
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(

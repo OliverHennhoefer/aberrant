@@ -21,7 +21,6 @@ class TestNETS(unittest.TestCase):
             "slide_size": 4,
             "time_key": "t",
             "warm_up_slides": 2,
-            "predict_threshold": 0.5,
             "eps": 1e-9,
         }
         defaults.update(overrides)
@@ -34,7 +33,6 @@ class TestNETS(unittest.TestCase):
         self.assertEqual(model.window_size, 10_000)
         self.assertEqual(model.slide_size, 500)
         self.assertEqual(model.warm_up_slides, 1)
-        self.assertEqual(model.predict_threshold, 0.5)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -51,10 +49,6 @@ class TestNETS(unittest.TestCase):
             NETS(time_key="")
         with self.assertRaises(ValueError):
             NETS(warm_up_slides=0)
-        with self.assertRaises(ValueError):
-            NETS(predict_threshold=-0.1)
-        with self.assertRaises(ValueError):
-            NETS(predict_threshold=1.1)
         with self.assertRaises(ValueError):
             NETS(eps=0.0)
 
@@ -153,17 +147,15 @@ class TestNETS(unittest.TestCase):
         self.assertGreaterEqual(normal_score, 0.0)
         self.assertGreater(outlier_score, normal_score)
 
-    def test_scores_are_bounded_and_predict_is_binary(self) -> None:
+    def test_scores_are_bounded(self) -> None:
         model = self.create_model(k=3, warm_up_slides=1, slide_size=3)
         for i in range(20):
             model.learn_one({"t": float(i), "a": float(i % 4), "b": float(i % 3)})
 
         score = model.score_one({"t": 21.0, "a": 10.0, "b": 10.0})
-        prediction = model.predict_one({"t": 21.0, "a": 10.0, "b": 10.0})
 
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
-        self.assertIn(prediction, (0, 1))
 
     def test_window_and_cell_state_is_bounded(self) -> None:
         model = self.create_model(
@@ -397,7 +389,6 @@ def test_score_matches_window_reference_through_eviction(n_features, eps):
             )
             expected = 0.0 if sample_index < 6 else 1.0 - min(count / 4, 1.0)
             assert model.score_one(event) == expected
-            assert model.predict_one(event) == int(expected >= 0.5)
         point = rng.normal(size=n_features)
         event = dict(zip(names, point, strict=True))
         event["t"] = timestamp

@@ -22,7 +22,6 @@ class TestLODA(unittest.TestCase):
             "decay": 0.99,
             "time_key": "t",
             "pseudocount": 0.5,
-            "predict_threshold": 0.75,
             "seed": 42,
             "eps": 1e-12,
         }
@@ -37,7 +36,6 @@ class TestLODA(unittest.TestCase):
         self.assertEqual(model.warm_up_samples, 256)
         self.assertEqual(model.decay, 1.0)
         self.assertEqual(model.pseudocount, 1.0)
-        self.assertEqual(model.predict_threshold, 0.5)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -58,8 +56,6 @@ class TestLODA(unittest.TestCase):
             LODA(time_key="")
         with self.assertRaises(ValueError):
             LODA(pseudocount=0.0)
-        with self.assertRaises(ValueError):
-            LODA(predict_threshold=-1.0)
         with self.assertRaises(ValueError):
             LODA(eps=0.0)
 
@@ -238,20 +234,6 @@ class TestLODA(unittest.TestCase):
 
         np.testing.assert_allclose(model._bin_counts, before_counts)
         np.testing.assert_allclose(model._bin_totals, before_totals)
-
-    def test_predict_is_binary(self) -> None:
-        model = self.create_model(warm_up_samples=4)
-        for i in range(50):
-            model.learn_one(
-                {
-                    "t": float(i),
-                    "a": float(i % 4),
-                    "b": float(i % 3),
-                }
-            )
-
-        prediction = model.predict_one({"t": 51.0, "a": 10.0, "b": 10.0})
-        self.assertIn(prediction, (0, 1))
 
     def test_reset_restores_cold_state(self) -> None:
         model = self.create_model()
