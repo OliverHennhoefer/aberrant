@@ -3,9 +3,13 @@
 import unittest
 
 import numpy as np
-from sklearn.metrics import average_precision_score
 
 from aberrant.model.timeseries import XLagDAMP
+from tests.integration._quality import assert_detects
+
+# Measured on main at ROC-AUC 1.000 and PR-AUC 1.000; the floors leave a margin.
+ROC_FLOOR = 0.99
+PR_FLOOR = 0.95
 
 
 class TestXLagDAMPIntegration(unittest.TestCase):
@@ -44,12 +48,12 @@ class TestXLagDAMPIntegration(unittest.TestCase):
             )
 
         evaluation_start = 5 * subsequence_length
-        pr_auc = average_precision_score(
+        assert_detects(
             labels[evaluation_start:],
             scores[evaluation_start:],
+            roc_auc_floor=ROC_FLOOR,
+            pr_auc_floor=PR_FLOOR,
         )
-        self.assertGreaterEqual(pr_auc, 0.95)
-        self.assertLessEqual(pr_auc, 1.0)
 
 
 if __name__ == "__main__":

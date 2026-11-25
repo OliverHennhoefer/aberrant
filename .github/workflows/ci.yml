@@ -147,6 +147,7 @@ jobs:
           uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_catalog_faiss.py tests/transformers/test_pca_pipeline.py -q
           uv run --locked python -m pytest tests/test_stream_longevity_forests_distance.py -k faiss -q
           uv run --locked python -m pytest tests/test_public_imports_extras.py -q
+          uv run --locked python -m pytest tests/integration/test_detection_quality.py -k knn-faiss -q
 
   integration-smoke:
     runs-on: ubuntu-latest

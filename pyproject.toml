@@ -124,6 +124,12 @@ constraint-dependencies = [
     "virtualenv>=21.14.10",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "benchmark: slow quality checks; the nightly Benchmark workflow runs them",
+]
+addopts = "-m 'not benchmark'"
+
 # Ruff configuration
 [tool.ruff]
 target-version = "py311"
