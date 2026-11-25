@@ -19,6 +19,13 @@ class SDOStream(BaseModel):
     distance to its nearest active observers, where active observers are
     selected via activity quantile filtering.
 
+    Observers are sampled at a rate proportional to the time elapsed since the
+    last sampled point, so ``T`` is in the units of the event times. When the
+    observer set is full, a sampled point replaces the observer with the lowest
+    ``observations / (1 - exp(-age / T))``: its decayed activity relative to the
+    most it could have gathered since it was added, as in the authors'
+    reference implementation.
+
     Notes:
     - Scores are continuous, non-negative distances.
     - State is bounded by ``k`` and independent of stream length.
@@ -242,9 +249,12 @@ class SDOStream(BaseModel):
         decayed = self._observations[idx] * self._decay_factor(
             current_time - self._time_touched[idx]
         )
-        age = np.maximum(current_time - self._time_added[idx], 1.0)
-        age_normalized = decayed / age
-        return int(np.argmin(age_normalized))
+        # The activity an observer can have gathered since it was added
+        # decays like its observations; one added at this instant is kept.
+        reachable = 1.0 - self._decay_factor(current_time - self._time_added[idx])
+        normalized = np.full(decayed.shape, np.inf)
+        np.divide(decayed, reachable, out=normalized, where=reachable > 0.0)
+        return int(np.argmin(normalized))
 
     def _advance(self) -> None:
         self._sample_index += 1
@@ -299,12 +309,12 @@ class SDOStream(BaseModel):
         lhs = (
             float(self._rng.uniform())
             * obs_sum
-            * max(1, current_index - self._last_added_index)
+            * (current_index - self._last_added_index)
         )
         rhs = (
             self._sampling_prefactor
             * nn_obs_sum
-            * max(1.0, current_time - self._last_added_time)
+            * (current_time - self._last_added_time)
         )
 
         if lhs < rhs:
