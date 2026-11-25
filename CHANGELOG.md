@@ -7,6 +7,13 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- `SignedGraphSketchDetector` keeps its graphs in least-recently-seen order,
+  so evicting one at `max_graphs` no longer scans every graph. Scores and the
+  evicted graphs are unchanged; with the default 4,096 graphs and a new graph
+  every other event, an event costs 50 µs instead of 180 µs.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

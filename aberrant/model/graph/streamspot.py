@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -219,7 +219,8 @@ class SignedGraphSketchDetector(BaseModel):
         self._sign_key = sign_salt
 
         self._graph_states: dict[float, _GraphState] = {}
-        self._graph_last_seen: dict[float, int] = {}
+        # Least recently seen first: a touch moves a graph to the end.
+        self._graph_last_seen: OrderedDict[float, int] = OrderedDict()
 
         self._cluster_centers = np.zeros(
             (self.num_clusters, self.sketch_dim), dtype=np.float64
@@ -371,18 +372,23 @@ class SignedGraphSketchDetector(BaseModel):
             tail=tail,
         )
         self._graph_states[graph_id] = state
-        self._graph_last_seen[graph_id] = self._samples_seen
+        self._touch_graph(graph_id)
         return state
 
     def _touch_graph(self, graph_id: float) -> None:
         self._graph_last_seen[graph_id] = self._samples_seen
+        self._graph_last_seen.move_to_end(graph_id)
 
     def _evict_graphs_if_needed(self) -> None:
         while len(self._graph_states) > self.max_graphs:
-            oldest_graph, _last_seen = min(
-                self._graph_last_seen.items(),
-                key=lambda item: (item[1], item[0]),
-            )
+            # The front holds the oldest time; among graphs sharing it, the
+            # smallest identifier goes first.
+            entries = iter(self._graph_last_seen.items())
+            oldest_graph, oldest_time = next(entries)
+            for graph_id, last_seen in entries:
+                if last_seen != oldest_time:
+                    break
+                oldest_graph = min(oldest_graph, graph_id)
             self._graph_last_seen.pop(oldest_graph, None)
             self._graph_states.pop(oldest_graph, None)
 
