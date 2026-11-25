@@ -102,9 +102,9 @@ window fills. The
 
 -   **Use benchmark streams**
 
-    Download, validate, cache, and batch registered NPZ datasets.
+    Replay labelled benchmarks, verified before they are read.
 
-    [Streaming datasets](user_guide/streaming.md)
+    [Benchmark datasets](user_guide/datasets.md)
 
 -   **Monitor change**
 

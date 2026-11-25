@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.stream import Dataset, load
+from aberrant.datasets import Dataset, load
 
 Features = dict[str, float]
 Adapter = Callable[[int, Features], Features]
@@ -63,7 +63,7 @@ class Result:
 
 
 def _rows(dataset: Dataset, shuffle_seed: int | None) -> Iterator[tuple[Features, int]]:
-    rows = load(dataset).stream()
+    rows = iter(load(dataset))
     if shuffle_seed is None:
         yield from rows
         return

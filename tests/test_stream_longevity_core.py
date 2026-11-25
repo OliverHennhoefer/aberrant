@@ -11,12 +11,12 @@ import pytest
 
 from aberrant._utils.validation import EdgeEventBoundary, MonotonicClock
 from aberrant.catalog import StateKind, model_capabilities
+from aberrant.datasets import Sample
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.exceptions import ValidationError
 from aberrant.model import NullModel
 from aberrant.model.stat import MovingZScore
-from aberrant.stream import BatchStreamer, Sample
 from aberrant.transform import (
     FeatureSchemaGuard,
     IncrementalPCA,
@@ -40,9 +40,6 @@ class _InfiniteStream:
         finally:
             self.closed = True
 
-    def get_metadata(self) -> None:
-        return None
-
 
 def test_catalog_distinguishes_mondrian_bounded_and_lifetime_modes() -> None:
     model_id = "mondrian_isolation_forest"
@@ -50,26 +47,7 @@ def test_catalog_distinguishes_mondrian_bounded_and_lifetime_modes() -> None:
     assert model_capabilities(model_id, {"window_size": 32}).state is StateKind.BOUNDED
 
 
-@pytest.mark.parametrize("size", [True, False, 0, -1, 2.5, math.inf, math.nan])
-def test_batch_size_cannot_disable_yielding(size: object) -> None:
-    with pytest.raises(ValueError, match="positive integer"):
-        BatchStreamer(_InfiniteStream(), batch_size=size)
-
-
-def test_batching_an_infinite_source_is_lazy_bounded_and_closable() -> None:
-    source = _InfiniteStream()
-    batches = BatchStreamer(source, batch_size=7).stream()
-    for batch_number, (features, labels) in enumerate(islice(batches, 10_000), 1):
-        assert len(features) == len(labels) == 7
-        assert source.consumed == batch_number * 7
-    batches.close()
-    assert source.closed
-
-
 def test_numpy_integer_capacities_remain_supported() -> None:
-    batches = BatchStreamer(_InfiniteStream(), batch_size=np.int64(4)).stream()
-    assert len(next(batches)[0]) == 4
-    batches.close()
     pca = IncrementalPCA(n_components=np.int64(1), warm_up=np.int64(2))
     pca.learn_one({"x": 1.0})
     pca.learn_one({"x": 2.0})

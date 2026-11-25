@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.sketch import RSHash
-from aberrant.stream import Dataset, load
 
 model = RSHash(
     n_members=24,
@@ -18,7 +18,7 @@ labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
 warmup_count = 0
-for i, (x, y) in enumerate(dataset.stream()):
+for i, (x, y) in enumerate(dataset):
     sample = dict(x)
     sample["t"] = float(i)
 

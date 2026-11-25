@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.distance import KNN
-from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, StandardScaler
 
 
@@ -94,10 +94,9 @@ class TestPCAPipelineIntegration(unittest.TestCase):
         """Test that PCA maintains consistent state during streaming."""
         eigenvalue_snapshots = []
 
-        # Load dataset using new API
         dataset = load(Dataset.SHUTTLE)
 
-        for i, (x, _) in enumerate(dataset.stream()):
+        for i, (x, _) in enumerate(dataset):
             if (i + 1) >= 150:
                 break
 
@@ -153,10 +152,9 @@ class TestPCAPipelineIntegration(unittest.TestCase):
         initial_pca_samples = self.pca.n_samples_seen
 
         # Process some samples
-        # Load dataset using new API
         dataset = load(Dataset.SHUTTLE)
 
-        for i, (x, _) in enumerate(dataset.stream()):
+        for i, (x, _) in enumerate(dataset):
             if i >= 200:
                 break
             self.pipeline_full.learn_one(x)

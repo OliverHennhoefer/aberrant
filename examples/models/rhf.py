@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.forest import RHF
-from aberrant.stream import Dataset, load
 
 model = RHF(n_trees=5, max_depth=6, window_size=128, seed=1)
 
@@ -9,7 +9,7 @@ labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 warmup_count = 0
 
-for x, y in dataset.stream():
+for x, y in dataset:
     if warmup_count < 512:
         if y == 0:
             model.learn_one(x)

@@ -61,6 +61,18 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** the benchmark datasets moved from `aberrant.stream` to
+  `aberrant.datasets`, and the core installation depends on NumPy alone:
+  tqdm and filelock are gone. `load(Dataset.SHUTTLE)` returns a
+  `DatasetStream` that yields `(features, label)` pairs when iterated, can be
+  replayed, and gives `arrays()`; labels are integers. Archives are cached in
+  `ABERRANT_DATA_DIR`, or `~/.cache/aberrant` when it is unset, instead of
+  `~/.aberrant/datasets`. A download is checked against its SHA-256 before it
+  is cached and a cached file before it is read, so a corrupt file is never
+  parsed; it is moved into place atomically, which makes the cache lock and
+  metadata file unnecessary. `load(..., fetch=False)` replaces
+  `auto_download=False`. Downloads no longer retry.
+
 - **Breaking:** calibration methods describe their parameters with the same
   `ParameterDescriptor` and `ValueDescriptor` the component catalog derives
   from constructors, now public in `aberrant.base`. `CalibratorSpec.schema()`
@@ -253,6 +265,14 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `aberrant.stream` with `DatasetManager`, `DatasetCacheStore`,
+  `CacheEntry`, `CacheMetadata`, `CacheInfo`, `DownloadBackend`,
+  `UrlLibDownloadBackend`, `DatasetArtifactValidator`, `NpzStreamer`,
+  `BatchStreamer`, `DATASET_REGISTRY`, `get_dataset_info`, `list_available`,
+  `list_by_category`, `get_categories`, `list_cached`, `clear_cache`,
+  `get_cache_info`, `get_default_manager`, `set_cache_dir` and the progress
+  bars. Use `Dataset.X.info`, `DATASETS`, `DatasetStream`, `data_dir()` and
+  delete that directory to clear the cache.
 - **Breaking:** `CalibratorParameter`, with its editor hints `low`, `high` and
   `step`. Use `CalibratorSpec.parameters` or `CalibratorSpec.schema()`.
 - **Breaking:** `ReadinessProtocol`, `WarmupRequirement`, `WarmupUnit`,

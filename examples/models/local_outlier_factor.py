@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.stream import Dataset, load
 from aberrant.transform import StandardScaler
 
 model = StandardScaler() | LocalOutlierFactor(k=10, window_size=128)
@@ -10,7 +10,7 @@ labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 warmup_count = 0
 
-for x, y in dataset.stream():
+for x, y in dataset:
     if warmup_count < 256:
         if y == 0:
             model.learn_one(x)

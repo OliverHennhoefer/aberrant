@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.sketch import MStream
-from aberrant.stream import Dataset, load
 
 model = MStream(
     n_hashes=1,
@@ -15,7 +15,7 @@ model = MStream(
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
-for i, (x, y) in enumerate(dataset.stream()):
+for i, (x, y) in enumerate(dataset):
     # MStream's author implementation applies log10(1 + x), so adapt this
     # signed benchmark into its required numeric domain.
     sample = {key: abs(value) for key, value in x.items()}

@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.graph import AnoEdgeL
-from aberrant.stream import Dataset, load
 
 model = AnoEdgeL(
     source_key="src",
@@ -21,7 +21,7 @@ labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 warmup_count = 0
 
-for i, (x, y) in enumerate(dataset.stream()):
+for i, (x, y) in enumerate(dataset):
     # Shuttle is tabular, so we build synthetic "edges" from two discrete features.
     sample = {"src": x["feature_0"], "dst": x["feature_8"], "t": float(i // 32)}
     if warmup_count < 2_000:
