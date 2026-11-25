@@ -32,3 +32,7 @@ support structural pipeline components without inheritance.
 ::: aberrant.base.Readiness
 
 ::: aberrant.base.ReadinessUnit
+
+::: aberrant.base.ParameterDescriptor
+
+::: aberrant.base.ValueDescriptor

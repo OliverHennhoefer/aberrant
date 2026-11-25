@@ -1,5 +1,6 @@
 """Interfaces shared by every component: base classes, protocols and pipelines."""
 
+from aberrant.base.descriptors import ParameterDescriptor, ValueDescriptor
 from aberrant.base.model import BaseModel
 from aberrant.base.pipeline import ModelPipeline, Pipeline, TransformerPipeline
 from aberrant.base.protocols import (
@@ -23,6 +24,7 @@ __all__ = [
     "LearnerProtocol",
     "ModelPipeline",
     "ModelProtocol",
+    "ParameterDescriptor",
     "Pipeline",
     "Readiness",
     "ReadinessUnit",
@@ -31,4 +33,5 @@ __all__ = [
     "TransactionalTransformerProtocol",
     "TransformerPipeline",
     "TransformerProtocol",
+    "ValueDescriptor",
 ]

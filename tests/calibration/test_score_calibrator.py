@@ -7,6 +7,7 @@ import random
 import pytest
 
 from aberrant.calibration import CALIBRATORS, ScoreCalibrator, ScoreHistory
+from aberrant.exceptions import ConfigurationError
 
 
 def _scores(n=400, seed=3):
@@ -85,15 +86,20 @@ def test_parameters_default_and_validate():
     calibrator = ScoreCalibrator("eci", alpha=0.1, c=2)
 
     assert calibrator.params == {"lr": 0.05, "c": 2.0, "h": 0.0}
-    with pytest.raises(ValueError, match="has no parameter gamma"):
+    with pytest.raises(ConfigurationError, match="has no parameter 'gamma'"):
         ScoreCalibrator("eci", alpha=0.1, gamma=0.1)
-    with pytest.raises(ValueError, match=r"rho must be in \(0, 1\)"):
+    with pytest.raises(ConfigurationError, match=r"expected a value in \(0, 1\)"):
         ScoreCalibrator("nexcp", alpha=0.1, rho=1)
-    with pytest.raises(ValueError, match="g must be an integer"):
+    with pytest.raises(ConfigurationError, match="expected an integer") as error:
         ScoreCalibrator("saocp", alpha=0.1, g=2.5)
+    assert [(issue.code, issue.loc) for issue in error.value.issues] == [
+        ("invalid_type", ("g",))
+    ]
+    with pytest.raises(ConfigurationError, match="expected a finite number"):
+        ScoreCalibrator("aci", alpha=0.1, gamma=math.nan)
     with pytest.raises(ValueError, match="alpha must be in"):
         ScoreCalibrator("aci", alpha=1.0)
-    with pytest.raises(ValueError, match="Unknown calibration method"):
+    with pytest.raises(ConfigurationError, match="Unknown calibration method"):
         ScoreCalibrator("conformal", alpha=0.1)
     with pytest.raises(ValueError, match="score must be finite"):
         calibrator.update(0, math.inf)
@@ -101,9 +107,27 @@ def test_parameters_default_and_validate():
 
 def test_every_default_is_accepted_by_its_parameter():
     for spec in CALIBRATORS.values():
-        for parameter in spec.parameters:
-            assert parameter.coerce(parameter.default) == parameter.default
-            assert parameter.minimum <= parameter.low <= parameter.high
+        assert spec.resolve(spec.defaults()) == spec.defaults()
+
+
+def test_parameters_are_described_like_catalog_components():
+    assert CALIBRATORS["nexcp"].schema() == {
+        "type": "object",
+        "properties": {
+            "rho": {
+                "type": "number",
+                "exclusiveMinimum": 0.0,
+                "exclusiveMaximum": 1.0,
+                "title": "Decay",
+                "description": "Weight of a score one step older.",
+                "default": 0.99,
+            }
+        },
+        "additionalProperties": False,
+    }
+    lifetime = CALIBRATORS["saocp"].schema()["properties"]["g"]
+    assert lifetime["type"] == "integer"
+    assert lifetime["minimum"] == 1
 
 
 @pytest.mark.parametrize("method", ["bocpd", "bocpd_aci", "cpcp"])
