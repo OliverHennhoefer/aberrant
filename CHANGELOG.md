@@ -7,12 +7,70 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `ISCONNA` no longer scores an edge 0 when its combined statistic leaves the
+  float range, and no longer raises `OverflowError` for large `alpha`, `beta`
+  or `gamma`. Such a score saturates at the largest float (1 with
+  `normalize_score=True`), and a zero component still gives 0. Scores inside
+  the float range are unchanged.
+- `SDOStream` now replaces the observer with the lowest
+  `observations / (1 - exp(-age / T))`, as in the authors' reference
+  implementation. Dividing by the plain age evicted long-lived observers that
+  were still popular. On SHUTTLE, HTTP and COVER, prequential ROC-AUC and AP
+  stay level or rise (COVER ROC-AUC 0.62 to 0.68).
+- `SDOStream` samples observers in proportion to the elapsed event time
+  rather than at least one time unit, so results no longer depend on the unit
+  of an explicit `time_key` (with `T` in the same unit), and a point at the
+  same instant as the last sampled one is not sampled. With implicit arrival
+  order the sampling is unchanged.
+- `StreamingLODA` scores the mean negative log bin probability instead of the
+  mean negative log density floored at 0. Features with a narrow range give
+  densities above 1, so the floor clipped most scores, and some outliers, to 0;
+  on Gaussian data scaled by 0.1 it lowered ROC-AUC from 0.999 to 0.92. The
+  bins of a projection share one width, so the new score differs from the
+  unclipped density score by a constant per model and ranks events the same
+  way, now independently of the feature scale. Score values change, so revisit
+  any `predict_threshold` tuned on the old scale.
+- `KSWIN` uses the exact two-sample KS p-value, as the authors'
+  implementation does, instead of the asymptotic one. For the default 30
+  against 30 samples the asymptotic p-value is too small: on 5,000 samples of
+  Gaussian noise it raised 22 false alarms over two seeds, the exact one 15.
+  After a drift the most recent `stat_size` samples become the new window, as
+  in the paper, instead of clearing it, so the next test comes
+  `window_size - stat_size` samples later.
+- `StreamingRSHash` normalizes bucket occupancy by the faded number of
+  learned samples instead of the total count. With fading, occupancy settles
+  while the total keeps growing, so every score drifted towards 1 as a stream
+  grew: the only point ever seen scored 0.33 after 1,000 samples. Without
+  fading (`decay=0`) scores are unchanged. On SHUTTLE, HTTP and COVER,
+  prequential ROC-AUC and AP stay level or rise.
+- The docstrings of `XStream`, `StreamingLODA` and `OnlineIsolationForest`
+  state where they differ from their papers or reference implementations:
+  XStream's chain aggregation, LODA's sign projection weights and the
+  logarithm base of the online isolation forest's depth limit.
+
 ### Changed
 
+- `MovingMedian`, `MovingQuantile` and `MovingInterquartileRange` keep their
+  window sorted as they learn, so a score reads the order statistics in
+  logarithmic time instead of sorting the window twice. Scores are
+  bit-identical; at a window of 10,000 an event costs about 4 µs instead of
+  1-2 ms.
 - `SignedGraphSketchDetector` keeps its graphs in least-recently-seen order,
   so evicting one at `max_graphs` no longer scans every graph. Scores and the
   evicted graphs are unchanged; with the default 4,096 graphs and a new graph
   every other event, an event costs 50 µs instead of 180 µs.
+- The `dtaci` calibrator finds where a score falls in the sorted window by
+  bisection instead of a linear scan. Thresholds are unchanged; at a window of
+  1,000 an update costs 7.5 µs instead of 30 µs.
+
+### Development
+
+- `LocalOutlierFactor` is checked score by score against scikit-learn's
+  novelty LOF over a sliding window, for both metrics.
+- The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
+  skips without FAISS and so ran in no job.
 
 ### Removed
 
