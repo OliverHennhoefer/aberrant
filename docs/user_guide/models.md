@@ -16,7 +16,7 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Scalar time-series discords | `RollingMatrixProfile` or `DAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
 | Departures from a known seasonal forecast | `ResidualDetector(HoltWinters(...))` | Scores forecast errors from additive level, trend, and seasonal components; see [forecast-based detection](forecasting.md) |
 | Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
-| Interpretable local statistic change | `aberrant.model.stat` | Measures candidate-induced changes in means, spread, moments, covariance, or correlation |
+| Interpretable local statistic change | `aberrant.model.stat` | Robust or plain z-scores of one feature, candidate-induced changes in covariance or correlation, Mahalanobis distance, or ECOD/COPOD tail probabilities |
 | Learned reconstruction error | `OnlineAutoencoderEnsemble` or optional `Autoencoder` | Uses NumPy or user-supplied PyTorch autoencoders |
 | A fixed bound on raw features | `ThresholdModel` | Returns `1.0` when a feature leaves its configured ceiling or floor; learned alarm thresholds on scores live in [calibration](calibration.md) |
 
@@ -280,8 +280,9 @@ can be approximate. Memory is bounded by
 
 The implementation follows the original X-Lag Amnesic, backward-only
 `lookahead=0` procedure from
-[Matrix Profile XXIV](https://doi.org/10.1145/3534678.3539271). Constant
-subsequences are rejected because z-normalized distance is undefined for zero
+[Matrix Profile XXIV](https://doi.org/10.1145/3534678.3539271). Subsequences
+with a population standard deviation at or below `min_std` count as constant
+and are rejected, because z-normalized distance is undefined for zero
 variance under the reference restriction.
 
 ### Statistical detectors

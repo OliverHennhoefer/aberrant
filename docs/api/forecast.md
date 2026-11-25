@@ -20,6 +20,8 @@ Forecasters learn one series with `learn_one(y)` and forecast it with
 
 ::: aberrant.forecast.nonconformity
 
+::: aberrant.forecast.NonconformityScore
+
 ::: aberrant.forecast.interval
 
 ::: aberrant.forecast.BaseForecaster

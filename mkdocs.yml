@@ -40,6 +40,7 @@ nav:
     - Score Calibration: user_guide/calibration.md
     - Forecast-Based Detection: user_guide/forecasting.md
     - Evaluation: user_guide/evaluation.md
+    - Upgrading to 2.0: user_guide/upgrading.md
     - Coming from river or PySAD: user_guide/migrating.md
     - Best Practices: user_guide/best_practices.md
   - Examples: examples/index.md

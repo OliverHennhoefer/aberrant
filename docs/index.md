@@ -21,10 +21,10 @@ the [model guide](user_guide/models.md).
 
 !!! note "API compatibility"
 
-    aberrant 1.x preserves compatibility for its documented public APIs.
+    aberrant 2.x preserves compatibility for its documented public APIs.
     Private implementation details and exact numeric score sequences are
-    outside this guarantee. Read the [compatibility policy](api/index.md#compatibility-policy)
-    when upgrading.
+    outside this guarantee. Read the [compatibility policy](api/index.md#compatibility-policy),
+    and [Upgrading to 2.0](user_guide/upgrading.md) when coming from 1.x.
 
 ## Start here
 

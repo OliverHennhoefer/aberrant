@@ -25,11 +25,12 @@ paths and are excluded from wildcard exports when the dependency is absent.
 
 ## Compatibility policy
 
-Starting with 1.0.0, aberrant follows Semantic Versioning for the documented
-public API. Within 1.x, existing public import paths, constructor parameters,
-methods, properties, return types, and documented behavior remain compatible.
-Minor releases may add compatible capabilities; incompatible public API changes
-require a new major version.
+aberrant follows Semantic Versioning for the documented public API. Within
+2.x, public import paths, constructor parameters, methods, properties, return
+types, catalog IDs, the configuration format and documented behaviour stay
+compatible. Minor releases may add capabilities, models and catalog entries;
+an incompatible change needs 3.0. 2.0 itself broke with 1.x without shims;
+see [Upgrading to 2.0](../user_guide/upgrading.md).
 
 Private modules, names beginning with `_`, and undocumented internal attributes
 are excluded from this guarantee. Experimental model descriptions qualify

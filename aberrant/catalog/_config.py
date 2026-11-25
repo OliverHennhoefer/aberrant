@@ -39,6 +39,7 @@ from ._specs import (
 )
 
 CONFIG_FORMAT_VERSION = 2
+"""The `version` a detector configuration must declare."""
 
 
 def _freeze_value(value: object) -> object:

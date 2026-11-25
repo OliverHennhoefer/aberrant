@@ -34,6 +34,7 @@ ANY_FEATURES = FeatureCount()
 ONE_FEATURE = FeatureCount(1, 1)
 TWO_FEATURES = FeatureCount(2, 2)
 CATALOG_FORMAT_VERSION = 2
+"""Format version of `catalog_manifest()`."""
 
 _Spec = TypeVar("_Spec", bound=ComponentSpec)
 
@@ -785,8 +786,11 @@ def _index(specs: tuple[_Spec, ...]) -> Mapping[str, _Spec]:
 
 
 MODEL_CATALOG: Mapping[str, ModelSpec] = _index(_MODEL_SPECS)
+"""Every model by catalog ID, read-only."""
 TRANSFORMER_CATALOG: Mapping[str, TransformerSpec] = _index(_TRANSFORMER_SPECS)
+"""Every transformer by catalog ID, read-only."""
 FORECASTER_CATALOG: Mapping[str, ComponentSpec] = _index(_FORECASTER_SPECS)
+"""Every forecaster and regressor by catalog ID, read-only."""
 
 
 def get_model_spec(component_id: str) -> ModelSpec:
