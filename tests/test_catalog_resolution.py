@@ -392,6 +392,7 @@ class _NotRuntimeCheckable(Protocol):
 class LooselyAnnotatedParameters:
     def __init__(
         self,
+        *,
         anything,
         ids: set[int] = frozenset(),
         names: frozenset[str] = frozenset(),

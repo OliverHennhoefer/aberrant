@@ -58,8 +58,8 @@ jobs:
           assert isinstance(p, Pipeline)
           graph = GraphPipeline(
               [
-                  GraphNode("left", Select(["x"])),
-                  GraphNode("right", Select(["y"])),
+                  GraphNode("left", Select(features=["x"])),
+                  GraphNode("right", Select(features=["y"])),
                   MergeNode("features", ("left", "right")),
               ],
               MovingCovariance(window_size=8),

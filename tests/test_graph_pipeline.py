@@ -477,21 +477,21 @@ class _UndeclaredTransformer:
     ("nodes", "model", "message"),
     [
         ([], StandardScaler(), "unambiguous model"),
-        (["a"], MovingAverage(5), "GraphNode or MergeNode"),
+        (["a"], MovingAverage(window_size=5), "GraphNode or MergeNode"),
         (
-            [GraphNode("a", MovingAverage(5))],
-            MovingAverage(5),
+            [GraphNode("a", MovingAverage(window_size=5))],
+            MovingAverage(window_size=5),
             "unambiguous transformer",
         ),
         (
             [GraphNode("a", _UndeclaredTransformer())],
-            MovingAverage(5),
+            MovingAverage(window_size=5),
             "minimum_updates",
         ),
-        ([MergeNode("a", ())], MovingAverage(5), "named inputs"),
+        ([MergeNode("a", ())], MovingAverage(window_size=5), "named inputs"),
         (
             [GraphNode("b", Passthrough()), MergeNode("a", ("b", "b"))],
-            MovingAverage(5),
+            MovingAverage(window_size=5),
             "repeat a predecessor",
         ),
     ],
@@ -521,7 +521,7 @@ def test_scoring_failures_name_the_node_and_keep_the_graph_usable():
                 raise ValueError("negative reading")
             return x
 
-    model, reference = MovingAverage(5), MovingAverage(5)
+    model, reference = MovingAverage(window_size=5), MovingAverage(window_size=5)
     graph = GraphPipeline(
         [GraphNode("guard", RejectsNegative(), minimum_updates=0)], model, "guard"
     )
@@ -542,7 +542,7 @@ def test_transformers_must_emit_string_feature_names():
 
     graph = GraphPipeline(
         [GraphNode("numbered", NumberedKeys(), minimum_updates=0)],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "numbered",
     )
     with pytest.raises(GraphExecutionError, match="non-empty strings"):
@@ -555,7 +555,9 @@ def test_component_readiness_must_be_a_readiness_value():
 
     with pytest.raises(TypeError, match="Readiness value"):
         GraphPipeline(
-            [GraphNode("claims", ClaimsReadiness())], MovingAverage(5), "claims"
+            [GraphNode("claims", ClaimsReadiness())],
+            MovingAverage(window_size=5),
+            "claims",
         )
 
 
@@ -567,7 +569,9 @@ def test_a_failing_transaction_entry_disables_the_graph():
             yield
 
     graph = GraphPipeline(
-        [GraphNode("broken", BrokenTransaction())], MovingAverage(5), "broken"
+        [GraphNode("broken", BrokenTransaction())],
+        MovingAverage(window_size=5),
+        "broken",
     )
     with pytest.raises(GraphStateUncertainError, match="cannot snapshot"):
         graph.learn_one({"x": 1.0})
@@ -584,9 +588,9 @@ def test_a_transaction_that_swallows_failures_disables_the_graph():
     graph = GraphPipeline(
         [
             GraphNode("swallowing", Swallowing()),
-            GraphNode("b", Rename({"missing": "x"}), "swallowing"),
+            GraphNode("b", Rename(mapping={"missing": "x"}), "swallowing"),
         ],
-        MovingAverage(5),
+        MovingAverage(window_size=5),
         "b",
     )
     with pytest.raises(GraphStateUncertainError, match="cannot suppress"):
