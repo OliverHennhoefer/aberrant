@@ -586,15 +586,6 @@ def test_non_declarative_model_is_cataloged_but_rejected_by_detector_config() ->
         DetectorConfig(model=ComponentConfig("autoencoder")).normalized()
 
 
-def test_builder_restores_integer_mapping_keys_from_json() -> None:
-    model = create_model(
-        "graph_gated_one_class_svm",
-        {"graph": {"0": [1], "1": []}},
-    )
-
-    assert model.graph == {0: [1], 1: []}
-
-
 def test_pipeline_feature_count_is_checked_before_construction() -> None:
     config = DetectorConfig(
         transformers=(

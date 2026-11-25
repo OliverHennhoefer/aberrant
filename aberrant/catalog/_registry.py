@@ -850,19 +850,6 @@ _MODEL_SPECS = (
         ),
     ),
     _model(
-        "graph_gated_one_class_svm",
-        "GraphGatedOneClassSVM",
-        "aberrant.model.svm",
-        "svm",
-        _capabilities(
-            event_kind=EventKind.TABULAR,
-            score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_fixed_warmup(1),
-            state=StateKind.BOUNDED,
-            resettable=False,
-        ),
-    ),
-    _model(
         "incremental_one_class_svm_adaptive_kernel",
         "IncrementalOneClassSVMAdaptiveKernel",
         "aberrant.model.svm",
