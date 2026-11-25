@@ -7,6 +7,21 @@ Semantic Versioning.
 
 ## [2.0.0] - Unreleased
 
+### Added
+
+- `ScoreCalibrator("spot")` and `ScoreCalibrator("dspot")`: streaming peaks
+  over threshold (Siffer et al., KDD 2017) over the calibration window. A
+  generalized Pareto tail fitted to the window's peaks gives thresholds for
+  an `alpha` below `1 / window`, where the window's conformal quantile does
+  not exist. DSPOT calibrates the deviation from a moving mean. Their
+  thresholds are not clipped to the largest score seen;
+  `CalibratorSpec.extrapolates` marks such methods.
+- `aberrant.evaluate.vus`: VUS-ROC and VUS-PR (Paparrizos et al., VLDB
+  2022), the volume under the range-based ROC and PR surfaces over margins
+  from 0 to `window`. Each labeled anomaly range counts as one event, with
+  partial credit near it. It follows the reference package's
+  `RangeAUC_volume_opt` and needs NumPy only.
+
 ### Fixed
 
 - `MovingCorrelationCoefficient` scores `0.0` until its window holds two

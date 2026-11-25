@@ -9,3 +9,7 @@ for warm-up, ranking metrics, retention, learning policies, and reproducibility.
 ::: aberrant.evaluate.EvaluationRecord
 
 ::: aberrant.evaluate.EvaluationResult
+
+::: aberrant.evaluate.vus
+
+::: aberrant.evaluate.VolumeUnderSurface

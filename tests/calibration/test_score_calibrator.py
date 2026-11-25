@@ -22,7 +22,10 @@ def test_no_threshold_before_the_first_score(method):
     assert calibrator.predict(0) == math.inf
 
 
-@pytest.mark.parametrize("method", sorted(CALIBRATORS))
+CLIPPED = sorted(key for key, spec in CALIBRATORS.items() if not spec.extrapolates)
+
+
+@pytest.mark.parametrize("method", CLIPPED)
 def test_thresholds_stay_within_the_scores_seen(method):
     calibrator = ScoreCalibrator(method, alpha=0.1, window=50)
     largest = 0.0
@@ -70,7 +73,10 @@ def test_feedback_for_an_unknown_key_still_joins_the_history(method):
         calibrator.update("never issued", score)
 
     assert calibrator.history.count == 60
-    assert 0.0 <= calibrator.predict(0) <= max(scores)
+    threshold = calibrator.predict(0)
+    assert 0.0 <= threshold < math.inf
+    if not calibrator.spec.extrapolates:
+        assert threshold <= max(scores)
 
 
 def test_the_calibrator_describes_its_method():

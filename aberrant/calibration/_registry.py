@@ -33,6 +33,7 @@ from aberrant.calibration._conformal import (
     QuantileTracker,
     RollingSplit,
 )
+from aberrant.calibration._extreme import SPOT
 from aberrant.calibration._window import ScoreHistory
 
 
@@ -91,16 +92,20 @@ class CalibratorSpec:
       ``alpha`` for any score sequence. This bounds every exceedance, normal
       or anomalous, not the false-positive rate on normal scores alone.
     - ``"none"``: no coverage guarantee; calibrated only in practice.
+
+    A method that ``extrapolates`` may issue a threshold above every score
+    seen; the others are clipped to the largest absolute score.
     """
 
     id: str
     name: str
     reference: str
     summary: str
-    family: Literal["conformal", "bayesian"]
+    family: Literal["conformal", "bayesian", "extreme_value"]
     coverage: Coverage
     parameters: tuple[ParameterDescriptor, ...]
     factory: Factory
+    extrapolates: bool = False
 
     def defaults(self) -> dict[str, float]:
         """Every parameter at its default."""
@@ -150,6 +155,16 @@ def _discount(
 
 
 _RANGE = "Step as a fraction of the recent score range."
+
+
+def _level() -> ParameterDescriptor:
+    return _parameter(
+        "level", "Initial threshold", 0.98, minimum=0.0, maximum=1.0,
+        exclusive_minimum=True, exclusive_maximum=True,
+        description="Quantile of the window above which scores count as "
+        "peaks; lowered when that leaves fewer than ten.",
+    )  # fmt: skip
+
 
 CALIBRATORS: Mapping[str, CalibratorSpec] = MappingProxyType({
     spec.id: spec
@@ -299,6 +314,29 @@ CALIBRATORS: Mapping[str, CalibratorSpec] = MappingProxyType({
                 ),
             ),
             lambda h, a, p: DiscountedBayes(h, a, p["delta"]),
+        ),
+        CalibratorSpec(
+            "spot", "SPOT", "Siffer, Fouque, Termier & Largouet, KDD 2017",
+            "Generalized Pareto tail fitted to the peaks of the last W scores; "
+            "extrapolates thresholds for alpha below 1/W.",
+            "extreme_value", "none", (_level(),),
+            lambda h, a, p: SPOT(h, a, p["level"]),
+            extrapolates=True,
+        ),
+        CalibratorSpec(
+            "dspot", "DSPOT", "Siffer, Fouque, Termier & Largouet, KDD 2017",
+            "SPOT on the deviation from the mean of the last d scores, so a "
+            "drifting score level does not count as extreme.",
+            "extreme_value", "none",
+            (
+                _level(),
+                _parameter(
+                    "depth", "Depth", 10, minimum=1, integer=True,
+                    description="Scores in the moving mean.",
+                ),
+            ),
+            lambda h, a, p: SPOT(h, a, p["level"], int(p["depth"])),
+            extrapolates=True,
         ),
     )
 })  # fmt: skip
