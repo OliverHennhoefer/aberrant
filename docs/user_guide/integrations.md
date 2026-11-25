@@ -230,8 +230,8 @@ set or run FAISS-backed and PyTorch-backed detectors in separate processes.
 ## Configure a forecast-based detector
 
 `residual_detector` scores a target against a forecast. Its `model` is a nested
-forecaster from `FORECASTER_CATALOG`: `seasonal_naive`, `holt_winters`, or
-`rls_regressor`.
+forecaster from `FORECASTER_CATALOG`: `seasonal_naive`, `holt_winters`,
+`kalman_forecaster`, or `rls_regressor`.
 
 ```python
 from aberrant.catalog import DetectorConfig

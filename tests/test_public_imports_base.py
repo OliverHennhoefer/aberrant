@@ -37,6 +37,7 @@ from aberrant.evaluate import (
 from aberrant.exceptions import ConfigurationError
 from aberrant.forecast import (
     HoltWinters,
+    KalmanForecaster,
     ResidualDetector,
     RLSRegressor,
     SeasonalNaive,
@@ -140,7 +141,13 @@ def test_calibration_public_imports_base_smoke() -> None:
 def test_forecast_public_imports_base_smoke() -> None:
     assert base_api.ForecasterProtocol is not None
     assert base_api.RegressorProtocol is not None
-    for component in (HoltWinters, ResidualDetector, RLSRegressor, SeasonalNaive):
+    for component in (
+        HoltWinters,
+        KalmanForecaster,
+        ResidualDetector,
+        RLSRegressor,
+        SeasonalNaive,
+    ):
         assert component is not None
     assert interval is not None and nonconformity is not None
 

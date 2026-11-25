@@ -7,11 +7,19 @@ import pytest
 
 from aberrant.catalog import MODEL_CATALOG, TRANSFORMER_CATALOG
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
-from aberrant.forecast import HoltWinters, SeasonalNaive
+from aberrant.forecast import HoltWinters, KalmanForecaster, SeasonalNaive
 
 
 def _classes() -> list[type]:
-    classes: list[type] = [ADWIN, CUSUM, KSWIN, PageHinkley, HoltWinters, SeasonalNaive]
+    classes: list[type] = [
+        ADWIN,
+        CUSUM,
+        KSWIN,
+        PageHinkley,
+        HoltWinters,
+        KalmanForecaster,
+        SeasonalNaive,
+    ]
     for catalog in (MODEL_CATALOG, TRANSFORMER_CATALOG):
         for spec in catalog.values():
             if not spec.available:

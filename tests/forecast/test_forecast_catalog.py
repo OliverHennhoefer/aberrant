@@ -17,7 +17,13 @@ from aberrant.catalog import (
     model_capabilities,
 )
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
-from aberrant.forecast import HoltWinters, ResidualDetector, RLSRegressor, SeasonalNaive
+from aberrant.forecast import (
+    HoltWinters,
+    KalmanForecaster,
+    ResidualDetector,
+    RLSRegressor,
+    SeasonalNaive,
+)
 
 
 def _config(forecaster: dict, **params: object) -> DetectorConfig:
@@ -49,11 +55,13 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
     assert dict(FORECASTER_CATALOG).keys() == {
         "seasonal_naive",
         "holt_winters",
+        "kalman_forecaster",
         "rls_regressor",
     }
     classes = {
         "seasonal_naive": SeasonalNaive,
         "holt_winters": HoltWinters,
+        "kalman_forecaster": KalmanForecaster,
         "rls_regressor": RLSRegressor,
     }
     for component_id, spec in FORECASTER_CATALOG.items():
@@ -99,6 +107,8 @@ def test_residual_detector_takes_its_forecaster_as_a_nested_component() -> None:
         ({"id": "seasonal_naive", "params": {}}, None),
         ({"id": "holt_winters", "params": {"season_length": 4}}, None),
         ({"id": "holt_winters", "params": {"season_length": 6, "horizon": 5}}, 5),
+        ({"id": "kalman_forecaster", "params": {}}, None),
+        ({"id": "kalman_forecaster", "params": {"slope_ratio": 0.0, "horizon": 4}}, 3),
     ],
 )
 def test_forecaster_warmup_matches_the_first_forecast(forecaster, lead) -> None:

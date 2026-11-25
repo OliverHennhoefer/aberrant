@@ -16,7 +16,7 @@ differ in what they predict from, which shows in how they are called:
 | Learn | `learn_one(y)` | `learn_one(x, y)` |
 | Predict | `forecast_one()` | `predict_one(x)` |
 | Leads | `1..horizon` | `0` |
-| Included | `SeasonalNaive`, `HoltWinters` | `RLSRegressor` |
+| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster` | `RLSRegressor` |
 
 The target is its own argument, never a key of `x`, so a regressor cannot see
 the value it predicts and transformers in front of it never touch the target.
@@ -51,8 +51,20 @@ Lead `k` forecasts the value learned `k` events after the origin. A
 (`levels`, `quantiles`), which `quantile(lead, level)` interpolates.
 
 Forecasters count events instead of reading timestamps: every learned value
-advances the series by one step. Resample irregular or missing readings
-before learning them.
+advances the series by one step. Resample irregular readings before learning
+them. `KalmanForecaster` also takes `learn_one(None)` for a missing reading:
+it advances the series without a correction, and its spreads widen.
+
+## Spreads
+
+`SeasonalNaive` and `HoltWinters` report each lead's faded mean absolute
+error as its spread. `KalmanForecaster` reports the standard deviation of its
+predictive distribution, from a local level (or, with `slope_ratio`, a local
+linear trend) model whose noise variance it estimates online. That spread
+grows with the lead as the model says it should, and on Gaussian noise
+`|y - mean| / spread` stays within 1.645 for 90% of values at every lead.
+`level_ratio` sets how quickly it follows the series; the default matches
+exponential smoothing with weight 0.2.
 
 ## One value, many forecasts
 
