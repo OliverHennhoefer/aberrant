@@ -147,7 +147,7 @@ def test_scoring_and_explaining_never_change_state(params: dict) -> None:
     before = pickle.dumps(model)
     candidate = _event(np.array([4.0, -3.0, 0.5]))
     first = model.score_one(candidate)
-    model.explain_one(candidate)
+    model.attribute_one(candidate)
     assert model.score_one(candidate) == first
     assert pickle.dumps(model) == before
 
@@ -299,7 +299,7 @@ def test_decayed_constant_features_have_nonnegative_scores(model_type: type) -> 
     for _ in range(1_000):
         model.learn_one({"x": 1.0})
         assert model.score_one({"x": 1.0}) >= 0.0
-        assert model.explain_one({"x": 1.0})["x"] >= 0.0
+        assert model.attribute_one({"x": 1.0})["x"] >= 0.0
 
 
 def test_decay_survives_weight_renormalization() -> None:
@@ -356,7 +356,7 @@ def test_hybrid_history_warms_up_by_learned_samples_under_fast_decay(
     assert window.score_one({"x": 0.0}) > 0.0
     assert hybrid.score_one({"x": 0.0}) == history.score_one({"x": 0.0})
     assert hybrid.score_one({"x": 0.0}) == pytest.approx(0.0, abs=1e-12)
-    assert hybrid.explain_one({"x": 0.0}) == pytest.approx({"x": 0.0}, abs=1e-12)
+    assert hybrid.attribute_one({"x": 0.0}) == pytest.approx({"x": 0.0}, abs=1e-12)
 
 
 @pytest.mark.parametrize("memory", ["window", "sketch"])
@@ -404,12 +404,12 @@ def test_explanation_sums_to_the_score(
     rng = np.random.default_rng(19)
     model = model_type(memory=memory, aggregation=aggregation, tail=tail, warm_up=10)
     names = ["a", "b", "c"]
-    assert model.explain_one(dict.fromkeys(names, 0.0)) == dict.fromkeys(names, 0.0)
+    assert model.attribute_one(dict.fromkeys(names, 0.0)) == dict.fromkeys(names, 0.0)
     for row in rng.lognormal(size=(1_200, 3)):
         model.learn_one(dict(zip(names, row.tolist(), strict=True)))
     for row in rng.lognormal(sigma=2.0, size=(20, 3)):
         event = dict(zip(names, row.tolist(), strict=True))
-        explanation = model.explain_one(event)
+        explanation = model.attribute_one(event)
         assert list(explanation) == names
         assert all(value >= 0.0 for value in explanation.values())
         assert sum(explanation.values()) == pytest.approx(model.score_one(event))
@@ -478,7 +478,7 @@ def test_time_key_is_excluded_and_must_not_decrease() -> None:
     model = OnlineECOD(time_key="t", warm_up=2)
     for t, value in enumerate([1.0, 2.0, 3.0]):
         model.learn_one({"t": float(t), "x": value})
-    assert model.explain_one({"t": 5.0, "x": 9.0}).keys() == {"x"}
+    assert model.attribute_one({"t": 5.0, "x": 9.0}).keys() == {"x"}
     with pytest.raises(ValueError):
         model.learn_one({"t": 0.0, "x": 1.0})
     with pytest.raises(ValueError):

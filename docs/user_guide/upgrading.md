@@ -93,6 +93,9 @@ Every public name has exactly one import path.
   it can normalize.
 - **Drift detectors.** `update(x)` returns whether this value completed a
   drift, so a loop reads `if detector.update(value):`.
+- **Feature contributions.** `OnlineECOD.explain_one` and
+  `OnlineCOPOD.explain_one` are now `attribute_one`, as on every model that
+  splits its score among features.
 - **Configurations.** Detector configurations and the catalog manifest use
   format version 2. Rename IDs and parameters as above and set
   `"version": 2`; a version 1 configuration is rejected.

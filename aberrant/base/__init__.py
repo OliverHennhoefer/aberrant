@@ -4,6 +4,7 @@ from aberrant.base.descriptors import ParameterDescriptor, ValueDescriptor
 from aberrant.base.model import BaseModel
 from aberrant.base.pipeline import ModelPipeline, Pipeline, TransformerPipeline
 from aberrant.base.protocols import (
+    AttributingModelProtocol,
     FeatureMap,
     ForecasterProtocol,
     LearnerProtocol,
@@ -17,6 +18,7 @@ from aberrant.base.readiness import Readiness, ReadinessUnit
 from aberrant.base.transformer import BaseTransformer
 
 __all__ = [
+    "AttributingModelProtocol",
     "BaseModel",
     "BaseTransformer",
     "FeatureMap",

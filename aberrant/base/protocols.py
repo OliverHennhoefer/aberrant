@@ -62,6 +62,22 @@ class ModelProtocol(LearnerProtocol, Protocol):
 
 
 @runtime_checkable
+class AttributingModelProtocol(ModelProtocol, Protocol):
+    """A model that splits its score among the event's features.
+
+    ``attribute_one(x)`` returns one share per feature of ``x`` without
+    learning; a larger share means the feature makes the event more unusual.
+    The shares sum to ``score_one(x)`` minus the model's baseline, the score
+    of an event that gives no evidence either way, which is 0 unless the
+    model documents another. Before readiness every share is 0.
+    """
+
+    def attribute_one(self, x: FeatureMap) -> FeatureMap:
+        """Return each feature's share of the score without learning."""
+        ...
+
+
+@runtime_checkable
 class ForecasterProtocol(Protocol):
     """Structural interface accepted for an online forecaster.
 

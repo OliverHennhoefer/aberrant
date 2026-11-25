@@ -357,12 +357,38 @@ class MovingMahalanobisDistance(BaseModel):
         prepared = self._schema.preview(x)
         if not self._schema.is_established or len(self.window) < 3:
             return 0.0
-        previous_points = _window_rows(self.window, prepared.values.size)
+        _, whitened, _ = self._decomposed(prepared.values)
+        return float(whitened @ whitened)
+
+    def attribute_one(self, x: dict[str, float]) -> dict[str, float]:
+        """Return each feature's share of ``score_one(x)``.
+
+        The squared distance ``d' S^-1 d`` splits into ``d_j (S^-1 d)_j`` per
+        feature, so the shares sum to the score. A share is negative when the
+        feature's deviation is what its correlations with the others predict,
+        which makes the event less unusual. All shares are 0 before three
+        observations.
+        """
+        prepared = self._schema.preview(x)
+        names = prepared.names
+        if not self._schema.is_established or len(self.window) < 3:
+            return dict.fromkeys(names, 0.0)
+        difference, _, weighted = self._decomposed(prepared.values)
+        return dict(zip(names, (difference * weighted).tolist(), strict=True))
+
+    def _decomposed(
+        self, values: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """``(d, L^-1 d, S^-1 d)`` for the window, where ``S = L L'``.
+
+        All three are in one common scale of the features.
+        """
+        previous_points = _window_rows(self.window, values.size)
         if np.all(previous_points == previous_points[0]):
             # Preserve the absolute 1e-6 covariance floor for constant windows,
             # where there is no observed variance to define a relative scale.
-            whitened = (prepared.values - previous_points[0]) / 1e-3
-            return float(whitened @ whitened)
+            whitened = (values - previous_points[0]) / 1e-3
+            return whitened, whitened, whitened
 
         # Center before selecting a common scale: a large constant coordinate
         # must not suppress the variance of smaller changing coordinates.
@@ -378,12 +404,12 @@ class MovingMahalanobisDistance(BaseModel):
         scaled_points = offsets / scale
 
         with np.errstate(over="ignore"):
-            query_offset = prepared.values * offset_factor - origin * offset_factor
+            query_offset = values * offset_factor - origin * offset_factor
         scaled_query = query_offset / scale
         overflowed = np.isinf(query_offset)
         if np.any(overflowed):
             scaled_query[overflowed] = (
-                prepared.values[overflowed] * offset_factor / scale
+                values[overflowed] * offset_factor / scale
                 - origin[overflowed] * offset_factor / scale
             )
         cov_matrix = np.atleast_2d(np.cov(scaled_points, rowvar=False, bias=self.bias))
@@ -397,4 +423,4 @@ class MovingMahalanobisDistance(BaseModel):
         factor = np.linalg.cholesky(cov_matrix)
         diff = scaled_query - np.mean(scaled_points, axis=0)
         whitened = np.linalg.solve(factor, diff)
-        return float(whitened @ whitened)
+        return diff, whitened, np.linalg.solve(factor.T, whitened)

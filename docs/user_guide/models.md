@@ -25,6 +25,41 @@ reconstruction models are scale-sensitive. `HalfSpaceTrees` specifically
 expects features scaled to `[0, 1]`. Isolation methods based on randomized cuts
 often need less scaling, but a transform can still change their geometry.
 
+## Which feature made an event unusual
+
+`OnlineECOD`, `OnlineCOPOD`, `LODA`, `MovingMahalanobisDistance` and
+`HalfSpaceTrees` split their score among the event's features with
+`attribute_one(x)`. It returns one share per feature without learning, and the
+shares sum to `score_one(x)` minus the model's baseline:
+
+| Model | Share of a feature | Baseline |
+| --- | --- | --- |
+| `OnlineECOD`, `OnlineCOPOD` | Its negative log tail probability | 0 |
+| `MovingMahalanobisDistance` | `d_j (S^-1 d)_j` of the squared distance `d' S^-1 d`; negative when its deviation is what its correlations predict | 0 |
+| `LODA` | Each projection's excess over the entropy of its histogram, split equally among the features it uses | The mean entropy, the score of a typical event |
+| `HalfSpaceTrees` | Each split's change in its tree's term, credited to the split's feature; positive when it sends the event into the sparser half | `1 - 2**-height`, the score at the roots |
+
+A large share points at the feature to look at first; it is not a causal
+diagnosis. `AttributingModelProtocol` in `aberrant.base` checks for the
+method. In a pipeline, attribute the transformed event to its final model:
+`pipeline.second.attribute_one(pipeline.first.transform_one(x))`.
+
+```python
+import random
+
+from aberrant.model.stat import MovingMahalanobisDistance
+
+rng = random.Random(0)
+detector = MovingMahalanobisDistance(window_size=200)
+for _ in range(200):
+    demand = rng.gauss(0.5, 0.1)
+    detector.learn_one({"cpu": demand + rng.gauss(0, 0.02), "load": demand})
+
+# cpu follows load, so high cpu at an ordinary load stands out.
+shares = detector.attribute_one({"cpu": 0.8, "load": 0.5})
+assert max(shares, key=shares.get) == "cpu"
+```
+
 ## Score contracts
 
 ### Isolation forests
@@ -355,7 +390,7 @@ for _ in range(500):
     detector.learn_one(event)  # then learn
 
 # Per-feature contributions sum to the score; here "cpu" dominates.
-print(detector.explain_one({"cpu": 0.95, "latency_ms": 11.5}))
+print(detector.attribute_one({"cpu": 0.95, "latency_ms": 11.5}))
 ```
 
 ### SVM detectors
