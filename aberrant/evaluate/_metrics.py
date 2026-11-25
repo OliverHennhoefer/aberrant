@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from importlib import import_module
 from typing import cast
 
-from aberrant.base.exceptions import MissingOptionalDependencyError
+from aberrant.exceptions import MissingOptionalDependencyError
 
 _Metric = Callable[[Sequence[int], Sequence[float]], float]
 

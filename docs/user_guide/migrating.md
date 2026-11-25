@@ -9,7 +9,7 @@ changing imports. PySAD code needs one extra step: events become
 === "aberrant"
 
     ```python
-    from aberrant.model.iforest import HalfSpaceTrees
+    from aberrant.model.forest import HalfSpaceTrees
     from aberrant.transform import MinMaxScaler
 
     detector = MinMaxScaler() | HalfSpaceTrees(seed=42)
@@ -83,12 +83,12 @@ identical numbers.
 
 | river | PySAD | aberrant |
 | --- | --- | --- |
-| `anomaly.HalfSpaceTrees` | `models.HalfSpaceTrees` | `model.iforest.HalfSpaceTrees` (expects features in `[0, 1]`; add a `MinMaxScaler`) |
+| `anomaly.HalfSpaceTrees` | `models.HalfSpaceTrees` | `model.forest.HalfSpaceTrees` (expects features in `[0, 1]`; add a `MinMaxScaler`) |
 | `anomaly.LODA` | `models.LODA` | `model.sketch.StreamingLODA` |
 | `anomaly.LocalOutlierFactor` | — | `model.distance.LocalOutlierFactor` |
 | — | `models.RSHash` | `model.sketch.StreamingRSHash` |
-| — | `models.RobustRandomCutForest` | `model.iforest.RandomCutForest` |
-| — | `models.IForestASD` | `model.iforest.ASDIsolationForest` |
+| — | `models.RobustRandomCutForest` | `model.forest.RandomCutForest` |
+| — | `models.IForestASD` | `model.forest.ASDIsolationForest` |
 | `anomaly.QuantileFilter` | `transform.ConformalProbabilityCalibrator` (calibrated scores) | `calibration.ScoreCalibrator` (adaptive alarm threshold); for conformal p-values see [nonconform](https://github.com/OliverHennhoefer/nonconform) |
 | `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` | — | `drift.ADWIN`, `drift.KSWIN`, `drift.PageHinkley` (`update` returns the drift flag, which `drift_detected` also holds) |
 | `preprocessing.StandardScaler`, `preprocessing.MinMaxScaler` | — | `transform.StandardScaler`, `transform.MinMaxScaler` |

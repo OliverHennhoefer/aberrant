@@ -2,8 +2,8 @@
 
 import math
 
+from aberrant._utils.validation import coerce_integer_count
 from aberrant.drift.base import BaseDriftDetector, _finite_observation
-from aberrant.utils.validation import coerce_integer_count
 
 
 class ADWIN(BaseDriftDetector):

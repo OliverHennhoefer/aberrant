@@ -10,12 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from aberrant.base import (
-    BaseSimilaritySearchEngine,
-    ConfigurationError,
-    ModelProtocol,
-    UnknownComponentError,
-)
+from aberrant.base import ModelProtocol
 from aberrant.catalog import (
     CATALOG_FORMAT_VERSION,
     MODEL_CATALOG,
@@ -39,19 +34,21 @@ from aberrant.catalog import (
     get_transformer_spec,
 )
 from aberrant.catalog import _registry as catalog_registry
+from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.model.distance import SDOStream
 from aberrant.model.stat import MovingGeometricAverage, MovingHarmonicAverage
 from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
 )
+from aberrant.similarity import BaseSimilaritySearchEngine
 
 PUBLIC_MODEL_MODULES = (
     "aberrant.model",
     "aberrant.model.deep",
     "aberrant.model.distance",
     "aberrant.model.graph",
-    "aberrant.model.iforest",
+    "aberrant.model.forest",
     "aberrant.model.sketch",
     "aberrant.model.stat",
     "aberrant.model.svm",

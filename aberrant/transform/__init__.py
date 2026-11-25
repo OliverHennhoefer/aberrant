@@ -1,6 +1,6 @@
 """Transformers for streaming validation, preprocessing, and projection."""
 
-from aberrant.transform.preprocessing import (
+from aberrant.transform._preprocessing import (
     FeatureSchemaGuard,
     MinMaxScaler,
     Passthrough,
@@ -9,7 +9,7 @@ from aberrant.transform.preprocessing import (
     Select,
     StandardScaler,
 )
-from aberrant.transform.projection import IncrementalPCA, RandomProjection
+from aberrant.transform._projection import IncrementalPCA, RandomProjection
 
 __all__ = [
     "IncrementalPCA",

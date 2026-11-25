@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from aberrant.model.distance.knn import KNN
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
+from aberrant.similarity import FaissSimilaritySearchEngine
 from tests.utils import DataGenerator
 
 faiss = pytest.importorskip("faiss")

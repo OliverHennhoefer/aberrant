@@ -135,8 +135,8 @@ unsupervised detector.
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.preprocessing import StandardScaler
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import StandardScaler
 
 rng = np.random.default_rng(42)
 warm_up_values = rng.normal(size=(128, 2))

@@ -7,12 +7,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from aberrant.base.model import BaseModel
-from aberrant.utils.validation import (
+from aberrant._utils.validation import (
     NumericEventBoundary,
     PreparedFeatures,
     coerce_integer_count,
 )
+from aberrant.base.model import BaseModel
 
 # Categorical hashes of an event without categorical features.
 _NO_CATEGORIES = np.empty(0, dtype=np.int64)

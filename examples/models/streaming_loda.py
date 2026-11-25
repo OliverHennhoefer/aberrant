@@ -1,8 +1,8 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from aberrant.model.sketch import StreamingLODA
-from aberrant.stream.dataset import Dataset, load
-from aberrant.transform.preprocessing import StandardScaler
+from aberrant.stream import Dataset, load
+from aberrant.transform import StandardScaler
 
 model = StandardScaler() | StreamingLODA(
     n_projections=64,

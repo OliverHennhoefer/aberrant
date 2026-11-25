@@ -1,16 +1,21 @@
-"""Streaming data interfaces.
+"""Streaming datasets: registry, download cache and replay streams."""
 
-Public streaming dataset APIs are re-exported from ``aberrant.stream.dataset``.
-"""
-
-from aberrant.stream.dataset import (
+from aberrant.stream._dataset import (
     DATASET_REGISTRY,
     BatchStreamer,
+    CacheEntry,
     CacheInfo,
+    CacheMetadata,
     Dataset,
+    DatasetArtifactValidator,
+    DatasetCacheStore,
     DatasetInfo,
     DatasetManager,
+    DatasetStream,
+    DownloadBackend,
     NpzStreamer,
+    Sample,
+    UrlLibDownloadBackend,
     clear_cache,
     download,
     get_cache_info,
@@ -26,12 +31,20 @@ from aberrant.stream.dataset import (
 
 __all__ = [
     "BatchStreamer",
+    "CacheEntry",
     "CacheInfo",
+    "CacheMetadata",
     "DATASET_REGISTRY",
     "Dataset",
+    "DatasetArtifactValidator",
+    "DatasetCacheStore",
     "DatasetInfo",
     "DatasetManager",
+    "DatasetStream",
+    "DownloadBackend",
     "NpzStreamer",
+    "Sample",
+    "UrlLibDownloadBackend",
     "clear_cache",
     "download",
     "get_cache_info",

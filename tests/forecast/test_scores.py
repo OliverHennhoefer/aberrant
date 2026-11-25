@@ -4,8 +4,7 @@ import math
 
 import pytest
 
-from aberrant.base import Forecast
-from aberrant.forecast import interval, nonconformity
+from aberrant.forecast import Forecast, interval, nonconformity
 
 POINT = Forecast(origin=3, leads=(1, 2), mean=(10.0, 12.0), scale=(2.0, 4.0))
 QUANTILES = Forecast(

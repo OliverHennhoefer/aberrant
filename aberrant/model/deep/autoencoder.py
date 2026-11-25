@@ -3,12 +3,13 @@
 from itertools import chain
 
 import torch
-from torch import optim
+from torch import nn, optim
 
-from aberrant.base.architecture import Architecture
+from aberrant._utils.validation import FeatureSchema, PreparedFeatures
 from aberrant.base.model import BaseModel
-from aberrant.utils.deep.loss_func import AutoencoderLoss
-from aberrant.utils.validation import FeatureSchema, PreparedFeatures
+from aberrant.model.deep._architecture import Architecture
+
+AutoencoderLoss = nn.MSELoss | nn.L1Loss | nn.SmoothL1Loss | nn.HuberLoss
 
 
 class Autoencoder(BaseModel):
@@ -33,8 +34,7 @@ class Autoencoder(BaseModel):
         ```python
         from torch import nn, optim
 
-        from aberrant.model.deep import Autoencoder
-        from aberrant.utils.deep.architecture import VanillaAutoencoder
+        from aberrant.model.deep import Autoencoder, VanillaAutoencoder
 
         architecture = VanillaAutoencoder(input_size=10)
         autoencoder = Autoencoder(

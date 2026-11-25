@@ -11,8 +11,5 @@ rule that NETS computes, instead of the paper's window-level outlier set.
 
 ::: aberrant.model.distance.SDOStream
 
-## Optional FAISS engine
-
-This engine requires `aberrant[faiss]`.
-
-::: aberrant.similarity.FaissSimilaritySearchEngine
+`KNN` needs a similarity engine; see the
+[similarity search API](../similarity.md).

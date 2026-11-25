@@ -16,12 +16,9 @@ import numpy as np
 import pytest
 
 from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble
-from aberrant.model.distance import (
-    CellNeighborhoodDetector,
-    SDOStream,
-)
+from aberrant.model.distance import CellNeighborhoodDetector, SDOStream
 from aberrant.model.distance.knn import KNN
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
@@ -42,9 +39,9 @@ from aberrant.model.stat import (
     OnlineECOD,
 )
 from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
-from aberrant.stream.dataset import Dataset, get_dataset_info
-from aberrant.transform.preprocessing import MinMaxScaler, StandardScaler
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
+from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.stream import Dataset, get_dataset_info
+from aberrant.transform import MinMaxScaler, StandardScaler
 from tests.integration._quality import (
     Case,
     assert_detects,
@@ -67,8 +64,8 @@ def _knn(seed: int) -> object:
 def _autoencoder(seed: int) -> object:
     from torch import nn, optim  # noqa: PLC0415
 
+    from aberrant.model.deep import VanillaAutoencoder  # noqa: PLC0415
     from aberrant.model.deep.autoencoder import Autoencoder  # noqa: PLC0415
-    from aberrant.utils.deep.architecture import VanillaAutoencoder  # noqa: PLC0415
 
     architecture = VanillaAutoencoder(
         input_size=get_dataset_info(Dataset.SHUTTLE).n_features, seed=seed

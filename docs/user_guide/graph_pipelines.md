@@ -8,8 +8,8 @@ own saved designs, bindings, user interfaces, calibration and alarm policies.
 ```python
 from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
 from aberrant.model.stat import MovingCovariance
-from aberrant.transform.preprocessing import StandardScaler
-from aberrant.transform.projection import IncrementalPCA
+from aberrant.transform import StandardScaler
+from aberrant.transform import IncrementalPCA
 
 graph = GraphPipeline(
     [

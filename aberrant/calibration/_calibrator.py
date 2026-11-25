@@ -5,13 +5,9 @@ from __future__ import annotations
 import math
 from collections.abc import Hashable
 
-from aberrant.calibration._registry import (
-    CALIBRATORS,
-    CalibratorSpec,
-    OnlineCalibrator,
-)
+from aberrant._utils.validation import coerce_event_number, coerce_finite_number
+from aberrant.calibration._registry import CALIBRATORS, CalibratorSpec, OnlineCalibrator
 from aberrant.calibration._window import ScoreHistory
-from aberrant.utils.validation import coerce_event_number, coerce_finite_number
 
 
 class ScoreCalibrator:

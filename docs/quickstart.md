@@ -20,8 +20,8 @@ included in the ranked results.
 ```python
 import numpy as np
 
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.preprocessing import StandardScaler
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import StandardScaler
 
 rng = np.random.default_rng(7)
 normal = rng.normal(loc=0.0, scale=1.0, size=(400, 2))

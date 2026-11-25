@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from aberrant.model.deep import OnlineAutoencoderEnsemble
-from aberrant.stream.dataset import Dataset, load
+from aberrant.stream import Dataset, load
 
 model = OnlineAutoencoderEnsemble(
     max_ae_size=4,

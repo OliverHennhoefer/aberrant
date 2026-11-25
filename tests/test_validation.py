@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from aberrant.utils.validation import (
+from aberrant._utils.validation import (
     EdgeEventBoundary,
     FeatureSchema,
     MonotonicClock,

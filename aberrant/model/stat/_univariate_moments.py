@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from aberrant._utils.statistics import linear_quantile
 from aberrant.model.stat._univariate_base import (
     _BaseMovingOrderStatistic,
     _BaseMovingUnivariate,
 )
-from aberrant.utils.statistics import linear_quantile
 
 
 def _mean(values: Sequence[float]) -> float:

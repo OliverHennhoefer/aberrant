@@ -6,22 +6,22 @@ not learn.
 
 ## Preprocessing
 
-::: aberrant.transform.preprocessing.FeatureSchemaGuard
+::: aberrant.transform
 
-::: aberrant.transform.preprocessing.MinMaxScaler
+::: aberrant.transform
 
-::: aberrant.transform.preprocessing.StandardScaler
+::: aberrant.transform
 
-::: aberrant.transform.preprocessing.RollingRobustScaler
+::: aberrant.transform
 
-::: aberrant.transform.preprocessing.Select
+::: aberrant.transform
 
-::: aberrant.transform.preprocessing.Rename
+::: aberrant.transform
 
-::: aberrant.transform.preprocessing.Passthrough
+::: aberrant.transform
 
 ## Projection
 
-::: aberrant.transform.projection.IncrementalPCA
+::: aberrant.transform
 
-::: aberrant.transform.projection.RandomProjection
+::: aberrant.transform

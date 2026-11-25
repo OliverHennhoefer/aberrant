@@ -6,8 +6,8 @@ from typing import Literal
 
 import numpy as np
 
+from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema, coerce_integer_count
 
 
 class LocalOutlierFactor(BaseModel):

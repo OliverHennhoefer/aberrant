@@ -3,12 +3,8 @@
 import numpy as np
 import pytest
 
-from aberrant.model.stat import (
-    MovingInterquartileRange,
-    MovingMedian,
-    MovingQuantile,
-)
-from aberrant.utils.statistics import linear_quantile
+from aberrant._utils.statistics import linear_quantile
+from aberrant.model.stat import MovingInterquartileRange, MovingMedian, MovingQuantile
 
 
 @pytest.mark.parametrize("model_type", [MovingMedian, MovingQuantile])

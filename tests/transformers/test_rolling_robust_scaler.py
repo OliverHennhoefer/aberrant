@@ -8,7 +8,7 @@ import pytest
 from aberrant.base import BaseModel, TransactionalTransformerProtocol
 from aberrant.catalog import DetectorConfig, get_transformer_spec
 from aberrant.transform import RollingRobustScaler
-from aberrant.transform.preprocessing import RollingRobustScaler as PreprocessingScaler
+from aberrant.transform import RollingRobustScaler as PreprocessingScaler
 
 
 class _RecordingModel(BaseModel):

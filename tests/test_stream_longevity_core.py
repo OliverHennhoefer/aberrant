@@ -9,13 +9,14 @@ from itertools import count, islice
 import numpy as np
 import pytest
 
-from aberrant.base import ValidationError
+from aberrant._utils.validation import EdgeEventBoundary, MonotonicClock
 from aberrant.catalog import StateKind, get_model_spec
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import PrequentialEvaluator
+from aberrant.exceptions import ValidationError
 from aberrant.model import NullModel
 from aberrant.model.stat import MovingAverage
-from aberrant.stream.dataset.streamers import BatchStreamer, Sample
+from aberrant.stream import BatchStreamer, Sample
 from aberrant.transform import (
     FeatureSchemaGuard,
     IncrementalPCA,
@@ -24,7 +25,6 @@ from aberrant.transform import (
     RollingRobustScaler,
     StandardScaler,
 )
-from aberrant.utils.validation import EdgeEventBoundary, MonotonicClock
 
 
 class _InfiniteStream:

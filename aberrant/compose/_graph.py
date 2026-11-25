@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from time import perf_counter_ns
 from typing import Literal, TypeVar, cast
 
+from aberrant._utils.validation import coerce_finite_number, coerce_integer_count
 from aberrant.base.protocols import ModelProtocol
 from aberrant.base.readiness import Readiness, ReadinessProtocol
 from aberrant.compose._learning import LearningPass, LearningTransactions
@@ -23,7 +24,6 @@ from aberrant.compose._types import (
     Observer,
 )
 from aberrant.compose._validation import checked_features, ordered_nodes, predecessors
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
 
 T = TypeVar("T")
 MODEL = "$model"

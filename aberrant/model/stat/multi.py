@@ -6,8 +6,8 @@ from itertools import chain
 
 import numpy as np
 
+from aberrant._utils.validation import FeatureSchema
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema
 
 
 def _float_array(values: np.ndarray | Collection[float]) -> np.ndarray:

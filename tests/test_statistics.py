@@ -7,7 +7,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from aberrant.utils.statistics import linear_quantile
+from aberrant._utils.statistics import linear_quantile
 
 
 @pytest.mark.parametrize(

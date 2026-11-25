@@ -6,16 +6,16 @@ import math
 
 import numpy as np
 
-from aberrant.base.forecast import Forecast
-from aberrant.base.protocols import FeatureMap
-from aberrant.forecast._arithmetic import blend
-from aberrant.forecast.base import BaseRegressor, check_spread_parameters
-from aberrant.utils.validation import (
+from aberrant._utils.validation import (
     FeatureSchema,
     PreparedFeatures,
     coerce_event_number,
     coerce_finite_number,
 )
+from aberrant.base.forecast import Forecast
+from aberrant.base.protocols import FeatureMap
+from aberrant.forecast._arithmetic import blend
+from aberrant.forecast.base import BaseRegressor, check_spread_parameters
 
 
 class RLSRegressor(BaseRegressor):

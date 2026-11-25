@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-from aberrant.base import ConfigurationError, ModelProtocol
+from aberrant.base import ModelProtocol
 from aberrant.catalog import create_transformer, get_transformer_spec
 from aberrant.compose import (
     INPUT,
@@ -17,19 +17,23 @@ from aberrant.compose import (
     GraphPipeline,
     GraphStateUncertainError,
     MergeNode,
-    Passthrough,
-    Rename,
-    Select,
 )
-from aberrant.model.iforest import OnlineIsolationForest
+from aberrant.exceptions import ConfigurationError
+from aberrant.model.forest import OnlineIsolationForest
 from aberrant.model.stat import (
     MovingAverage,
     MovingCovariance,
     MovingGeometricAverage,
     MovingHarmonicAverage,
 )
-from aberrant.transform.preprocessing import MinMaxScaler, StandardScaler
-from aberrant.transform.projection import IncrementalPCA
+from aberrant.transform import (
+    IncrementalPCA,
+    MinMaxScaler,
+    Passthrough,
+    Rename,
+    Select,
+    StandardScaler,
+)
 
 
 def test_branched_pca_raw_bypass_matches_explicit_numeric_reference():

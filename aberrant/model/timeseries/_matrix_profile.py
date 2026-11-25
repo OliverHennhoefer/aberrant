@@ -11,8 +11,8 @@ from typing import Generic, TypeVar, cast
 
 import numpy as np
 
+from aberrant._utils.validation import FeatureSchema, PreparedFeatures
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import FeatureSchema, PreparedFeatures
 
 _Sample = TypeVar("_Sample", float, np.ndarray)
 _Statistics = TypeVar(

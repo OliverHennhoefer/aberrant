@@ -5,7 +5,6 @@ from collections.abc import Callable
 
 import pytest
 
-from aberrant.base import ValidationError
 from aberrant.catalog import (
     MODEL_CATALOG,
     TRANSFORMER_CATALOG,
@@ -13,6 +12,7 @@ from aberrant.catalog import (
     create_transformer,
 )
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
+from aberrant.exceptions import ValidationError
 from aberrant.forecast import HoltWinters, SeasonalNaive
 
 _MODEL_PARAMS: dict[str, dict[str, object]] = {

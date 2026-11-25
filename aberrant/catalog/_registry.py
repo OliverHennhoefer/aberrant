@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import TypeVar, cast
 
 from aberrant import __version__
-from aberrant.base.exceptions import UnknownComponentError
+from aberrant.exceptions import UnknownComponentError
 
 from ._specs import (
     ComponentDependency,
@@ -592,7 +592,7 @@ _MODEL_SPECS = (
     _model(
         "asd_isolation_forest",
         "ASDIsolationForest",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -605,7 +605,7 @@ _MODEL_SPECS = (
     _model(
         "half_space_trees",
         "HalfSpaceTrees",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -619,7 +619,7 @@ _MODEL_SPECS = (
     _model(
         "mondrian_isolation_forest",
         "MondrianIsolationForest",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -632,7 +632,7 @@ _MODEL_SPECS = (
     _model(
         "online_isolation_forest",
         "OnlineIsolationForest",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -645,7 +645,7 @@ _MODEL_SPECS = (
     _model(
         "random_cut_forest",
         "RandomCutForest",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -658,7 +658,7 @@ _MODEL_SPECS = (
     _model(
         "stream_random_histogram_forest",
         "StreamRandomHistogramForest",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -671,7 +671,7 @@ _MODEL_SPECS = (
     _model(
         "x_stream",
         "XStream",
-        "aberrant.model.iforest",
+        "aberrant.model.forest",
         "isolation_forest",
         _capabilities(
             event_kind=EventKind.TABULAR,
@@ -984,7 +984,7 @@ _TRANSFORMER_SPECS = (
     _transformer(
         component_id="select",
         class_name="Select",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="composition",
         resolver=_selected_count,
         names_resolver=_selected_names,
@@ -992,7 +992,7 @@ _TRANSFORMER_SPECS = (
     _transformer(
         component_id="rename",
         class_name="Rename",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="composition",
         resolver=_preserve_features,
         names_resolver=_renamed_names,
@@ -1000,42 +1000,42 @@ _TRANSFORMER_SPECS = (
     _transformer(
         component_id="passthrough",
         class_name="Passthrough",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="composition",
         resolver=_preserve_features,
     ),
     _transformer(
         component_id="feature_schema_guard",
         class_name="FeatureSchemaGuard",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="validation",
         resolver=_schema_features,
     ),
     _transformer(
         component_id="min_max_scaler",
         class_name="MinMaxScaler",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="preprocessing",
         resolver=_preserve_features,
     ),
     _transformer(
         component_id="standard_scaler",
         class_name="StandardScaler",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="preprocessing",
         resolver=_preserve_features,
     ),
     _transformer(
         component_id="rolling_robust_scaler",
         class_name="RollingRobustScaler",
-        module="aberrant.transform.preprocessing",
+        module="aberrant.transform",
         family="preprocessing",
         resolver=_preserve_features,
     ),
     _transformer(
         component_id="incremental_pca",
         class_name="IncrementalPCA",
-        module="aberrant.transform.projection",
+        module="aberrant.transform",
         family="projection",
         resolver=_projected_features,
         names_resolver=_projected_names,
@@ -1043,7 +1043,7 @@ _TRANSFORMER_SPECS = (
     _transformer(
         component_id="random_projection",
         class_name="RandomProjection",
-        module="aberrant.transform.projection",
+        module="aberrant.transform",
         family="projection",
         resolver=_projected_features,
         names_resolver=_projected_names,

@@ -7,8 +7,6 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.BaseTransformer
 
-::: aberrant.base.BaseSimilaritySearchEngine
-
 ::: aberrant.base.Pipeline
 
 ::: aberrant.base.TransformerPipeline
@@ -29,35 +27,8 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.RegressorProtocol
 
-::: aberrant.base.Forecast
-
 ::: aberrant.base.FeatureMap
 
 ::: aberrant.base.Readiness
 
 ::: aberrant.base.ReadinessProtocol
-
-## Exceptions
-
-::: aberrant.base.AberrantError
-
-::: aberrant.base.PipelineError
-
-::: aberrant.base.ValidationError
-
-::: aberrant.base.ConfigurationError
-
-::: aberrant.base.ConfigurationIssue
-
-::: aberrant.base.UnknownComponentError
-
-::: aberrant.base.MissingOptionalDependencyError
-
-::: aberrant.base.IncompatibleComponentError
-
-## Optional PyTorch architecture base
-
-The following object requires `aberrant[dl]` at runtime and is intentionally
-absent from `from aberrant.base import *`.
-
-::: aberrant.base.architecture.Architecture

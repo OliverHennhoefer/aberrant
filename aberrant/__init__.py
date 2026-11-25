@@ -1,16 +1,20 @@
-"""ABERRANT: Online Anomaly Detection library for streaming data.
+"""aberrant: online anomaly detection for streaming data.
 
-A Python library implementing the online learning paradigm for anomaly
-detection. Models process data one point at a time and update their state
-incrementally. Memory strategies vary from fixed-size summaries to bounded
-windows and periodic internal rebuilds.
+Every component learns one event at a time and keeps bounded state.
 
-Modules:
-    base: Core abstract classes (BaseModel, BaseTransformer, Pipeline)
-    drift: Concept drift detection algorithms (ADWIN, KSWIN, PageHinkley)
-    model: Anomaly detection models
-    stream: Streaming data utilities
-    transform: Data transformers (scalers, projections)
+Packages:
+    base: base classes, protocols, ``Pipeline`` and ``Readiness``
+    calibration: turn scores into alarm thresholds (``ScoreCalibrator``)
+    catalog: build components from declarative configurations
+    compose: branched graph pipelines
+    drift: concept-drift detectors (ADWIN, KSWIN, PageHinkley)
+    evaluate: prequential evaluation and metrics
+    exceptions: the errors aberrant raises
+    forecast: forecasters and forecast-residual detection
+    model: anomaly detection models, grouped by family
+    similarity: nearest-neighbour search engines
+    stream: benchmark datasets and replay streams
+    transform: scalers, feature selection and projections
 """
 
 __version__ = "1.5.0"

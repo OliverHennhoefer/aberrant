@@ -6,12 +6,12 @@ from typing import Literal
 
 import numpy as np
 
-from aberrant.base.model import BaseModel
-from aberrant.utils.validation import (
+from aberrant._utils.validation import (
     NumericEventBoundary,
     coerce_finite_number,
     coerce_integer_count,
 )
+from aberrant.base.model import BaseModel
 
 
 class SDOStream(BaseModel):

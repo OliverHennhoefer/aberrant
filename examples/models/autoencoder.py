@@ -1,10 +1,10 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 from torch import nn, optim
 
+from aberrant.model.deep import VanillaAutoencoder
 from aberrant.model.deep.autoencoder import Autoencoder
-from aberrant.stream.dataset import Dataset, load
-from aberrant.transform.preprocessing.scaler import MinMaxScaler
-from aberrant.utils.deep.architecture import VanillaAutoencoder
+from aberrant.stream import Dataset, load
+from aberrant.transform import MinMaxScaler
 
 architecture = VanillaAutoencoder(input_size=9, seed=1)
 model = Autoencoder(

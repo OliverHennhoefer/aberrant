@@ -1,7 +1,7 @@
 """Threshold model for simple boundary-based anomaly detection."""
 
+from aberrant._utils.validation import coerce_feature_values
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import coerce_feature_values
 
 
 class ThresholdModel(BaseModel):

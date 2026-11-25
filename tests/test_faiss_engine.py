@@ -7,8 +7,8 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from aberrant.utils.similar import faiss_engine
-from aberrant.utils.similar.faiss_engine import FaissSimilaritySearchEngine
+from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.similarity import _faiss as faiss_engine
 
 faiss = pytest.importorskip("faiss")
 
@@ -140,7 +140,7 @@ class TestFaissSimilaritySearchEngine(unittest.TestCase):
 
                 with (
                     patch(
-                        "aberrant.utils.similar.faiss_engine.faiss.IndexFlatL2",
+                        "aberrant.similarity._faiss.faiss.IndexFlatL2",
                         side_effect=create_failing_index,
                     ),
                     self.assertRaisesRegex(RuntimeError, "index insertion failed"),

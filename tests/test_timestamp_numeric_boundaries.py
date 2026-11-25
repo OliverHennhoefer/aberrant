@@ -7,10 +7,10 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
+from aberrant._utils.validation import coerce_finite_number
 from aberrant.model.distance import SDOStream
 from aberrant.model.sketch import StreamingRSHash
 from aberrant.model.sketch.rshash import _time_difference
-from aberrant.utils.validation import coerce_finite_number
 
 
 @pytest.mark.parametrize("value", [10**400, -(10**400)])

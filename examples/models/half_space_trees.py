@@ -1,8 +1,8 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.iforest import HalfSpaceTrees
-from aberrant.stream.dataset import Dataset, load
-from aberrant.transform.preprocessing import MinMaxScaler
+from aberrant.model.forest import HalfSpaceTrees
+from aberrant.stream import Dataset, load
+from aberrant.transform import MinMaxScaler
 
 model = MinMaxScaler() | HalfSpaceTrees(
     n_trees=10,

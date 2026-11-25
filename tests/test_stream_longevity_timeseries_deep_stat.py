@@ -41,11 +41,8 @@ except ImportError:
     torch = None
 
 if torch is not None:
+    from aberrant.model.deep import VanillaAutoencoder, VanillaLSTMAutoencoder
     from aberrant.model.deep.autoencoder import Autoencoder
-    from aberrant.utils.deep.architecture import (
-        VanillaAutoencoder,
-        VanillaLSTMAutoencoder,
-    )
 
 _UNIVARIATE = [
     MovingAverage,

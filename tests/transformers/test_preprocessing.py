@@ -5,8 +5,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from aberrant.transform.preprocessing.scaler import MinMaxScaler, StandardScaler
-from aberrant.transform.projection.random_projection import RandomProjection
+from aberrant.transform import MinMaxScaler, RandomProjection, StandardScaler
 
 
 @pytest.mark.parametrize(

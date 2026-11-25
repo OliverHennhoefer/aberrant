@@ -23,7 +23,7 @@ from aberrant.model.distance import (
     LocalOutlierFactor,
     SDOStream,
 )
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
@@ -32,9 +32,9 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.iforest._online_tree import _OnlineBranch
-from aberrant.model.iforest.halfspace import HSTNode
-from aberrant.model.iforest.mondrian import (
+from aberrant.model.forest._online_tree import _OnlineBranch
+from aberrant.model.forest.halfspace import HSTNode
+from aberrant.model.forest.mondrian import (
     MondrianBranch,
     MondrianLeaf,
     MondrianTree,
@@ -430,9 +430,7 @@ def test_lof_retains_only_current_window_and_matches_fresh_tail_model(
 def test_faiss_and_knn_native_indexes_follow_bounded_fifo_after_thousands_of_evictions():
     pytest.importorskip("faiss")
     from aberrant.model.distance.knn import KNN  # noqa: PLC0415
-    from aberrant.utils.similar.faiss_engine import (  # noqa: PLC0415
-        FaissSimilaritySearchEngine,
-    )
+    from aberrant.similarity import FaissSimilaritySearchEngine  # noqa: PLC0415
 
     engine = FaissSimilaritySearchEngine(window_size=17, warm_up=3)
     model = KNN(k=3, similarity_engine=engine)
@@ -538,9 +536,7 @@ def test_bounded_models_retained_python_allocations_plateau(factory):
 )
 def test_faiss_large_finite_distance_matches_representable_euclidean_norm():
     pytest.importorskip("faiss")
-    from aberrant.utils.similar.faiss_engine import (  # noqa: PLC0415
-        FaissSimilaritySearchEngine,
-    )
+    from aberrant.similarity import FaissSimilaritySearchEngine  # noqa: PLC0415
 
     engine = FaissSimilaritySearchEngine(window_size=4, warm_up=1)
     engine.append({"x": 0.0})

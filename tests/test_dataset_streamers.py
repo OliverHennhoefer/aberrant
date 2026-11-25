@@ -5,8 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from aberrant.stream.dataset.registry import Dataset, get_dataset_info
-from aberrant.stream.dataset.streamers import BatchStreamer, NpzStreamer
+from aberrant.stream import BatchStreamer, Dataset, NpzStreamer, get_dataset_info
 
 
 @pytest.fixture

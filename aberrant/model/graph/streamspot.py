@@ -8,14 +8,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from aberrant.base.exceptions import ValidationError
-from aberrant.base.model import BaseModel
-from aberrant.utils.validation import (
+from aberrant._utils.validation import (
     MonotonicClock,
     PreparedTimestamp,
     coerce_event_number,
     coerce_integer_count,
 )
+from aberrant.base.model import BaseModel
+from aberrant.exceptions import ValidationError
 
 
 @dataclass(slots=True)

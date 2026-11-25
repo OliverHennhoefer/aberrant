@@ -5,7 +5,7 @@ import pickle
 
 import pytest
 
-from aberrant.model.iforest import HalfSpaceTrees, OnlineIsolationForest
+from aberrant.model.forest import HalfSpaceTrees, OnlineIsolationForest
 from aberrant.transform import MinMaxScaler, RollingRobustScaler, StandardScaler
 
 

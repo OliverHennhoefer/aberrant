@@ -2,7 +2,7 @@
 
 import pytest
 
-from aberrant.base import ValidationError
+from aberrant.exceptions import ValidationError
 from aberrant.transform import FeatureSchemaGuard
 
 

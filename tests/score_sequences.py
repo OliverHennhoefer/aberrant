@@ -24,8 +24,7 @@ import numpy as np
 
 import aberrant
 from aberrant.model.distance import LocalOutlierFactor
-from aberrant.model.graph import ISCONNA
-from aberrant.model.iforest import (
+from aberrant.model.forest import (
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
@@ -34,6 +33,7 @@ from aberrant.model.iforest import (
     StreamRandomHistogramForest,
     XStream,
 )
+from aberrant.model.graph import ISCONNA
 from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 from aberrant.model.stat import (
     MovingCorrelationCoefficient,

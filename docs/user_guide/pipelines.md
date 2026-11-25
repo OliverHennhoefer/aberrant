@@ -65,9 +65,9 @@ The first event is used only to establish scaler and model state. Every later
 event is scored before it is learned.
 
 ```python
-from aberrant.model.iforest import OnlineIsolationForest
-from aberrant.transform.preprocessing import StandardScaler
-from aberrant.transform.projection import RandomProjection
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import StandardScaler
+from aberrant.transform import RandomProjection
 
 pipeline = (
     StandardScaler()
@@ -98,8 +98,8 @@ The same composition mechanism can expose transformed features without a
 model:
 
 ```python
-from aberrant.transform.preprocessing import StandardScaler
-from aberrant.transform.projection import RandomProjection
+from aberrant.transform import StandardScaler
+from aberrant.transform import RandomProjection
 
 transformer = StandardScaler() | RandomProjection(
     n_components=2,
