@@ -333,7 +333,10 @@ def test_valid_convolution_matches_fftconvolve(scale):
             expected = fftconvolve(signal, kernel, mode="valid")
             actual = _valid_convolution(signal, kernel)
             assert actual.shape == expected.shape
-            assert actual.tobytes() == expected.tobytes()
+            # NumPy and SciPy share pocketfft but can be built with different
+            # vector kernels, so the last bit may differ between them.
+            error = np.max(np.abs(actual - expected))
+            assert error <= 1e-12 * np.max(np.abs(expected))
 
 
 def test_next_fast_length_matches_scipy():

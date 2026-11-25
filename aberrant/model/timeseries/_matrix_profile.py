@@ -170,7 +170,7 @@ def _valid_convolution(signal: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     signal. This makes the same real FFT calls at the same fast length as
     SciPy, without its general shape handling, which dominated the cost of
     these short transforms. NumPy and SciPy share the pocketfft kernels, so
-    the result is bit-identical.
+    the result matches SciPy to the last bit or two.
     """
     length = _next_fast_length(signal.size + kernel.size - 1)
     spectrum = np.fft.rfft(signal, length) * np.fft.rfft(kernel, length)
