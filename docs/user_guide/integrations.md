@@ -102,10 +102,6 @@ Always supply counts in `warmup.unit` to `remaining()` and `is_satisfied()`.
 For SDOStream the unit is `observers`: use `model.n_observers`, since observer
 insertion is sampled and learned event counts cannot determine readiness.
 Its minimum accounts for both `warm_up` and `n_neighbors`.
-Geometric and harmonic moving averages use `retained_values`: supply
-`len(model.window)`, since geometric learning ignores nonpositive inputs and
-harmonic learning ignores zeros. Geometric readiness requires two retained
-values, or three with `absoluteValues=True`; harmonic readiness requires one.
 
 `feature_schema` distinguishes fixed-key models from feature-evolving and
 unrestricted ones. `requires_unit_interval` identifies hard input-domain

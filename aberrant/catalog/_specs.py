@@ -63,7 +63,6 @@ class WarmupUnit(str, Enum):
     """Unit used to express a model's readiness requirement."""
 
     EVENTS = "events"
-    RETAINED_VALUES = "retained_values"
     BUCKETS = "buckets"
     OBSERVERS = "observers"
     ACTIVE_GRAPHS = "active_graphs"

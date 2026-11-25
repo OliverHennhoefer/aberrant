@@ -137,7 +137,7 @@ class TestMovingCorrelationCoefficient(unittest.TestCase):
         self.assertEqual(model.score_one({"a": 0, "b": 0}), 0)
 
     def test_score_one_without_bessel(self):
-        model = MovingCorrelationCoefficient(window_size=3, bias=True, abs_diff=False)
+        model = MovingCorrelationCoefficient(window_size=3, bias=True)
         points = [{"x": float(i), "y": i**2 - 1} for i in range(1, 4)]
         for point in points:
             model.learn_one(point)
@@ -152,10 +152,10 @@ class TestMovingCorrelationCoefficient(unittest.TestCase):
         cor_coef_new = cov_new / (std_new_0 * std_new_1)
         cor_coef_diff = float(cor_coef_new - cor_coef_old)
 
-        self.assertAlmostEqual(model.score_one({"x": 4, "y": 15}), cor_coef_diff)
+        self.assertAlmostEqual(model.score_one({"x": 4, "y": 15}), abs(cor_coef_diff))
 
     def test_score_one_with_bessel_correction(self):
-        model = MovingCorrelationCoefficient(window_size=3, bias=False, abs_diff=False)
+        model = MovingCorrelationCoefficient(window_size=3, bias=False)
         points = [{"x": float(i), "y": i**2 - 1} for i in range(1, 4)]
         for point in points:
             model.learn_one(point)
@@ -170,7 +170,7 @@ class TestMovingCorrelationCoefficient(unittest.TestCase):
         cor_coef_new = cov_new / (std_new_0 * std_new_1)
         cor_coef_diff = float(cor_coef_new - cor_coef_old)
 
-        self.assertAlmostEqual(model.score_one({"x": 4, "y": 15}), cor_coef_diff)
+        self.assertAlmostEqual(model.score_one({"x": 4, "y": 15}), abs(cor_coef_diff))
 
 
 class TestMovingMahalanobisDistance(unittest.TestCase):

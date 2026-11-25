@@ -35,7 +35,6 @@ from aberrant.catalog import (
 from aberrant.catalog import _registry as catalog_registry
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.model.distance import SDOStream
-from aberrant.model.stat import MovingGeometricAverage, MovingHarmonicAverage
 from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
@@ -152,9 +151,7 @@ def test_capabilities_resolve_from_model_parameters() -> None:
         }
     )
     xstream = get_model_spec("xstream").capabilities()
-    signed_statistic = get_model_spec("moving_covariance").capabilities(
-        {"window_size": 20, "abs_diff": False}
-    )
+    statistic = get_model_spec("moving_covariance").capabilities({"window_size": 20})
     edge = get_model_spec("midas").capabilities({"time_key": None})
 
     assert random_cut.warmup.minimum == 13
@@ -162,80 +159,25 @@ def test_capabilities_resolve_from_model_parameters() -> None:
     assert xstream.warmup.minimum == 256
     assert xstream.state is StateKind.BOUNDED
     assert xstream.feature_schema is FeatureSchemaKind.EVOLVING
-    assert signed_statistic.score_kind is ScoreKind.SIGNED
-    assert signed_statistic.higher_is_more_anomalous is None
+    assert statistic.score_kind is ScoreKind.NON_NEGATIVE
+    assert statistic.higher_is_more_anomalous
     assert edge.event_kind is EventKind.EDGE
     assert edge.feature_count.minimum == 2
     assert edge.feature_count.maximum is None
     assert get_model_spec("half_space_trees").capabilities().requires_unit_interval
 
 
-@pytest.mark.parametrize(
-    ("absolute_values", "ready_count"), [(None, 2), (False, 2), (True, 3)]
-)
-def test_geometric_average_warmup_matches_scoring_readiness(
-    absolute_values: bool | None, ready_count: int
-) -> None:
-    params: dict[str, object] = {"window_size": 10}
-    if absolute_values is not None:
-        params["absoluteValues"] = absolute_values
-    warmup = get_model_spec("moving_geometric_average").capabilities(params).warmup
-    model = create_model("moving_geometric_average", params)
-    assert isinstance(model, MovingGeometricAverage)
-    query = {"x": 20.0}
+@pytest.mark.parametrize("component_id", ["moving_zscore", "moving_mad"])
+@pytest.mark.parametrize(("params", "ready_count"), [({}, 256), ({"warm_up": 5}, 5)])
+def test_moving_warmup_matches_scoring_readiness(component_id, params, ready_count):
+    warmup = get_model_spec(component_id).capabilities(params).warmup
+    model = create_model(component_id, params)
 
-    assert warmup.unit is WarmupUnit.RETAINED_VALUES
     assert warmup.minimum == ready_count
-    for ignored_value in (-1.0, 0.0):
-        model.learn_one({"x": ignored_value})
-    assert len(model.window) == 0
-    assert warmup.remaining(len(model.window)) == ready_count
     for index in range(ready_count):
-        assert not warmup.is_satisfied(len(model.window))
-        assert model.score_one(query) == 0.0
-        model.learn_one({"x": float(index + 1)})
-
-    assert warmup.is_satisfied(len(model.window))
-    assert model.score_one(query) > 0.0
-
-
-@pytest.mark.parametrize(
-    ("absolute_values", "window_size"), [(False, 1), (True, 1), (True, 2)]
-)
-def test_geometric_average_undersized_window_never_satisfies_warmup(
-    absolute_values: bool, window_size: int
-) -> None:
-    params = {"window_size": window_size, "absoluteValues": absolute_values}
-    warmup = get_model_spec("moving_geometric_average").capabilities(params).warmup
-    model = create_model("moving_geometric_average", params)
-    assert isinstance(model, MovingGeometricAverage)
-
-    for index in range(10):
-        model.learn_one({"x": float(index + 1)})
-        assert not warmup.is_satisfied(len(model.window))
         assert model.score_one({"x": 20.0}) == 0.0
-
-
-def test_harmonic_average_warmup_requires_a_retained_nonzero_value() -> None:
-    params = {"window_size": 10}
-    warmup = get_model_spec("moving_harmonic_average").capabilities(params).warmup
-    model = create_model("moving_harmonic_average", params)
-    assert isinstance(model, MovingHarmonicAverage)
-    query = {"x": 20.0}
-
-    assert warmup.unit is WarmupUnit.RETAINED_VALUES
-    assert warmup.minimum == 1
-    for _ in range(3):
-        model.learn_one({"x": 0.0})
-        assert len(model.window) == 0
-        assert warmup.remaining(len(model.window)) == 1
-        assert model.score_one(query) == 0.0
-
-    model.learn_one({"x": 1.0})
-    assert warmup.is_satisfied(len(model.window))
-    assert model.score_one(query) > 0.0
-    model.learn_one({"x": 0.0})
-    assert warmup.is_satisfied(len(model.window))
+        model.learn_one({"x": float(index % 3)})
+    assert model.score_one({"x": 20.0}) > 0.0
 
 
 @pytest.mark.parametrize(
@@ -563,7 +505,7 @@ def test_pipeline_feature_count_is_checked_before_construction() -> None:
                 {"features": ["a", "b"]},
             ),
         ),
-        model=ComponentConfig("moving_average", {"window_size": 10}),
+        model=ComponentConfig("moving_zscore", {"window_size": 10}),
     )
 
     with pytest.raises(ConfigurationError, match="expects 1 features"):
@@ -718,11 +660,11 @@ def test_select_narrows_a_pipeline_for_a_univariate_model() -> None:
             ComponentConfig("feature_schema_guard", {"features": ["a", "b", "c"]}),
             ComponentConfig("select", {"features": ["b"]}),
         ),
-        model=ComponentConfig("moving_average", {"window_size": 4}),
+        model=ComponentConfig("moving_zscore", {"window_size": 4}),
     )
     assert config.capabilities().feature_count.accepts(1)
     pipeline = config.build()
-    model = create_model("moving_average", {"window_size": 4})
+    model = create_model("moving_zscore", {"window_size": 4})
 
     for index in range(6):
         event = {"a": 100.0, "b": float(index), "c": -100.0}

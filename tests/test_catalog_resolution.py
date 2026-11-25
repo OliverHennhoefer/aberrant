@@ -71,7 +71,7 @@ def test_inspection_is_shared_within_resolution_only(monkeypatch):
 
     monkeypatch.setattr(inspect, "signature", record)
     config = DetectorConfig(
-        ComponentConfig("moving_average", {"window_size": 8}),
+        ComponentConfig("moving_zscore", {"window_size": 8}),
         (ComponentConfig("standard_scaler"), ComponentConfig("standard_scaler")),
     )
     config.resolve().build()
@@ -98,7 +98,7 @@ def test_repeated_builds_have_independent_learned_state_and_parameters():
 
 def test_normalization_and_fingerprint_do_not_require_feature_compatibility():
     config = DetectorConfig(
-        ComponentConfig("moving_average", {"window_size": 8}),
+        ComponentConfig("moving_zscore", {"window_size": 8}),
         (ComponentConfig("feature_schema_guard", {"features": ["a", "b"]}),),
     )
     assert config.normalized().model.params["window_size"] == 8
@@ -143,10 +143,10 @@ def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
         (example(), "15420435d505a1da06502752cfca5c68454a06b5b5ca387837885b9ff11878d5"),
         (
             DetectorConfig(
-                ComponentConfig("moving_average", {"window_size": 8}),
+                ComponentConfig("moving_zscore", {"window_size": 8}),
                 (ComponentConfig("min_max_scaler", {"feature_range": [0, 1]}),),
             ),
-            "bae4638b4a7d65c3627bddae8e0a9cc77d92dc5511ea6e019499b6ae0a993acc",
+            "0b63cd9d5255d483b116e3c503685b379c707d7ba8780eb2e548905ad0f50283",
         ),
     ],
 )

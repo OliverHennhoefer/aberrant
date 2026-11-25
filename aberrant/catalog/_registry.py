@@ -117,18 +117,6 @@ def _mondrian_state(params: Parameters) -> StateKind:
     )
 
 
-def _difference_score(params: Parameters) -> ScoreKind:
-    return (
-        ScoreKind.NON_NEGATIVE
-        if bool(params.get("abs_diff", True))
-        else ScoreKind.SIGNED
-    )
-
-
-def _difference_orientation(params: Parameters) -> bool | None:
-    return True if bool(params.get("abs_diff", True)) else None
-
-
 def _time_aware_features(params: Parameters) -> FeatureCount:
     return FeatureCount(2 if params.get("time_key") is not None else 1)
 
@@ -291,9 +279,11 @@ def _matrix_profile_warmup(params: Parameters) -> WarmupRequirement:
     return _events(length + zone)
 
 
-def _geometric_warmup(params: Parameters) -> WarmupRequirement:
-    minimum = 3 if bool(params.get("absoluteValues", False)) else 2
-    return WarmupRequirement(minimum, WarmupUnit.RETAINED_VALUES)
+def _moving_warmup(params: Parameters) -> WarmupRequirement:
+    warm_up = params.get("warm_up")
+    return _events(
+        _as_int(params.get("window_size", 256) if warm_up is None else warm_up)
+    )
 
 
 def _moving_capabilities(
@@ -308,11 +298,10 @@ def _moving_capabilities(
             else EventKind.BIVARIATE
         ),
         feature_count=feature_count,
-        score_kind=_difference_score,
+        score_kind=ScoreKind.NON_NEGATIVE,
         warmup=_fixed_warmup(warmup) if isinstance(warmup, int) else warmup,
         state=StateKind.BOUNDED,
-        resettable=False,
-        higher_is_more_anomalous=_difference_orientation,
+        resettable=True,
     )
 
 
@@ -666,34 +655,12 @@ _MODEL_SPECS = (
             class_name,
             "aberrant.model.stat",
             "statistical",
-            _moving_capabilities(ONE_FEATURE, warmup=1),
+            _moving_capabilities(ONE_FEATURE, warmup=_moving_warmup),
         )
         for component_id, class_name in (
-            ("moving_average", "MovingAverage"),
-            ("moving_average_absolute_deviation", "MovingAverageAbsoluteDeviation"),
-            ("moving_interquartile_range", "MovingInterquartileRange"),
-            ("moving_kurtosis", "MovingKurtosis"),
-            ("moving_median", "MovingMedian"),
-            ("moving_quantile", "MovingQuantile"),
-            ("moving_skewness", "MovingSkewness"),
-            ("moving_variance", "MovingVariance"),
+            ("moving_zscore", "MovingZScore"),
+            ("moving_mad", "MovingMAD"),
         )
-    ),
-    _model(
-        "moving_geometric_average",
-        "MovingGeometricAverage",
-        "aberrant.model.stat",
-        "statistical",
-        _moving_capabilities(ONE_FEATURE, warmup=_geometric_warmup),
-    ),
-    _model(
-        "moving_harmonic_average",
-        "MovingHarmonicAverage",
-        "aberrant.model.stat",
-        "statistical",
-        _moving_capabilities(
-            ONE_FEATURE, warmup=_fixed_warmup(1, WarmupUnit.RETAINED_VALUES)
-        ),
     ),
     _model(
         "moving_correlation_coefficient",

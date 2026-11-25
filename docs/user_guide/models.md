@@ -286,36 +286,28 @@ variance under the reference restriction.
 
 ### Statistical detectors
 
-The univariate classes accept exactly one feature and retain at most
-`window_size` values:
-
-- `MovingAverage`, `MovingHarmonicAverage`, and `MovingGeometricAverage`;
-- `MovingMedian` and `MovingQuantile`;
-- `MovingVariance`, `MovingInterquartileRange`, and
-  `MovingAverageAbsoluteDeviation`;
-- `MovingKurtosis` and `MovingSkewness`.
-
-Their score is the change in the configured statistic after provisionally
-adding the candidate to the current window. It is `0.0` for an empty window.
-`abs_diff=True` returns magnitude; `abs_diff=False` preserves direction.
-`MovingGeometricAverage.score_one` requires a positive candidate, while
-`learn_one` ignores non-positive values. Its `absoluteValues` mode operates on
-successive growth factors.
+`MovingZScore` and `MovingMAD` accept exactly one feature and compare a value
+with the last `window_size` learned values. `MovingZScore` returns
+`|x - mean| / std`. `MovingMAD` returns the robust z-score
+`|x - median| / (1.4826 * MAD)`, which a few extreme values in the window
+barely move. Both return `0.0` until `warm_up` values have been learned, and
+`warm_up` defaults to `window_size`.
 
 ```python
-from aberrant.model.stat import MovingAverage
+from aberrant.model.stat import MovingMAD
 
-detector = MovingAverage(window_size=3, key="latency_ms")
-for value in [10.0, 11.0, 9.0]:
+detector = MovingMAD(window_size=5)
+for value in [10.0, 11.0, 9.0, 10.5, 9.5]:
     detector.learn_one({"latency_ms": value})
 
 candidate = {"latency_ms": 25.0}
-print(f"mean-change score: {detector.score_one(candidate):.3f}")
+print(f"robust z-score: {detector.score_one(candidate):.1f}")
 detector.learn_one(candidate)
 ```
 
 `MovingCovariance` and `MovingCorrelationCoefficient` require exactly two
-features and score candidate-induced statistic change. `MovingMahalanobisDistance`
+features and score the absolute change of their statistic when the candidate
+is added. `MovingMahalanobisDistance`
 accepts a fixed multivariate schema and returns **squared** Mahalanobis distance
 from the current window mean; it returns `0.0` with fewer than three learned
 points.

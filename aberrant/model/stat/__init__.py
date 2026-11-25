@@ -1,19 +1,7 @@
 """Statistical models for streaming anomaly detection."""
 
-from aberrant.model.stat._univariate_averages import (
-    MovingAverage,
-    MovingGeometricAverage,
-    MovingHarmonicAverage,
-)
-from aberrant.model.stat._univariate_moments import (
-    MovingAverageAbsoluteDeviation,
-    MovingInterquartileRange,
-    MovingKurtosis,
-    MovingSkewness,
-    MovingVariance,
-)
-from aberrant.model.stat._univariate_order import MovingMedian, MovingQuantile
 from aberrant.model.stat.ecdf import OnlineCOPOD, OnlineECOD
+from aberrant.model.stat.moving import MovingMAD, MovingZScore
 from aberrant.model.stat.multi import (
     MovingCorrelationCoefficient,
     MovingCovariance,
@@ -21,19 +9,11 @@ from aberrant.model.stat.multi import (
 )
 
 __all__ = [
-    "MovingAverage",
-    "MovingAverageAbsoluteDeviation",
     "MovingCorrelationCoefficient",
     "MovingCovariance",
-    "MovingGeometricAverage",
-    "MovingHarmonicAverage",
-    "MovingInterquartileRange",
-    "MovingKurtosis",
+    "MovingMAD",
     "MovingMahalanobisDistance",
-    "MovingMedian",
-    "MovingQuantile",
-    "MovingSkewness",
-    "MovingVariance",
+    "MovingZScore",
     "OnlineCOPOD",
     "OnlineECOD",
 ]

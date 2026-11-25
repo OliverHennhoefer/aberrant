@@ -21,10 +21,8 @@ from aberrant.compose import (
 from aberrant.exceptions import ConfigurationError
 from aberrant.model.forest import OnlineIsolationForest
 from aberrant.model.stat import (
-    MovingAverage,
     MovingCovariance,
-    MovingGeometricAverage,
-    MovingHarmonicAverage,
+    MovingZScore,
 )
 from aberrant.transform import (
     IncrementalPCA,
@@ -141,7 +139,7 @@ def test_staggered_branches_gate_downstream_initialization():
 def test_terminal_rejection_restores_all_transformers_and_disables_graph():
     scaler = StandardScaler()
     graph = GraphPipeline(
-        [GraphNode("scaled", scaler)], MovingAverage(window_size=5), "scaled"
+        [GraphNode("scaled", scaler)], MovingZScore(window_size=5), "scaled"
     )
     previous = pickle.dumps(scaler)
     with pytest.raises(GraphStateUncertainError, match="exactly one"):
@@ -208,7 +206,7 @@ def test_observations_are_detached_and_do_not_reexecute_components():
     scaler = StandardScaler()
     graph = GraphPipeline(
         [GraphNode("scaled", scaler)],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "scaled",
         observer=observations.append,
     )
@@ -237,34 +235,18 @@ def test_observer_failure_never_changes_learning_or_score():
 
     graph = GraphPipeline(
         [GraphNode("scaled", StandardScaler())],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "scaled",
         observer=broken,
     )
     clean = GraphPipeline(
-        [GraphNode("scaled", StandardScaler())], MovingAverage(window_size=5), "scaled"
+        [GraphNode("scaled", StandardScaler())], MovingZScore(window_size=5), "scaled"
     )
     for value in (1.0, 2.0, 3.0):
         graph.learn_one({"x": value})
         clean.learn_one({"x": value})
     assert graph.score_one({"x": 9.0}) == clean.score_one({"x": 9.0})
     assert graph.observer_error_count == 11
-
-
-@pytest.mark.parametrize(
-    "model,values,required",
-    [
-        (MovingGeometricAverage(window_size=5), [-1.0, 0.0, 1.0, 2.0], 2),
-        (MovingHarmonicAverage(window_size=5), [0.0, 0.0, 2.0], 1),
-    ],
-)
-def test_model_readiness_uses_retained_values(model, values, required):
-    graph = GraphPipeline([], model, INPUT)
-    for index, value in enumerate(values):
-        graph.learn_one({"x": value})
-        assert graph.readiness.ready == (index == len(values) - 1)
-    assert model.readiness.required == required
-    assert graph.score_one({"x": 3.0}) >= 0
 
 
 def test_duplicate_keys_are_rejected_before_terminal_learning():
@@ -274,7 +256,7 @@ def test_duplicate_keys_are_rejected_before_terminal_learning():
             GraphNode("b", Passthrough()),
             MergeNode("joined", ("a", "b")),
         ],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "joined",
     )
     with pytest.raises(GraphExecutionError, match="duplicate"):
@@ -295,7 +277,7 @@ def test_duplicate_keys_are_rejected_before_terminal_learning():
 )
 def test_invalid_graphs_are_rejected(nodes, output):
     with pytest.raises(ConfigurationError):
-        GraphPipeline(nodes, MovingAverage(window_size=5), output)
+        GraphPipeline(nodes, MovingZScore(window_size=5), output)
 
 
 def test_component_instances_cannot_be_owned_by_two_nodes():
@@ -303,14 +285,14 @@ def test_component_instances_cannot_be_owned_by_two_nodes():
     with pytest.raises(ConfigurationError, match="one node"):
         GraphPipeline(
             [GraphNode("a", scaler), GraphNode("b", scaler, "a")],
-            MovingAverage(window_size=5),
+            MovingZScore(window_size=5),
             "b",
         )
 
 
 def test_input_schema_and_nonfinite_values_reject_before_learning():
     graph = GraphPipeline(
-        [GraphNode("scaled", StandardScaler())], MovingAverage(window_size=5), "scaled"
+        [GraphNode("scaled", StandardScaler())], MovingZScore(window_size=5), "scaled"
     )
     graph.learn_one({"x": 1.0})
     before = pickle.dumps(graph)
@@ -393,7 +375,7 @@ def test_custom_initialization_minimum_gates_each_node():
         [
             GraphNode("custom", LearnsReference(), minimum_updates=3),
         ],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "custom",
         model_minimum_updates=2,
     )
@@ -417,7 +399,7 @@ def test_rollback_failure_disables_graph():
             GraphNode("a", BrokenRollback()),
             GraphNode("b", Rename(mapping={"missing": "x"}), "a"),
         ],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "b",
     )
     with pytest.raises(GraphStateUncertainError, match="rollback failed"):
@@ -481,21 +463,21 @@ class _UndeclaredTransformer:
     ("nodes", "model", "message"),
     [
         ([], StandardScaler(), "unambiguous model"),
-        (["a"], MovingAverage(window_size=5), "GraphNode or MergeNode"),
+        (["a"], MovingZScore(window_size=5), "GraphNode or MergeNode"),
         (
-            [GraphNode("a", MovingAverage(window_size=5))],
-            MovingAverage(window_size=5),
+            [GraphNode("a", MovingZScore(window_size=5))],
+            MovingZScore(window_size=5),
             "unambiguous transformer",
         ),
         (
             [GraphNode("a", _UndeclaredTransformer())],
-            MovingAverage(window_size=5),
+            MovingZScore(window_size=5),
             "minimum_updates",
         ),
-        ([MergeNode("a", ())], MovingAverage(window_size=5), "named inputs"),
+        ([MergeNode("a", ())], MovingZScore(window_size=5), "named inputs"),
         (
             [GraphNode("b", Passthrough()), MergeNode("a", ("b", "b"))],
-            MovingAverage(window_size=5),
+            MovingZScore(window_size=5),
             "repeat a predecessor",
         ),
     ],
@@ -525,7 +507,7 @@ def test_scoring_failures_name_the_node_and_keep_the_graph_usable():
                 raise ValueError("negative reading")
             return x
 
-    model, reference = MovingAverage(window_size=5), MovingAverage(window_size=5)
+    model, reference = MovingZScore(window_size=5), MovingZScore(window_size=5)
     graph = GraphPipeline(
         [GraphNode("guard", RejectsNegative(), minimum_updates=0)], model, "guard"
     )
@@ -546,7 +528,7 @@ def test_transformers_must_emit_string_feature_names():
 
     graph = GraphPipeline(
         [GraphNode("numbered", NumberedKeys(), minimum_updates=0)],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "numbered",
     )
     with pytest.raises(GraphExecutionError, match="non-empty strings"):
@@ -560,7 +542,7 @@ def test_component_readiness_must_be_a_readiness_value():
     with pytest.raises(TypeError, match="Readiness value"):
         GraphPipeline(
             [GraphNode("claims", ClaimsReadiness())],
-            MovingAverage(window_size=5),
+            MovingZScore(window_size=5),
             "claims",
         )
 
@@ -574,7 +556,7 @@ def test_a_failing_transaction_entry_disables_the_graph():
 
     graph = GraphPipeline(
         [GraphNode("broken", BrokenTransaction())],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "broken",
     )
     with pytest.raises(GraphStateUncertainError, match="cannot snapshot"):
@@ -594,7 +576,7 @@ def test_a_transaction_that_swallows_failures_disables_the_graph():
             GraphNode("swallowing", Swallowing()),
             GraphNode("b", Rename(mapping={"missing": "x"}), "swallowing"),
         ],
-        MovingAverage(window_size=5),
+        MovingZScore(window_size=5),
         "b",
     )
     with pytest.raises(GraphStateUncertainError, match="cannot suppress"):

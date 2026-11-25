@@ -84,9 +84,9 @@ order:
 
 ```python
 from aberrant.drift import PageHinkley
-from aberrant.model.stat import MovingAverage
+from aberrant.model.stat import MovingZScore
 
-model = MovingAverage(window_size=5, key="value")
+model = MovingZScore(window_size=5)
 monitor = PageHinkley(
     min_instances=5,
     delta=0.0,
@@ -103,7 +103,7 @@ for index, event in enumerate(events):
     model.learn_one(event)
 ```
 
-This example monitors the moving-mean change score, not the raw feature. A
+This example monitors the z-score, not the raw feature. A
 different signal can produce a different detection time and operational
 meaning.
 

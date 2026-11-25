@@ -51,9 +51,6 @@ probability, a p-value, or a portable quantity across models.
   map scores to a common scale with [calibration](calibration.md).
 - `RandomCutForest` returns raw, unbounded CoDisp, and LOF-like scores use a
   baseline near `1` once ready.
-- Moving-statistic models return a statistic change. With `abs_diff=False`, the
-  sign records direction and the result is no longer a simple higher-is-more-
-  anomalous magnitude.
 - `NullModel` and `RandomModel` are baselines, not meaningful anomaly scorers.
 
 Use the per-class table in [Models](models.md#score-contracts) before setting a
