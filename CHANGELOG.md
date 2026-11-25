@@ -79,6 +79,8 @@ Semantic Versioning.
   clipped at 0, so it returned 0 for every sample on SHUTTLE and COVER
   (ROC-AUC 0.50). Its child nodes never trained. It followed no published
   method, so there was nothing to correct it towards.
+- The weekly OpenSSF Scorecard workflow and the Scorecard badge in the
+  README.
 
 ## [1.5.0] - 2026-11-10
 
