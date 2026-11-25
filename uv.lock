@@ -21,7 +21,6 @@ source = { editable = "." }
 dependencies = [
     { name = "filelock" },
     { name = "numpy" },
-    { name = "scipy" },
     { name = "tqdm" },
 ]
 
@@ -40,6 +39,7 @@ all = [
     { name = "river" },
     { name = "ruff" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "torch" },
     { name = "zensical" },
 ]
@@ -55,6 +55,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "torch" },
 ]
 dl = [
@@ -106,7 +107,8 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'all'", specifier = ">=1.9.1,<2.0.0" },
     { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.9.1,<2.0.0" },
     { name = "scikit-learn", marker = "extra == 'eval'", specifier = ">=1.9.1,<2.0.0" },
-    { name = "scipy", specifier = ">=1.17.1,<2.0.0" },
+    { name = "scipy", marker = "extra == 'all'", specifier = ">=1.17.1,<2.0.0" },
+    { name = "scipy", marker = "extra == 'dev'", specifier = ">=1.17.1,<2.0.0" },
     { name = "torch", marker = "extra == 'all'", specifier = ">=2.15.0,<3.0.0" },
     { name = "torch", marker = "extra == 'dev'", specifier = ">=2.6.0,<3.0.0" },
     { name = "torch", marker = "extra == 'dl'", specifier = ">=2.6.0,<3.0.0" },

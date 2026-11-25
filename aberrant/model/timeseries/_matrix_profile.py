@@ -5,11 +5,11 @@ from __future__ import annotations
 import math
 from collections import deque
 from collections.abc import Callable, Iterable
+from functools import lru_cache
 from itertools import chain, islice
 from typing import Generic, TypeVar, cast
 
 import numpy as np
-from scipy import fft as sp_fft
 
 from aberrant.base.model import BaseModel
 from aberrant.utils.validation import FeatureSchema, PreparedFeatures
@@ -141,17 +141,40 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
         )
 
 
+@lru_cache(maxsize=256)
+def _next_fast_length(size: int) -> int:
+    """Return the smallest 5-smooth length of at least ``size``.
+
+    It equals ``scipy.fft.next_fast_len(size, real=True)``: real FFTs are
+    fastest on lengths whose only prime factors are 2, 3 and 5.
+    """
+    if size <= 6:
+        return size
+    best = 1 << (size - 1).bit_length()
+    power_of_five = 1
+    while power_of_five < best:
+        odd_part = power_of_five
+        while odd_part < best:
+            quotient = -(-size // odd_part)
+            candidate = odd_part << (quotient - 1).bit_length()
+            best = min(best, candidate)
+            odd_part *= 3
+        power_of_five *= 5
+    return best
+
+
 def _valid_convolution(signal: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """Return ``scipy.signal.fftconvolve(signal, kernel, mode="valid")``.
 
     The kernel must have at least two values and must not be longer than the
     signal. This makes the same real FFT calls at the same fast length as
     SciPy, without its general shape handling, which dominated the cost of
-    these short transforms.
+    these short transforms. NumPy and SciPy share the pocketfft kernels, so
+    the result matches SciPy to the last bit or two.
     """
-    length = sp_fft.next_fast_len(signal.size + kernel.size - 1, real=True)
-    spectrum = sp_fft.rfft(signal, length) * sp_fft.rfft(kernel, length)
-    full = sp_fft.irfft(spectrum, length)
+    length = _next_fast_length(signal.size + kernel.size - 1)
+    spectrum = np.fft.rfft(signal, length) * np.fft.rfft(kernel, length)
+    full = np.fft.irfft(spectrum, length)
     return cast(np.ndarray, full[kernel.size - 1 : signal.size])
 
 
