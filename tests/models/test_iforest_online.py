@@ -1,6 +1,6 @@
 """Unit tests for Online Isolation Forest - Edge cases and initialization only.
 
-Real dataset tests are in tests/integration/test_iforest_models.py
+Real dataset tests are in tests/integration/test_detection_quality.py
 """
 
 import time

@@ -87,6 +87,21 @@ Semantic Versioning.
   novelty LOF over a sliding window, for both metrics.
 - The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
   skips without FAISS and so ran in no job.
+- Integration tests check detection quality with floors instead of PR-AUC
+  ranges. Every tabular detector runs from one table on 5,000 SHUTTLE rows
+  (387 anomalies instead of about 40), and must keep ROC-AUC and PR-AUC within
+  0.02 and 0.05 of the lowest value `main` reached over five seeds, with
+  finite, non-constant scores. Upper bounds are gone, so a better detector
+  keeps passing. `MovingMedian` left the table: a median moves the same for
+  every value above it, so its score cannot rank outliers (ROC-AUC 0.49).
+  The kNN and `OnlineAutoencoderEnsemble` cases standardize their inputs:
+  on raw shuffled COVER features the ensemble ranked anomalies below chance
+  (ROC-AUC 0.31), with a `StandardScaler` in front 0.98.
+- A nightly Benchmark workflow runs tests marked `benchmark`: the floors over
+  four more seeds, shuffled COVER with a leakage alarm at ROC-AUC 0.999, and
+  comparisons with river for `HalfSpaceTrees`, `ADWIN` and `PageHinkley`.
+  Pull requests skip them.
+- The FAISS CI job runs the kNN quality case, which no job ran before.
 
 ### Removed
 

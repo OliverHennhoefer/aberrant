@@ -3,10 +3,15 @@
 import unittest
 
 import numpy as np
-from sklearn.metrics import average_precision_score
 
 from aberrant.model.graph import MIDAS
-from tests.integration._settings import MAX_TEST_SHORT, WARMUP_SAMPLES
+from tests.integration._quality import assert_detects
+
+WARMUP_SAMPLES = 1_000
+MAX_TEST_SHORT = 500
+# Measured on main at ROC-AUC 0.989 and PR-AUC 0.870; the floors leave a margin.
+ROC_FLOOR = 0.95
+PR_FLOOR = 0.80
 
 
 class TestMIDAS(unittest.TestCase):
@@ -38,7 +43,7 @@ class TestMIDAS(unittest.TestCase):
         return {"src": float(src), "dst": float(dst), "t": float(bucket)}, 0
 
     def test_synthetic_edge_stream_pr_auc(self) -> None:
-        """Smoke-test MIDAS quality on a synthetic stream with broad PR-AUC bounds."""
+        """Smoke-test MIDAS quality on a synthetic stream against quality floors."""
         rng = np.random.default_rng(42)
         model = MIDAS(
             source_key="src",
@@ -74,21 +79,7 @@ class TestMIDAS(unittest.TestCase):
             test_count += 1
             t += 1
 
-        self.assertGreater(len(scores), 0, "No test samples were processed.")
-        self.assertGreater(sum(labels), 0, "Test stream did not generate anomalies.")
-        pr_auc = average_precision_score(labels, scores)
-
-        lower_bound, upper_bound = 0.60, 1.00
-        self.assertGreaterEqual(
-            pr_auc,
-            lower_bound,
-            f"PR-AUC {pr_auc:.3f} is below expected range [{lower_bound}, {upper_bound}]",
-        )
-        self.assertLessEqual(
-            pr_auc,
-            upper_bound,
-            f"PR-AUC {pr_auc:.3f} is above expected range [{lower_bound}, {upper_bound}]",
-        )
+        assert_detects(labels, scores, roc_auc_floor=ROC_FLOOR, pr_auc_floor=PR_FLOOR)
 
 
 if __name__ == "__main__":

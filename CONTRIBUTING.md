@@ -31,6 +31,19 @@ To run integration tests directly:
 uv run python -m pytest tests/integration -q
 ```
 
+They check each detector's ROC-AUC and PR-AUC against floors in
+`tests/integration/test_detection_quality.py`. When a change moves a detector
+on purpose, measure it over the seeds 42 and 0 to 3 and set the floors 0.02
+(ROC-AUC) and 0.05 (PR-AUC) below the lowest value.
+
+Slow checks (more seeds, shuffled COVER, comparisons with river) are marked
+`benchmark` and run nightly. To run them locally:
+
+```bash
+uv sync --extra dev --extra benchmark
+uv run python -m pytest tests/integration -m benchmark -q
+```
+
 ## PR expectations
 
 - Keep changes scoped and reviewable.
