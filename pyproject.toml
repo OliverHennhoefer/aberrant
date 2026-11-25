@@ -15,7 +15,8 @@ authors = [
 maintainers = [
   { name = "Oliver Hennhoefer", email = "oliver.hennhoefer@mail.de" }
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 readme = { file = "README.md", content-type = "text/markdown" }
 keywords = [
     "anomaly detection",
@@ -39,7 +40,6 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -54,12 +54,18 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "filelock>=4.2.7,<5.0.0",
-    "numpy>=2.2.3,<3.0.0",
-    "tqdm>=4.67.1,<5.0.0",
+    "filelock>=4.2.7",
+    "numpy>=2.2.3",
+    "tqdm>=4.67.1",
 ]
 
 [project.optional-dependencies]
+eval = ["scikit-learn>=1.9.1"]
+dl = ["torch>=2.6.0"]
+faiss = ["faiss-cpu>=1.10.0"]
+all = ["aberrant[eval,dl,faiss]"]
+
+[dependency-groups]
 dev = [
     "ruff>=0.8.0,<1.0.0",
     "pre-commit>=4.0.0,<5.0.0",
@@ -78,32 +84,9 @@ docs = [
     "pygments>=2.20.0",
 ]
 security = ["pip-audit==2.10.1"]
-eval = ["scikit-learn>=1.9.1,<2.0.0"]
-dl = ["torch>=2.6.0,<3.0.0"]
 benchmark = [
     "river>=0.22.0,<1.0.0",
     "pytest-benchmark>=5.3.1,<6.0.0",
-]
-faiss = ["faiss-cpu>=1.10.0,<2.0.0"]
-all = [
-    "ruff>=0.8.0,<1.0.0",
-    "pre-commit>=4.0.0,<5.0.0",
-    "pytest>=8.0.0,<10.0.0",
-    "pytest-cov>=6.0.0,<8.0.0",
-    "hypothesis>=6.0.0,<7.0.0",
-    "mypy>=1.13.0,<3.0.0",
-    "scipy>=1.17.1,<2.0.0",
-    "zensical>=0.0.45,<0.1.0",
-    # Keep docs stack aligned with the `docs` extra above.
-    "mkdocstrings-python>=2.0.7,<3.0.0",
-    "pygments>=2.20.0",
-    "scikit-learn>=1.9.1,<2.0.0",
-    "torch>=2.15.0,<3.0.0",
-    "river>=0.22.0,<1.0.0",
-    "pytest-benchmark>=5.3.1,<6.0.0",
-    "pip-audit==2.10.1",
-    # Keep in sync with the `faiss` extra above; avoid self-referential extras.
-    "faiss-cpu>=1.10.0,<2.0.0",
 ]
 
 [project.urls]
@@ -115,6 +98,13 @@ all = [
 
 [tool.hatch.version]
 path = "aberrant/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+exclude = [".github", ".pre-commit-config.yaml", "codecov.yml"]
+
+[tool.pytest.ini_options]
+addopts = ["--strict-markers", "--strict-config"]
+xfail_strict = true
 
 [tool.uv]
 required-version = ">=0.12.18"

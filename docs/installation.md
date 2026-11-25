@@ -30,6 +30,7 @@ drift detectors, and dataset streaming.
 | `eval` | The evaluation examples and scikit-learn metrics | `scikit-learn` |
 | `dl` | The user-supplied PyTorch `Autoencoder` | `torch` |
 | `faiss` | `FaissSimilaritySearchEngine`, commonly used with `KNN` | `faiss-cpu` |
+| `all` | Every optional capability above | all of the above |
 
 Extras can be combined in one installation:
 
@@ -68,19 +69,20 @@ print(f"aberrant {aberrant.__version__} is installed")
 
 ## Set up a development checkout
 
-The `dev`, `docs`, `benchmark`, and `all` extras are contributor toolchains,
-not runtime requirements for library users.
+Contributor tools are dependency groups, not extras, so they never reach a
+library installation. `uv sync` installs the `dev` group by default; add
+`--group docs`, `--group benchmark` or `--group security` as needed.
 
 ```bash
 git clone https://github.com/OliverHennhoefer/aberrant.git
 cd aberrant
-uv sync --extra dev --extra docs
+uv sync --group docs
 uv run python -m pytest -q
 uv run zensical build
 ```
 
-The documentation extra includes Zensical and mkdocstrings; the development
-extra includes the formatter, linter, type checker, test framework, PyTorch,
-and scikit-learn. See the
+The `docs` group includes Zensical and mkdocstrings; the `dev` group includes
+the formatter, linter, type checker, test framework, PyTorch, and
+scikit-learn. See the
 [contribution guide](https://github.com/OliverHennhoefer/aberrant/blob/main/CONTRIBUTING.md)
 for the complete quality gates.
