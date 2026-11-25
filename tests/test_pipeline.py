@@ -12,9 +12,11 @@ from aberrant.base import (
     ModelPipeline,
     ModelProtocol,
     Pipeline,
+    PipelineError,
     TransformerPipeline,
     TransformerProtocol,
 )
+from aberrant.model import NullModel
 from aberrant.model.stat import MovingAverage
 from aberrant.transform import (
     FeatureSchemaGuard,
@@ -121,6 +123,8 @@ def test_pipeline_protocols_match_available_capabilities() -> None:
     assert isinstance(model_pipeline, ModelProtocol)
     assert not isinstance(model_pipeline, TransformerProtocol)
     assert not hasattr(model_pipeline, "transform_one")
+    assert transformer_pipeline.ends_in_transformer
+    assert not model_pipeline.ends_in_transformer
 
 
 def test_parenthesized_model_pipeline_preserves_learning_and_pickling() -> None:
@@ -313,3 +317,36 @@ def test_custom_transformer_can_opt_into_learning_transactions():
     assert transformer.state == 0.0
     assert transformer.learned == []
     assert transformer.transformed == []
+
+
+class _ListTransformer(_StatefulTransformer):
+    def transform_one(self, x: dict[str, float]) -> dict[str, float]:
+        return [x["x"]]  # type: ignore[return-value]
+
+
+class _TextModel(_RecordingModel):
+    def score_one(self, x: dict[str, float]) -> float:
+        return "high"  # type: ignore[return-value]
+
+
+@pytest.mark.parametrize(
+    ("pipeline", "call", "message"),
+    [
+        (_ListTransformer() | _RecordingModel(), "learn_one", "dict"),
+        (_ListTransformer() | _RecordingModel(), "score_one", "dict"),
+        (_StatefulTransformer() | _TextModel(), "score_one", "numeric score"),
+    ],
+    ids=["transform-on-learn", "transform-on-score", "score"],
+)
+def test_components_breaking_their_contract_are_named(pipeline, call, message):
+    with pytest.raises(PipelineError, match=message):
+        getattr(pipeline, call)({"x": 1.0})
+
+
+def test_pipeline_repr_lists_every_stage_with_its_settings() -> None:
+    pipeline = StandardScaler() | MinMaxScaler(clip=True) | NullModel()
+
+    assert repr(pipeline) == (
+        "Pipeline(StandardScaler(with_std=True) | "
+        "MinMaxScaler(feature_range=(0.0, 1.0), clip=True) | NullModel())"
+    )

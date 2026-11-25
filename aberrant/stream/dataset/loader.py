@@ -112,8 +112,6 @@ class DatasetManager:
 
     def download(self, dataset: Dataset, force: bool = False) -> Path:
         """Download, validate, and publish one registered dataset safely."""
-        if dataset not in DATASET_REGISTRY:
-            raise KeyError(f"Dataset {dataset} not found in registry")
         destination = self._path(dataset)
         if not force and self._validate_cached(dataset):
             return destination
@@ -165,8 +163,6 @@ class DatasetManager:
         show_progress: bool = False,
     ) -> NpzStreamer:
         """Return a typed NPZ stream for one validated cached dataset."""
-        if dataset not in DATASET_REGISTRY:
-            raise KeyError(f"Dataset {dataset} not found in registry")
         if not self._validate_cached(dataset):
             if not auto_download:
                 raise FileNotFoundError(

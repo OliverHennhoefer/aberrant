@@ -2,6 +2,7 @@
 
 import importlib
 import json
+import math
 import subprocess
 import sys
 from dataclasses import FrozenInstanceError
@@ -9,24 +10,35 @@ from pathlib import Path
 
 import pytest
 
-from aberrant.base import ConfigurationError, ModelProtocol, UnknownComponentError
+from aberrant.base import (
+    BaseSimilaritySearchEngine,
+    ConfigurationError,
+    ModelProtocol,
+    UnknownComponentError,
+)
 from aberrant.catalog import (
     CATALOG_FORMAT_VERSION,
     MODEL_CATALOG,
     SIMILARITY_ENGINE_CATALOG,
     TRANSFORMER_CATALOG,
     ComponentConfig,
+    ComponentKind,
+    ComponentSpec,
     DetectorConfig,
     EventKind,
+    FeatureCount,
     FeatureSchemaKind,
     ScoreKind,
     StateKind,
+    WarmupRequirement,
     WarmupUnit,
     build_detector,
     catalog_manifest,
     create_model,
     get_model_spec,
+    get_transformer_spec,
 )
+from aberrant.catalog import _registry as catalog_registry
 from aberrant.model.distance import SDOStream
 from aberrant.model.stat import MovingGeometricAverage, MovingHarmonicAverage
 from aberrant.model.timeseries import (
@@ -675,3 +687,176 @@ def test_edge_models_accept_guarded_events_with_metadata(
     )
     with pytest.raises(ConfigurationError, match="expects at least"):
         undersized.build()
+
+
+@pytest.mark.parametrize(
+    ("start_index", "ready_count"), [(None, 38), (30, 36)], ids=["default", "explicit"]
+)
+def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None:
+    params: dict[str, object] = {"subsequence_length": 8}
+    if start_index is not None:
+        params["start_index"] = start_index
+    warmup = get_model_spec("x_lag_damp").capabilities(params).warmup
+    model = create_model("x_lag_damp", params)
+
+    for index in range(ready_count):
+        assert not model.is_ready
+        model.learn_one({"x": math.sin(index / 3)})
+
+    assert warmup.minimum == ready_count
+    assert model.is_ready
+    assert get_model_spec("x_lag_damp").capabilities().warmup.minimum is None
+
+
+class _WindowedEngine(BaseSimilaritySearchEngine):
+    def __init__(self, warm_up: int, window_size: int | None) -> None:
+        self.warm_up = warm_up
+        self.window_size = window_size
+
+    def append(self, x: dict[str, float]) -> None:
+        pass
+
+    def search(self, x: dict[str, float], n_neighbors: int) -> float:
+        return 0.0
+
+
+def test_knn_warmup_reads_a_runtime_engine_instance() -> None:
+    spec = get_model_spec("knn")
+    engine = _WindowedEngine(warm_up=5, window_size=10)
+
+    assert spec.capabilities({"k": 3, "similarity_engine": engine}).warmup.minimum == 5
+    unbounded = _WindowedEngine(warm_up=5, window_size=None)
+    assert spec.capabilities({"k": 5, "similarity_engine": unbounded}).warmup.minimum
+    for k, broken in [(6, engine), (1, _WindowedEngine(warm_up=11, window_size=10))]:
+        with pytest.raises(ConfigurationError, match="k <= warm_up <= window_size"):
+            spec.capabilities({"k": k, "similarity_engine": broken})
+
+
+@pytest.mark.parametrize(
+    ("component_id", "params", "names"),
+    [
+        ("select", {"features": ["c", "a"]}, ("c", "a")),
+        ("rename", {"mapping": {"a": "x"}}, ("x", "b", "c")),
+        ("passthrough", {}, ("a", "b", "c")),
+        ("incremental_pca", {"n_components": 2}, ("component_0", "component_1")),
+    ],
+)
+def test_transformers_resolve_output_names_without_learning(
+    component_id, params, names
+) -> None:
+    spec = get_transformer_spec(component_id)
+
+    assert spec.output_feature_names(params, ("a", "b", "c")) == names
+    assert spec.output_feature_count(params, 3) == len(names)
+
+
+def test_rename_names_stay_unknown_until_inputs_are_known() -> None:
+    assert (
+        get_transformer_spec("rename").output_feature_names(
+            {"mapping": {"a": "x"}}, None
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("component_id", "params", "message"),
+    [
+        ("select", {"features": []}, "non-empty sequence"),
+        ("select", {"features": [""]}, "non-empty names"),
+        ("select", {"features": ["a", "a"]}, "duplicates"),
+        ("select", {"features": ["z"]}, "must exist in the input"),
+        ("rename", {"mapping": {"z": "x"}}, "must exist in the input"),
+        ("rename", {"mapping": {"a": "b"}}, "duplicate features"),
+    ],
+)
+def test_transformers_reject_names_that_cannot_be_resolved(
+    component_id, params, message
+) -> None:
+    spec = get_transformer_spec(component_id)
+
+    with pytest.raises(ConfigurationError, match=message):
+        spec.output_feature_names(params, ("a", "b", "c"))
+
+
+def test_select_narrows_a_pipeline_for_a_univariate_model() -> None:
+    config = DetectorConfig(
+        transformers=(
+            ComponentConfig("feature_schema_guard", {"features": ["a", "b", "c"]}),
+            ComponentConfig("select", {"features": ["b"]}),
+        ),
+        model=ComponentConfig("moving_average", {"window_size": 4}),
+    )
+    assert config.capabilities().feature_count.accepts(1)
+    pipeline = config.build()
+    model = create_model("moving_average", {"window_size": 4})
+
+    for index in range(6):
+        event = {"a": 100.0, "b": float(index), "c": -100.0}
+        assert pipeline.score_one(event) == model.score_one({"b": float(index)})
+        pipeline.learn_one(event)
+        model.learn_one({"b": float(index)})
+
+
+@pytest.mark.parametrize(
+    ("nested", "message"),
+    [
+        ({"params": {}}, "forecaster id"),
+        ({"id": "seasonal_naive", "params": [4]}, "params must be a mapping"),
+    ],
+)
+def test_residual_detector_rejects_a_malformed_nested_forecaster(
+    nested, message
+) -> None:
+    with pytest.raises(ConfigurationError, match=message):
+        get_model_spec("residual_detector").capabilities(
+            {"target": "y", "model": nested}
+        )
+
+
+def test_catalog_index_rejects_duplicate_identifiers() -> None:
+    spec = get_model_spec("null")
+
+    with pytest.raises(RuntimeError, match="must be unique"):
+        catalog_registry._index((spec, spec))
+
+
+@pytest.mark.parametrize(
+    ("factory", "message"),
+    [
+        (lambda: FeatureCount(0), "must be positive"),
+        (lambda: FeatureCount(3, 2), "not be below minimum"),
+        (lambda: WarmupRequirement(-1), "non-negative"),
+        (lambda: WarmupRequirement(3).remaining(-1), "non-negative"),
+    ],
+)
+def test_capability_records_reject_impossible_bounds(factory, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        factory()
+
+
+def test_indeterminate_warmup_is_neither_satisfied_nor_pending() -> None:
+    warmup = WarmupRequirement(None, WarmupUnit.ENGINE_DEFINED)
+
+    assert warmup.remaining(10) is None
+    assert warmup.is_satisfied(10) is None
+    assert WarmupRequirement(3).is_satisfied(3)
+
+
+@pytest.mark.parametrize(
+    ("import_path", "message"),
+    [("NoModule", "Invalid catalog import path"), ("math.pi", "not a class")],
+)
+def test_spec_loading_rejects_entries_that_are_not_classes(
+    import_path, message
+) -> None:
+    spec = ComponentSpec(
+        id="broken",
+        display_name="Broken",
+        family="test",
+        kind=ComponentKind.MODEL,
+        import_path=import_path,
+    )
+
+    with pytest.raises(RuntimeError, match=message):
+        spec.load()

@@ -4,13 +4,15 @@ import pytest
 
 pytest.importorskip("faiss")
 
-from aberrant.base import ConfigurationError
+from aberrant.base import ConfigurationError, UnknownComponentError
 from aberrant.catalog import (
     ComponentSpec,
     DetectorConfig,
     catalog_manifest,
     create_model,
+    create_similarity_engine,
 )
+from aberrant.similarity import FaissSimilaritySearchEngine
 
 
 def test_catalog_builds_knn_after_manifest_discovery() -> None:
@@ -93,3 +95,15 @@ def test_nested_component_parameter_errors_keep_complete_paths():
         ("model", "params", "similarity_engine", "params", "window_size"),
         ("model", "params", "similarity_engine", "params", "warm_up"),
     }
+
+
+def test_similarity_engines_are_created_from_the_catalog():
+    engine = create_similarity_engine("faiss", {"window_size": 4, "warm_up": 2})
+    direct = FaissSimilaritySearchEngine(window_size=4, warm_up=2)
+    for point in ({"x": 0.0}, {"x": 1.0}, {"x": 3.0}):
+        engine.append(point)
+        direct.append(point)
+
+    assert engine.search({"x": 2.0}, 1) == direct.search({"x": 2.0}, 1)
+    with pytest.raises(UnknownComponentError):
+        create_similarity_engine("annoy")
