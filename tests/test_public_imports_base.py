@@ -59,10 +59,7 @@ from aberrant.model.iforest import (
 )
 from aberrant.model.sketch import MStream, StreamingLODA, StreamingRSHash
 from aberrant.model.stat import MovingAverage, MovingCovariance
-from aberrant.model.svm import (
-    GraphGatedOneClassSVM,
-    IncrementalOneClassSVMAdaptiveKernel,
-)
+from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
@@ -115,7 +112,6 @@ def test_public_imports_base_smoke() -> None:
     assert MStream is not None
     assert StreamingRSHash is not None
     assert IncrementalOneClassSVMAdaptiveKernel is not None
-    assert GraphGatedOneClassSVM is not None
     assert (
         XLagDAMP is not None
         and RollingMatrixProfile is not None
@@ -172,6 +168,7 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (sketch_api, "LODA"),
         (sketch_api, "RSHash"),
         (svm_api, "GADGETSVM"),
+        (svm_api, "GraphGatedOneClassSVM"),
         (dataset_api, "DatasetStreamer"),
     )
     for module, name in removed:
