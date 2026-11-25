@@ -42,8 +42,8 @@ sequences across package, dependency, and platform versions are not guaranteed.
 Review the changelog, revalidate score thresholds, and run a chronological canary
 stream when upgrading.
 
-Model object layout and pickle/joblib checkpoints are not a stable interchange
-format. Cross-version serialization compatibility is not promised; see
+Pickled components restore only in the aberrant version that wrote them;
+another version raises `IncompatibleStateError`. See
 [persistence and upgrades](../user_guide/best_practices.md#persistence-and-upgrades).
 
 ## Shared model shape

@@ -508,6 +508,8 @@ class RandomCutForest(BaseModel):
         Reference implementation: https://github.com/aws/random-cut-forest-by-aws
     """
 
+    _transient = ("_planned",)
+
     def __init__(
         self,
         *,
@@ -549,12 +551,6 @@ class RandomCutForest(BaseModel):
         self._trees = [
             _RandomCutTree(np.random.default_rng(seq)) for seq in child_sequences
         ]
-
-    def __getstate__(self) -> dict[str, object]:
-        state = self.__dict__.copy()
-        # Planned walks are a cache of the trees, not part of the model.
-        state["_planned"] = None
-        return state
 
     @property
     def readiness(self) -> Readiness:

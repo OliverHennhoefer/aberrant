@@ -61,6 +61,14 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** pickles of models, transformers, forecasters, drift detectors
+  and calibrators record the aberrant version that wrote them, and only that
+  version restores them. Any other version, and every pickle written before
+  2.0, raises the new `IncompatibleStateError` instead of loading state the
+  running code may misread. Caches that models used to drop by hand are
+  declared once in `_transient`; `MinMaxScaler` no longer upgrades pickles
+  written before its `clip` option.
+
 - **Breaking:** the benchmark datasets moved from `aberrant.stream` to
   `aberrant.datasets`, and the core installation depends on NumPy alone:
   tqdm and filelock are gone. `load(Dataset.SHUTTLE)` returns a

@@ -20,3 +20,5 @@ to install.
 ::: aberrant.exceptions.UnknownComponentError
 
 ::: aberrant.exceptions.MissingOptionalDependencyError
+
+::: aberrant.exceptions.IncompatibleStateError

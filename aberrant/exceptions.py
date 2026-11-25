@@ -105,3 +105,21 @@ class IncompatibleComponentError(PipelineError):
         )
         self.component_name = component_name
         self.expected_type = expected_type
+
+
+class IncompatibleStateError(AberrantError):
+    """Raised when a pickled component was saved by another aberrant version.
+
+    Learned state is only restored by the release that saved it. Rebuild the
+    component and let it learn again from the events.
+    """
+
+    def __init__(self, component: str, saved: str | None, running: str) -> None:
+        origin = "a release before 2.0" if saved is None else f"aberrant {saved}"
+        super().__init__(
+            f"{component} was saved by {origin} and cannot be restored by "
+            f"aberrant {running}. Rebuild it and let it learn again."
+        )
+        self.component = component
+        self.saved = saved
+        self.running = running

@@ -83,6 +83,8 @@ class RSHash(BaseModel):
         https://www.charuaggarwal.net/linearout.pdf
     """
 
+    _transient = ("_scored",)
+
     def __init__(
         self,
         *,
@@ -150,12 +152,6 @@ class RSHash(BaseModel):
         # The value bytes and buckets of the last scored point. Only learning
         # changes the buckets of a point, so learning that point reuses them.
         self._scored: tuple[bytes, np.ndarray] | None = None
-
-    def __getstate__(self) -> dict[str, object]:
-        state = self.__dict__.copy()
-        # The buckets of the last scored point are a cache, not model state.
-        state["_scored"] = None
-        return state
 
     @property
     def n_samples_seen(self) -> int:

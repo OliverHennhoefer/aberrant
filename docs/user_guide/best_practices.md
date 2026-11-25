@@ -108,20 +108,32 @@ warm a replacement model in parallel, or reject an upstream release. See
 
 ## Persistence and upgrades
 
-aberrant does not currently define a stable, cross-version model serialization
-format. Do not document or rely on generic pickle/joblib persistence as a
-package guarantee.
+Components pickle with their learned state, and each pickle records the
+aberrant version that wrote it. Only that version restores it: unpickling in
+any other release, or a pickle from before 2.0, raises
+`IncompatibleStateError` instead of loading state that the running code may
+read differently. Caches, such as a forest's planned walks, are left out of
+pickles and rebuilt on demand.
 
-If an application checkpoints model objects anyway:
+```python
+import pickle
 
-- own the serializer and storage security policy;
-- never load an untrusted pickle-like artifact;
-- record the exact Python, aberrant, NumPy, and optional dependency versions;
-- test round-trip scores and subsequent learning for every model type;
-- retain the source event offset needed to resume without gaps or duplicates;
-- keep a path to rebuild state from events when upgrading; the
-  [public API compatibility policy](../api/index.md#compatibility-policy) does not
-  guarantee cross-version checkpoint compatibility.
+from aberrant.model.forest import HalfSpaceTrees
+
+model = HalfSpaceTrees(seed=1)
+model.learn_one({"x": 0.5})
+restored = pickle.loads(pickle.dumps(model))
+assert restored.score_one({"x": 0.5}) == model.score_one({"x": 0.5})
+```
+
+When you checkpoint components:
+
+- never unpickle data you did not write yourself: a pickle can run code;
+- keep the offset of the last event a checkpoint learned, so a restored
+  component resumes without gaps or duplicates;
+- keep a way to rebuild state from events, because an upgrade of aberrant
+  invalidates every checkpoint.
+
 
 ## Long running streams
 
