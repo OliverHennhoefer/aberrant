@@ -137,7 +137,7 @@ they describe retained observations and arrays, excluding exact lifetime counter
 | --- | --- |
 | `ASDIsolationForest`, `HalfSpaceTrees`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` | Configured windows, trees, samples, or sketches. Large `OnlineIsolationForest.learn` batches are processed in bounded chunks, and retained rows own their storage. `XStream(max_feature_cache_size=None)` permits an unlimited feature-name cache; keep a finite cache budget for schema churn. |
 | `MondrianIsolationForest` | Default lifetime trees can grow indefinitely. Set `window_size=W` for periodic replacement from the latest W events. Between replacements each tree represents at most `2W - 1` events; replacement has a bounded latency spike. This is periodic rebuilding, not exact per-event sliding-window deletion. |
-| `KNN`, `LocalOutlierFactor`, `SDOStream`, `CellNeighborhoodDetector`, `StationaryRegionNeighborDetector` | Configured point windows, observer budgets, cells, and bounded indexes. A custom KNN engine owns its own retention policy. |
+| `KNN`, `LocalOutlierFactor`, `SDOStream`, `CellNeighborhoodDetector` | Configured point windows, observer budgets, cells, and bounded indexes. A custom KNN engine owns its own retention policy. |
 | `MStream`, `StreamingLODA`, `StreamingRSHash` | Fixed sketches, projections, histograms, and feature statistics. Novel values do not create a persistent key per value. |
 | `MIDAS`, `ISCONNA`, `AnoEdgeL`, `SignedGraphSketchDetector` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
 | `IncrementalOneClassSVMAdaptiveKernel` | Fixed support-vector and feature-map budgets. |

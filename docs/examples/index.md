@@ -46,7 +46,6 @@ These notebooks install aberrant themselves and run in Google Colab without a lo
 | Local density | [`local_outlier_factor.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/local_outlier_factor.py) | Registered SHUTTLE dataset |
 | Cell neighborhood | [`cell_neighborhood.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/cell_neighborhood.py) | Registered SHUTTLE dataset |
 | Observer distance | [`sdostream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/sdostream.py) | Registered SHUTTLE dataset |
-| Stationary region | [`stationary_region_neighbor.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/stationary_region_neighbor.py) | Registered SHUTTLE dataset |
 | Multi-aspect sketch | [`mstream.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/mstream.py) | Registered SHUTTLE dataset |
 | Projection histogram | [`streaming_loda.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streaming_loda.py) | Registered SHUTTLE dataset |
 | Randomized hashing | [`streaming_rshash.py`](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/models/streaming_rshash.py) | Registered SHUTTLE dataset |

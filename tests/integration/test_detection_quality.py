@@ -19,7 +19,6 @@ from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble
 from aberrant.model.distance import (
     CellNeighborhoodDetector,
     SDOStream,
-    StationaryRegionNeighborDetector,
 )
 from aberrant.model.distance.knn import KNN
 from aberrant.model.iforest import (
@@ -168,24 +167,6 @@ CASES = [
                 radius=1.5,
                 window_size=2048,
                 slide_size=128,
-                subspace_dim=3,
-                warm_up_slides=2,
-                seed=s,
-            )
-        ),
-        0.68,
-        0.25,
-    ),
-    Case(
-        "stationary-region-neighbor",
-        lambda s: (
-            StandardScaler()
-            | StationaryRegionNeighborDetector(
-                k=30,
-                radius=1.5,
-                window_size=2048,
-                slide_size=128,
-                skip_threshold=0.1,
                 warm_up_slides=2,
             )
         ),

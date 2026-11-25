@@ -174,7 +174,7 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | Family | Implementations |
 | --- | --- |
 | Isolation forest | `ASDIsolationForest`, `HalfSpaceTrees`, `MondrianIsolationForest`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` |
-| Distance | `CellNeighborhoodDetector`, `KNN`, `LocalOutlierFactor`, `SDOStream`, `StationaryRegionNeighborDetector` |
+| Distance | `CellNeighborhoodDetector`, `KNN`, `LocalOutlierFactor`, `SDOStream` |
 | Sketch | `MStream`, `StreamingLODA`, `StreamingRSHash` |
 | Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `SignedGraphSketchDetector` |
 | Time series | `MultivariateRollingMatrixProfile`, `RollingMatrixProfile`, `XLagDAMP` |

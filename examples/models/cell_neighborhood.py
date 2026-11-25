@@ -9,10 +9,8 @@ model = CellNeighborhoodDetector(
     radius=1.5,
     window_size=1024,
     slide_size=128,
-    subspace_dim=3,
     warm_up_slides=2,
     predict_threshold=0.5,
-    seed=42,
 )
 pipeline = StandardScaler() | model
 

@@ -43,7 +43,6 @@ COVER_FLOORS: dict[str, tuple[float, float]] = {
     "random-cut-forest": (0.79, 0.037),
     "xstream": (0.81, 0.025),
     "cell-neighborhood": (0.81, 0.028),
-    "stationary-region-neighbor": (0.81, 0.028),
     "sdostream": (0.61, 0.009),
     "knn-faiss": (0.85, 0.039),
     "loda": (0.82, 0.024),

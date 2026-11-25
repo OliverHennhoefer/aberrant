@@ -128,6 +128,15 @@ Semantic Versioning.
   `seasonal_residual_detector`. `ResidualDetector(HoltWinters(season_length=m),
   target="x")` scores the same events identically; in a configuration use the
   `residual_detector` ID with a nested `holt_winters` model.
+- **Breaking:** `StationaryRegionNeighborDetector` and its catalog ID
+  `stationary_region_neighbor_detector`. It scored exactly like
+  `CellNeighborhoodDetector`, and `skip_threshold` did nothing. A rebuild
+  after the STARE paper and its reference code (balloon kernel density over
+  cell kernels, z-scored against the neighbors) stayed near or below chance
+  on nine benchmark datasets, so 2.0 ships no STARE. Use
+  `CellNeighborhoodDetector`.
+- **Breaking:** `CellNeighborhoodDetector`'s `subspace_dim` and `seed`
+  parameters. Neither changed a score.
 - `ModelNotFittedError`, `TransformationError` and `UnsupportedFeatureError`
   from `aberrant.base`. Nothing raised them.
 - The `dev`, `docs`, `security` and `benchmark` extras. They are dependency
