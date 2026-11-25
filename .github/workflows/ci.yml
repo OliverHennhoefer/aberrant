@@ -41,7 +41,8 @@ jobs:
           uv run --locked --no-dev python - <<'PY'
           import aberrant
           from aberrant.base import Pipeline
-          from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
+          from aberrant.compose import GraphNode, GraphPipeline, MergeNode
+          from aberrant.transform import Select
           from aberrant.calibration import ScoreCalibrator
           from aberrant.model import NullModel, RandomModel, ThresholdModel
           from aberrant.model.forest import OnlineIsolationForest
