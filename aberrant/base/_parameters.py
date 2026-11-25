@@ -1,6 +1,7 @@
 """Constructor parameters shared by models, transformers and forecasters."""
 
 import copy
+import dataclasses
 import inspect
 from typing import Any, ClassVar, Self
 
@@ -41,12 +42,22 @@ def _fresh(value: object, memo: dict[int, Any]) -> object:
     clone = getattr(value, "clone", None)
     if isinstance(value, Parameterized) and callable(clone):
         return clone()
-    if isinstance(value, list):
-        return [_fresh(item, memo) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_fresh(item, memo) for item in value)
+    if isinstance(value, list | tuple):
+        items = [_fresh(item, memo) for item in value]
+        return items if isinstance(value, list) else tuple(items)
     if isinstance(value, dict):
         return {key: _fresh(item, memo) for key, item in value.items()}
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.replace(
+            value,
+            **{
+                field.name: _fresh(getattr(value, field.name), memo)
+                for field in dataclasses.fields(value)
+                if field.init
+            },
+        )
+    if inspect.isfunction(value) or inspect.ismethod(value):
+        return value
     return copy.deepcopy(value, memo)
 
 
@@ -89,8 +100,10 @@ class Parameterized:
         """
         Return a new, untrained instance with the same parameters.
 
-        Parameters that are components themselves are cloned too; other values
-        are deep-copied, so the clone shares no state with this instance.
+        Parameters that are components themselves are cloned too, also inside
+        sequences, mappings and dataclasses such as graph nodes. Functions are
+        shared; other values are deep-copied, so the clone shares no learned
+        state with this instance.
         """
         memo: dict[int, Any] = {}
         params = {

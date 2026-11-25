@@ -77,9 +77,7 @@ def test_the_calibrator_describes_its_method():
     calibrator = ScoreCalibrator("eci", alpha=0.1, window=40, c=2)
 
     assert calibrator.spec is CALIBRATORS["eci"]
-    assert repr(calibrator) == (
-        "ScoreCalibrator('eci', alpha=0.1, window=40, lr=0.05, c=2, h=0)"
-    )
+    assert repr(calibrator) == "ScoreCalibrator('eci', alpha=0.1, window=40, c=2.0)"
 
 
 def test_parameters_default_and_validate():

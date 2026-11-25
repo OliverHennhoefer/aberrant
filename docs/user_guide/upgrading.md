@@ -97,7 +97,8 @@ Every public name has exactly one import path.
   format version 2. Rename IDs and parameters as above and set
   `"version": 2`; a version 1 configuration is rejected.
 - **Contract.** `get_params()`, `clone()`, `reset()` and a `repr` of the
-  non-default arguments work the same way on every component.
+  non-default arguments work the same way on every component, pipelines and
+  `ScoreCalibrator` included.
 - **Datasets.** `load(Dataset.SHUTTLE)` returns a replayable `DatasetStream`:
   iterate it directly instead of calling `.stream()`. Files are cached in
   `ABERRANT_DATA_DIR` or `~/.cache/aberrant`, so the first load downloads

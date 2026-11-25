@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog and the project aims to follow
 Semantic Versioning.
 
-## [Unreleased]
+## [2.0.0] - Unreleased
 
 ### Fixed
 
@@ -140,6 +140,10 @@ Semantic Versioning.
   arguments that differ from their defaults. Models also get `learn_many` and
   `score_many`. Hand-written `reset` and `__repr__` methods are gone, so every
   `reset()` now matches a freshly built component, seeded generators included.
+  `Pipeline`, `GraphPipeline` and `ScoreCalibrator` follow the same
+  contract; a pipeline clones each stage, and `ScoreCalibrator`'s `repr` no
+  longer lists parameters at their defaults. Pickles of a `GraphPipeline`
+  carry the version stamp too.
 - **Breaking:** one score convention: higher is more anomalous, `0.0` until the
   model has learned enough to judge, and the raw statistic otherwise.
   `OnlineIsolationForest` scores `0.0` instead of `1.0` until it can normalize
@@ -240,6 +244,8 @@ Semantic Versioning.
 
 ### Development
 
+- CI runs ruff and mypy once, in a `lint` job, and the `test` matrix over
+  Python 3.11 to 3.14 on Linux and Windows runs only the tests.
 - The 25 per-model scripts under `examples/models/` gave way to one script
   per model family (`forest.py`, `distance.py`, `sketch.py`, `stat.py`,
   `svm.py`, `deep.py`, `graph.py`, `timeseries.py`, `forecast.py`). They

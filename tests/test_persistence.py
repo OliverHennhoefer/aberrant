@@ -8,6 +8,7 @@ import pytest
 import aberrant.base._parameters as parameters
 from aberrant import __version__
 from aberrant.calibration import ScoreCalibrator
+from aberrant.compose import GraphNode, GraphPipeline
 from aberrant.drift import ADWIN
 from aberrant.exceptions import IncompatibleStateError
 from aberrant.model.sketch import RSHash
@@ -36,10 +37,11 @@ def test_a_pickle_carries_its_version_and_drops_caches() -> None:
     [
         _trained(),
         StandardScaler() | _trained(),
+        GraphPipeline([GraphNode("scaled", StandardScaler())], _trained(), "scaled"),
         ADWIN(),
         ScoreCalibrator("aci", alpha=0.1),
     ],
-    ids=["model", "pipeline", "drift", "calibrator"],
+    ids=["model", "pipeline", "graph", "drift", "calibrator"],
 )
 def test_another_version_cannot_restore_a_pickle(
     component: object, monkeypatch: pytest.MonkeyPatch
