@@ -31,10 +31,10 @@ from aberrant.model.null import NullModel
 from aberrant.model.random import RandomModel
 from aberrant.model.sketch import LODA, RSHash
 from aberrant.model.stat import (
-    MovingAverage,
     MovingCovariance,
+    MovingMAD,
     MovingMahalanobisDistance,
-    MovingVariance,
+    MovingZScore,
     OnlineCOPOD,
     OnlineECOD,
 )
@@ -267,17 +267,17 @@ CASES = [
         0.57,
     ),
     Case(
-        "moving-average",
-        lambda s: MovingAverage(window_size=100),
+        "moving-zscore",
+        lambda s: MovingZScore(window_size=100),
         0.96,
-        0.91,
+        0.9,
         adapt=first_features(1),
     ),
     Case(
-        "moving-variance",
-        lambda s: MovingVariance(window_size=100),
+        "moving-mad",
+        lambda s: MovingMAD(window_size=100),
         0.95,
-        0.9,
+        0.91,
         adapt=first_features(1),
     ),
 ]

@@ -55,32 +55,8 @@ transformer pipelines require an explicit warm-up or readiness policy. Existing
 model instances default to zero evaluator warm-up; their caller supplies any
 required calibration or readiness policy.
 
-Geometric and harmonic moving averages express warm-up in **retained values**:
-geometric learning ignores nonpositive values, and harmonic learning ignores
-zeros. Geometric scoring needs two retained values, or three with
-`absoluteValues=True`; harmonic scoring needs one. Supply readiness based on
-the actual window rather than counting successful learning calls:
-
-```python
-from aberrant.model.stat import MovingGeometricAverage
-
-config = DetectorConfig(
-    ComponentConfig("moving_geometric_average", {"window_size": 10}),
-)
-minimum = config.capabilities().warmup.minimum
-assert minimum is not None
-evaluator = PrequentialEvaluator(
-    config,
-    readiness=lambda model: (
-        isinstance(model, MovingGeometricAverage) and len(model.window) >= minimum
-    ),
-)
-```
-
-For harmonic averages, use `MovingHarmonicAverage` and the corresponding
-catalog minimum. The window must hold at least the required number of values;
-an undersized window remains unready. An explicit numeric `warmup` remains
-available when the caller can guarantee enough retained history.
+An explicit numeric `warmup` remains available when the caller can guarantee
+enough history.
 
 Labels must be binary real numeric values (normal `0`, anomaly `1`), booleans, or
 `None` for unknown. Real NumPy scalars are accepted; complex labels are rejected

@@ -15,7 +15,7 @@ from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.exceptions import ValidationError
 from aberrant.model import NullModel
-from aberrant.model.stat import MovingAverage
+from aberrant.model.stat import MovingZScore
 from aberrant.stream import BatchStreamer, Sample
 from aberrant.transform import (
     FeatureSchemaGuard,
@@ -251,11 +251,7 @@ def test_evaluator_and_pipeline_retained_memory_plateau(metrics: bool) -> None:
     if metrics:
         pytest.importorskip("sklearn")
     scaler = RollingRobustScaler(window_size=17)
-    model = (
-        FeatureSchemaGuard(features=["x"])
-        | scaler
-        | MovingAverage(window_size=17, key="x")
-    )
+    model = FeatureSchemaGuard(features=["x"]) | scaler | MovingZScore(window_size=17)
     evaluator = PrequentialEvaluator(
         model, warmup=17, metrics=metrics, metric_window_size=31, measure_time=False
     )

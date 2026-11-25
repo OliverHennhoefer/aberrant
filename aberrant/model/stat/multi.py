@@ -82,7 +82,6 @@ class MovingCovariance(BaseModel):
         window_size: Number of recent values to consider.
         bias: If False, applies Bessel correction (ddof=1).
         features: Feature names for the two variables. If None, uses the first learned names.
-        abs_diff: If True, returns absolute difference.
 
     Raises:
         ValueError: If window_size is not positive.
@@ -103,7 +102,6 @@ class MovingCovariance(BaseModel):
         window_size: int = 256,
         bias: bool = True,
         features: list[str] | None = None,
-        abs_diff: bool = True,
     ) -> None:
         """Initialize the moving covariance model."""
         super().__init__()
@@ -115,7 +113,6 @@ class MovingCovariance(BaseModel):
         self.features = None if features is None else list(features)
         self._schema = FeatureSchema(names=features, expected_size=2)
         self.bias = bias
-        self.abs_diff = abs_diff
         if self._schema.names is not None:
             _initialize_bivariate_windows(
                 self.window,
@@ -179,7 +176,7 @@ class MovingCovariance(BaseModel):
         score_cov = _covariance(score_0, score_1, ddof=ddof)
 
         difference = score_cov - window_cov
-        return abs(difference) if self.abs_diff else difference
+        return abs(difference)
 
 
 class MovingCorrelationCoefficient(BaseModel):
@@ -187,7 +184,7 @@ class MovingCorrelationCoefficient(BaseModel):
 
     The detector compares the correlation of the retained two-feature window
     with the correlation after temporarily appending the candidate. It returns
-    the absolute change by default; set ``abs_diff=False`` to preserve its sign.
+    the absolute change.
     Windows with fewer than two paired values have correlation ``0.0``.
 
     Args:
@@ -197,7 +194,6 @@ class MovingCorrelationCoefficient(BaseModel):
             also applied consistently to covariance and standard deviations.
         features: Explicit names for the two features. If omitted, the first
             successfully learned mapping establishes a sorted schema.
-        abs_diff: Return the magnitude of the change when true.
     """
 
     def __init__(
@@ -206,7 +202,6 @@ class MovingCorrelationCoefficient(BaseModel):
         window_size: int = 256,
         bias: bool = True,
         features: list[str] | None = None,
-        abs_diff: bool = True,
     ) -> None:
         """Initialize the bounded bivariate window."""
         window_size = coerce_integer_count(window_size, label="window_size")
@@ -215,7 +210,6 @@ class MovingCorrelationCoefficient(BaseModel):
         self.features = None if features is None else list(features)
         self._schema = FeatureSchema(names=features, expected_size=2)
         self.bias = bias
-        self.abs_diff = abs_diff
         if self._schema.names is not None:
             _initialize_bivariate_windows(
                 self.window,
@@ -272,7 +266,7 @@ class MovingCorrelationCoefficient(BaseModel):
             x: Candidate with exactly the established two feature names.
 
         Returns:
-            Absolute or signed correlation difference according to ``abs_diff``.
+            Absolute correlation difference.
         """
         prepared = self._schema.preview(x)
         names = self._schema.names
@@ -285,7 +279,7 @@ class MovingCorrelationCoefficient(BaseModel):
         corr_coeff_diff = self._correlation_coefficient(
             score_window_0, score_window_1
         ) - self._correlation_coefficient(self.window[names[0]], self.window[names[1]])
-        return abs(corr_coeff_diff) if self.abs_diff else corr_coeff_diff
+        return abs(corr_coeff_diff)
 
 
 class MovingMahalanobisDistance(BaseModel):

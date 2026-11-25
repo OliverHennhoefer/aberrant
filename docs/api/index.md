@@ -60,7 +60,6 @@ numeric scale. In particular:
   `RandomCutForest` defaults to raw CoDisp and
   `RHF` returns a raw log-mass score;
 - graph detectors return raw, unbounded scores;
-- moving statistics can return signed changes when `abs_diff=False`;
 - `RandomModel` is a generator-backed baseline rather than an anomaly model.
 
 Read the [model score contracts](../user_guide/models.md#score-contracts)

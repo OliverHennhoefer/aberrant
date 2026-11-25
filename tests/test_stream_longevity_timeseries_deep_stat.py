@@ -14,19 +14,11 @@ import pytest
 from aberrant.model import NullModel, RandomModel, ThresholdModel
 from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble, _NumpyAutoencoder
 from aberrant.model.stat import (
-    MovingAverage,
-    MovingAverageAbsoluteDeviation,
     MovingCorrelationCoefficient,
     MovingCovariance,
-    MovingGeometricAverage,
-    MovingHarmonicAverage,
-    MovingInterquartileRange,
-    MovingKurtosis,
+    MovingMAD,
     MovingMahalanobisDistance,
-    MovingMedian,
-    MovingQuantile,
-    MovingSkewness,
-    MovingVariance,
+    MovingZScore,
 )
 from aberrant.model.timeseries import (
     DAMP,
@@ -44,18 +36,7 @@ if torch is not None:
     from aberrant.model.deep import VanillaAutoencoder, VanillaLSTMAutoencoder
     from aberrant.model.deep.autoencoder import Autoencoder
 
-_UNIVARIATE = [
-    MovingAverage,
-    MovingAverageAbsoluteDeviation,
-    MovingGeometricAverage,
-    MovingHarmonicAverage,
-    MovingInterquartileRange,
-    MovingKurtosis,
-    MovingMedian,
-    MovingQuantile,
-    MovingSkewness,
-    MovingVariance,
-]
+_UNIVARIATE = [MovingZScore, MovingMAD]
 
 
 @pytest.mark.parametrize("model_type", _UNIVARIATE)
@@ -69,14 +50,14 @@ def test_univariate_state_stays_bounded_through_hundreds_of_turnovers(
         assert math.isfinite(model.score_one({"value": value}))
         model.learn_one({"value": value})
         expected.append(value)
-        assert model.window == expected
+        assert list(model._window) == list(expected)
     # Inference-only calls cannot enlarge the learned sample window.
     for _ in range(200):
         assert math.isfinite(model.score_one({"value": 3.0}))
-    assert model.window == expected
+    assert list(model._window) == list(expected)
     with pytest.raises(ValueError):
         model.learn_one({"replacement": 3.0})
-    assert model.window == expected
+    assert list(model._window) == list(expected)
 
 
 @pytest.mark.parametrize(
@@ -259,7 +240,8 @@ def test_numpy_autoencoder_stages_overflowing_updates_before_publishing_weights(
 
 def test_retained_python_memory_plateaus_after_warmup_across_model_families() -> None:
     models = [
-        MovingAverage(window_size=23),
+        MovingZScore(window_size=23),
+        MovingMAD(window_size=23),
         MovingCovariance(window_size=23),
         RollingMatrixProfile(subsequence_length=4, window_size=23),
         MultivariateRollingMatrixProfile(subsequence_length=4, window_size=23),
@@ -278,7 +260,7 @@ def test_retained_python_memory_plateaus_after_warmup_across_model_families() ->
             point = {"x": math.sin(index * 0.17)}
             paired = {**point, "y": math.cos(index * 0.21)}
             for model_index, model in enumerate(models):
-                sample = paired if model_index in (1, 3, 5) else point
+                sample = paired if model_index in (2, 4, 6) else point
                 if index % 4 == 0:
                     model.score_one(sample)
                 model.learn_one(sample)

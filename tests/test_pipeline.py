@@ -16,7 +16,7 @@ from aberrant.base import (
 )
 from aberrant.exceptions import IncompatibleComponentError, PipelineError
 from aberrant.model import NullModel
-from aberrant.model.stat import MovingAverage
+from aberrant.model.stat import MovingZScore
 from aberrant.transform import (
     FeatureSchemaGuard,
     IncrementalPCA,
@@ -214,9 +214,9 @@ def test_concrete_pipeline_subclasses_preserve_their_type(base_type) -> None:
 @pytest.mark.parametrize("warm", [False, True])
 def test_terminal_rejection_restores_scaler_state(warm):
     scaler = StandardScaler()
-    model = MovingAverage(window_size=3)
+    model = MovingZScore(window_size=3)
     pipeline = scaler | model
-    clean = StandardScaler() | MovingAverage(window_size=3)
+    clean = StandardScaler() | MovingZScore(window_size=3)
     if warm:
         pipeline.learn_one({"a": 1.0})
         clean.learn_one({"a": 1.0})
@@ -240,7 +240,7 @@ def test_terminal_rejection_restores_scaler_state(warm):
 )
 def test_rejected_update_preserves_scaler_mapping_references(factory, mapping_names):
     scaler = factory()
-    pipeline = scaler | MovingAverage(window_size=3)
+    pipeline = scaler | MovingZScore(window_size=3)
     pipeline.learn_one({"a": 1.0})
     previous = [
         (name, getattr(scaler, name), dict(getattr(scaler, name)))

@@ -9,7 +9,6 @@ from aberrant.catalog import ComponentConfig, DetectorConfig
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
 from aberrant.exceptions import MissingOptionalDependencyError
 from aberrant.model import NullModel
-from aberrant.model.stat import MovingGeometricAverage, MovingHarmonicAverage
 from aberrant.transform import StandardScaler
 
 
@@ -298,128 +297,34 @@ def test_config_constructs_fresh_model_and_resolves_metadata():
     assert first.result().config.as_dict()["model"]["params"]["seed"] == 19
 
 
-@pytest.mark.parametrize("absolute_values,warmup", [(False, 2), (True, 3)])
-def test_geometric_catalog_warmup_excludes_unready_scores(absolute_values, warmup):
-    config = DetectorConfig(
-        ComponentConfig(
-            "moving_geometric_average",
-            {"window_size": 10, "absoluteValues": absolute_values},
-        )
-    )
+def test_warmup_in_other_units_needs_a_readiness_callback():
+    config = DetectorConfig(ComponentConfig("sdostream", {"seed": 1}))
     with pytest.raises(ValueError, match="warmup or readiness"):
         PrequentialEvaluator(config)
     evaluator = PrequentialEvaluator(
-        config,
-        readiness=lambda model: (
-            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
-        ),
-        measure_time=False,
+        config, readiness=lambda model: model.n_observers >= 6, measure_time=False
     )
-    for index in range(warmup):
-        record = evaluator.update({"x": float(index + 1)}, 1)
-        assert record.score is None and record.exclusion == "not_ready"
-    result = evaluator.result()
-    assert result.n_not_ready == warmup
-    assert result.n_scored == result.n_labeled == 0
-    record = evaluator.update({"x": float(warmup + 1)}, 0)
-    assert record.exclusion is None and record.score > 0
-    result = evaluator.result()
-    assert result.n_scored == result.n_labeled == 1 and result.prevalence == 0
+    assert evaluator.result().uses_readiness_callback
 
 
-@pytest.mark.parametrize("absolute_values,warmup", [(False, 2), (True, 3)])
-def test_geometric_ranking_metrics_begin_after_readiness(absolute_values, warmup):
+def test_readiness_callback_excludes_unready_scores_and_metrics():
     metrics = pytest.importorskip("sklearn.metrics")
     evaluator = PrequentialEvaluator(
-        DetectorConfig(
-            ComponentConfig(
-                "moving_geometric_average",
-                {"window_size": 10, "absoluteValues": absolute_values},
-            )
-        ),
-        readiness=lambda model: (
-            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
-        ),
+        DetectorConfig(ComponentConfig("moving_zscore", {"window_size": 10})),
+        readiness=lambda model: model.n_samples_seen >= 3,
         metrics=True,
         measure_time=False,
     )
-    events = [({"x": float(index + 1)}, 1) for index in range(warmup)]
-    events.extend([({"x": float(warmup + 1)}, 0), ({"x": 100.0}, 1)])
+    events = [({"x": float(index % 2)}, 1) for index in range(3)]
+    events.extend([({"x": 0.5}, 0), ({"x": 100.0}, 1)])
     records = list(evaluator.iter_evaluate(events))
-    scores = [record.score for record in records[warmup:]]
+    assert [record.exclusion for record in records[:3]] == ["not_ready"] * 3
+    scores = [record.score for record in records[3:]]
     result = evaluator.result()
-    assert result.n_not_ready == warmup
+    assert result.n_not_ready == 3
     assert result.n_scored == result.n_labeled == result.metric_samples == 2
-    assert result.prevalence == result.metric_prevalence == 0.5
     assert result.average_precision == metrics.average_precision_score([0, 1], scores)
     assert result.roc_auc == metrics.roc_auc_score([0, 1], scores)
-
-
-@pytest.mark.parametrize("absolute_values,warmup", [(False, 2), (True, 3)])
-def test_geometric_readiness_counts_retained_positive_values(absolute_values, warmup):
-    evaluator = PrequentialEvaluator(
-        DetectorConfig(
-            ComponentConfig(
-                "moving_geometric_average",
-                {"window_size": 10, "absoluteValues": absolute_values},
-            )
-        ),
-        readiness=lambda model: (
-            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
-        ),
-    )
-    for value in [-1.0, 0.0, *range(1, warmup + 1)]:
-        record = evaluator.update({"x": float(value)}, 1)
-        assert record.learned and record.score is None
-    result = evaluator.result()
-    assert result.n_learned == result.n_not_ready == warmup + 2
-    assert result.n_scored == result.n_labeled == 0
-    record = evaluator.update({"x": float(warmup + 1)}, 0)
-    assert record.exclusion is None and record.score > 0
-
-
-@pytest.mark.parametrize("absolute_values,warmup", [(False, 2), (True, 3)])
-def test_geometric_undersized_window_never_scores(absolute_values, warmup):
-    evaluator = PrequentialEvaluator(
-        DetectorConfig(
-            ComponentConfig(
-                "moving_geometric_average",
-                {"window_size": warmup - 1, "absoluteValues": absolute_values},
-            )
-        ),
-        readiness=lambda model: (
-            isinstance(model, MovingGeometricAverage) and len(model.window) >= warmup
-        ),
-    )
-    records = list(evaluator.iter_evaluate([({"x": float(i)}, 1) for i in range(1, 6)]))
-    assert all(
-        record.score is None and record.exclusion == "not_ready" for record in records
-    )
-    result = evaluator.result()
-    assert result.n_not_ready == result.n_seen == 5
-    assert result.n_scored == result.n_labeled == 0
-
-
-def test_harmonic_readiness_ignores_zero_learning_calls():
-    config = DetectorConfig(
-        ComponentConfig("moving_harmonic_average", {"window_size": 10})
-    )
-    with pytest.raises(ValueError, match="warmup or readiness"):
-        PrequentialEvaluator(config)
-    evaluator = PrequentialEvaluator(
-        config,
-        readiness=lambda model: (
-            isinstance(model, MovingHarmonicAverage) and bool(model.window)
-        ),
-    )
-    for value in [0.0, 0.0, 2.0]:
-        record = evaluator.update({"x": value}, 1)
-        assert record.score is None and record.exclusion == "not_ready"
-    record = evaluator.update({"x": 3.0}, 0)
-    assert record.exclusion is None and record.score > 0
-    result = evaluator.result()
-    assert result.n_learned == 4 and result.n_not_ready == 3
-    assert result.n_scored == result.n_labeled == 1 and result.prevalence == 0
 
 
 @pytest.mark.parametrize(
@@ -448,9 +353,7 @@ def test_non_event_and_pipeline_readiness_is_explicit(config):
 
 
 def test_unknown_catalog_orientation_is_explicit():
-    config = DetectorConfig(
-        ComponentConfig("moving_average", {"window_size": 10, "abs_diff": False})
-    )
+    config = DetectorConfig(ComponentConfig("null", {}))
     with pytest.raises(ValueError, match="orientation"):
         PrequentialEvaluator(config)
     assert (

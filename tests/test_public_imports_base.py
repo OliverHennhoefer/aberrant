@@ -55,7 +55,7 @@ from aberrant.model.forest import (
 )
 from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, StreamSpot
 from aberrant.model.sketch import LODA, MStream, RSHash
-from aberrant.model.stat import MovingAverage, MovingCovariance
+from aberrant.model.stat import MovingCovariance, MovingZScore
 from aberrant.model.svm import AdaptiveOneClassSVM
 from aberrant.model.timeseries import (
     DAMP,
@@ -111,7 +111,7 @@ def test_public_imports_base_smoke() -> None:
         and RollingMatrixProfile is not None
         and MultivariateRollingMatrixProfile is not None
     )
-    assert MovingAverage is not None
+    assert MovingZScore is not None
     assert MovingCovariance is not None
     assert MinMaxScaler is not None
     assert StandardScaler is not None

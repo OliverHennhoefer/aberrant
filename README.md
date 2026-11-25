@@ -178,7 +178,7 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `StreamSpot` |
 | Time series | `MultivariateRollingMatrixProfile`, `RollingMatrixProfile`, `DAMP` |
 | SVM | `AdaptiveOneClassSVM` |
-| Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |
+| Statistical | `MovingZScore`, `MovingMAD`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |
 | Reconstruction | `OnlineAutoencoderEnsemble`, optional `Autoencoder` |
 | Fixed rule | `ThresholdModel` |
 | Baselines | `NullModel`, `RandomModel` |

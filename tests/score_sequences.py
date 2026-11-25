@@ -519,7 +519,6 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "statistic": "covariance",
                     "window_size": 30,
                     "bias": False,
-                    "abs_diff": False,
                 },
                 "stream": {"seed": 213, "n_events": 300, "n_features": 2},
             },
@@ -544,7 +543,6 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "statistic": "correlation_coefficient",
                     "window_size": 120,
                     "bias": False,
-                    "abs_diff": False,
                 },
                 "stream": {
                     "seed": 216,

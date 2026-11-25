@@ -58,6 +58,15 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** `MovingZScore` and `MovingMAD` (IDs `moving_zscore` and
+  `moving_mad`) replace the ten univariate moving statistics. Each scores
+  how far a value lies from the last `window_size` learned values, as
+  `|x - mean| / std` or as the modified z-score `|x - median| / (1.4826 * MAD)`,
+  and scores `0.0` until `warm_up` values (by default `window_size`) have been
+  learned. `MovingZScore` updates in constant time; `MovingMAD` resists a few
+  extreme values in its window. On SHUTTLE both reach ROC-AUC 0.98.
+- **Breaking:** `MovingCovariance` and `MovingCorrelationCoefficient` always
+  score the absolute change; the `abs_diff` parameter is gone.
 - **Breaking:** `KNN(k=10, window_size=1000, backend="numpy")` keeps its own
   window of recent events and scores the mean Euclidean distance to the `k`
   nearest of them, `0.0` until the window holds `k` events. The default NumPy
@@ -204,6 +213,14 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `MovingAverage`, `MovingVariance`, `MovingSkewness`,
+  `MovingKurtosis`, `MovingMedian`, `MovingQuantile`,
+  `MovingInterquartileRange`, `MovingAverageAbsoluteDeviation`,
+  `MovingGeometricAverage` and `MovingHarmonicAverage`, with their catalog
+  IDs. They scored the change a value
+  would cause in a window statistic, which is not a distance from normal and
+  partly negative. Use `MovingZScore` or `MovingMAD`. The catalog's
+  `retained_values` warm-up unit went with them.
 - **Breaking:** `aberrant.similarity`, `FaissSimilaritySearchEngine`,
   `BaseSimilaritySearchEngine`, the `similarity_engine` catalog kind,
   `SIMILARITY_ENGINE_CATALOG`, `get_similarity_engine_spec`,
