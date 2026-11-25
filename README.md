@@ -40,13 +40,13 @@
 from itertools import islice
 
 from aberrant.calibration import ScoreCalibrator
+from aberrant.datasets import Dataset, load
 from aberrant.drift import ADWIN
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.model.distance import SDOStream
-from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, StandardScaler
 
-stream = load(Dataset.SHUTTLE).stream()
+stream = iter(load(Dataset.SHUTTLE))
 preprocess = StandardScaler() | IncrementalPCA(n_components=5, warm_up=100)
 for event, _ in islice(stream, 512):
     preprocess.learn_one(event)

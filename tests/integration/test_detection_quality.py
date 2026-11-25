@@ -15,6 +15,7 @@ import importlib.util
 import numpy as np
 import pytest
 
+from aberrant.datasets import Dataset
 from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble
 from aberrant.model.distance import CellNeighborhoodDetector, SDOStream
 from aberrant.model.distance.knn import KNN
@@ -39,7 +40,6 @@ from aberrant.model.stat import (
     OnlineECOD,
 )
 from aberrant.model.svm import AdaptiveOneClassSVM
-from aberrant.stream import Dataset, get_dataset_info
 from aberrant.transform import MinMaxScaler, StandardScaler
 from tests.integration._quality import (
     Case,
@@ -65,7 +65,7 @@ def _autoencoder(seed: int) -> object:
     from aberrant.model.deep.autoencoder import Autoencoder  # noqa: PLC0415
 
     architecture = VanillaAutoencoder(
-        input_size=get_dataset_info(Dataset.SHUTTLE).n_features, seed=seed
+        input_size=Dataset.SHUTTLE.info.n_features, seed=seed
     )
     return Autoencoder(
         model=architecture,

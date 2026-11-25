@@ -54,9 +54,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "filelock>=4.2.7",
     "numpy>=2.2.3",
-    "tqdm>=4.67.1",
 ]
 
 [project.optional-dependencies]
@@ -190,9 +188,3 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 show_error_codes = true
 
-[[tool.mypy.overrides]]
-module = [
-    "tqdm",
-    "tqdm.*",
-]
-ignore_missing_imports = true

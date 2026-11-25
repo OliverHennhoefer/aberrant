@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.distance import KNN
-from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, MinMaxScaler, StandardScaler
 
 # Baseline pipeline: scaling + KNN.
@@ -17,7 +17,7 @@ pca_pipeline = (
 labels, baseline_scores, pca_scores = [], [], []
 dataset = load(Dataset.SHUTTLE)
 
-for i, (x, y) in enumerate(dataset.stream()):
+for i, (x, y) in enumerate(dataset):
     if i < 2_000:
         if y == 0:
             baseline_pipeline.learn_one(x)

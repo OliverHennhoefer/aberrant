@@ -96,10 +96,9 @@ alerting warm-up explicit in application code.
     Machine-readable capabilities, strict declarative configuration, safe
     construction, and event-schema enforcement.
 
--   **[Streaming datasets](streaming.md)**
+-   **[Benchmark datasets](datasets.md)**
 
-    Registered artifacts, local NPZ streams, batching, validation, and cache
-    behavior.
+    Labelled benchmarks and local NPZ archives replayed as streams.
 
 -   **[Drift detection](drift.md)** and **[Evaluation](evaluation.md)**
 

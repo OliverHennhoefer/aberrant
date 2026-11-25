@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.distance.sdostream import SDOStream
-from aberrant.stream import Dataset, load
 from aberrant.transform import StandardScaler
 
 model = SDOStream(
@@ -19,7 +19,7 @@ labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
 warmup_count = 0
-for x, y in dataset.stream():
+for x, y in dataset:
     if warmup_count < 2_000:
         if y == 0:
             pipeline.learn_one(x)

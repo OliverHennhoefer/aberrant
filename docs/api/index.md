@@ -14,7 +14,7 @@ public methods, properties, return types, and model-specific caveats. Use the
 - [Drift detectors](drift.md)
 - [Score calibration](calibration.md)
 - [Forecasters and regressors](forecast.md)
-- [Dataset registry, cache, and streams](stream.md)
+- [Benchmark datasets](datasets.md)
 - [Prequential evaluation](evaluate.md)
 - [Exceptions](exceptions.md)
 

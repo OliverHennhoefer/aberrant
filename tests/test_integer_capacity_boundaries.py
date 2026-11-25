@@ -2,7 +2,7 @@
 
 import math
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -17,21 +17,7 @@ from aberrant.model.forest import (
 from aberrant.model.graph import StreamSpot
 from aberrant.model.sketch import LODA
 from aberrant.model.svm import AdaptiveOneClassSVM
-from aberrant.stream import BatchStreamer, Sample
 from aberrant.transform import IncrementalPCA
-
-
-class _EmptyStream:
-    def stream(self) -> Iterator[Sample]:
-        yield from ()
-
-    def get_metadata(self) -> None:
-        return None
-
-
-def _batch_streamer(*, batch_size: int = 1000) -> BatchStreamer:
-    return BatchStreamer(_EmptyStream(), batch_size=batch_size)
-
 
 _CAPACITY_CASES = [
     (ADWIN, {}, "clock", 1),
@@ -41,7 +27,6 @@ _CAPACITY_CASES = [
     (ADWIN, {"min_window_length": 1}, "max_window_size", 2),
     (IncrementalPCA, {"n_components": 1, "warm_up": 4}, "n_components", 1),
     (IncrementalPCA, {"n_components": 1, "warm_up": 4}, "warm_up", 1),
-    (_batch_streamer, {}, "batch_size", 1),
     (
         StreamSpot,
         {"num_clusters": 1, "warm_up": 1},

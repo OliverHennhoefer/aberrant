@@ -7,12 +7,12 @@ Packages:
     calibration: turn scores into alarm thresholds (``ScoreCalibrator``)
     catalog: build components from declarative configurations
     compose: branched graph pipelines
+    datasets: labelled benchmark datasets, replayed as streams
     drift: concept-drift detectors (ADWIN, KSWIN, PageHinkley)
     evaluate: prequential evaluation and metrics
     exceptions: the errors aberrant raises
     forecast: forecasters and forecast-residual detection
     model: anomaly detection models, grouped by family
-    stream: benchmark datasets and replay streams
     transform: scalers, feature selection and projections
 """
 

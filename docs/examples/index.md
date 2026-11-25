@@ -19,8 +19,8 @@ package checkout are available.
     ```
 
 Most model scripts compute average precision and ROC AUC and therefore require
-the `eval` extra. Dataset-backed scripts can download and cache a registered NPZ
-artifact on first use.
+the `eval` extra. Dataset-backed scripts download and cache a registered dataset on
+first use.
 
 ## Notebooks
 

@@ -32,7 +32,7 @@ nav:
     - Concepts and Terminology: user_guide/concepts.md
     - Models: user_guide/models.md
     - Transformers: user_guide/transformers.md
-    - Streaming Datasets: user_guide/streaming.md
+    - Benchmark Datasets: user_guide/datasets.md
     - Pipelines: user_guide/pipelines.md
     - Branched Pipelines: user_guide/graph_pipelines.md
     - Application Integration: user_guide/integrations.md
@@ -63,7 +63,7 @@ nav:
     - Drift: api/drift.md
     - Calibration: api/calibration.md
     - Forecasting: api/forecast.md
-    - Stream Datasets: api/stream.md
+    - Datasets: api/datasets.md
     - Evaluation: api/evaluate.md
     - Exceptions: api/exceptions.md
   - Contributing: contributing.md

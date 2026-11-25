@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.svm.adaptive import AdaptiveOneClassSVM
-from aberrant.stream import Dataset, load
 from aberrant.transform import StandardScaler
 
 scaler = StandardScaler()
@@ -17,7 +17,7 @@ pipeline = scaler | model
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
-for i, (x, y) in enumerate(dataset.stream()):
+for i, (x, y) in enumerate(dataset):
     if i < 2_000:
         if y == 0:
             pipeline.learn_one(x)

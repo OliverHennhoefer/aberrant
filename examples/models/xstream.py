@@ -1,7 +1,7 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from aberrant.datasets import Dataset, load
 from aberrant.model.forest import XStream
-from aberrant.stream import Dataset, load
 
 model = XStream(
     k=64,
@@ -18,7 +18,7 @@ model = XStream(
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)
 
-for i, (x, y) in enumerate(dataset.stream()):
+for i, (x, y) in enumerate(dataset):
     if i < 5000 and y == 0:
         model.learn_one(x)
         continue

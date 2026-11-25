@@ -15,7 +15,6 @@ import aberrant.model.graph as graph_api
 import aberrant.model.sketch as sketch_api
 import aberrant.model.svm as svm_api
 import aberrant.model.timeseries as timeseries_api
-import aberrant.stream as stream_api
 from aberrant import __version__
 from aberrant.base import (
     BaseModel,
@@ -26,6 +25,7 @@ from aberrant.base import (
 )
 from aberrant.calibration import CALIBRATORS, ScoreCalibrator
 from aberrant.catalog import MODEL_CATALOG, DetectorConfig, build_detector
+from aberrant.datasets import Dataset, DatasetStream, load
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import EvaluationRecord, EvaluationResult, PrequentialEvaluator
 from aberrant.exceptions import ConfigurationError
@@ -62,7 +62,6 @@ from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
 )
-from aberrant.stream import BatchStreamer, Dataset, NpzStreamer, load
 from aberrant.transform import (
     FeatureSchemaGuard,
     IncrementalPCA,
@@ -123,8 +122,7 @@ def test_public_imports_base_smoke() -> None:
     assert build_detector is not None
     assert Dataset is not None
     assert load is not None
-    assert BatchStreamer is not None
-    assert NpzStreamer is not None
+    assert DatasetStream is not None
 
 
 def test_calibration_public_imports_base_smoke() -> None:
@@ -166,7 +164,6 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (svm_api, "GraphGatedOneClassSVM"),
         (svm_api, "IncrementalOneClassSVMAdaptiveKernel"),
         (timeseries_api, "XLagDAMP"),
-        (stream_api, "DatasetStreamer"),
     )
     for module, name in removed:
         assert not hasattr(module, name)
@@ -252,7 +249,7 @@ def test_every_export_has_one_public_home() -> None:
         "aberrant._utils.deep",
         "aberrant.transform.preprocessing",
         "aberrant.transform.projection",
-        "aberrant.stream.dataset",
+        "aberrant.stream",
         "aberrant.utils",
     ],
 )

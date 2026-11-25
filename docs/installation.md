@@ -19,9 +19,9 @@ any selected optional extras; it is not part of the current CI matrix.
     uv pip install aberrant
     ```
 
-The base installation includes NumPy, tqdm, and the dataset cache's file
-locking dependency. It is enough for all NumPy-backed detectors, transforms,
-drift detectors, and dataset streaming.
+The base installation depends on NumPy alone. It is enough for all
+NumPy-backed detectors, transforms, drift detectors, calibration and the
+benchmark datasets.
 
 ## Add optional capabilities
 
