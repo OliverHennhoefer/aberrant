@@ -23,6 +23,8 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.ModelProtocol
 
+::: aberrant.base.AttributingModelProtocol
+
 ::: aberrant.base.ForecasterProtocol
 
 ::: aberrant.base.RegressorProtocol

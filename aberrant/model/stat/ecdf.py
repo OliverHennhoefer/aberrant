@@ -175,7 +175,7 @@ class _OnlineTailDetector(BaseModel):
         score, _ = self._evaluate(event.features.values)
         return score
 
-    def explain_one(self, x: dict[str, float]) -> dict[str, float]:
+    def attribute_one(self, x: dict[str, float]) -> dict[str, float]:
         """Return each feature's contribution to ``score_one(x)``.
 
         The contributions are the per-feature negative log tail probabilities

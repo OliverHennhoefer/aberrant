@@ -286,6 +286,39 @@ class HalfSpaceTrees(BaseModel):
 
         return min(max(1.0 - total_score / max_score, 0.0), 1.0)
 
+    def attribute_one(self, x: dict[str, float]) -> dict[str, float]:
+        """Return each feature's share of ``score_one(x)`` above its baseline.
+
+        Every event's path starts at the root, where it would score
+        ``1 - 2**-height``. Each split on the way to a tree's scoring node
+        changes that tree's term by how much less than half of the parent's
+        mass the half it enters holds, weighted by depth; the change goes to
+        the split's feature. The shares therefore sum to
+        ``score_one(x) - (1 - 2**-height)``: positive shares send the event
+        into sparse halves, negative ones into dense halves. All shares are 0
+        before the first reference window.
+        """
+        prepared = self._schema.preview(x)
+        names = prepared.names
+        if not self._initialized or self._reference_window_size == 0:
+            return dict.fromkeys(names, 0.0)
+        values = prepared.values.tolist()
+        shares = [0.0] * len(names)
+        size_limit = 0.1 * self.window_size
+        for tree in self._trees:
+            node: Any = tree
+            weighted = float(node.r_mass)
+            for depth in range(1, self.height + 1):
+                if node.r_mass <= size_limit:
+                    break
+                feature = node.feature
+                node = node.left if values[feature] < node.threshold else node.right
+                child = float(node.r_mass * 2**depth)
+                shares[feature] += weighted - child
+                weighted = child
+        total = self.n_trees * self._reference_window_size * 2**self.height
+        return {name: share / total for name, share in zip(names, shares, strict=True)}
+
     def _total_mass_score(self, x: list[float]) -> float:
         """
         Sum the depth-weighted reference mass of each tree's scoring node.

@@ -31,6 +31,11 @@ Semantic Versioning.
   spread is the predictive standard deviation of each lead, with the noise
   variance estimated online, and `learn_one(None)` learns a missing reading.
   The catalog lists it as `kalman_forecaster`.
+- `attribute_one(x)` on `LODA`, `MovingMahalanobisDistance` and
+  `HalfSpaceTrees`, alongside `OnlineECOD` and `OnlineCOPOD`: each feature's
+  share of the score, without learning. The shares sum to the score minus
+  the model's documented baseline. `AttributingModelProtocol` in
+  `aberrant.base` recognizes such models.
 
 ### Fixed
 
@@ -85,6 +90,11 @@ Semantic Versioning.
   logarithm base of the online isolation forest's depth limit.
 
 ### Changed
+
+- **Breaking:** `OnlineECOD.explain_one` and `OnlineCOPOD.explain_one` are
+  now `attribute_one`, the name every model that splits its score among
+  features uses. `explain_one` stays on `ResidualDetector` and
+  `MultivariateRollingMatrixProfile`, which return their own tuples.
 
 - **Breaking:** pickles of models, transformers, forecasters, drift detectors
   and calibrators record the aberrant version that wrote them, and only that

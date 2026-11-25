@@ -229,23 +229,32 @@ class LODA(BaseModel):
         self._bin_counts.reshape(-1)[bins] += 1.0
         self._bin_totals += 1.0
 
-    def _score_projected(self, projected: np.ndarray) -> float:
-        if (
-            self._inner_edges is None
-            or self._bin_counts is None
-            or self._bin_totals is None
-        ):
-            return 0.0
+    def _masses(self) -> np.ndarray:
+        """Every bin's smoothed probability, one row per projection."""
+        assert self._bin_counts is not None and self._bin_totals is not None
+        masses: np.ndarray = (self._bin_counts + self.pseudocount) / (
+            self._bin_totals[:, np.newaxis] + self.pseudocount * float(self.n_bins)
+        )
+        return masses
 
+    def _terms(self, projected: np.ndarray) -> np.ndarray:
+        """Each projection's negative log bin probability."""
+        assert self._inner_edges is not None
+        assert self._bin_counts is not None and self._bin_totals is not None
         bins = self._flat_bins(projected, self._inner_edges)
         counts = self._bin_counts.take(bins)
-
         mass = (counts + self.pseudocount) / (
             self._bin_totals + self.pseudocount * float(self.n_bins)
         )
+        terms: np.ndarray = -np.log(mass)
+        return terms
+
+    def _score_projected(self, projected: np.ndarray) -> float:
+        if not self._ready:
+            return 0.0
         # The mean of the negative log bin probabilities; np.add.reduce is the
         # sum that np.mean takes, without its Python-level overhead.
-        return float(np.add.reduce(-np.log(mass))) / self.n_projections
+        return float(np.add.reduce(self._terms(projected))) / self.n_projections
 
     @property
     def readiness(self) -> Readiness:
@@ -278,3 +287,27 @@ class LODA(BaseModel):
 
         projected = self._project(event.features.values)
         return self._score_projected(projected)
+
+    def attribute_one(self, x: dict[str, float]) -> dict[str, float]:
+        """Return each feature's share of ``score_one(x)`` above its baseline.
+
+        A projection's term exceeds what a typical event scores there, the
+        entropy of its histogram, by some amount; that excess is shared
+        equally among the features the projection uses. A feature's share is
+        therefore high when the projections through it find the event less
+        probable than usual, which is the comparison behind Pevny's feature
+        explanations made additive. The shares sum to ``score_one(x)`` minus
+        the baseline, the mean entropy of the histograms: the score a typical
+        event gets. All shares are 0 during warm-up.
+        """
+        event = self._boundary.preview(x)
+        names = event.features.names
+        if not self._boundary.schema.is_established or not self._ready:
+            return dict.fromkeys(names, 0.0)
+        assert self._projection_matrix is not None
+        masses = self._masses()
+        entropies = np.add.reduce(-masses * np.log(masses), axis=1)
+        excess = self._terms(self._project(event.features.values)) - entropies
+        active = self._projection_matrix != 0.0
+        shares = (excess / active.sum(axis=1)) @ active / self.n_projections
+        return dict(zip(names, shares.tolist(), strict=True))
