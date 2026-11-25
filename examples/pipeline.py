@@ -1,24 +1,17 @@
 from sklearn.metrics import average_precision_score
 
-from aberrant.model.distance.knn import KNN
-from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.model.distance import KNN
 from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, MinMaxScaler, StandardScaler
 
 # Baseline pipeline: scaling + KNN.
-baseline_pipeline = MinMaxScaler() | KNN(
-    k=55,
-    similarity_engine=FaissSimilaritySearchEngine(window_size=250, warm_up=50),
-)
+baseline_pipeline = MinMaxScaler() | KNN(k=55, window_size=250)
 
 # PCA pipeline: scaling + incremental PCA + KNN.
 pca_pipeline = (
     StandardScaler()
     | IncrementalPCA(n_components=3, warm_up=100)
-    | KNN(
-        k=55,
-        similarity_engine=FaissSimilaritySearchEngine(window_size=250, warm_up=50),
-    )
+    | KNN(k=55, window_size=250)
 )
 
 labels, baseline_scores, pca_scores = [], [], []

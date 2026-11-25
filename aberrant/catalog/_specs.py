@@ -18,7 +18,6 @@ class ComponentKind(str, Enum):
 
     MODEL = "model"
     TRANSFORMER = "transformer"
-    SIMILARITY_ENGINE = "similarity_engine"
     FORECASTER = "forecaster"
 
 
@@ -39,7 +38,6 @@ class FeatureSchemaKind(str, Enum):
     FIXED = "fixed"
     EVOLVING = "evolving"
     UNRESTRICTED = "unrestricted"
-    ENGINE_DEFINED = "engine_defined"
 
 
 class ScoreKind(str, Enum):
@@ -50,7 +48,6 @@ class ScoreKind(str, Enum):
     ZERO_TO_ONE = "zero_to_one"
     NON_NEGATIVE = "non_negative"
     SIGNED = "signed"
-    ENGINE_DEFINED = "engine_defined"
 
 
 class StateKind(str, Enum):
@@ -70,7 +67,6 @@ class WarmupUnit(str, Enum):
     BUCKETS = "buckets"
     OBSERVERS = "observers"
     ACTIVE_GRAPHS = "active_graphs"
-    ENGINE_DEFINED = "engine_defined"
 
 
 @dataclass(frozen=True, slots=True)

@@ -43,8 +43,8 @@ Algorithm constructor invariants are checked when building.
 Configuration exceptions retain their messages and subclasses and expose an
 immutable tuple of `ConfigurationIssue` records through `error.issues`. A record
 contains a stable `code`, a tuple `loc` of object keys and array indexes, and a
-`message`. A nested engine field can have location
-`("model", "params", "similarity_engine", "params", "warm_up")`.
+`message`. A nested forecaster field can have location
+`("model", "params", "model", "params", "season_length")`.
 Independent parameter failures are collected. Constructor-only invariants use
 the component's `params` location when a field cannot be identified reliably.
 Use these locations directly in forms; do not parse human-readable messages.
@@ -56,8 +56,7 @@ catalog or changing executable fingerprints.
 
 ## Inspect the catalog
 
-`MODEL_CATALOG`, `TRANSFORMER_CATALOG`, `SIMILARITY_ENGINE_CATALOG`, and
-`FORECASTER_CATALOG` are read-only mappings keyed by stable component identifiers. Each entry exposes
+`MODEL_CATALOG`, `TRANSFORMER_CATALOG`, and `FORECASTER_CATALOG` are read-only mappings keyed by stable component identifiers. Each entry exposes
 its public import path, family, optional extra, availability in the current
 environment, constructor parameter schema, and operational capabilities.
 Identifiers and the versioned configuration shape are part of the public API;
@@ -108,8 +107,8 @@ Geometric and harmonic moving averages use `retained_values`: supply
 harmonic learning ignores zeros. Geometric readiness requires two retained
 values, or three with `absoluteValues=True`; harmonic readiness requires one.
 
-`feature_schema` distinguishes fixed-key models from feature-evolving or
-engine-defined behavior. `requires_unit_interval` identifies hard input-domain
+`feature_schema` distinguishes fixed-key models from feature-evolving and
+unrestricted ones. `requires_unit_interval` identifies hard input-domain
 requirements such as Half-Space Trees; it does not imply that applications must
 use a particular transformer when their source data already satisfies them.
 
@@ -211,27 +210,18 @@ assert len(dead_letters) == 1
 
 ## Configure KNN and FAISS
 
-FAISS has a stable public import at `aberrant.similarity`. Declarative KNN
-configuration accepts a nested similarity-engine component:
+`KNN` keeps its own window of recent events and computes exact distances with
+NumPy. For wide or long windows, `backend="faiss"` searches a FAISS index
+instead:
 
 ```python
 from aberrant.catalog import create_model
 
-knn = create_model(
-    "knn",
-    {
-        "k": 5,
-        "similarity_engine": {
-            "id": "faiss",
-            "params": {"window_size": 1000, "warm_up": 20},
-        },
-    },
-)
+knn = create_model("knn", {"k": 5, "window_size": 1000})
 ```
 
-This requires `aberrant[faiss]`. The catalog reports the engine as unavailable
-when that extra is not installed and raises `MissingOptionalDependencyError`
-when construction is attempted.
+The FAISS backend requires `aberrant[faiss]`. Building `KNN` with
+`backend="faiss"` without that extra raises `MissingOptionalDependencyError`.
 
 Some macOS PyTorch and `faiss-cpu` wheel combinations bundle separate OpenMP
 runtimes and abort when both are activated in one process. aberrant does not set

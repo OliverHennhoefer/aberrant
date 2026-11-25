@@ -67,14 +67,14 @@ implementation.
 
 | Class | Default score | Built-in warm-up | State policy |
 | --- | --- | --- | --- |
-| `KNN` | Engine-defined; the FAISS engine returns mean Euclidean distance to the `k` nearest retained points | Engine-defined; FAISS returns `0.0` before `warm_up` | Engine-defined; FAISS uses a `window_size` sliding window |
+| `KNN` | Non-negative mean Euclidean distance to the `k` nearest retained events | `k` learned events | The last `window_size` learned events |
 | `LocalOutlierFactor` | Non-negative LOF; values near `1` indicate density comparable to neighbors, larger values indicate lower local density | Returns `0.0` until more than `k` points are learned | At most `window_size` retained points, each with a list of at most `2 * k` nearest neighbors |
 | `CellNeighborhoodDetector` | `[0, 1]` from radius-neighbor scarcity | At least `warm_up * slide_size` events and `k + 1` retained points | At most `window_size` points plus cell indexes |
 | `SDOStream` | Non-negative median distance to nearest active observers | `warm_up`, defaulting to at least `n_neighbors` | Exactly up to `max_observers` observers with exponentially faded activity |
 
-For the FAISS-backed KNN, configure `warm_up >= k`; otherwise the engine can
-be warm while still holding too few points for the requested neighbor count.
-Install it with `aberrant[faiss]`.
+`KNN` computes exact float64 distances with NumPy. `backend="faiss"` searches
+an exact float32 FAISS index instead, which is faster for wide or long windows
+and needs `aberrant[faiss]`.
 
 `CellNeighborhoodDetector` scores each query with the distance-based outlier
 rule that NETS computes (fewer than `k` window points within `radius`), not the

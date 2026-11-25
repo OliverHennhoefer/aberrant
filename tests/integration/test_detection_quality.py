@@ -39,7 +39,6 @@ from aberrant.model.stat import (
     OnlineECOD,
 )
 from aberrant.model.svm import AdaptiveOneClassSVM
-from aberrant.similarity import FaissSimilaritySearchEngine
 from aberrant.stream import Dataset, get_dataset_info
 from aberrant.transform import MinMaxScaler, StandardScaler
 from tests.integration._quality import (
@@ -55,10 +54,8 @@ N_TEST = 5_000
 SEED = 42
 
 
-def _knn(seed: int) -> object:
-    return StandardScaler() | KNN(
-        k=55, similarity_engine=FaissSimilaritySearchEngine(window_size=250, warm_up=50)
-    )
+def _knn(seed: int, backend: str = "numpy") -> object:
+    return StandardScaler() | KNN(k=55, window_size=250, backend=backend)
 
 
 def _autoencoder(seed: int) -> object:
@@ -179,7 +176,14 @@ CASES = [
         0.97,
         0.75,
     ),
-    Case("knn-faiss", _knn, 0.97, 0.82, requires=("faiss",)),
+    Case("knn", _knn, 0.97, 0.82),
+    Case(
+        "knn-faiss",
+        lambda s: _knn(s, backend="faiss"),
+        0.97,
+        0.82,
+        requires=("faiss",),
+    ),
     Case(
         "loda",
         lambda s: (

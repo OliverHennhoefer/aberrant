@@ -204,56 +204,8 @@ def _kitnet_warmup(params: Parameters) -> WarmupRequirement:
     return _events(feature_map + detector)
 
 
-def _uses_faiss(params: Parameters) -> bool:
-    engine = params.get("similarity_engine")
-    if isinstance(engine, Mapping):
-        return engine.get("id") == "faiss"
-    return engine is not None and engine.__class__.__name__ == (
-        "FaissSimilaritySearchEngine"
-    )
-
-
-def _knn_feature_schema(params: Parameters) -> FeatureSchemaKind:
-    return (
-        FeatureSchemaKind.FIXED
-        if _uses_faiss(params)
-        else FeatureSchemaKind.ENGINE_DEFINED
-    )
-
-
-def _knn_score(params: Parameters) -> ScoreKind:
-    return ScoreKind.NON_NEGATIVE if _uses_faiss(params) else ScoreKind.ENGINE_DEFINED
-
-
-def _knn_state(params: Parameters) -> StateKind:
-    return StateKind.BOUNDED if _uses_faiss(params) else StateKind.EXTERNAL
-
-
-def _knn_orientation(params: Parameters) -> bool | None:
-    return True if _uses_faiss(params) else None
-
-
 def _knn_warmup(params: Parameters) -> WarmupRequirement:
-    k = _as_int(params.get("k", 1))
-    engine = params.get("similarity_engine")
-    if isinstance(engine, Mapping):
-        engine_params = engine.get("params", {})
-        if isinstance(engine_params, Mapping) and "warm_up" in engine_params:
-            warm_up = _as_int(engine_params["warm_up"])
-            window_size = _as_int(engine_params.get("window_size", warm_up))
-            if not k <= warm_up <= window_size:
-                raise ValueError("FAISS KNN requires k <= warm_up <= window_size")
-            return _events(warm_up)
-    engine_warm_up = getattr(engine, "warm_up", None)
-    if engine_warm_up is not None:
-        minimum = _as_int(engine_warm_up)
-        engine_window_size = getattr(engine, "window_size", None)
-        if k > minimum or (
-            engine_window_size is not None and minimum > _as_int(engine_window_size)
-        ):
-            raise ValueError("KNN requires k <= warm_up <= window_size")
-        return _events(minimum)
-    return WarmupRequirement(None, WarmupUnit.ENGINE_DEFINED)
+    return _events(_as_int(params.get("k", 10)))
 
 
 def _cell_warmup(params: Parameters) -> WarmupRequirement:
@@ -470,18 +422,10 @@ _MODEL_SPECS = (
         "distance",
         _capabilities(
             event_kind=EventKind.TABULAR,
-            feature_schema=_knn_feature_schema,
-            score_kind=_knn_score,
+            score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_knn_warmup,
-            state=_knn_state,
-            resettable=False,
-            higher_is_more_anomalous=_knn_orientation,
-        ),
-        dependencies=(
-            ComponentDependency(
-                "similarity_engine",
-                ComponentKind.SIMILARITY_ENGINE,
-            ),
+            state=StateKind.BOUNDED,
+            resettable=True,
         ),
     ),
     _model(
@@ -1042,19 +986,6 @@ _TRANSFORMER_SPECS = (
     ),
 )
 
-_SIMILARITY_SPECS = (
-    ComponentSpec(
-        id="faiss",
-        display_name="FaissSimilaritySearchEngine",
-        kind=ComponentKind.SIMILARITY_ENGINE,
-        family="nearest_neighbor",
-        import_path="aberrant.similarity.FaissSimilaritySearchEngine",
-        optional_extra="faiss",
-        dependency_module="faiss",
-    ),
-)
-
-
 _FORECASTER_SPECS = (
     ComponentSpec(
         id="seasonal_naive",
@@ -1089,7 +1020,6 @@ def _index(specs: tuple[_Spec, ...]) -> Mapping[str, _Spec]:
 
 MODEL_CATALOG: Mapping[str, ModelSpec] = _index(_MODEL_SPECS)
 TRANSFORMER_CATALOG: Mapping[str, TransformerSpec] = _index(_TRANSFORMER_SPECS)
-SIMILARITY_ENGINE_CATALOG: Mapping[str, ComponentSpec] = _index(_SIMILARITY_SPECS)
 FORECASTER_CATALOG: Mapping[str, ComponentSpec] = _index(_FORECASTER_SPECS)
 
 
@@ -1112,17 +1042,6 @@ def get_transformer_spec(component_id: str) -> TransformerSpec:
         ) from exc
 
 
-def get_similarity_engine_spec(component_id: str) -> ComponentSpec:
-    """Return one similarity-engine entry or raise ``UnknownComponentError``."""
-    try:
-        return SIMILARITY_ENGINE_CATALOG[component_id]
-    except KeyError as exc:
-        raise UnknownComponentError(
-            ComponentKind.SIMILARITY_ENGINE.value,
-            component_id,
-        ) from exc
-
-
 def get_forecaster_spec(component_id: str) -> ComponentSpec:
     """Return one forecaster or regressor entry or raise ``UnknownComponentError``."""
     try:
@@ -1141,8 +1060,5 @@ def catalog_manifest() -> dict[str, object]:
         "aberrant_version": __version__,
         "models": [spec.as_dict() for spec in MODEL_CATALOG.values()],
         "transformers": [spec.as_dict() for spec in TRANSFORMER_CATALOG.values()],
-        "similarity_engines": [
-            spec.as_dict() for spec in SIMILARITY_ENGINE_CATALOG.values()
-        ],
         "forecasters": [spec.as_dict() for spec in FORECASTER_CATALOG.values()],
     }

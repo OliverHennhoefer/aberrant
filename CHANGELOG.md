@@ -58,6 +58,11 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** `KNN(k=10, window_size=1000, backend="numpy")` keeps its own
+  window of recent events and scores the mean Euclidean distance to the `k`
+  nearest of them, `0.0` until the window holds `k` events. The default NumPy
+  backend needs no extra; `backend="faiss"` uses an exact FAISS index and needs
+  `aberrant[faiss]`. KNN no longer takes a `similarity_engine`.
 - **Breaking:** one shared contract for models, transformers, forecasters,
   regressors and drift detectors. Each stores its constructor arguments under
   their own names, `get_params()` returns them, `clone()` builds an untrained
@@ -199,6 +204,11 @@ Semantic Versioning.
 
 ### Removed
 
+- **Breaking:** `aberrant.similarity`, `FaissSimilaritySearchEngine`,
+  `BaseSimilaritySearchEngine`, the `similarity_engine` catalog kind,
+  `SIMILARITY_ENGINE_CATALOG`, `get_similarity_engine_spec`,
+  `create_similarity_engine` and the manifest's `similarity_engines` list. The
+  KNN backends replace them.
 - **Breaking:** `normalize_score` on `AnoEdgeL`, `ISCONNA`, `MIDAS`,
   `StreamSpot` and `RandomCutForest`, and `score_scale` on `RandomCutForest`.
   Map raw scores to a common scale with `aberrant.calibration`.

@@ -65,7 +65,6 @@ nav:
     - Forecasting: api/forecast.md
     - Stream Datasets: api/stream.md
     - Evaluation: api/evaluate.md
-    - Similarity Search: api/similarity.md
     - Exceptions: api/exceptions.md
   - Contributing: contributing.md
   - Changelog: changelog.md

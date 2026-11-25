@@ -10,6 +10,3 @@ rule that NETS computes, instead of the paper's window-level outlier set.
 ::: aberrant.model.distance.CellNeighborhoodDetector
 
 ::: aberrant.model.distance.SDOStream
-
-`KNN` needs a similarity engine; see the
-[similarity search API](../similarity.md).

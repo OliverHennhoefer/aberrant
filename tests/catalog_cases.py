@@ -66,7 +66,7 @@ def model_params(component_id: str) -> dict[str, object]:
 MODEL_IDS = [
     component_id
     for component_id, spec in MODEL_CATALOG.items()
-    if spec.available and spec.declarative and component_id != "knn"
+    if spec.available and spec.declarative
 ]
 TRANSFORMER_IDS = [
     component_id

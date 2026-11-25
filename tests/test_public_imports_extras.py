@@ -6,10 +6,10 @@ pytest.importorskip("torch")
 pytest.importorskip("faiss")
 
 from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
-from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.model.distance import KNN
 
 
 def test_public_imports_extras_smoke() -> None:
     assert Autoencoder is not None
     assert OnlineAutoencoderEnsemble is not None
-    assert FaissSimilaritySearchEngine is not None
+    assert KNN(backend="faiss").backend == "faiss"

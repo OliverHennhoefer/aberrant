@@ -163,14 +163,14 @@ jobs:
         run: |
           uv run --locked python - <<'PY'
           from aberrant.model.deep import Autoencoder, OnlineAutoencoderEnsemble
-          from aberrant.similarity import FaissSimilaritySearchEngine
+          from aberrant.model.distance import KNN
 
           assert Autoencoder is not None
           assert OnlineAutoencoderEnsemble is not None
-          engine = FaissSimilaritySearchEngine(window_size=8, warm_up=2)
-          engine.append({"x": 0.0, "y": 0.0})
-          engine.append({"x": 1.0, "y": 1.0})
-          assert isinstance(engine.search({"x": 0.5, "y": 0.5}, n_neighbors=1), float)
+          model = KNN(k=1, window_size=8, backend="faiss")
+          model.learn_one({"x": 0.0, "y": 0.0})
+          model.learn_one({"x": 1.0, "y": 1.0})
+          assert isinstance(model.score_one({"x": 0.5, "y": 0.5}), float)
           PY
 
       - name: Compare ECOD and COPOD with PyOD
@@ -178,7 +178,7 @@ jobs:
 
       - name: FAISS model smoke tests
         run: |
-          uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_catalog_faiss.py tests/transformers/test_pca_pipeline.py -q
+          uv run --locked python -m pytest tests/models/test_distance_knn.py -q
           uv run --locked python -m pytest tests/test_stream_longevity_forests_distance.py -k faiss -q
           uv run --locked python -m pytest tests/test_public_imports_extras.py -q
           uv run --locked python -m pytest tests/integration/test_detection_quality.py -k knn-faiss -q
@@ -220,8 +220,8 @@ jobs:
       - name: Install Python
         run: uv python install 3.11
 
-      # FAISS is installed so the coverage report includes the FAISS engine,
-      # which the extras job tests.
+      # FAISS is installed so the coverage report includes the FAISS backend
+      # of KNN, which the extras job tests.
       - name: Install dependencies
         run: uv sync --locked --extra faiss
 

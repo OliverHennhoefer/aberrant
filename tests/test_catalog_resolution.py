@@ -24,7 +24,7 @@ from aberrant.exceptions import (
     MissingOptionalDependencyError,
     UnknownComponentError,
 )
-from aberrant.similarity import BaseSimilaritySearchEngine
+from aberrant.forecast import SeasonalNaive
 
 
 def example():
@@ -120,17 +120,12 @@ def test_resolution_does_not_construct_or_validate_constructor_only_invariants()
     assert error.value.issues[0].loc == ("model", "params")
 
 
-class RuntimeEngine(BaseSimilaritySearchEngine):
-    def append(self, x):
-        pass
-
-    def search(self, x, n_neighbors):
-        return 0.0
-
-
 def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
     config = DetectorConfig(
-        ComponentConfig("knn", {"k": 1, "similarity_engine": RuntimeEngine()})
+        ComponentConfig(
+            "residual_detector",
+            {"target": "a", "model": SeasonalNaive(season_length=2)},
+        )
     )
     resolved = config.resolve()
     assert resolved.build() is not resolved.build()
@@ -273,23 +268,26 @@ def test_collecting_other_errors_preserves_the_first_exception_subclass():
     }
 
 
-def test_missing_dependency_keeps_its_subclass_and_nested_location(monkeypatch):
+def test_missing_dependency_keeps_its_subclass_and_location(monkeypatch):
     monkeypatch.setattr(
-        ComponentSpec, "available", property(lambda self: self.id != "faiss")
+        ComponentSpec,
+        "available",
+        property(lambda self: self.id != "seasonal_naive"),
     )
+    monkeypatch.setattr(ComponentSpec, "optional_extra", "forecast", raising=False)
     with pytest.raises(MissingOptionalDependencyError) as error:
         DetectorConfig(
             ComponentConfig(
-                "knn",
+                "residual_detector",
                 {
-                    "k": 1,
-                    "similarity_engine": {"id": "faiss"},
+                    "target": "a",
+                    "model": {"id": "seasonal_naive", "params": {"season_length": 2}},
                 },
             )
         ).resolve()
-    assert error.value.extra == "faiss"
+    assert error.value.extra == "forecast"
     assert error.value.issues[0].code == "missing_dependency"
-    assert error.value.issues[0].loc == ("model", "params", "similarity_engine", "id")
+    assert error.value.issues[0].loc == ("model", "params", "model", "id")
 
 
 @pytest.mark.parametrize(
@@ -367,12 +365,12 @@ def test_configs_built_in_python_are_validated_like_parsed_ones(make):
 
 
 def test_nested_configs_and_sets_are_frozen_and_serialized():
-    engine = ComponentConfig("faiss", {"window_size": 8})
-    config = ComponentConfig("knn", {"similarity_engine": engine, "tags": {"a"}})
+    forecaster = ComponentConfig("seasonal_naive", {"season_length": 8})
+    config = ComponentConfig("residual_detector", {"model": forecaster, "tags": {"a"}})
     assert config.params["tags"] == frozenset({"a"})
-    assert config.as_dict()["params"]["similarity_engine"] == {
-        "id": "faiss",
-        "params": {"window_size": 8},
+    assert config.as_dict()["params"]["model"] == {
+        "id": "seasonal_naive",
+        "params": {"season_length": 8},
     }
 
 

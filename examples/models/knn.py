@@ -1,12 +1,10 @@
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from aberrant.model.distance.knn import KNN
-from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.model.distance import KNN
 from aberrant.stream import Dataset, load
 from aberrant.transform import MinMaxScaler
 
-engine = FaissSimilaritySearchEngine(window_size=250, warm_up=50)
-model = KNN(k=45, similarity_engine=engine)
+model = KNN(k=45, window_size=250)
 pipeline = MinMaxScaler() | model
 labels, scores = [], []
 dataset = load(Dataset.SHUTTLE)

@@ -7,7 +7,6 @@ coverage is isolated at test execution so other tests remain collectible.
 
 from __future__ import annotations
 
-import copy
 import gc
 import math
 import pickle
@@ -19,6 +18,7 @@ import numpy as np
 import pytest
 
 from aberrant.model.distance import (
+    KNN,
     CellNeighborhoodDetector,
     LocalOutlierFactor,
     SDOStream,
@@ -405,31 +405,26 @@ def test_lof_retains_only_current_window_and_matches_fresh_tail_model(
     assert pickle.dumps(model) == before
 
 
-def test_faiss_and_knn_native_indexes_follow_bounded_fifo_after_thousands_of_evictions():
-    pytest.importorskip("faiss")
-    from aberrant.model.distance.knn import KNN  # noqa: PLC0415
-    from aberrant.similarity import FaissSimilaritySearchEngine  # noqa: PLC0415
+@pytest.mark.parametrize("backend", ["numpy", "faiss"])
+def test_knn_window_follows_bounded_fifo_after_thousands_of_evictions(backend):
+    if backend == "faiss":
+        pytest.importorskip("faiss")
 
-    engine = FaissSimilaritySearchEngine(window_size=17, warm_up=3)
-    model = KNN(k=3, similarity_engine=engine)
-    recent = deque(maxlen=engine.window_size)
+    model = KNN(k=3, window_size=17, backend=backend)
+    recent = deque(maxlen=model.window_size)
     for i in range(2000):
         point = {"x": float(i), "y": float(i % 11)}
         model.learn_one(point)
         recent.append([point["x"], point["y"]])
-        assert len(engine._window) == len(recent)
-        assert engine.index.ntotal == len(recent)
+        assert model.n_samples_seen == len(recent)
         if i % 100 == 0 and len(recent) >= 3:
             query = np.array([i + 0.25, 4.0])
             distances = np.linalg.norm(np.asarray(recent) - query, axis=1)
             assert model.score_one({"x": query[0], "y": query[1]}) == pytest.approx(
                 np.sort(distances)[:3].mean(), rel=1e-5
             )
-            assert engine.index.ntotal == len(recent)
-    # The public snapshot cannot retain or mutate the authoritative vectors.
-    snapshot = copy.deepcopy(engine.window)
-    snapshot[-1]["x"] = -1e9
-    assert engine.window[-1]["x"] == 1999.0
+            if backend == "faiss":
+                assert model._index.ntotal == len(recent)
 
 
 _BOUNDED_MODELS = [
@@ -483,6 +478,7 @@ _BOUNDED_MODELS = [
         id="cell-neighborhood",
     ),
     pytest.param(lambda: LocalOutlierFactor(k=2, window_size=16), id="lof"),
+    pytest.param(lambda: KNN(k=2, window_size=16), id="knn"),
 ]
 
 
@@ -512,11 +508,10 @@ def test_bounded_models_retained_python_allocations_plateau(factory):
 )
 def test_faiss_large_finite_distance_matches_representable_euclidean_norm():
     pytest.importorskip("faiss")
-    from aberrant.similarity import FaissSimilaritySearchEngine  # noqa: PLC0415
 
-    engine = FaissSimilaritySearchEngine(window_size=4, warm_up=1)
-    engine.append({"x": 0.0})
-    assert engine.search({"x": 1e30}, 1) == pytest.approx(1e30, rel=1e-6)
+    model = KNN(k=1, window_size=4, backend="faiss")
+    model.learn_one({"x": 0.0})
+    assert model.score_one({"x": 1e30}) == pytest.approx(1e30, rel=1e-6)
 
 
 @pytest.mark.xfail(
