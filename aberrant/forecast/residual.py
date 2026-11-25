@@ -9,6 +9,7 @@ from aberrant._utils.validation import coerce_event_number, coerce_integer_count
 from aberrant.base.forecast import Forecast
 from aberrant.base.model import BaseModel
 from aberrant.base.protocols import FeatureMap, ForecasterProtocol, RegressorProtocol
+from aberrant.base.readiness import Readiness
 from aberrant.exceptions import ValidationError
 from aberrant.forecast.scores import nonconformity
 
@@ -88,6 +89,22 @@ class ResidualDetector(BaseModel):
         self.lead = resolved
         self.score = score
         self._issued: deque[Forecast | None] = deque(maxlen=max(resolved, 1))
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once a forecast or prediction exists for the next event.
+
+        A forecaster that is ready after ``r`` events makes the detector ready
+        after ``r + lead - 1``, since an event is scored against the forecast
+        issued ``lead`` events earlier.
+        """
+        if self._regressor is not None:
+            return self._regressor.readiness
+        assert self._forecaster is not None
+        model = self._forecaster.readiness
+        required = None if model.required is None else model.required + self.lead - 1
+        ready = len(self._issued) >= self.lead and self._issued[0] is not None
+        return Readiness(ready, model.observed, required, model.unit)
 
     def _split(self, x: FeatureMap) -> tuple[FeatureMap, float]:
         if self.target not in x:

@@ -40,7 +40,9 @@ def test_ready_after_one_measured_error_and_recovers_coefficients() -> None:
     events = list(_events(50))
     for count, (x, y) in enumerate(events, start=1):
         model.learn_one(x, y)
-        assert model.is_ready == (count >= 4)  # three coefficients, then one error
+        assert model.readiness.ready == (
+            count >= 4
+        )  # three coefficients, then one error
     assert model.feature_names == ("a", "b")
     assert model.coefficients == pytest.approx({"a": 3.0, "b": -2.0, "intercept": 0.5})
     prediction = model.predict_one({"a": 1.0, "b": 1.0})

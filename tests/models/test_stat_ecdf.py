@@ -462,7 +462,7 @@ def test_warm_up_and_readiness() -> None:
     assert model.readiness == Readiness(False, 2, 3)
     model.learn_one({"x": 3.0})
     assert model.readiness == Readiness(True, 3, 3)
-    assert model.is_ready
+    assert model.readiness.ready
     assert model.score_one({"x": 100.0}) > 0.0
 
 

@@ -54,7 +54,7 @@ of `10.0` with the default fallback maps a candidate of `13.0` to `3.0`.
 There is no clipping or normalization to `[0, 1]`.
 
 Missing features do not advance their own windows. `sample_counts` returns a
-detached snapshot of retained counts, and `is_ready` becomes true when every
+detached snapshot of retained counts, and `readiness.ready` becomes true when every
 learned feature has `warm_up` observations. An empty scaler is unready;
 introducing a new feature can make it unready again. Use `FeatureSchemaGuard`
 when the set of features must remain fixed. Transformations use provisional

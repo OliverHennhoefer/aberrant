@@ -8,6 +8,7 @@ import numpy as np
 
 from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 # Bound on the comparisons of warm-up rows with interior bin edges held at
 # once, so fitting the histograms needs about 1 MiB of temporaries.
@@ -245,6 +246,11 @@ class LODA(BaseModel):
         # The mean of the negative log bin probabilities; np.add.reduce is the
         # sum that np.mean takes, without its Python-level overhead.
         return float(np.add.reduce(-np.log(mass))) / self.n_projections
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` events have fitted the histograms."""
+        return Readiness(self._ready, self._samples_seen, self.warm_up)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""

@@ -174,7 +174,7 @@ for value in [0.0, 1.0, 0.0, -1.0] * 20:
     event = {"value": value}
     score, reference_start = detector.match_one(event)
     # score_one(event) returns the same score without the reference index.
-    if detector.is_ready:
+    if detector.readiness.ready:
         print(score, reference_start)
     detector.learn_one(event)
 ```
@@ -191,7 +191,7 @@ Reference starts must be more than that radius behind the query start, so
 overlap is allowed. Set `exclusion_zone=m-1` for nonoverlapping references.
 The window must hold at least `m + exclusion_zone + 1` samples. Scoring starts
 after `m + exclusion_zone` learned samples, without waiting for the window to
-fill; earlier calls return `0.0` and no match. Use `is_ready` to distinguish
+fill; earlier calls return `0.0` and no match. Use `readiness.ready` to distinguish
 warm-up zeros from genuine zero distances. Scores belong to the subsequence
 ending at the current event, and equal distances choose the earliest retained
 reference.
@@ -232,7 +232,7 @@ detector = MultivariateRollingMatrixProfile(
 for value in [0.0, 1.0, 0.0, -1.0] * 20:
     event = {"sensor_a": value, "sensor_b": 2 * value}
     score, reference_start, channel_distances = detector.explain_one(event)
-    if detector.is_ready:
+    if detector.readiness.ready:
         print(score, reference_start, channel_distances)
     detector.learn_one(event)
 ```

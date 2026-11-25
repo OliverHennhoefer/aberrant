@@ -6,6 +6,7 @@ from typing import overload
 from aberrant.base._parameters import Parameterized
 from aberrant.base.pipeline import ModelPipeline, Pipeline, TransformerPipeline
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
+from aberrant.base.readiness import Readiness
 
 
 class BaseTransformer(Parameterized, abc.ABC):
@@ -18,7 +19,14 @@ class BaseTransformer(Parameterized, abc.ABC):
     post-update transformations during ``learn_one``.
 
     Subclasses must implement the `learn_one` and `transform_one` methods.
+    ``readiness`` says whether the transformer has learned enough to
+    transform; the default suits a stateless transformer.
     """
+
+    @property
+    def readiness(self) -> Readiness:
+        """Whether the transformer has learned enough to transform."""
+        return Readiness(True)
 
     @abc.abstractmethod
     def learn_one(self, x: dict[str, float]) -> None:

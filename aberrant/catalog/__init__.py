@@ -6,9 +6,11 @@ from aberrant.catalog._config import (
     DetectorConfig,
     ResolvedDetectorConfig,
     build_detector,
+    catalog_manifest,
     create_model,
     create_transformer,
     detector_capabilities,
+    model_capabilities,
     normalize_detector_config,
     resolve_detector_config,
 )
@@ -17,7 +19,6 @@ from aberrant.catalog._registry import (
     FORECASTER_CATALOG,
     MODEL_CATALOG,
     TRANSFORMER_CATALOG,
-    catalog_manifest,
     get_forecaster_spec,
     get_model_spec,
     get_transformer_spec,
@@ -34,8 +35,6 @@ from aberrant.catalog._specs import (
     ScoreKind,
     StateKind,
     TransformerSpec,
-    WarmupRequirement,
-    WarmupUnit,
 )
 
 __all__ = [
@@ -58,8 +57,6 @@ __all__ = [
     "ScoreKind",
     "StateKind",
     "TransformerSpec",
-    "WarmupRequirement",
-    "WarmupUnit",
     "build_detector",
     "catalog_manifest",
     "create_model",
@@ -68,6 +65,7 @@ __all__ = [
     "get_forecaster_spec",
     "get_model_spec",
     "get_transformer_spec",
+    "model_capabilities",
     "normalize_detector_config",
     "resolve_detector_config",
 ]

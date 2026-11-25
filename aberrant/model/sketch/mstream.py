@@ -13,6 +13,7 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness, ReadinessUnit
 
 # Categorical hashes of an event without categorical features.
 _NO_CATEGORIES = np.empty(0, dtype=np.int64)
@@ -87,9 +88,9 @@ class MStream(BaseModel):
             arrival. The field is excluded from modeled features.
         categorical_features: Feature names treated as integer-like categorical
             identifiers. Every other feature is numeric.
-        warm_up: Required integer bucket-index distance from the first
+        warm_up: Buckets that learned events must span past the first
             learned bucket before scoring begins. With explicit time, skipped
-            bucket numbers contribute to this distance.
+            bucket numbers count towards this span.
         seed: Seed for model-local categorical and record hash generation.
 
     References:
@@ -437,6 +438,18 @@ class MStream(BaseModel):
         # Initial log(1) preserves log(1 + sum(statistics)), including all zeros.
         return float(np.logaddexp.reduce(log_statistics, initial=0.0))
 
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once learned events span ``warm_up`` buckets past the first."""
+        state = self._state
+        span = 0 if state is None else state.current_bucket - state.first_bucket
+        return Readiness(
+            state is not None and span >= self.warm_up,
+            span,
+            self.warm_up,
+            ReadinessUnit.BUCKETS,
+        )
+
     def learn_one(self, x: dict[str, float]) -> None:
         """Update model state with a single sample."""
         event = self._boundary.preview(x)
@@ -501,7 +514,7 @@ class MStream(BaseModel):
             state.numeric.indices,
             state.categorical.indices,
         )
-        if self._time_index(state, bucket) - 1 < self.warm_up:
+        if not self.readiness.ready:
             return 0.0
 
         normalized = self._normalize_numeric(state.numeric, numeric, update=False)

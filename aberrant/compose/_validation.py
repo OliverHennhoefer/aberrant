@@ -3,9 +3,8 @@
 from collections.abc import Sequence
 from heapq import heappop, heappush
 
-from aberrant._utils.validation import coerce_event_number, coerce_integer_count
+from aberrant._utils.validation import coerce_event_number
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
-from aberrant.base.readiness import ReadinessProtocol
 from aberrant.compose._types import INPUT, GraphComponent, GraphNode, MergeNode
 from aberrant.exceptions import ConfigurationError
 
@@ -115,12 +114,6 @@ def _validate_transformer(node: GraphNode, owners: set[int]) -> None:
     if id(node.transformer) in owners:
         raise ConfigurationError("Each component instance must belong to one node")
     owners.add(id(node.transformer))
-    if node.minimum_updates is not None:
-        coerce_integer_count(node.minimum_updates, label="minimum_updates", minimum=0)
-    elif not isinstance(node.transformer, ReadinessProtocol):
-        raise ConfigurationError(
-            f"Custom transformer {node.id!r} needs explicit minimum_updates or readiness"
-        )
 
 
 def checked_features(

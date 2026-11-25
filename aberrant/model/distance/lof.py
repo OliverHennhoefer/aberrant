@@ -8,6 +8,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 class LocalOutlierFactor(BaseModel):
@@ -121,6 +122,11 @@ class LocalOutlierFactor(BaseModel):
     def n_points(self) -> int:
         """Number of points currently in the window."""
         return self._n_points
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the window holds ``k + 1`` events."""
+        return Readiness.after(self._n_points, self.k + 1)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """
@@ -247,10 +253,7 @@ class LocalOutlierFactor(BaseModel):
         """
         prepared = self._schema.preview(x)
 
-        # Need at least k+1 points to compute LOF
-        if self._n_points <= self.k:
-            return 0.0
-        if not self._schema.is_established:
+        if not self.readiness.ready:
             return 0.0
 
         distances = self._distances(prepared.values)

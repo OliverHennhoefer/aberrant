@@ -13,6 +13,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, PreparedFeatures
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 _Sample = TypeVar("_Sample", float, np.ndarray)
 _Statistics = TypeVar(
@@ -96,9 +97,11 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
         return len(self._history)
 
     @property
-    def is_ready(self) -> bool:
-        """Whether the next valid event has an eligible reference subsequence."""
-        return self._samples_seen >= self.subsequence_length + self.exclusion_zone
+    def readiness(self) -> Readiness:
+        """Ready once the next event has an eligible reference subsequence."""
+        return Readiness.after(
+            self._samples_seen, self.subsequence_length + self.exclusion_zone
+        )
 
     def _learn(
         self,

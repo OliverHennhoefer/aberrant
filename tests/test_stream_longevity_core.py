@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from aberrant._utils.validation import EdgeEventBoundary, MonotonicClock
-from aberrant.catalog import StateKind, get_model_spec
+from aberrant.catalog import StateKind, model_capabilities
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.exceptions import ValidationError
@@ -45,9 +45,9 @@ class _InfiniteStream:
 
 
 def test_catalog_distinguishes_mondrian_bounded_and_lifetime_modes() -> None:
-    spec = get_model_spec("mondrian_isolation_forest")
-    assert spec.capabilities().state is StateKind.GROWING
-    assert spec.capabilities({"window_size": 32}).state is StateKind.BOUNDED
+    model_id = "mondrian_isolation_forest"
+    assert model_capabilities(model_id).state is StateKind.GROWING
+    assert model_capabilities(model_id, {"window_size": 32}).state is StateKind.BOUNDED
 
 
 @pytest.mark.parametrize("size", [True, False, 0, -1, 2.5, math.inf, math.nan])

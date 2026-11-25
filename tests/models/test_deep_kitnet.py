@@ -29,7 +29,7 @@ class TestKitNET(unittest.TestCase):
         self.assertEqual(model.learning_rate, 0.1)
         self.assertEqual(model.hidden_ratio, 0.75)
         self.assertEqual(model.phase, "feature_map_warmup")
-        self.assertFalse(model.is_ready)
+        self.assertFalse(model.readiness.ready)
 
     def test_invalid_parameters(self) -> None:
         """Invalid constructor parameters raise ValueError."""
@@ -85,7 +85,7 @@ class TestKitNET(unittest.TestCase):
 
         for i in range(24):
             model.learn_one({"x": float(i), "y": float(i * 2)})
-        self.assertTrue(model.is_ready)
+        self.assertTrue(model.readiness.ready)
         self.assertEqual(model.phase, "ready")
 
     def test_ad_grace_zero_trains_before_ready(self) -> None:
@@ -190,7 +190,7 @@ class TestKitNET(unittest.TestCase):
         model.reset()
         self.assertIsNone(model._schema.names)
         self.assertEqual(model.phase, "feature_map_warmup")
-        self.assertFalse(model.is_ready)
+        self.assertFalse(model.readiness.ready)
         self.assertEqual(model.score_one({"x": 0.0, "y": 1.0}), 0.0)
 
     def test_repr_contains_key_settings(self) -> None:

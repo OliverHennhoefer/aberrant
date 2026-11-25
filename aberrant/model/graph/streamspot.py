@@ -15,6 +15,7 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness, ReadinessUnit
 from aberrant.exceptions import ValidationError
 
 
@@ -407,6 +408,16 @@ class StreamSpot(BaseModel):
     def _is_warm(self) -> bool:
         return (
             len(self._graph_states) >= self.warm_up and self._initialized_clusters > 0
+        )
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` graphs are active and clustered."""
+        return Readiness(
+            self._is_warm(),
+            len(self._graph_states),
+            self.warm_up,
+            ReadinessUnit.ACTIVE_GRAPHS,
         )
 
     def learn_one(self, x: dict[str, float]) -> None:

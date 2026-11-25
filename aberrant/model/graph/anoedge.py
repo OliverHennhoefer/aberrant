@@ -9,6 +9,7 @@ import numpy as np
 
 from aberrant._utils.validation import EdgeEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 _MatrixValue = Callable[[int, int], float]
 
@@ -361,6 +362,11 @@ class AnoEdgeL(BaseModel):
                     pass
             score += submatrix.likelihood(row, col, matrix_value)
         return score
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` edges have been learned."""
+        return Readiness.after(self._samples_seen, max(self.warm_up, 1))
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Insert an edge and update the local dense-submatrix states."""

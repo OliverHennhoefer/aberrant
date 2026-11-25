@@ -14,6 +14,30 @@ MODEL_PARAMS: dict[str, dict[str, object]] = {
     "rolling_matrix_profile": {"subsequence_length": 4},
     "damp": {"subsequence_length": 4},
 }
+# Small warm-ups, so a short stream reaches every model's readiness.
+QUICK_PARAMS: dict[str, dict[str, object]] = {
+    "online_autoencoder_ensemble": {"feature_map_grace": 5, "ad_grace": 7},
+    "knn": {"k": 3},
+    "local_outlier_factor": {"k": 3},
+    "cell_neighborhood_detector": {"k": 3, "slide_size": 4, "warm_up": 2},
+    "sdostream": {"max_observers": 8, "n_neighbors": 3},
+    "anoedge_l": {"warm_up": 5},
+    "isconna": {"warm_up": 5},
+    "midas": {"warm_up": 5},
+    "streamspot": {"warm_up": 1},
+    "asd_isolation_forest": {"max_samples": 16, "n_trees": 5},
+    "half_space_trees": {"window_size": 10, "n_trees": 5},
+    "mondrian_isolation_forest": {"n_trees": 5},
+    "online_isolation_forest": {"n_trees": 5, "max_leaf_samples": 8},
+    "random_cut_forest": {"n_trees": 5, "sample_size": 16},
+    "rhf": {"n_trees": 5, "window_size": 16},
+    "xstream": {"window_size": 16, "warm_up": 16, "n_chains": 4},
+    "mstream": {"warm_up": 2},
+    "loda": {"warm_up": 10},
+    "rshash": {"warm_up": 10, "n_members": 4},
+    "online_copod": {"warm_up": 10},
+    "online_ecod": {"warm_up": 10},
+}
 TRANSFORMER_PARAMS: dict[str, dict[str, object]] = {
     "feature_schema_guard": {"features": ["a", "b"]},
     "select": {"features": ["a"]},
@@ -61,6 +85,11 @@ def model_params(component_id: str) -> dict[str, object]:
     if component_id.startswith("moving_"):
         return {"window_size": 8}
     return dict(MODEL_PARAMS.get(component_id, {}))
+
+
+def quick_params(component_id: str) -> dict[str, object]:
+    """Return parameters whose warm-up a stream of about a hundred events ends."""
+    return {**model_params(component_id), **QUICK_PARAMS.get(component_id, {})}
 
 
 MODEL_IDS = [

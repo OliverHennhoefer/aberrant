@@ -85,6 +85,6 @@ def test_rejected_feature_map_transition_preserves_moments_schema_and_rng(
     point = {"other": 0.0} if grace == 1 else {"x": 0.0, "y": 0.0}
     model.learn_one(point)
     control.learn_one(point)
-    assert model.is_ready
+    assert model.readiness.ready
     assert pickle.dumps(model) == pickle.dumps(control)
     assert math.isfinite(model.score_one(point))

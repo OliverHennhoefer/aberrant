@@ -129,9 +129,9 @@ def test_invalid_values_and_reset() -> None:
             model.learn_one("1")  # type: ignore[arg-type]
         for y in _series(10, 2):
             model.learn_one(y)
-        assert model.is_ready
+        assert model.readiness.ready
         model.reset()
-        assert not model.is_ready
+        assert not model.readiness.ready
         assert model.forecast_one() is None
 
 

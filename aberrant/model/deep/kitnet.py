@@ -10,6 +10,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 _PHASE_FEATURE_MAP = "feature_map_warmup"
 _PHASE_DETECTOR = "detector_warmup"
@@ -226,11 +227,6 @@ class OnlineAutoencoderEnsemble(BaseModel):
         """Current warm-up/training phase."""
         return self._phase
 
-    @property
-    def is_ready(self) -> bool:
-        """Whether the model is ready to produce non-zero anomaly scores."""
-        return self._phase == _PHASE_READY
-
     def _preview_feature_statistics(
         self, x_vec: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -410,6 +406,15 @@ class OnlineAutoencoderEnsemble(BaseModel):
 
         self._sum, self._sum_sq, self._sum_cross = total, squared, cross
         self._feature_map_samples = samples
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready after the feature-map and detector grace periods."""
+        return Readiness(
+            self._phase == _PHASE_READY,
+            self._samples_seen,
+            self.feature_map_grace + self.ad_grace,
+        )
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update model state with a single sample."""

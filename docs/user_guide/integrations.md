@@ -63,19 +63,19 @@ Identifiers and the versioned configuration shape are part of the public API;
 new catalog entries may be added compatibly within 1.x.
 
 ```python
-from aberrant.catalog import get_model_spec
+from aberrant.catalog import get_model_spec, model_capabilities
 
-spec = get_model_spec("random_cut_forest")
-parameter_schema = spec.parameter_schema()
-capabilities = spec.capabilities(
+parameter_schema = get_model_spec("random_cut_forest").parameter_schema()
+capabilities = model_capabilities(
+    "random_cut_forest",
     {
         "sample_size": 256,
         "shingle_size": 4,
         "warm_up": 128,
-    }
+    },
 )
 
-assert capabilities.warmup.minimum == 131
+assert capabilities.warmup == 131
 assert capabilities.score_kind.value == "non_negative"
 assert capabilities.state.value == "bounded"
 ```
@@ -90,10 +90,13 @@ own resource ceilings for values such as tree counts and window sizes.
 Bulk discovery does not import optional runtimes. Optional components retain
 availability metadata, but their `parameters` and model `capabilities` are
 `None` in catalog snapshots. Inspect a selected component explicitly with
-`spec.parameter_schema()` or `spec.capabilities(params)` when needed; these
-calls may load its optional runtime.
+`spec.parameter_schema()` or `model_capabilities(component_id, params)` when
+needed; these calls may load its optional runtime.
 
-Catalog warm-up is the minimum history required by the algorithm's scoring
+Catalog warm-up is the `required` count of a freshly built model's
+`readiness`, in `warmup_unit`, so the catalog and the model cannot disagree. It
+is `None` when the parameters are incomplete or the count depends on the data.
+It is the minimum history required by the algorithm's scoring
 contract. It is not a recommendation for threshold calibration. A production
 application can require a longer calibration period without replacing the
 model-specific metadata.
@@ -139,7 +142,7 @@ config = DetectorConfig.from_mapping(
 )
 
 detector = config.build()
-minimum_model_warmup = config.capabilities().warmup.minimum
+minimum_model_warmup = config.capabilities().warmup
 config_fingerprint = config.fingerprint()
 ```
 
@@ -248,7 +251,7 @@ config = DetectorConfig.from_mapping(
         }
     }
 )
-config.capabilities().warmup.minimum  # 53: two seasons, then the lead
+config.capabilities().warmup  # 53: two seasons, then the lead
 detector = config.build()
 ```
 

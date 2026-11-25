@@ -10,6 +10,7 @@ import numpy as np
 
 from aberrant._utils.validation import EdgeEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 # Width and gap occurrence counters stop growing at the signed int64 maximum.
 _COUNTER_LIMIT = int(np.iinfo(np.int64).max) - 1
@@ -446,6 +447,11 @@ class ISCONNA(BaseModel):
             max(component) for component in zip(*scores, strict=True)
         )
         return frequency, width, gap
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once ``warm_up`` edges have been learned."""
+        return Readiness.after(self._samples_seen, self.warm_up)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update detector state with one sample."""

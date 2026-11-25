@@ -37,7 +37,7 @@ configuration format and ownership boundary.
 
 ::: aberrant.catalog.FeatureCount
 
-::: aberrant.catalog.WarmupRequirement
+::: aberrant.catalog.model_capabilities
 
 ::: aberrant.catalog.catalog_manifest
 
@@ -58,5 +58,3 @@ configuration format and ownership boundary.
 ::: aberrant.catalog.ScoreKind
 
 ::: aberrant.catalog.StateKind
-
-::: aberrant.catalog.WarmupUnit

@@ -7,6 +7,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 @dataclass(slots=True)
@@ -196,6 +197,13 @@ class HalfSpaceTrees(BaseModel):
         self._nodes = nodes
         self._workspaces = workspaces
         self._initialized = True
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once the first reference window is complete."""
+        ready = self._initialized and self._reference_window_size > 0
+        observed = self.window_size if ready else self._samples_in_window
+        return Readiness(ready, observed, self.window_size)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """

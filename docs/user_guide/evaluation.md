@@ -42,21 +42,13 @@ result = evaluator.result()
 print(result.average_precision, result.roc_auc, result.config_fingerprint)
 ```
 
-Warm-up counts **successful learning calls**, not arrivals. Excluded events have
-`score=None` and an explicit `"warmup"` or `"not_ready"` reason. Their labels do
-not enter metrics. The readiness callback inspects prior model state before the
-candidate is scored. For a standalone SDOStream configuration, import
-`SDOStream` from `aberrant.model.distance` and use
-`readiness=lambda model: isinstance(model, SDOStream) and model.n_observers >= 6`
-for its default neighbor count instead of counting observer readiness as
-arrivals. A configured detector without transformers uses catalog warm-up
-automatically when it is expressed in events. Other units, unknown warm-up, and
-transformer pipelines require an explicit warm-up or readiness policy. Existing
-model instances default to zero evaluator warm-up; their caller supplies any
-required calibration or readiness policy.
-
-An explicit numeric `warmup` remains available when the caller can guarantee
-enough history.
+Every event before the model's `readiness` is ready is excluded as
+`"not_ready"`, whatever the model counts: events, buckets, observers or active
+graphs, and for a pipeline the readiness of each stage. Readiness is read from
+the prior state, before the candidate is scored. An explicit `warmup` excludes
+that many further **successful learning calls** first, as `"warmup"`, for a
+calibration period on top of the model's own. Excluded events have
+`score=None`, and their labels do not enter metrics.
 
 Labels must be binary real numeric values (normal `0`, anomaly `1`), booleans, or
 `None` for unknown. Real NumPy scalars are accepted; complex labels are rejected
@@ -65,8 +57,7 @@ metrics and records; the model receives only feature dictionaries. The default
 policy learns every event, including evaluated anomalies. An optional
 `learn_filter(event, score)` can skip learning without using labels. Its score
 is `None` during exclusion, and its descriptive `learn_policy_name` is recorded.
-Readiness and learning callbacks must return Python booleans and readiness must
-not update the model.
+The learning callback must return a Python boolean.
 
 Metrics are disabled by default, so the base install can still produce traces,
 counters and timings. `metrics=True` loads scikit-learn from the `eval` extra.
@@ -76,9 +67,8 @@ Set `metric_window_size=None` explicitly for exact full-stream ranking metrics;
 this retains all labeled scores and uses `O(n)` memory. A finite window uses
 `O(window_size)` retention. AP is `None` when no positive labels are present;
 ROC AUC is `None` unless both classes are present. Raw trace scores preserve the
-model's scale; metrics honor `higher_is_more_anomalous`, resolved from catalog
-metadata when available. Unknown catalog orientation requires an explicit
-choice; existing model instances default to higher-is-more-anomalous.
+model's scale, and metrics rank higher scores as more anomalous, as every model
+scores.
 
 Records are yielded as events are processed and never retained by the evaluator.
 Write them to a file or another sink when a full trace is needed. Results include

@@ -15,14 +15,12 @@ INPUT = "$input"
 class GraphNode:
     """One transformer applied to one predecessor's complete feature mapping.
 
-    Custom transformers without public readiness must specify
-    ``minimum_updates`` explicitly, including zero for stateless components.
+    The node passes features on once the transformer's ``readiness`` is ready.
     """
 
     id: str
     transformer: TransformerProtocol
     input: str = INPUT
-    minimum_updates: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,10 +68,6 @@ class NodeObservation:
 
 
 Observer: TypeAlias = Callable[[NodeObservation], None]
-
-
-class GraphNotReadyError(PipelineError):
-    """Scoring was requested before a complete learned path was ready."""
 
 
 class GraphExecutionError(PipelineError):

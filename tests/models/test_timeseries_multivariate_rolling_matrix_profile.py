@@ -240,10 +240,10 @@ def test_defaults_and_first_valid_score():
     model = MultivariateRollingMatrixProfile(subsequence_length=5)
     assert (model.window_size, model.exclusion_zone, model.normalize) == (80, 2, True)
     for index in range(7):
-        assert not model.is_ready
+        assert not model.readiness.ready
         assert model.explain_one({"a": float(index), "b": 0.0}) == (0.0, None, {})
         model.learn_one({"a": float(index), "b": 0.0})
-    assert model.is_ready
+    assert model.readiness.ready
     assert model.match_one({"a": 7.0, "b": 0.0})[1] == 0
     assert model.n_history < model.window_size
 
@@ -256,7 +256,7 @@ def test_minimum_capacity_continues_scoring_during_eviction(zone):
     for index in range(80):
         event = {"a": float(index % 7), "b": float(index % 5)}
         score, match = model.match_one(event)
-        if model.is_ready:
+        if model.readiness.ready:
             assert match == max(0, index - model.window_size + 1)
             assert math.isfinite(score)
         model.learn_one(event)
@@ -268,7 +268,7 @@ def test_ties_choose_earliest_retained_interval(normalize):
         subsequence_length=3, window_size=11, normalize=normalize
     )
     for index in range(35):
-        if model.is_ready:
+        if model.readiness.ready:
             assert model.match_one({"a": 2.0, "b": 3.0}) == (0.0, max(0, index - 10))
         model.learn_one({"a": 2.0, "b": 3.0})
 
@@ -299,7 +299,7 @@ def test_queries_are_read_only_and_learning_is_independent():
         result[2]["altered"] = -1.0
         assert "altered" not in queried.explain_one(event)[2]
         assert list(queried.explain_one(event)[2]) == (
-            sorted(event) if queried.is_ready else []
+            sorted(event) if queried.readiness.ready else []
         )
         assert pickle.dumps(queried) == before
         queried.learn_one(event)
@@ -361,7 +361,7 @@ def test_long_stream_stays_ready_bounded_and_forgets_old_prefix(normalize):
     for index, values in enumerate(np.random.default_rng(12).normal(size=(2000, 3))):
         score = model.score_one(_event(values))
         assert math.isfinite(score) and score >= 0.0
-        assert model.is_ready == (index >= 7)
+        assert model.readiness.ready == (index >= 7)
         if index % 97 == 0:
             _assert_matches_oracle(model, history, values)
         model.learn_one(_event(values))

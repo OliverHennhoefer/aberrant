@@ -95,18 +95,18 @@ def test_constant_extreme_references_center_exactly(value: float) -> None:
 
 def test_sparse_windows_and_readiness_are_per_feature() -> None:
     scaler = RollingRobustScaler(window_size=3, warm_up=2)
-    assert not scaler.is_ready
+    assert not scaler.readiness.ready
     scaler.learn_one({"x": 0.0})
-    assert not scaler.is_ready
+    assert not scaler.readiness.ready
     # Provisional output remains available while a pipeline warms up.
     assert scaler.transform_one({"x": 2.0}) == {"x": 2.0}
     scaler.learn_one({"x": 2.0})
-    assert scaler.is_ready
+    assert scaler.readiness.ready
     scaler.learn_one({"y": 10.0})
-    assert not scaler.is_ready
+    assert not scaler.readiness.ready
     assert scaler.sample_counts == {"x": 2, "y": 1}
     scaler.learn_one({"y": 20.0})
-    assert scaler.is_ready
+    assert scaler.readiness.ready
     assert scaler.transform_one({"x": 2.0, "y": 20.0}) == {"x": 1.0, "y": 1.0}
     snapshot = scaler.sample_counts
     snapshot["x"] = 100
@@ -215,7 +215,7 @@ def test_reset_clears_readiness_and_unfreezes_without_changing_parameters() -> N
     scaler.reset()
 
     assert scaler.sample_counts == {}
-    assert not scaler.is_ready
+    assert not scaler.readiness.ready
     assert not scaler.is_frozen
     assert (scaler.window_size, scaler.warm_up, scaler.fallback_scale) == (5, 2, 3)
 
@@ -226,7 +226,7 @@ def test_pipeline_scores_prior_state_and_learns_post_update_state() -> None:
     pipeline = scaler | model
     for value in [0, 10]:
         pipeline.learn_one({"x": value})
-    assert scaler.is_ready
+    assert scaler.readiness.ready
     before = pickle.dumps(pipeline)
     assert pipeline.score_one({"x": 20.0}) == 3.0
     assert pickle.dumps(pipeline) == before

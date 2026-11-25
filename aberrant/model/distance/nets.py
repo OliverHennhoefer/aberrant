@@ -11,6 +11,7 @@ import numpy as np
 
 from aberrant._utils.validation import NumericEventBoundary, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 _Cell: TypeAlias = tuple[int, ...]
 _Entry: TypeAlias = tuple[int, _Cell]
@@ -168,6 +169,15 @@ class CellNeighborhoodDetector(BaseModel):
             self._neighbor_cache[cell] = candidates
         return candidates
 
+    @property
+    def readiness(self) -> Readiness:
+        """Ready after ``warm_up`` slides and more than ``k`` retained events."""
+        required = max(self.warm_up * self.slide_size, self.k + 1)
+        ready = self._samples_seen >= self.warm_up * self.slide_size and (
+            len(self._window_entries) > self.k
+        )
+        return Readiness(ready, self._samples_seen, required)
+
     def learn_one(self, x: dict[str, float]) -> None:
         """Retain one validated observation and evict the oldest when full."""
         event = self._boundary.preview(x)
@@ -192,9 +202,7 @@ class CellNeighborhoodDetector(BaseModel):
     def score_one(self, x: dict[str, float]) -> float:
         """Count exact neighbors, stopping once the scarcity score is zero."""
         event = self._boundary.preview(x)
-        if self._samples_seen < self.warm_up * self.slide_size or (
-            len(self._window_entries) <= self.k
-        ):
+        if not self.readiness.ready:
             return 0.0
         vector = event.features.values
         neighbors = 0

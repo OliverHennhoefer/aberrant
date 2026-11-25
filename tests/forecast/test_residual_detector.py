@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from aberrant.base import BaseModel
+from aberrant.base import BaseModel, Readiness
 from aberrant.calibration import ScoreCalibrator
 from aberrant.evaluate import PrequentialEvaluator
 from aberrant.forecast import (
@@ -24,6 +24,10 @@ class _Recorder:
 
     def __init__(self) -> None:
         self.n = 0
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness.after(self.n, 1)
 
     def learn_one(self, y: float) -> None:
         self.n += 1

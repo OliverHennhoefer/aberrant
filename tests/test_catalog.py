@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from aberrant.base import ModelProtocol
+from aberrant.base import ModelProtocol, ReadinessUnit
 from aberrant.catalog import (
     CATALOG_FORMAT_VERSION,
     MODEL_CATALOG,
@@ -24,13 +24,12 @@ from aberrant.catalog import (
     FeatureSchemaKind,
     ScoreKind,
     StateKind,
-    WarmupRequirement,
-    WarmupUnit,
     build_detector,
     catalog_manifest,
     create_model,
     get_model_spec,
     get_transformer_spec,
+    model_capabilities,
 )
 from aberrant.catalog import _registry as catalog_registry
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
@@ -143,41 +142,28 @@ def test_parameter_schema_reports_types_defaults_and_required_values() -> None:
 
 
 def test_capabilities_resolve_from_model_parameters() -> None:
-    random_cut = get_model_spec("random_cut_forest").capabilities(
+    random_cut = model_capabilities(
+        "random_cut_forest",
         {
             "sample_size": 64,
             "shingle_size": 4,
             "warm_up": 10,
-        }
+        },
     )
-    xstream = get_model_spec("xstream").capabilities()
-    statistic = get_model_spec("moving_covariance").capabilities({"window_size": 20})
-    edge = get_model_spec("midas").capabilities({"time_key": None})
+    xstream = model_capabilities("xstream")
+    statistic = model_capabilities("moving_covariance", {"window_size": 20})
+    edge = model_capabilities("midas", {"time_key": None})
 
-    assert random_cut.warmup.minimum == 13
+    assert random_cut.warmup == 13
     assert random_cut.score_kind is ScoreKind.NON_NEGATIVE
-    assert xstream.warmup.minimum == 256
+    assert xstream.warmup == 256
     assert xstream.state is StateKind.BOUNDED
     assert xstream.feature_schema is FeatureSchemaKind.EVOLVING
     assert statistic.score_kind is ScoreKind.NON_NEGATIVE
-    assert statistic.higher_is_more_anomalous
     assert edge.event_kind is EventKind.EDGE
     assert edge.feature_count.minimum == 2
     assert edge.feature_count.maximum is None
-    assert get_model_spec("half_space_trees").capabilities().requires_unit_interval
-
-
-@pytest.mark.parametrize("component_id", ["moving_zscore", "moving_mad"])
-@pytest.mark.parametrize(("params", "ready_count"), [({}, 256), ({"warm_up": 5}, 5)])
-def test_moving_warmup_matches_scoring_readiness(component_id, params, ready_count):
-    warmup = get_model_spec(component_id).capabilities(params).warmup
-    model = create_model(component_id, params)
-
-    assert warmup.minimum == ready_count
-    for index in range(ready_count):
-        assert model.score_one({"x": 20.0}) == 0.0
-        model.learn_one({"x": float(index % 3)})
-    assert model.score_one({"x": 20.0}) > 0.0
+    assert model_capabilities("half_space_trees").requires_unit_interval
 
 
 @pytest.mark.parametrize(
@@ -196,26 +182,25 @@ def test_xstream_warmup_matches_scoring_readiness(
         "window_size": window_size,
         "seed": 1,
     }
-    warmup = get_model_spec("xstream").capabilities(params).warmup
+    assert model_capabilities("xstream", params).warmup == 8
     model = create_model("xstream", params)
     query = {"x": 20.0}
 
     for i in range(7):
         model.learn_one({"x": float(i)})
 
-    assert warmup.unit is WarmupUnit.EVENTS
-    assert not warmup.is_satisfied(7)
+    assert not model.readiness.ready
     assert model.score_one(query) == 0.0
 
     model.learn_one({"x": 7.0})
 
-    assert warmup.is_satisfied(8)
+    assert model.readiness.ready
     assert model.score_one(query) > 0.0
 
 
 def test_sdo_warmup_counts_sampled_observers_instead_of_events() -> None:
     params = {"max_observers": 8, "time_scale": 1000000.0, "n_neighbors": 2, "seed": 1}
-    warmup = get_model_spec("sdostream").capabilities(params).warmup
+    capabilities = model_capabilities("sdostream", params)
     model = create_model("sdostream", params)
     assert isinstance(model, SDOStream)
 
@@ -223,9 +208,10 @@ def test_sdo_warmup_counts_sampled_observers_instead_of_events() -> None:
     model.learn_one({"x": 1.0})
 
     assert model.n_observers == 1
-    assert warmup.unit is WarmupUnit.OBSERVERS
-    assert warmup.remaining(model.n_observers) == 1
-    assert not warmup.is_satisfied(model.n_observers)
+    assert capabilities.warmup_unit is ReadinessUnit.OBSERVERS
+    assert capabilities.warmup == 2
+    assert model.readiness.observed == 1
+    assert not model.readiness.ready
     assert model.score_one({"x": 20.0}) == 0.0
 
 
@@ -243,7 +229,7 @@ def test_sdo_observer_warmup_matches_scoring_readiness(
         "warm_up": warm_up,
         "seed": 1,
     }
-    warmup = get_model_spec("sdostream").capabilities(params).warmup
+    assert model_capabilities("sdostream", params).warmup == ready_count
     model = create_model("sdostream", params)
     assert isinstance(model, SDOStream)
     query = {"x": 20.0}
@@ -251,13 +237,13 @@ def test_sdo_observer_warmup_matches_scoring_readiness(
     for i in range(ready_count - 1):
         model.learn_one({"x": float(i)})
 
-    assert not warmup.is_satisfied(model.n_observers)
+    assert not model.readiness.ready
     assert model.score_one(query) == 0.0
 
     model.learn_one({"x": float(ready_count - 1)})
 
     assert model.n_observers == ready_count
-    assert warmup.is_satisfied(model.n_observers)
+    assert model.readiness.ready
     assert model.score_one(query) > 0.0
 
 
@@ -267,7 +253,7 @@ def test_matrix_profile_catalog_capabilities_and_warmup(zone) -> None:
     params = {"subsequence_length": 4, "exclusion_zone": zone}
     model = create_model(spec.id, params)
     assert isinstance(model, RollingMatrixProfile)
-    capabilities = spec.capabilities(params)
+    capabilities = model_capabilities(spec.id, params)
     assert spec.family == "time_series"
     assert capabilities.event_kind is EventKind.UNIVARIATE
     assert capabilities.feature_schema is FeatureSchemaKind.FIXED
@@ -275,13 +261,14 @@ def test_matrix_profile_catalog_capabilities_and_warmup(zone) -> None:
     assert not capabilities.feature_count.accepts(2)
     assert capabilities.score_kind is ScoreKind.NON_NEGATIVE
     assert capabilities.state is StateKind.BOUNDED
-    assert capabilities.higher_is_more_anomalous and capabilities.resettable
-    assert capabilities.warmup.unit is WarmupUnit.EVENTS
+    assert capabilities.warmup_unit is ReadinessUnit.EVENTS
     expected = 4 + (1 if zone is None else zone)
-    assert capabilities.warmup.minimum == expected
+    assert capabilities.warmup == expected
     for index in range(expected + 2):
-        assert model.is_ready == capabilities.warmup.is_satisfied(index)
-        assert (model.match_one({"x": float(index)})[1] is not None) == model.is_ready
+        assert model.readiness.ready == (index >= expected)
+        assert (
+            model.match_one({"x": float(index)})[1] is not None
+        ) == model.readiness.ready
         model.learn_one({"x": float(index)})
 
 
@@ -299,7 +286,7 @@ def test_matrix_profile_parameter_schema_and_manifest(model_id, model_class) -> 
     assert schema["properties"]["normalize"] == {"type": "boolean", "default": True}
     assert schema["properties"]["window_size"]["default"] is None
     assert schema["properties"]["exclusion_zone"]["default"] is None
-    assert spec.capabilities().warmup.minimum is None
+    assert model_capabilities(spec.id).warmup is None
     entry = next(
         entry for entry in catalog_manifest()["models"] if entry["id"] == model_id
     )
@@ -314,7 +301,7 @@ def test_multivariate_matrix_profile_capabilities_and_warmup(zone) -> None:
     model = create_model(spec.id, params)
     assert isinstance(model, MultivariateRollingMatrixProfile)
     assert model.window_size == 64
-    capabilities = spec.capabilities(params)
+    capabilities = model_capabilities(spec.id, params)
     assert spec.family == "time_series"
     assert capabilities.event_kind is EventKind.TABULAR
     assert capabilities.feature_schema is FeatureSchemaKind.FIXED
@@ -322,14 +309,13 @@ def test_multivariate_matrix_profile_capabilities_and_warmup(zone) -> None:
     assert capabilities.feature_count.maximum is None
     assert capabilities.score_kind is ScoreKind.NON_NEGATIVE
     assert capabilities.state is StateKind.BOUNDED
-    assert capabilities.higher_is_more_anomalous and capabilities.resettable
-    assert capabilities.warmup.unit is WarmupUnit.EVENTS
+    assert capabilities.warmup_unit is ReadinessUnit.EVENTS
     expected = 4 + (1 if zone is None else zone)
-    assert capabilities.warmup.minimum == expected
+    assert capabilities.warmup == expected
     for index in range(expected + 2):
         event = {"a": float(index), "b": float(index % 3)}
-        assert model.is_ready == capabilities.warmup.is_satisfied(index)
-        assert (model.match_one(event)[1] is not None) == model.is_ready
+        assert model.readiness.ready == (index >= expected)
+        assert (model.match_one(event)[1] is not None) == model.readiness.ready
         model.learn_one(event)
 
 
@@ -404,7 +390,12 @@ def test_build_detector_constructs_a_validated_pipeline() -> None:
             ],
             "model": {
                 "id": "online_isolation_forest",
-                "params": {"n_trees": 2, "window_size": 8, "seed": 17},
+                "params": {
+                    "n_trees": 2,
+                    "window_size": 8,
+                    "max_leaf_samples": 4,
+                    "seed": 17,
+                },
             },
         }
     )
@@ -595,16 +586,16 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
     params: dict[str, object] = {"subsequence_length": 8}
     if start_index is not None:
         params["start_index"] = start_index
-    warmup = get_model_spec("damp").capabilities(params).warmup
+    warmup = model_capabilities("damp", params).warmup
     model = create_model("damp", params)
 
     for index in range(ready_count):
-        assert not model.is_ready
+        assert not model.readiness.ready
         model.learn_one({"x": math.sin(index / 3)})
 
-    assert warmup.minimum == ready_count
-    assert model.is_ready
-    assert get_model_spec("damp").capabilities().warmup.minimum is None
+    assert warmup == ready_count
+    assert model.readiness.ready
+    assert model_capabilities("damp").warmup is None
 
 
 @pytest.mark.parametrize(
@@ -684,9 +675,7 @@ def test_residual_detector_rejects_a_malformed_nested_forecaster(
     nested, message
 ) -> None:
     with pytest.raises(ConfigurationError, match=message):
-        get_model_spec("residual_detector").capabilities(
-            {"target": "y", "model": nested}
-        )
+        model_capabilities("residual_detector", {"target": "y", "model": nested})
 
 
 def test_catalog_index_rejects_duplicate_identifiers() -> None:
@@ -701,21 +690,11 @@ def test_catalog_index_rejects_duplicate_identifiers() -> None:
     [
         (lambda: FeatureCount(0), "must be positive"),
         (lambda: FeatureCount(3, 2), "not be below minimum"),
-        (lambda: WarmupRequirement(-1), "non-negative"),
-        (lambda: WarmupRequirement(3).remaining(-1), "non-negative"),
     ],
 )
 def test_capability_records_reject_impossible_bounds(factory, message) -> None:
     with pytest.raises(ValueError, match=message):
         factory()
-
-
-def test_indeterminate_warmup_is_neither_satisfied_nor_pending() -> None:
-    warmup = WarmupRequirement(None, WarmupUnit.EVENTS)
-
-    assert warmup.remaining(10) is None
-    assert warmup.is_satisfied(10) is None
-    assert WarmupRequirement(3).is_satisfied(3)
 
 
 @pytest.mark.parametrize(

@@ -4,12 +4,18 @@ from contextlib import AbstractContextManager
 from typing import Protocol, TypeAlias, runtime_checkable
 
 from aberrant.base.forecast import Forecast
+from aberrant.base.readiness import Readiness
 
 FeatureMap: TypeAlias = dict[str, float]
 
 
 class LearnerProtocol(Protocol):
     """A component that updates itself from one feature mapping."""
+
+    @property
+    def readiness(self) -> Readiness:
+        """Whether the component has learned enough to do its job."""
+        ...
 
     def learn_one(self, x: FeatureMap) -> None:
         """Update the component from one sample."""
@@ -69,6 +75,11 @@ class ForecasterProtocol(Protocol):
         """The largest lead a forecast holds."""
         ...
 
+    @property
+    def readiness(self) -> Readiness:
+        """Whether the component has learned enough to predict."""
+        ...
+
     def learn_one(self, y: float) -> None:
         """Learn the next value of the series."""
         ...
@@ -86,6 +97,11 @@ class RegressorProtocol(Protocol):
     ``predict_one(x)`` predicts without learning, and ``learn_one(x, y)``
     learns the target once it is known, which may be later.
     """
+
+    @property
+    def readiness(self) -> Readiness:
+        """Whether the component has learned enough to predict."""
+        ...
 
     def learn_one(self, x: FeatureMap, y: float) -> None:
         """Learn the target ``y`` of the event with covariates ``x``."""

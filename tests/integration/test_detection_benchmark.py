@@ -13,6 +13,7 @@ import importlib.util
 import numpy as np
 import pytest
 
+from aberrant.base import Readiness
 from aberrant.drift import ADWIN, PageHinkley
 from aberrant.model.forest import HalfSpaceTrees
 from aberrant.stream import Dataset
@@ -112,6 +113,10 @@ class _RiverHalfSpaceTrees:
             preprocessing.MinMaxScaler(),
             anomaly.HalfSpaceTrees(n_trees=25, height=15, window_size=250, seed=seed),
         )
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(True)
 
     def learn_one(self, x: dict[str, float]) -> None:
         self._model.learn_one(x)

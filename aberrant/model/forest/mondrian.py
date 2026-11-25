@@ -11,6 +11,7 @@ import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
+from aberrant.base.readiness import Readiness
 
 
 def _average_path_length(n: int) -> float:
@@ -466,6 +467,11 @@ class MondrianIsolationForest(BaseModel):
         # Planned walks are a cache of the trees, not part of the model.
         state["_planned"] = None
         return state
+
+    @property
+    def readiness(self) -> Readiness:
+        """Ready once two events have been learned."""
+        return Readiness(self.n_samples > 1 and bool(self.trees), self.n_samples, 2)
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Update all trees with one feature dictionary."""

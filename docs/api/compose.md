@@ -16,8 +16,6 @@ for execution and failure semantics.
 
 ::: aberrant.compose.NodeObservation
 
-::: aberrant.compose.GraphNotReadyError
-
 ::: aberrant.compose.GraphExecutionError
 
 ::: aberrant.compose.GraphStateUncertainError

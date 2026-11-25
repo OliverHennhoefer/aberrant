@@ -29,7 +29,7 @@ from aberrant.forecast import SeasonalNaive
 
 def example():
     return DetectorConfig(
-        ComponentConfig("online_isolation_forest", {"seed": 2, "window_size": 16}),
+        ComponentConfig("online_isolation_forest", {"seed": 2, "window_size": 64}),
         (ComponentConfig("standard_scaler"),),
     )
 
@@ -54,7 +54,7 @@ def test_each_component_occurrence_resolves_once(monkeypatch, operation):
         resolved.build()
         assert (
             resolved.fingerprint
-            == "15420435d505a1da06502752cfca5c68454a06b5b5ca387837885b9ff11878d5"
+            == "4deb6d7d58961f8b818ffa73e98a53e33a54a0dd3a88a961282512397e34292b"
         )
     else:
         config.build()
@@ -109,13 +109,11 @@ def test_normalization_and_fingerprint_do_not_require_feature_compatibility():
         config.build()
 
 
-def test_resolution_does_not_construct_or_validate_constructor_only_invariants():
+def test_resolution_builds_the_model_once_and_reports_its_constructor_errors():
     config = DetectorConfig(ComponentConfig("online_isolation_forest", {"n_trees": 0}))
-    resolved = config.resolve()
-    assert resolved.config == config.normalized()
-    assert resolved.fingerprint == config.fingerprint()
+    assert config.normalized().model.params["n_trees"] == 0
     with pytest.raises(ConfigurationError) as error:
-        resolved.build()
+        config.resolve()
     assert error.value.issues[0].code == "invalid_value"
     assert error.value.issues[0].loc == ("model", "params")
 
@@ -140,7 +138,7 @@ def test_runtime_values_remain_buildable_but_cannot_be_fingerprinted():
 @pytest.mark.parametrize(
     ("config", "fingerprint"),
     [
-        (example(), "15420435d505a1da06502752cfca5c68454a06b5b5ca387837885b9ff11878d5"),
+        (example(), "4deb6d7d58961f8b818ffa73e98a53e33a54a0dd3a88a961282512397e34292b"),
         (
             DetectorConfig(
                 ComponentConfig("moving_zscore", {"window_size": 8}),

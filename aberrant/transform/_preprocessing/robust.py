@@ -21,7 +21,7 @@ class RollingRobustScaler(BaseTransformer):
     from a constant reference instead of mapping every candidate to zero.
 
     ``transform_one`` is read-only and uses provisional statistics even before
-    ``warm_up`` observations. Read ``is_ready`` to exclude this warm-up
+    ``warm_up`` observations. Read ``readiness`` to exclude this warm-up
     from evaluation. Freeze a ready calibration before fitting a downstream
     model when its stored references must share one coordinate system.
     Adaptive updates do not re-express downstream points or split boundaries.
@@ -62,25 +62,21 @@ class RollingRobustScaler(BaseTransformer):
 
     @property
     def readiness(self) -> Readiness:
-        return Readiness(
-            self.is_ready, min(self.sample_counts.values(), default=0), self.warm_up
+        """Ready once every learned feature has at least ``warm_up`` values.
+
+        An empty scaler is not ready. Learning a new feature can make an
+        adaptive scaler unready again; use a schema guard for fixed inputs.
+        """
+        ready = bool(self._windows) and all(
+            len(window) >= self.warm_up for window in self._windows.values()
         )
+        observed = min(self.sample_counts.values(), default=0)
+        return Readiness(ready, observed, self.warm_up)
 
     @property
     def sample_counts(self) -> dict[str, int]:
         """Return an owned snapshot of retained observations per feature."""
         return {feature: len(window) for feature, window in self._windows.items()}
-
-    @property
-    def is_ready(self) -> bool:
-        """Whether every learned feature has at least ``warm_up`` values.
-
-        An empty scaler is not ready. Learning a new feature can make an
-        adaptive scaler unready again; use a schema guard for fixed inputs.
-        """
-        return bool(self._windows) and all(
-            len(window) >= self.warm_up for window in self._windows.values()
-        )
 
     @property
     def is_frozen(self) -> bool:
@@ -89,7 +85,7 @@ class RollingRobustScaler(BaseTransformer):
 
     def freeze(self) -> None:
         """Freeze a ready calibration; unseen features are then rejected."""
-        if not self.is_ready:
+        if not self.readiness.ready:
             raise ValueError("Cannot freeze before all learned features are ready")
         self._frozen = True
 

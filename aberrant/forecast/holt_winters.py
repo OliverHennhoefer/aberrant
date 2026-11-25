@@ -8,6 +8,7 @@ from aberrant._utils.validation import (
     coerce_integer_count,
 )
 from aberrant.base.forecast import Forecast
+from aberrant.base.readiness import Readiness
 from aberrant.forecast._arithmetic import LeadErrors, fsum, holt_winters_initialize
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
 
@@ -72,9 +73,9 @@ class HoltWinters(BaseForecaster):
         self._reset_state()
 
     @property
-    def is_ready(self) -> bool:
-        """Whether two complete cycles have been learned."""
-        return self.n_samples_seen >= 2 * self.season_length
+    def readiness(self) -> Readiness:
+        """Ready once two complete cycles have been learned."""
+        return Readiness.after(self.n_samples_seen, 2 * self.season_length)
 
     def _reset_state(self) -> None:
         """Forget learned components and errors."""
@@ -108,7 +109,7 @@ class HoltWinters(BaseForecaster):
         """Learn the next value of the series."""
         value = coerce_event_number(y, label="y")
         origin = self.n_samples_seen + 1
-        if not self.is_ready:
+        if self.n_samples_seen < 2 * self.season_length:
             if origin < 2 * self.season_length:
                 self._warmup.append(value)
                 self.n_samples_seen = origin
@@ -139,7 +140,7 @@ class HoltWinters(BaseForecaster):
 
     def forecast_one(self) -> Forecast | None:
         """Forecast leads ``1..horizon``, or ``None`` before two cycles."""
-        if not self.is_ready:
+        if self.n_samples_seen < 2 * self.season_length:
             return None
         return Forecast(
             origin=self.n_samples_seen,

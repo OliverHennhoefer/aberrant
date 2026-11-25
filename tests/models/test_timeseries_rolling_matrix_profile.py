@@ -175,10 +175,10 @@ def test_default_parameters_and_warmup_boundary():
     assert model.exclusion_zone == 2
     assert model.normalize is True
     for index in range(7):
-        assert not model.is_ready
+        assert not model.readiness.ready
         assert model.match_one({"value": float(index)}) == (0.0, None)
         model.learn_one({"value": float(index)})
-    assert model.is_ready
+    assert model.readiness.ready
     assert model.match_one({"value": 7.0})[1] == 0
     assert model.n_history < model.window_size
 
@@ -190,7 +190,7 @@ def test_minimum_capacity_keeps_one_eligible_reference(zone):
     )
     for index in range(80):
         score, match = model.match_one({"value": float(index % 7)})
-        if model.is_ready:
+        if model.readiness.ready:
             assert match == max(0, index - model.window_size + 1)
             assert math.isfinite(score)
         model.learn_one({"value": float(index % 7)})
@@ -213,7 +213,7 @@ def test_equal_matches_choose_earliest_retained_start(normalize):
         subsequence_length=3, window_size=11, normalize=normalize
     )
     for index in range(35):
-        if model.is_ready:
+        if model.readiness.ready:
             assert model.match_one({"value": 2.0}) == (
                 0.0,
                 max(0, index - model.window_size + 1),
@@ -270,7 +270,7 @@ def test_long_stream_has_bounded_state_and_forgets_old_prefix(normalize):
     for index, value in enumerate(np.random.default_rng(12).normal(size=3000)):
         score = model.score_one({"value": float(value)})
         assert math.isfinite(score) and score >= 0.0
-        assert model.is_ready == (index >= 7)
+        assert model.readiness.ready == (index >= 7)
         if index % 97 == 0:
             _assert_matches_oracle(model, history, value)
         model.learn_one({"value": float(value)})

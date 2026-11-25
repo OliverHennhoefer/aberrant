@@ -6,6 +6,7 @@ import pytest
 
 from aberrant.base import (
     Pipeline,
+    Readiness,
     TransactionalLearnerProtocol,
     TransactionalTransformerProtocol,
 )
@@ -21,6 +22,10 @@ class RecordingModel:
     def __init__(self, failure=None):
         self.inputs = []
         self.failure = failure
+
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(True)
 
     def learn_one(self, x):
         self.inputs.append(dict(x))
@@ -46,6 +51,10 @@ class ReversibleTransformer:
     def __init__(self):
         self.updates = 0
 
+    @property
+    def readiness(self) -> Readiness:
+        return Readiness(True)
+
     def learn_one(self, x):
         self.updates += 1
 
@@ -64,9 +73,7 @@ class ReversibleTransformer:
 
 def pipeline(engine, transformer, model):
     if engine == "graph":
-        return GraphPipeline(
-            [GraphNode("transform", transformer, minimum_updates=0)], model, "transform"
-        )
+        return GraphPipeline([GraphNode("transform", transformer)], model, "transform")
     return Pipeline(transformer, model)
 
 

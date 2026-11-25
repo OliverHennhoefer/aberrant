@@ -31,4 +31,4 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.Readiness
 
-::: aberrant.base.ReadinessProtocol
+::: aberrant.base.ReadinessUnit
