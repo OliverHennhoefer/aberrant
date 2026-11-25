@@ -40,7 +40,7 @@ Slow checks (more seeds, shuffled COVER, comparisons with river) are marked
 `benchmark` and run nightly. To run them locally:
 
 ```bash
-uv sync --extra dev --extra benchmark
+uv sync --group benchmark
 uv run python -m pytest tests/integration -m benchmark -q
 ```
 
