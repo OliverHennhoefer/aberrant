@@ -36,9 +36,10 @@ Implementation-specific details matter:
   oldest whole buckets are removed, so the retained width can fall below the
   configured maximum. The bound must be at least `2 * min_window_length` and
   changes the history available for detecting slow drift.
-- KSWIN requires `stat_size < window_size / 2`. aberrant uses SciPy's
-  asymptotic two-sample KS test and requires both `p_value <= alpha` and a KS
-  statistic greater than `0.1`. `seed` controls its historical sampling.
+- KSWIN requires `stat_size < window_size / 2`. aberrant uses the exact
+  two-sample KS p-value, as `scipy.stats.ks_2samp(method="exact")` computes
+  it, and requires both `p_value <= alpha` and a KS statistic greater than
+  `0.1`. `seed` controls its historical sampling.
 - Page-Hinkley `delta` is the tolerated change magnitude, `threshold` controls
   signaling, and `alpha` fades cumulative sums. Values closer to `1` retain
   more history.

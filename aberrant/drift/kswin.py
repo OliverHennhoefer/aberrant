@@ -1,10 +1,9 @@
 """KSWIN (Kolmogorov-Smirnov WINdowing) drift detector."""
 
 import random
-import warnings
+from bisect import bisect_right
 from collections import deque
-
-from scipy.stats import ks_2samp
+from itertools import chain
 
 from aberrant.drift.base import BaseDriftDetector, _finite_observation
 
@@ -143,15 +142,7 @@ class KSWIN(BaseDriftDetector):
         )
         historical = [window_values[i] for i in sample_indices]
 
-        # SciPy warns and uses the asymptotic p-value where the exact one
-        # cannot be computed; that fallback is expected here.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="ks_2samp: Exact calculation unsuccessful",
-                category=RuntimeWarning,
-            )
-            statistic, p_value = ks_2samp(recent, historical, method="exact")
+        statistic, p_value = _ks_two_sample(recent, historical)
         self._statistic = statistic
         self._p_value = p_value
 
@@ -167,3 +158,32 @@ class KSWIN(BaseDriftDetector):
             f"KSWIN(alpha={self.alpha}, window_size={self.window_size}, "
             f"stat_size={self.stat_size})"
         )
+
+
+def _ks_two_sample(first: list[float], second: list[float]) -> tuple[float, float]:
+    """Return the two-sided KS statistic and its exact p-value for equal sizes.
+
+    The result equals ``scipy.stats.ks_2samp(first, second, method="exact")``.
+    With equal sizes ``n`` the statistic is ``h / n`` for the largest count
+    difference ``h`` of the two empirical distributions, and the p-value is the
+    share of lattice paths that leave the band ``|x - y| < h``, summed in
+    SciPy's nested form to avoid cancellation.
+    """
+    n = len(first)
+    if n == 0 or len(second) != n:
+        raise ValueError("KS samples must be non-empty and of equal size")
+    first = sorted(first)
+    second = sorted(second)
+    h = max(
+        abs(bisect_right(first, value) - bisect_right(second, value))
+        for value in chain(first, second)
+    )
+    if h == 0:
+        return 0.0, 1.0
+    probability = 0.0
+    for k in range(n // h, -1, -1):
+        term = 1.0
+        for j in range(h):
+            term = (n - k * h - j) * term / (n + k * h + j + 1)
+        probability = term * (1.0 - probability)
+    return h / n, min(max(2 * probability, 0.0), 1.0)
