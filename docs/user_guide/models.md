@@ -9,10 +9,10 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Problem | Useful starting point | Why |
 | --- | --- | --- |
 | General multivariate events | `OnlineIsolationForest` | Incremental trees with explicit sliding-window unlearning and a bounded `[0, 1]` score |
-| Periodically rebuilt reference model | `ASDIsolationForest` or `StreamRandomHistogramForest` | Replaces a forest from recent-window state rather than adapting every old split forever |
+| Periodically rebuilt reference model | `ASDIsolationForest` or `RHF` | Replaces a forest from recent-window state rather than adapting every old split forever |
 | Local density or neighborhood isolation | `LocalOutlierFactor`, `SDOStream`, or a cell-neighborhood detector | Scores relative to nearby points, observers, or radius cells |
 | Fixed-size projection/frequency state | `LODA`, `MStream`, or `RSHash` | Memory is controlled by projection, histogram, or sketch dimensions |
-| Dynamic edges | `MIDAS`, `ISCONNA`, `AnoEdgeL`, or `SignedGraphSketchDetector` | Models repeated edges, endpoint patterns, dense submatrices, or graph-level structure |
+| Dynamic edges | `MIDAS`, `ISCONNA`, `AnoEdgeL`, or `StreamSpot` | Models repeated edges, endpoint patterns, dense submatrices, or graph-level structure |
 | Scalar time-series discords | `RollingMatrixProfile` or `DAMP` | Exact rolling nearest-subsequence scores or approximate DAMP discord scores over bounded history |
 | Departures from a known seasonal forecast | `ResidualDetector(HoltWinters(...))` | Scores forecast errors from additive level, trend, and seasonal components; see [forecast-based detection](forecasting.md) |
 | Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
@@ -34,9 +34,9 @@ often need less scaling, but a transform can still change their geometry.
 | `ASDIsolationForest` | `[0, 1]`; `0.0` before a forest exists | First complete `window_size` | Bounded recent window; complete forest replacement every `retrain_interval` events |
 | `HalfSpaceTrees` | `[0, 1]`; `0.0` before reference mass exists | First complete `window_size` | Fixed trees and two window-mass counters; no retained sample window |
 | `MondrianIsolationForest` | `[0, 1]`; `0.0` through the first learned event | At least two learned events | Growing online Mondrian trees; no automatic forgetting or state bound |
-| `OnlineIsolationForest` | `[0, 1]`; early scores are possible but not calibrated | No explicit zero-score warm-up | At most `window_size` retained events plus trees; evicted events are unlearned |
-| `RandomCutForest` | Raw non-negative CoDisp by default; optional `[0, 1)` transform | `warm_up` inserted shingles, defaulting to `sample_size` | At most `sample_size` shingled points plus shingle history |
-| `StreamRandomHistogramForest` | Non-negative summed log leaf-mass score | First complete `window_size` | Bounded alternating reference/current-window forest state |
+| `OnlineIsolationForest` | `[0, 1]`; `0.0` until path lengths can be normalized | Enough learned events for a positive path-length normalization | At most `window_size` retained events plus trees; evicted events are unlearned |
+| `RandomCutForest` | Raw non-negative CoDisp | `warm_up` inserted shingles, defaulting to `sample_size` | At most `sample_size` shingled points plus shingle history |
+| `RHF` | Non-negative summed log leaf-mass score | First complete `window_size` | Bounded alternating reference/current-window forest state |
 | `XStream` | `[0, 1]`; `0.0` until ready | Projection initialization plus one complete reference window | Fixed count-min sketches, chains, and bounded feature-hash cache when configured |
 
 `MondrianIsolationForest` is an aberrant hybrid: it uses online Mondrian block
@@ -49,47 +49,10 @@ retention, set `window_size`: trees periodically rebuild from the latest complet
 window, representing at most twice that window minus one event between rebuilds.
 This changes the reference history and introduces periodic rebuild work.
 
-`OnlineIsolationForest.n_jobs=1` executes tree work sequentially;
-`n_jobs=-1` uses all logical CPUs reported by the operating system. Positive
-values request that many worker threads.
-
-The raw and normalized Random Cut Forest forms preserve ranking but not numeric
-scale:
-
-```python
-from aberrant.model.forest import RandomCutForest
-
-history = [
-    {"x": 0.0, "y": 0.1},
-    {"x": 0.1, "y": -0.1},
-    {"x": -0.1, "y": 0.0},
-    {"x": 0.2, "y": 0.1},
-]
-query = {"x": 4.0, "y": 4.0}
-
-raw_detector = RandomCutForest(
-    n_trees=10,
-    sample_size=4,
-    warm_up=4,
-    normalize_score=False,
-    seed=3,
-)
-bounded_detector = RandomCutForest(
-    n_trees=10,
-    sample_size=4,
-    warm_up=4,
-    normalize_score=True,
-    score_scale=8.0,
-    seed=3,
-)
-
-for event in history:
-    raw_detector.learn_one(event)
-    bounded_detector.learn_one(event)
-
-print(f"raw CoDisp: {raw_detector.score_one(query):.3f}")
-print(f"bounded transform: {bounded_detector.score_one(query):.3f}")
-```
+Forest scores are raw: Random Cut Forest returns its collusive displacement
+(CoDisp) unchanged, and a larger value is more anomalous. To compare or
+threshold scores on a common scale, calibrate them with
+[`aberrant.calibration`](calibration.md).
 
 Primary method sources include
 [Isolation Forest](https://doi.org/10.1109/ICDM.2008.17),
@@ -148,17 +111,17 @@ distance, so gaps between explicit bucket numbers count toward
 
 | Class | What it scores | Default score | State policy |
 | --- | --- | --- | --- |
-| `AnoEdgeL` | Candidate edge membership in maintained local dense submatrices | Non-negative raw score; optional `[0, 1)` | Fixed higher-order sketches and configured submatrices |
-| `ISCONNA` | Edge/endpoint frequency, consecutive-width, and gap patterns | Non-negative raw combined G-test score; optional `[0, 1]` | Fixed count-min sketches |
-| `MIDAS` | Candidate-inclusive edge microcluster statistic; MIDAS-R also scores endpoints | Non-negative raw chi-square-style score; optional `[0, 1)` | Fixed count-min sketches |
-| `SignedGraphSketchDetector` | Change in a graph's signed shingle sketch relative to online centroids | Non-negative distance-plus-novelty score; optional `[0, 1)` | At most `max_graphs` sketches plus fixed centroids |
+| `AnoEdgeL` | Candidate edge membership in maintained local dense submatrices | Non-negative raw score | Fixed higher-order sketches and configured submatrices |
+| `ISCONNA` | Edge/endpoint frequency, consecutive-width, and gap patterns | Non-negative raw combined G-test score | Fixed count-min sketches |
+| `MIDAS` | Candidate-inclusive edge microcluster statistic; MIDAS-R also scores endpoints | Non-negative raw chi-square-style score | Fixed count-min sketches |
+| `StreamSpot` | Change in a graph's signed shingle sketch relative to online centroids | Non-negative distance-plus-novelty score | At most `max_graphs` sketches plus fixed centroids |
 
 `AnoEdgeL`, `ISCONNA`, and `MIDAS` require integer-like source, destination,
 and explicit timestamp values. Their timestamps are non-decreasing integer
 buckets; equal timestamps represent edges in the same bucket. If
 `time_key=None`, each arrival receives the next implicit bucket.
 
-`SignedGraphSketchDetector` additionally requires a graph identifier. Its
+`StreamSpot` additionally requires a graph identifier. Its
 identifiers are finite numeric values, and its explicit timestamps are also
 integer-like. It is a signed-count/Euclidean-centroid structural adaptation;
 it does not reproduce StreamSpot's Hamming-sketch clustering workflow.
@@ -173,7 +136,6 @@ detector = MIDAS(
     destination_key="dst",
     time_key="t",
     warm_up=2,
-    normalize_score=True,
     seed=11,
 )
 

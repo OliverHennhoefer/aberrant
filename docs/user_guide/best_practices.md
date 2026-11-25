@@ -102,8 +102,6 @@ warm a replacement model in parallel, or reject an upstream release. See
 - Treat each model instance as single-owner. The package does not promise that
   concurrent `learn_one` and `score_one` calls on one instance are atomic or
   thread-safe.
-- `OnlineIsolationForest(n_jobs=-1)` parallelizes work across all reported
-  logical CPUs; it does not make concurrent caller access safe.
 - When processing partitioned streams, give each partition its own model or
   serialize access under an application-owned ordering policy. Incremental
   model state is generally not mergeable.
@@ -135,11 +133,11 @@ they describe retained observations and arrays, excluding exact lifetime counter
 
 | Implementations | Retained state and conditions |
 | --- | --- |
-| `ASDIsolationForest`, `HalfSpaceTrees`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` | Configured windows, trees, samples, or sketches. Large `OnlineIsolationForest.learn` batches are processed in bounded chunks, and retained rows own their storage. `XStream(max_feature_cache_size=None)` permits an unlimited feature-name cache; keep a finite cache budget for schema churn. |
+| `ASDIsolationForest`, `HalfSpaceTrees`, `OnlineIsolationForest`, `RandomCutForest`, `RHF`, `XStream` | Configured windows, trees, samples, or sketches. `XStream(max_feature_cache_size=None)` permits an unlimited feature-name cache; keep a finite cache budget for schema churn. |
 | `MondrianIsolationForest` | Default lifetime trees can grow indefinitely. Set `window_size=W` for periodic replacement from the latest W events. Between replacements each tree represents at most `2W - 1` events; replacement has a bounded latency spike. This is periodic rebuilding, not exact per-event sliding-window deletion. |
 | `KNN`, `LocalOutlierFactor`, `SDOStream`, `CellNeighborhoodDetector` | Configured point windows, observer budgets, cells, and bounded indexes. A custom KNN engine owns its own retention policy. |
 | `MStream`, `LODA`, `RSHash` | Fixed sketches, projections, histograms, and feature statistics. Novel values do not create a persistent key per value. |
-| `MIDAS`, `ISCONNA`, `AnoEdgeL`, `SignedGraphSketchDetector` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
+| `MIDAS`, `ISCONNA`, `AnoEdgeL`, `StreamSpot` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
 | `AdaptiveOneClassSVM` | Fixed support-vector and feature-map budgets. |
 | `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `DAMP` | Configured rolling series and lag arrays. DAMP rejects constant subsequences. |
 | All ten univariate moving statistics, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
@@ -169,7 +167,7 @@ Numeric limits remain observable even with bounded data retention:
   decay; calibrate against recent scores rather than assume a stationary scale.
 - Shared integer clocks and `MIDAS`/`ISCONNA`/`AnoEdgeL` edge identifiers remain
   exact past `2**53` when supplied as Python/NumPy integers. The numeric
-  identifiers in `SignedGraphSketchDetector` and categorical vectors in
+  identifiers in `StreamSpot` and categorical vectors in
   `MStream` still use float64. Passing integers through float-valued preprocessing or
   `PrequentialEvaluator`'s float event conversion loses that exactness. Supply
   integers directly to models when this matters. Floating timestamps cannot

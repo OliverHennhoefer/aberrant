@@ -132,10 +132,6 @@ class SDOStream(BaseModel):
         self._last_added_index = -1
         self._last_added_time = 0.0
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     @property
     def n_observers(self) -> int:
         """Number of observers currently maintained by the model."""
@@ -367,12 +363,3 @@ class SDOStream(BaseModel):
 
         score = float(np.median(nearest))
         return float(max(score, 0.0))
-
-    def __repr__(self) -> str:
-        return (
-            "SDOStream("
-            f"max_observers={self.max_observers}, time_scale={self.time_scale}, inactive_quantile={self.inactive_quantile}, n_neighbors={self.n_neighbors}, "
-            f"distance='{self.distance}', minkowski_p={self.minkowski_p}, "
-            f"time_key={self.time_key!r}, warm_up={self.warm_up}, "
-            f"seed={self.seed}, n_observers={self._n_observers})"
-        )

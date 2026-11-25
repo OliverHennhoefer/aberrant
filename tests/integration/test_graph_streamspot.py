@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.graph import SignedGraphSketchDetector as StreamSpot
+from aberrant.model.graph import StreamSpot
 from tests.integration._quality import assert_detects
 
 WARMUP_SAMPLES = 1_000
@@ -61,7 +61,6 @@ class TestStreamSpot(unittest.TestCase):
             num_clusters=8,
             max_graphs=256,
             warm_up=16,
-            normalize_score=False,
             seed=42,
         )
 

@@ -296,12 +296,3 @@ class ASDIsolationForest(BaseModel):
 
         average_path = float(np.mean(self._flat.path_lengths_of(prepared.values)))
         return float(2.0 ** (-average_path / self.c_n))
-
-    def __repr__(self) -> str:
-        """Return a string representation of iForestASD."""
-        return (
-            f"ASDIsolationForest(n_trees={self.n_trees}, "
-            f"max_samples={self.max_samples}, window_size={self.window_size}, "
-            f"retrain_interval={self.retrain_interval}, n_trees={len(self.trees)}, "
-            f"fits_completed={self._fits_completed}, seed={self.seed})"
-        )

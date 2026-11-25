@@ -221,10 +221,6 @@ class OnlineAutoencoderEnsemble(BaseModel):
         self._ensemble: list[_NumpyAutoencoder] = []
         self._output_ae: _NumpyAutoencoder | None = None
 
-    def reset(self) -> None:
-        """Public state reset."""
-        self._reset_state()
-
     @property
     def phase(self) -> str:
         """Current warm-up/training phase."""
@@ -443,12 +439,3 @@ class OnlineAutoencoderEnsemble(BaseModel):
         if self._phase != _PHASE_READY:
             return 0.0
         return float(max(0.0, self._score_detector(prepared.values)))
-
-    def __repr__(self) -> str:
-        return (
-            f"OnlineAutoencoderEnsemble(max_ae_size={self.max_ae_size}, "
-            f"feature_map_grace={self.feature_map_grace}, ad_grace={self.ad_grace}, "
-            f"learning_rate={self.learning_rate}, hidden_ratio={self.hidden_ratio}, "
-            f"adaptive_after_warmup={self.adaptive_after_warmup}, phase='{self._phase}', "
-            f"feature_groups={len(self._feature_groups)})"
-        )

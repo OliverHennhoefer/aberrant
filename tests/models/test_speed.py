@@ -13,11 +13,11 @@ import pytest
 
 from aberrant.model.distance import LocalOutlierFactor
 from aberrant.model.forest import (
+    RHF,
     ASDIsolationForest,
     HalfSpaceTrees,
     OnlineIsolationForest,
     RandomCutForest,
-    StreamRandomHistogramForest,
     XStream,
 )
 from aberrant.model.forest.mondrian import MondrianIsolationForest
@@ -72,7 +72,7 @@ CASES = {
     ),  # ~0.4 s
     "xstream": (lambda: XStream(seed=1), _stream(seed=1), 5.0),  # ~0.5 s
     "random-histogram-forest": (
-        lambda: StreamRandomHistogramForest(seed=1),
+        lambda: RHF(seed=1),
         _stream(seed=1, n_events=1000),
         10.0,
     ),  # ~1 s

@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aberrant.model.graph import SignedGraphSketchDetector as StreamSpot
+from aberrant.model.graph import StreamSpot
 
 
 class TestStreamSpot(unittest.TestCase):
@@ -22,7 +22,6 @@ class TestStreamSpot(unittest.TestCase):
             "num_clusters": 4,
             "max_graphs": 32,
             "warm_up": 4,
-            "normalize_score": False,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -40,7 +39,6 @@ class TestStreamSpot(unittest.TestCase):
         self.assertEqual(model.num_clusters, 8)
         self.assertEqual(model.max_graphs, 4096)
         self.assertEqual(model.warm_up, 32)
-        self.assertFalse(model.normalize_score)
 
     def test_invalid_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -255,33 +253,10 @@ class TestStreamSpot(unittest.TestCase):
             0.0,
         )
 
-    def test_normalize_score_bounds_output(self) -> None:
-        model = self.create_model(
-            edge_type_key=None,
-            shingle_size=1,
-            warm_up=2,
-            normalize_score=True,
-        )
-        for i in range(120):
-            model.learn_one(
-                {
-                    "graph": float(i % 6),
-                    "src": float(i % 11),
-                    "dst": float((i + 1) % 11),
-                    "t": float(i),
-                }
-            )
-
-        score = model.score_one(
-            {"graph": 777.0, "src": 888.0, "dst": 999.0, "t": 120.0}
-        )
-        self.assertGreaterEqual(score, 0.0)
-        self.assertLess(score, 1.0)
-
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(sketch_dim=128, num_clusters=6, max_graphs=64)
         output = repr(model)
-        self.assertIn("SignedGraphSketchDetector", output)
+        self.assertIn("StreamSpot", output)
         self.assertIn("sketch_dim=128", output)
         self.assertIn("num_clusters=6", output)
         self.assertIn("max_graphs=64", output)

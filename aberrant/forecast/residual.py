@@ -141,9 +141,3 @@ class ResidualDetector(BaseModel):
         assert self._forecaster is not None
         self._forecaster.learn_one(y)
         self._issued.append(self._forecaster.forecast_one())
-
-    def __repr__(self) -> str:
-        return (
-            f"ResidualDetector({self.model!r}, target={self.target!r}, "
-            f"lead={self.lead}, score={self.score!r})"
-        )

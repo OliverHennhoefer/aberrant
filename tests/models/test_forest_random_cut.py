@@ -56,8 +56,6 @@ class TestRandomCutForest(unittest.TestCase):
             sample_size=32,
             shingle_size=1,
             warm_up=16,
-            normalize_score=True,
-            score_scale=8.0,
             seed=42,
         )
 
@@ -68,7 +66,6 @@ class TestRandomCutForest(unittest.TestCase):
         self.assertEqual(model.sample_size, 256)
         self.assertEqual(model.shingle_size, 1)
         self.assertEqual(model.warm_up, 256)
-        self.assertFalse(model.normalize_score)
         self.assertFalse(model._ready)
 
     def test_invalid_parameters(self):
@@ -81,8 +78,6 @@ class TestRandomCutForest(unittest.TestCase):
             RandomCutForest(shingle_size=0)
         with self.assertRaises(ValueError):
             RandomCutForest(warm_up=0)
-        with self.assertRaises(ValueError):
-            RandomCutForest(score_scale=0.0)
 
     def test_score_zero_before_warmup(self):
         """score_one should return 0.0 before warm-up is complete."""
@@ -230,7 +225,6 @@ class TestRandomCutForest(unittest.TestCase):
             n_trees=8,
             sample_size=32,
             warm_up=16,
-            normalize_score=False,
             seed=42,
         )
         for i in range(50):
@@ -267,7 +261,7 @@ class TestRandomCutForestExactness(unittest.TestCase):
         for case in score_sequences.load("random_cut_forest"):
             with self.subTest(case=case["name"]):
                 scores = score_sequences.replay(RandomCutForest(**case["params"]), case)
-                if case["params"].get("normalize_score"):
+                if "squash" in case:
                     # Raw CoDisp is plain arithmetic, but np.exp can differ in
                     # the last bit between CPUs (SIMD and libm loops). The
                     # recording platform reproduces every bit.

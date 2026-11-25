@@ -342,10 +342,9 @@ def test_components_breaking_their_contract_are_named(pipeline, call, message):
         getattr(pipeline, call)({"x": 1.0})
 
 
-def test_pipeline_repr_lists_every_stage_with_its_settings() -> None:
+def test_pipeline_repr_lists_every_stage_with_its_changed_settings() -> None:
     pipeline = StandardScaler() | MinMaxScaler(clip=True) | NullModel()
 
     assert repr(pipeline) == (
-        "Pipeline(StandardScaler(with_std=True) | "
-        "MinMaxScaler(feature_range=(0.0, 1.0), clip=True) | NullModel())"
+        "Pipeline(StandardScaler() | MinMaxScaler(clip=True) | NullModel())"
     )

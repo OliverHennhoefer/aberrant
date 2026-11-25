@@ -45,15 +45,15 @@ from aberrant.model.distance import (
     SDOStream,
 )
 from aberrant.model.forest import (
+    RHF,
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
-    StreamRandomHistogramForest,
     XStream,
 )
-from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, SignedGraphSketchDetector
+from aberrant.model.graph import ISCONNA, MIDAS, AnoEdgeL, StreamSpot
 from aberrant.model.sketch import LODA, MStream, RSHash
 from aberrant.model.stat import MovingAverage, MovingCovariance
 from aberrant.model.svm import AdaptiveOneClassSVM
@@ -94,13 +94,13 @@ def test_public_imports_base_smoke() -> None:
     assert AnoEdgeL is not None
     assert ISCONNA is not None
     assert MIDAS is not None
-    assert SignedGraphSketchDetector is not None
+    assert StreamSpot is not None
     assert ASDIsolationForest is not None
     assert HalfSpaceTrees is not None
     assert MondrianIsolationForest is not None
     assert OnlineIsolationForest is not None
     assert RandomCutForest is not None
-    assert StreamRandomHistogramForest is not None
+    assert RHF is not None
     assert XStream is not None
     assert LODA is not None
     assert MStream is not None
@@ -157,8 +157,9 @@ def test_removed_compatibility_exports_stay_removed() -> None:
         (distance_api, "STARE"),
         (model_api, "QuantileThreshold"),
         (distance_api, "StationaryRegionNeighborDetector"),
-        (graph_api, "StreamSpot"),
+        (graph_api, "SignedGraphSketchDetector"),
         (forest_api, "MondrianForest"),
+        (forest_api, "StreamRandomHistogramForest"),
         (sketch_api, "StreamingLODA"),
         (sketch_api, "StreamingRSHash"),
         (svm_api, "GADGETSVM"),

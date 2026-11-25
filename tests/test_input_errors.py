@@ -5,66 +5,17 @@ from collections.abc import Callable
 
 import pytest
 
-from aberrant.catalog import (
-    MODEL_CATALOG,
-    TRANSFORMER_CATALOG,
-    create_model,
-    create_transformer,
-)
+from aberrant.catalog import create_model, create_transformer
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.exceptions import ValidationError
 from aberrant.forecast import HoltWinters, SeasonalNaive
-
-_MODEL_PARAMS: dict[str, dict[str, object]] = {
-    "threshold": {"ceiling": 1.0},
-    "residual_detector": {
-        "target": "a",
-        "model": {"id": "seasonal_naive", "params": {"season_length": 4}},
-    },
-    "multivariate_rolling_matrix_profile": {"subsequence_length": 4},
-    "rolling_matrix_profile": {"subsequence_length": 4},
-    "damp": {"subsequence_length": 4},
-}
-_TRANSFORMER_PARAMS: dict[str, dict[str, object]] = {
-    "feature_schema_guard": {"features": ["a", "b"]},
-    "select": {"features": ["a"]},
-    "rename": {"mapping": {"a": "c"}},
-    "incremental_pca": {"n_components": 1, "warm_up": 5},
-    "random_projection": {"n_components": 1},
-}
-_EDGE_MODELS = {"anoedge_l", "isconna", "midas", "signed_graph_sketch_detector"}
-_MULTIVARIATE_STATISTICS = {
-    "moving_correlation_coefficient",
-    "moving_covariance",
-    "moving_mahalanobis_distance",
-}
-_UNIVARIATE_MODELS = {
-    "rolling_matrix_profile",
-    "damp",
-}
-
-
-def _event_factory(component_id: str) -> Callable[[int], dict[str, object]]:
-    if component_id in _EDGE_MODELS:
-
-        def edge(index: int) -> dict[str, object]:
-            event: dict[str, object] = {
-                "src": index % 5,
-                "dst": index * 7 % 5,
-                "t": index,
-            }
-            if component_id == "signed_graph_sketch_detector":
-                event["graph"] = 1
-            return event
-
-        return edge
-    univariate = component_id in _UNIVARIATE_MODELS or (
-        component_id.startswith("moving_")
-        and component_id not in _MULTIVARIATE_STATISTICS
-    )
-    if univariate:
-        return lambda index: {"a": index % 7 + 0.1}
-    return lambda index: {"a": index % 7 + 0.1, "b": index % 3 + 0.2}
+from tests.catalog_cases import (
+    MODEL_IDS,
+    TRANSFORMER_IDS,
+    TRANSFORMER_PARAMS,
+    event_factory,
+    model_params,
+)
 
 
 def _malformed(event: dict[str, object]) -> dict[str, dict[str, object]]:
@@ -105,34 +56,18 @@ def _rejections(component: object, event: dict[str, object], methods: tuple[str,
                 yield f"{case}/{method}: {type(error).__name__}: {error}"
 
 
-_MODEL_IDS = [
-    component_id
-    for component_id, spec in MODEL_CATALOG.items()
-    if spec.available and spec.declarative and component_id != "knn"
-]
-_TRANSFORMER_IDS = [
-    component_id
-    for component_id, spec in TRANSFORMER_CATALOG.items()
-    if spec.available and spec.declarative
-]
-
-
-@pytest.mark.parametrize("component_id", _MODEL_IDS)
+@pytest.mark.parametrize("component_id", MODEL_IDS)
 def test_models_reject_malformed_events_with_validation_error(component_id):
-    if component_id.startswith("moving_"):
-        params: dict[str, object] = {"window_size": 8}
-    else:
-        params = _MODEL_PARAMS.get(component_id, {})
-    make_event = _event_factory(component_id)
-    model = _warmed(create_model(component_id, params), make_event)
+    make_event = event_factory(component_id)
+    model = _warmed(create_model(component_id, model_params(component_id)), make_event)
     failures = list(_rejections(model, make_event(81), ("score_one", "learn_one")))
     assert failures == []
 
 
-@pytest.mark.parametrize("component_id", _TRANSFORMER_IDS)
+@pytest.mark.parametrize("component_id", TRANSFORMER_IDS)
 def test_transformers_reject_malformed_events_with_validation_error(component_id):
-    params = _TRANSFORMER_PARAMS.get(component_id, {})
-    make_event = _event_factory(component_id)
+    params = TRANSFORMER_PARAMS.get(component_id, {})
+    make_event = event_factory(component_id)
     transformer = _warmed(create_transformer(component_id, params), make_event)
     failures = list(
         _rejections(transformer, make_event(81), ("transform_one", "learn_one"))

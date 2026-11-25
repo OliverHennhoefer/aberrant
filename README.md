@@ -153,7 +153,7 @@ pip install "aberrant[eval,faiss]"
 | General multivariate detection | [`OnlineIsolationForest` or another isolation-forest variant](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#isolation-forests) |
 | Local-neighborhood or density anomalies | [`LocalOutlierFactor`, `KNN`, `SDOStream`, or a cell-based detector](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#distance-and-neighborhood-detectors) |
 | Compact projection or frequency sketches | [`LODA`, `MStream`, or `RSHash`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#sketch-detectors) |
-| Anomalous edges and graph evolution | [`AnoEdgeL`, `ISCONNA`, `MIDAS`, or `SignedGraphSketchDetector`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#graph-stream-detectors) |
+| Anomalous edges and graph evolution | [`AnoEdgeL`, `ISCONNA`, `MIDAS`, or `StreamSpot`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#graph-stream-detectors) |
 | Discords in a scalar time series | [`RollingMatrixProfile` or `DAMP`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-discord-detection) |
 | Changes in relationships between time-series channels | [`MultivariateRollingMatrixProfile`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#time-series-discord-detection) |
 | Interpretable rolling statistics | [Univariate and multivariate moving statistics](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#statistical-detectors) |
@@ -172,10 +172,10 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 
 | Family | Implementations |
 | --- | --- |
-| Isolation forest | `ASDIsolationForest`, `HalfSpaceTrees`, `MondrianIsolationForest`, `OnlineIsolationForest`, `RandomCutForest`, `StreamRandomHistogramForest`, `XStream` |
+| Isolation forest | `ASDIsolationForest`, `HalfSpaceTrees`, `MondrianIsolationForest`, `OnlineIsolationForest`, `RandomCutForest`, `RHF`, `XStream` |
 | Distance | `CellNeighborhoodDetector`, `KNN`, `LocalOutlierFactor`, `SDOStream` |
 | Sketch | `MStream`, `LODA`, `RSHash` |
-| Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `SignedGraphSketchDetector` |
+| Graph | `AnoEdgeL`, `ISCONNA`, `MIDAS`, `StreamSpot` |
 | Time series | `MultivariateRollingMatrixProfile`, `RollingMatrixProfile`, `DAMP` |
 | SVM | `AdaptiveOneClassSVM` |
 | Statistical | `MovingAverage`, `MovingAverageAbsoluteDeviation`, `MovingGeometricAverage`, `MovingHarmonicAverage`, `MovingInterquartileRange`, `MovingKurtosis`, `MovingMedian`, `MovingQuantile`, `MovingSkewness`, `MovingVariance`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |

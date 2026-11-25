@@ -55,7 +55,3 @@ class RandomModel(BaseModel):
             Random float between 0.0 and 1.0.
         """
         return float(self.rng.uniform(0.0, 1.0))
-
-    def __repr__(self) -> str:
-        """Return a string representation of the random model."""
-        return f"RandomModel(seed={self.seed})"

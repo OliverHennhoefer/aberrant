@@ -105,10 +105,6 @@ class CellNeighborhoodDetector(BaseModel):
         self._neighbor_offsets_cache: dict[int, tuple[_Cell, ...]] = {}
         self._samples_seen = 0
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     @property
     def n_samples_seen(self) -> int:
         """Number of samples processed via ``learn_one``."""
@@ -210,13 +206,3 @@ class CellNeighborhoodDetector(BaseModel):
                     if neighbors >= self.k:
                         return 0.0
         return 1.0 - neighbors / float(self.k)
-
-    def __repr__(self) -> str:
-        return (
-            "CellNeighborhoodDetector("
-            f"k={self.k}, radius={self.radius}, window_size={self.window_size}, "
-            f"slide_size={self.slide_size}, time_key={self.time_key!r}, "
-            f"warm_up={self.warm_up}, "
-            f"samples_seen={self._samples_seen}, "
-            f"active_cells={len(self._cell_members)})"
-        )

@@ -70,7 +70,6 @@ class TestAnoEdgeL(unittest.TestCase):
             "num_dense_submatrices": 1,
             "time_decay_factor": 1.0,
             "warm_up": 0,
-            "normalize_score": False,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -250,14 +249,6 @@ class TestAnoEdgeL(unittest.TestCase):
         self.assertEqual(model.n_samples_seen, 0)
         self.assertIsNone(model._current_bucket)
         self.assertEqual(float(np.sum(model._sketch)), 0.0)
-
-    def test_normalize_score_bounds_output(self) -> None:
-        model = self.create_model(normalize_score=True)
-        for _ in range(20):
-            model.learn_one({"src": 1.0, "dst": 2.0, "t": 1.0})
-        score = model.score_one({"src": 1.0, "dst": 2.0, "t": 1.0})
-        self.assertGreaterEqual(score, 0.0)
-        self.assertLess(score, 1.0)
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(

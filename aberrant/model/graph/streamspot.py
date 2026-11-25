@@ -37,7 +37,7 @@ class _PreparedGraphEvent:
     edge_type: float | None
 
 
-class SignedGraphSketchDetector(BaseModel):
+class StreamSpot(BaseModel):
     """
     Signed-sketch detector for graph-level structural anomalies.
 
@@ -50,7 +50,6 @@ class SignedGraphSketchDetector(BaseModel):
 
     Notes:
     - Scores are continuous and non-negative.
-    - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by ``max_graphs``, ``sketch_dim``, and ``num_clusters``.
 
     Args:
@@ -68,8 +67,6 @@ class SignedGraphSketchDetector(BaseModel):
             learned graph state is evicted when the limit is exceeded.
         warm_up: Number of active graph sketches required before
             scoring. It cannot exceed ``max_graphs``.
-        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
-            distance-plus-novelty score.
         seed: Seed for model-local shingle hashing.
 
     References:
@@ -138,7 +135,6 @@ class SignedGraphSketchDetector(BaseModel):
         num_clusters: int = 8,
         max_graphs: int = 4096,
         warm_up: int = 32,
-        normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
         sketch_dim = coerce_integer_count(sketch_dim, label="sketch_dim", minimum=1)
@@ -179,7 +175,6 @@ class SignedGraphSketchDetector(BaseModel):
         self.num_clusters = num_clusters
         self.max_graphs = max_graphs
         self.warm_up = warm_up
-        self.normalize_score = normalize_score
         self.seed = seed
 
         self._reset_state()
@@ -208,10 +203,6 @@ class SignedGraphSketchDetector(BaseModel):
 
         self._clock = MonotonicClock(integer_like=True)
         self._samples_seen = 0
-
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
 
     @property
     def n_samples_seen(self) -> int:
@@ -470,21 +461,4 @@ class SignedGraphSketchDetector(BaseModel):
         raw_score = float(distance_component + novelty)
         if not np.isfinite(raw_score):
             raw_score = 0.0
-        if self.normalize_score:
-            return float(raw_score / (1.0 + raw_score))
         return raw_score
-
-    def __repr__(self) -> str:
-        return (
-            "SignedGraphSketchDetector("
-            f"graph_key={self.graph_key!r}, source_key={self.source_key!r}, "
-            f"destination_key={self.destination_key!r}, "
-            f"edge_type_key={self.edge_type_key!r}, time_key={self.time_key!r}, "
-            f"sketch_dim={self.sketch_dim}, shingle_size={self.shingle_size}, "
-            f"num_clusters={self.num_clusters}, max_graphs={self.max_graphs}, "
-            f"warm_up={self.warm_up}, "
-            f"normalize_score={self.normalize_score}, "
-            f"seed={self.seed}, "
-            f"samples_seen={self._samples_seen}, active_graphs={len(self._graph_states)}, "
-            f"initialized_clusters={self._initialized_clusters})"
-        )

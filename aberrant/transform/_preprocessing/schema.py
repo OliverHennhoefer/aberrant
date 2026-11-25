@@ -70,16 +70,3 @@ class FeatureSchemaGuard(BaseTransformer):
 
     def _prepare(self, x: dict[str, float]) -> PreparedFeatures:
         return self._schema.preview(x)
-
-    def reset(self) -> None:
-        """Forget a learned schema while preserving constructor configuration."""
-        self._schema = FeatureSchema(
-            names=self.features,
-            sort_names=self.sort_features,
-        )
-
-    def __repr__(self) -> str:
-        return (
-            f"FeatureSchemaGuard(features={self.features!r}, "
-            f"sort_features={self.sort_features})"
-        )

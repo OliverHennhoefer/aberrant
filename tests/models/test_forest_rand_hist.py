@@ -12,7 +12,7 @@ import warnings
 import numpy as np
 
 from aberrant.model.forest.rand_hist import (
-    StreamRandomHistogramForest,
+    RHF,
     _fold_moments,
     _moments_with,
     _RandomHistogramTree,
@@ -41,7 +41,7 @@ def _tree_shape(node: _RHFNode | None) -> tuple:
     return (node.depth, node.node_id, [point.tobytes() for point in node.points])
 
 
-def _forest_shape(model: StreamRandomHistogramForest) -> list[tuple]:
+def _forest_shape(model: RHF) -> list[tuple]:
     return [(_tree_shape(tree.root), tree._node_random) for tree in model._trees]
 
 
@@ -49,7 +49,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
     """Test Stream Random Histogram Forest edge cases and initialization."""
 
     def create_model(self):
-        return StreamRandomHistogramForest(
+        return RHF(
             n_trees=5,  # Small for fast testing
             max_depth=5,
             window_size=50,
@@ -61,9 +61,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_initialization_valid_parameters(self):
         """Test initialization with valid parameters."""
-        model = StreamRandomHistogramForest(
-            n_trees=10, max_depth=8, window_size=100, seed=123
-        )
+        model = RHF(n_trees=10, max_depth=8, window_size=100, seed=123)
 
         self.assertEqual(model.n_trees, 10)
         self.assertEqual(model.max_depth, 8)
@@ -75,23 +73,23 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         """Test initialization with invalid parameters raises errors."""
         # Invalid n_trees
         with self.assertRaises((ValueError, AssertionError)):
-            StreamRandomHistogramForest(n_trees=0)
+            RHF(n_trees=0)
 
         # Invalid max_depth
         with self.assertRaises((ValueError, AssertionError)):
-            StreamRandomHistogramForest(max_depth=0)
+            RHF(max_depth=0)
 
         # Invalid window_size
         with self.assertRaises((ValueError, AssertionError)):
-            StreamRandomHistogramForest(window_size=0)
+            RHF(window_size=0)
 
     def test_max_bins_is_no_longer_accepted(self):
         with self.assertRaises(TypeError):
-            StreamRandomHistogramForest(max_bins=5)  # type: ignore[call-arg]
+            RHF(max_bins=5)  # type: ignore[call-arg]
 
     def test_window_size_behavior(self):
         """Test window size constraint behavior."""
-        model = StreamRandomHistogramForest(
+        model = RHF(
             n_trees=3,
             max_depth=4,
             window_size=10,  # Small window
@@ -114,7 +112,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         """Test different max_depth configurations."""
         for max_depth in [3, 5, 10]:
             with self.subTest(max_depth=max_depth):
-                model = StreamRandomHistogramForest(
+                model = RHF(
                     n_trees=3,
                     max_depth=max_depth,
                     window_size=50,
@@ -162,12 +160,8 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
 
     def test_deterministic_behavior(self):
         """Test deterministic behavior with same seed."""
-        model1 = StreamRandomHistogramForest(
-            n_trees=3, max_depth=5, window_size=20, seed=42
-        )
-        model2 = StreamRandomHistogramForest(
-            n_trees=3, max_depth=5, window_size=20, seed=42
-        )
+        model1 = RHF(n_trees=3, max_depth=5, window_size=20, seed=42)
+        model2 = RHF(n_trees=3, max_depth=5, window_size=20, seed=42)
 
         # Train both models identically
         training_points = [
@@ -188,12 +182,8 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         self.assertEqual(score1, score2, "Same seed should produce identical results")
 
     def test_different_seeds_produce_different_node_random_values(self):
-        model1 = StreamRandomHistogramForest(
-            n_trees=2, max_depth=5, window_size=4, seed=42
-        )
-        model2 = StreamRandomHistogramForest(
-            n_trees=2, max_depth=5, window_size=4, seed=43
-        )
+        model1 = RHF(n_trees=2, max_depth=5, window_size=4, seed=42)
+        model2 = RHF(n_trees=2, max_depth=5, window_size=4, seed=43)
         points = [
             {"x": 0.0, "y": 4.0},
             {"x": 1.0, "y": 1.0},
@@ -209,7 +199,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         self.assertNotEqual(caches1, caches2)
 
     def test_large_depth_allocates_random_values_only_for_visited_nodes(self):
-        model = StreamRandomHistogramForest(
+        model = RHF(
             n_trees=2,
             max_depth=64,
             window_size=4,
@@ -239,7 +229,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         self.assertEqual(values1, values2)
 
     def test_score_preview_preserves_cache_and_matches_later_learning(self):
-        model = StreamRandomHistogramForest(
+        model = RHF(
             n_trees=3,
             max_depth=8,
             window_size=4,
@@ -274,7 +264,7 @@ class TestStreamRandomHistogramForestEdgeCases(unittest.TestCase):
         )
 
     def test_score_preview_matches_deepcopy_insert_reference(self):
-        model = StreamRandomHistogramForest(
+        model = RHF(
             n_trees=4,
             max_depth=8,
             window_size=8,
@@ -345,13 +335,11 @@ class TestStreamRandomHistogramForestExactness(unittest.TestCase):
     """Planned insertions must reproduce the 1.4.0 trees and scores."""
 
     def test_score_sequences_match_recorded_reference(self):
-        for case in score_sequences.load("stream_random_histogram_forest"):
+        for case in score_sequences.load("rhf"):
             with self.subTest(case=case["name"]), warnings.catch_warnings():
                 # The overflowing case warns where NumPy moments overflow.
                 warnings.simplefilter("ignore", RuntimeWarning)
-                scores = score_sequences.replay(
-                    StreamRandomHistogramForest(**case["params"]), case
-                )
+                scores = score_sequences.replay(RHF(**case["params"]), case)
                 np.testing.assert_allclose(scores, case["scores"], rtol=1e-12, atol=0)
 
     def test_moments_with_matches_folding_one_value_at_a_time(self):
@@ -405,9 +393,9 @@ class TestStreamRandomHistogramForestExactness(unittest.TestCase):
     def test_learning_a_scored_point_matches_learning_it_directly(self):
         events = score_sequences.make_stream(seed=7, n_events=260, n_features=3)
         params = {"n_trees": 4, "max_depth": 6, "window_size": 40, "seed": 8}
-        scored = StreamRandomHistogramForest(**params)
-        learned = StreamRandomHistogramForest(**params)
-        scored_elsewhere = StreamRandomHistogramForest(**params)
+        scored = RHF(**params)
+        learned = RHF(**params)
+        scored_elsewhere = RHF(**params)
         for index, event in enumerate(events):
             scored.score_one(event)
             scored.learn_one(event)
@@ -421,9 +409,7 @@ class TestStreamRandomHistogramForestExactness(unittest.TestCase):
 
     def test_pickles_leave_out_the_preview(self):
         events = score_sequences.make_stream(seed=9, n_events=80, n_features=2)
-        model = StreamRandomHistogramForest(
-            n_trees=3, max_depth=5, window_size=30, seed=10
-        )
+        model = RHF(n_trees=3, max_depth=5, window_size=30, seed=10)
         for event in events[:60]:
             model.learn_one(event)
         before = pickle.dumps(model)

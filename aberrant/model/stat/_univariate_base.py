@@ -46,6 +46,7 @@ class _BaseMovingUnivariate(BaseModel):
 
         self.window_size = window_size
         self.window: deque[float] = deque(maxlen=window_size)
+        self.key = key
         self.feature_name = key
         self.abs_diff = abs_diff
 

@@ -23,11 +23,6 @@ class MovingAverage(_BaseMovingUnivariate):
         new_mean = (window_sum + self._extract_value(x)) / (len(self.window) + 1)
         return self._difference(new_mean, current_mean)
 
-    def __repr__(self) -> str:
-        return (
-            f"MovingAverage(window_size={self.window_size}, abs_diff={self.abs_diff})"
-        )
-
 
 class MovingHarmonicAverage(_BaseMovingUnivariate):
     """Score harmonic-mean change, ignoring zero values during learning."""
@@ -64,12 +59,6 @@ class MovingHarmonicAverage(_BaseMovingUnivariate):
             raise ValueError("Harmonic mean is undefined after adding the sample.")
         new_harmonic = (len(self.window) + 1) / new_reciprocal_sum
         return self._difference(new_harmonic, current_harmonic)
-
-    def __repr__(self) -> str:
-        return (
-            f"MovingHarmonicAverage(window_size={self.window_size}, "
-            f"abs_diff={self.abs_diff})"
-        )
 
 
 class MovingGeometricAverage(_BaseMovingUnivariate):

@@ -106,10 +106,6 @@ class ADWIN(BaseDriftDetector):
         self._drift_detected: bool = False
         self._samples_since_reset: int = 0
 
-    def reset(self) -> None:
-        """Reset the detector to its initial state (clears all counters)."""
-        self._reset_state()
-
     def _soft_reset(self) -> None:
         """Reset detector state but preserve n_detections counter."""
         n_detections = self._n_detections
@@ -343,9 +339,3 @@ class ADWIN(BaseDriftDetector):
             self._bucket_count.pop()
             self._bucket_sum.pop()
             self._bucket_variance.pop()
-
-    def __repr__(self) -> str:
-        return (
-            f"ADWIN(delta={self.delta}, clock={self.clock}, "
-            f"max_buckets={self.max_buckets}, width={self._width})"
-        )

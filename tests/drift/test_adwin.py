@@ -188,7 +188,6 @@ class TestADWIN(unittest.TestCase):
         self.assertIn("ADWIN", repr_str)
         self.assertIn("delta=0.01", repr_str)
         self.assertIn("clock=16", repr_str)
-        self.assertIn("width=", repr_str)
 
 
 class TestADWINBucketCompression(unittest.TestCase):

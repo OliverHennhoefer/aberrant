@@ -48,7 +48,3 @@ class NullModel(BaseModel):
             Always returns 0.0 (no anomaly detected).
         """
         return 0.0
-
-    def __repr__(self) -> str:
-        """Return a string representation of the null model."""
-        return "NullModel()"

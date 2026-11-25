@@ -14,7 +14,6 @@ model = AnoEdgeL(
     num_dense_submatrices=1,
     time_decay_factor=1.0,
     warm_up=0,
-    normalize_score=False,
     seed=42,
 )
 

@@ -150,10 +150,6 @@ class RSHash(BaseModel):
         # changes the buckets of a point, so learning that point reuses them.
         self._scored: tuple[bytes, np.ndarray] | None = None
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     def __getstate__(self) -> dict[str, object]:
         state = self.__dict__.copy()
         # The buckets of the last scored point are a cache, not model state.
@@ -350,13 +346,3 @@ class RSHash(BaseModel):
         self._scored = (vector.tobytes(), buckets)
         query_scale = self._preview_scale(current_time)
         return float(max(0.0, self._score_buckets(buckets, query_scale)))
-
-    def __repr__(self) -> str:
-        return (
-            "RSHash("
-            f"n_members={self.n_members}, n_hashes={self.n_hashes}, "
-            f"sketch_width={self.sketch_width}, subspace_size={self.subspace_size}, "
-            f"bin_width={self.bin_width}, decay={self.decay}, "
-            f"warm_up={self.warm_up}, time_key={self.time_key!r}, "
-            f"seed={self.seed}, samples_seen={self._samples_seen})"
-        )

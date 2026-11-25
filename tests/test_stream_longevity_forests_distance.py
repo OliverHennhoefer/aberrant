@@ -24,12 +24,12 @@ from aberrant.model.distance import (
     SDOStream,
 )
 from aberrant.model.forest import (
+    RHF,
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
-    StreamRandomHistogramForest,
     XStream,
 )
 from aberrant.model.forest._online_tree import _OnlineBranch
@@ -186,26 +186,6 @@ def test_online_forest_long_turnover_has_bounded_membership_and_tree(
             assert math.isfinite(model.score_one(point))
 
 
-def test_online_large_batch_does_not_pin_discarded_batch_or_overgrow_tree_updates():
-    model = OnlineIsolationForest(n_trees=1, max_leaf_samples=4, window_size=12, seed=5)
-    batch = np.arange(30_000.0).reshape(-1, 3)
-    populations = []
-    original_learn = model.trees[0].learn
-
-    def tracked_learn(data):
-        populations.append(model.trees[0].data_size + len(data))
-        return original_learn(data)
-
-    model.trees[0].learn = tracked_learn
-    model.learn_batch(batch)
-    assert max(populations) <= 2 * model.window_size
-    assert len(model.data_window) == model.window_size
-    assert all(row.base is None for row in model.data_window)
-    np.testing.assert_array_equal(model.data_window, batch[-model.window_size :])
-    batch[:] = -1.0
-    assert all(np.all(row >= 0.0) for row in model.data_window)
-
-
 @pytest.mark.parametrize("shingle", [1, 4])
 @pytest.mark.parametrize("pattern", ["duplicates", "unique"])
 def test_random_cut_forest_evicts_ids_and_preserves_score_preview(shingle, pattern):
@@ -239,7 +219,7 @@ def test_replacement_forests_do_not_accumulate_old_trees_or_samples(pattern):
     asd = ASDIsolationForest(
         n_trees=2, max_samples=12, window_size=16, retrain_interval=7, seed=2
     )
-    rhf = StreamRandomHistogramForest(n_trees=2, max_depth=5, window_size=16, seed=2)
+    rhf = RHF(n_trees=2, max_depth=5, window_size=16, seed=2)
     for i in range(1200):
         value = 1.0 if pattern == "constant" else float((i * 11) % 17)
         point = {"x": value, "y": float(i % 5)}
@@ -478,9 +458,7 @@ _BOUNDED_MODELS = [
         id="random-cut",
     ),
     pytest.param(
-        lambda: StreamRandomHistogramForest(
-            n_trees=2, window_size=16, max_depth=4, seed=1
-        ),
+        lambda: RHF(n_trees=2, window_size=16, max_depth=4, seed=1),
         id="random-histogram",
     ),
     pytest.param(

@@ -33,7 +33,6 @@ class TestISCONNA(unittest.TestCase):
             "gamma": 0.5,
             "include_endpoints": True,
             "warm_up": 0,
-            "normalize_score": False,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -262,14 +261,6 @@ class TestISCONNA(unittest.TestCase):
         self.assertIsNone(model._current_bucket)
         self.assertFalse(np.any(model._edge.busy_current))
 
-    def test_normalize_score_bounds_output(self) -> None:
-        model = self.create_model(normalize_score=True, include_endpoints=False)
-        for i in range(1, 20):
-            model.learn_one({"src": 1.0, "dst": 2.0, "t": float(i)})
-        score = model.score_one({"src": 1.0, "dst": 2.0, "t": 20.0})
-        self.assertGreaterEqual(score, 0.0)
-        self.assertLess(score, 1.0)
-
     def test_score_saturates_when_the_product_overflows(self) -> None:
         event = {"src": 1.0, "dst": 2.0, "t": 1.0}
         cases = [
@@ -283,16 +274,14 @@ class TestISCONNA(unittest.TestCase):
             ((1e-200, 1e200, 1.0), {"alpha": 2.0, "beta": 2.0}, 1.0),
         ]
         for components, exponents, expected in cases:
-            for normalize in (False, True):
-                with self.subTest(components=components, normalize=normalize):
-                    model = self.create_model(normalize_score=normalize, **exponents)
-                    model.learn_one(event)
-                    with mock.patch.object(
-                        model, "_component_scores", return_value=components
-                    ):
-                        score = model.score_one(event)
-                    want = expected / (1.0 + expected) if normalize else expected
-                    self.assertEqual(score, pytest.approx(want, rel=1e-12))
+            with self.subTest(components=components):
+                model = self.create_model(**exponents)
+                model.learn_one(event)
+                with mock.patch.object(
+                    model, "_component_scores", return_value=components
+                ):
+                    score = model.score_one(event)
+                self.assertEqual(score, pytest.approx(expected, rel=1e-12))
 
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(n_hashes=9, sketch_width=257)
@@ -300,7 +289,7 @@ class TestISCONNA(unittest.TestCase):
         self.assertIn("ISCONNA", output)
         self.assertIn("n_hashes=9", output)
         self.assertIn("sketch_width=257", output)
-        self.assertIn("gamma=0.5", output)
+        self.assertNotIn("gamma=", output)
 
 
 if __name__ == "__main__":

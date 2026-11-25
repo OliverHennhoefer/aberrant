@@ -24,7 +24,7 @@ class KNN(BaseModel):
         if k <= 0:
             raise ValueError("k must be a positive integer")
         self.k: int = k
-        self.engine: BaseSimilaritySearchEngine = similarity_engine
+        self.similarity_engine = similarity_engine
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Append one observation to the search engine.
@@ -32,7 +32,7 @@ class KNN(BaseModel):
         Args:
             x: Feature mapping to retain for subsequent queries.
         """
-        self.engine.append(x)
+        self.similarity_engine.append(x)
 
     def score_one(self, x: dict[str, float]) -> float:
         """Query the engine for a ``k``-neighbor scalar.
@@ -43,8 +43,4 @@ class KNN(BaseModel):
         Returns:
             The value returned by the configured engine.
         """
-        return self.engine.search(x, n_neighbors=self.k)
-
-    def __repr__(self) -> str:
-        """Return a string representation of the KNN model."""
-        return f"KNN(k={self.k}, similarity_engine={self.engine.__class__.__name__})"
+        return self.similarity_engine.search(x, n_neighbors=self.k)

@@ -1,9 +1,12 @@
 """Base model interface for online anomaly detection."""
 
 import abc
+from collections.abc import Iterable
+
+from aberrant.base._parameters import Parameterized
 
 
-class BaseModel(abc.ABC):
+class BaseModel(Parameterized, abc.ABC):
     """
     Abstract base class for online anomaly detection models.
 
@@ -11,8 +14,16 @@ class BaseModel(abc.ABC):
     observation against the model's current reference state; ``learn_one``
     incorporates an observation into that state.
 
-    Subclasses must implement ``learn_one`` and ``score_one``. Score ranges,
-    warm-up behavior, and score orientation are model-specific.
+    Every model follows one score convention: a higher score is more
+    anomalous, the score is 0.0 until the model has learned enough to judge,
+    and it is the model's raw statistic. Map scores to a common scale with
+    ``aberrant.calibration``.
+
+    Subclasses implement ``learn_one`` and ``score_one`` and store every
+    constructor parameter under its own name. ``get_params``, ``clone``,
+    ``reset`` and ``repr`` follow from that, and ``learn_many`` and
+    ``score_many`` loop over the single-event methods unless a model has a
+    faster batch path.
     """
 
     @abc.abstractmethod
@@ -41,10 +52,11 @@ class BaseModel(abc.ABC):
         """
         raise NotImplementedError
 
-    def __repr__(self) -> str:
-        """Return a string representation of the model."""
-        return f"{self.__class__.__name__}()"
+    def learn_many(self, xs: Iterable[dict[str, float]]) -> None:
+        """Learn the events of ``xs`` in order."""
+        for x in xs:
+            self.learn_one(x)
 
-    def __str__(self) -> str:
-        """Return a human-readable string representation of the model."""
-        return self.__repr__()
+    def score_many(self, xs: Iterable[dict[str, float]]) -> list[float]:
+        """Score the events of ``xs`` against the current state, without learning."""
+        return [self.score_one(x) for x in xs]

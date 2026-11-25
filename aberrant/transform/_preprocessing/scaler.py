@@ -153,11 +153,6 @@ class MinMaxScaler(BaseTransformer):
 
         return scaled_x
 
-    def __repr__(self) -> str:
-        """Return string representation of the scaler."""
-        suffix = ", clip=True" if self.clip else ""
-        return f"MinMaxScaler(feature_range={self.feature_range}{suffix})"
-
 
 class StandardScaler(BaseTransformer):
     """
@@ -276,7 +271,3 @@ class StandardScaler(BaseTransformer):
                 scaled_x[feature] = numeric_value - self.means[feature]
 
         return scaled_x
-
-    def __repr__(self) -> str:
-        """Return string representation of the scaler."""
-        return f"StandardScaler(with_std={self.with_std})"

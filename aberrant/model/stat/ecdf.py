@@ -120,10 +120,6 @@ class _OnlineTailDetector(BaseModel):
         self._history_samples_seen = 0
         self._samples_seen = 0
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     @property
     def n_samples_seen(self) -> int:
         """Number of samples processed with ``learn_one``."""
@@ -240,16 +236,6 @@ class _OnlineTailDetector(BaseModel):
         else:
             terms = np.maximum(skewed, 0.5 * (left + right))
         return float(np.add.reduce(terms)), terms
-
-    def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}("
-            f"memory={self.memory!r}, window_size={self.window_size}, "
-            f"half_life={self.half_life}, compression={self.compression}, "
-            f"tail={self.tail!r}, tail_quantile={self.tail_quantile}, "
-            f"warm_up={self.warm_up}, aggregation={self.aggregation!r}, "
-            f"time_key={self.time_key!r}, samples_seen={self._samples_seen})"
-        )
 
 
 class OnlineECOD(_OnlineTailDetector):

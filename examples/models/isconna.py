@@ -12,7 +12,6 @@ model = ISCONNA(
     sketch_width=1024,
     time_decay_factor=0.5,
     warm_up=128,
-    normalize_score=False,
     seed=42,
 )
 

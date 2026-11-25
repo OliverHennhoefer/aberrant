@@ -174,10 +174,3 @@ class FaissSimilaritySearchEngine(BaseSimilaritySearchEngine):
             raise ValueError(
                 f"window_size ({window_size}) must be >= warm_up ({warm_up})"
             )
-
-    def __repr__(self) -> str:
-        """Return a string representation of the FAISS engine."""
-        return (
-            f"FaissSimilaritySearchEngine(window_size={self.window_size}, "
-            f"warm_up={self.warm_up}, current_size={len(self._window)})"
-        )

@@ -177,27 +177,6 @@ class OnlineIsolationTree:
             memo = self._depth_limit_memo = (population, limit)
         return memo[1]
 
-    def learn(self, data: np.ndarray) -> OnlineIsolationTree:
-        membership = np.asarray(
-            self.rng.random(data.shape[0]) < self.subsample, dtype=np.bool_
-        )
-        self._sample_membership.extend(bool(value) for value in membership)
-        selected = data[membership]
-        if selected.shape[0] == 0:
-            return self
-
-        self.data_size += selected.shape[0]
-        self._depth_limit_population = self.data_size
-        if self.root is None:
-            self.next_node_index, self.root = self.recursive_build(selected)
-        else:
-            self.next_node_index, self.root = self.recursive_learn(
-                self.root,
-                selected,
-                self.next_node_index,
-            )
-        return self
-
     def learn_point(self, point: _Bounds, values: list[float]) -> None:
         """Learn one row given as its own bounds and as a list of its values.
 
@@ -247,26 +226,6 @@ class OnlineIsolationTree:
             self._replace_child(parent, index, replacement)
         elif leaf is not node:
             self._replace_child(parent, index, leaf)
-
-    def unlearn(self, data: np.ndarray) -> OnlineIsolationTree:
-        """Forget a FIFO prefix using its original sampling decisions."""
-        count = data.shape[0]
-        if count > len(self._sample_membership):
-            raise ValueError("Cannot unlearn more observations than were learned")
-        membership = np.fromiter(
-            (self._sample_membership.popleft() for _ in range(count)),
-            dtype=np.bool_,
-            count=count,
-        )
-        selected = data[membership]
-        if selected.shape[0] == 0:
-            return self
-
-        self.data_size -= selected.shape[0]
-        self._depth_limit_population = self.data_size
-        if self.root is not None:
-            self.root = self.recursive_unlearn(self.root, selected)
-        return self
 
     def unlearn_point(self, values: list[float]) -> None:
         """Forget the oldest learned row, given as a list of its values."""
@@ -343,74 +302,6 @@ class OnlineIsolationTree:
                 else _Bounds.union([parent.split_bounds, leaf.bounds])
             )
         return self.recursive_build(sampled, depth=leaf.depth, node_index=node_index)
-
-    def recursive_learn(
-        self,
-        node: _OnlineNode,
-        data: np.ndarray,
-        node_index: int,
-        parent: _OnlineBranch | None = None,
-    ) -> tuple[int, _OnlineNode]:
-        if isinstance(node, _EmptyLeaf):
-            node = _OnlineLeaf(
-                data_size=data.shape[0],
-                depth=node.depth,
-                node_index=node.node_index,
-                bounds=_Bounds.from_data(data),
-            )
-        else:
-            node.data_size += data.shape[0]
-            if isinstance(node, _OnlineLeaf):
-                node.bounds.include(_Bounds.from_data(data))
-
-        if isinstance(node, _OnlineLeaf):
-            if self._is_full(node):
-                return self._split(node, parent, node_index)
-            return node_index, node
-
-        partition_indices = self.split_data(
-            data[:, node.feature],
-            node.split_values,
-        )
-        for index, indices in enumerate(partition_indices):
-            if len(indices) > 0:
-                node_index, node.children[index] = self.recursive_learn(
-                    node.children[index],
-                    data[indices],
-                    node_index,
-                    node,
-                )
-        return node_index, node
-
-    def recursive_unlearn(
-        self,
-        node: _OnlineNode,
-        data: np.ndarray,
-    ) -> _OnlineNode:
-        if isinstance(node, _EmptyLeaf):
-            return node
-
-        node.data_size -= data.shape[0]
-        if isinstance(node, _OnlineLeaf):
-            if node.data_size <= 0:
-                return _EmptyLeaf(depth=node.depth, node_index=node.node_index)
-            return node
-
-        if node.data_size < self._split_threshold(node.depth):
-            return self.recursive_unbuild(node)
-
-        partition_indices = self.split_data(
-            data[:, node.feature],
-            node.split_values,
-        )
-        for index, indices in enumerate(partition_indices):
-            if len(indices) > 0:
-                node.children[index] = self.recursive_unlearn(
-                    node.children[index],
-                    data[indices],
-                )
-        node.split_bounds = None
-        return node
 
     @classmethod
     def node_bounds(cls, node: _OnlineLeaf | _OnlineBranch) -> _Bounds:
@@ -498,13 +389,6 @@ class OnlineIsolationTree:
             split_values=tuple(split_values.tolist()),
         )
 
-    def predict(self, data: np.ndarray) -> np.ndarray:
-        return self.recursive_depth_search(
-            self.root,
-            data,
-            np.empty(shape=(data.shape[0],), dtype=float),
-        )
-
     def leaf_path(self, values: list[float]) -> tuple[int, int]:
         """Return the depth and population of the leaf that ``values`` reaches."""
         node = self.root
@@ -513,36 +397,6 @@ class OnlineIsolationTree:
         while isinstance(node, _OnlineBranch):
             node = node.children[bisect_right(node.split_values, values[node.feature])]
         return node.depth, node.data_size
-
-    def recursive_depth_search(
-        self,
-        node: _OnlineNode | None,
-        data: np.ndarray,
-        depths: np.ndarray,
-    ) -> np.ndarray:
-        if node is None or not isinstance(node, _OnlineBranch) or data.shape[0] == 0:
-            if node is None:
-                depths[:] = 0
-            else:
-                depths[:] = node.depth + self.get_random_path_length(
-                    self.branching_factor,
-                    self.max_leaf_samples,
-                    node.data_size,
-                )
-            return depths
-
-        partition_indices = self.split_data(
-            data[:, node.feature],
-            node.split_values,
-        )
-        for index, indices in enumerate(partition_indices):
-            if len(indices) > 0:
-                depths[indices] = self.recursive_depth_search(
-                    node.children[index],
-                    data[indices],
-                    depths[indices],
-                )
-        return depths
 
     @staticmethod
     def split_data(

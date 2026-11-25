@@ -170,7 +170,6 @@ class AnoEdgeL(BaseModel):
     - Source and destination identifiers must be integer-like numbers.
     - Scores are continuous and non-negative; denser anomalous edges score
       higher.
-    - With ``normalize_score=True``, scores are squashed to ``[0, 1)``.
     - State is bounded by the configured higher-order sketch dimensions.
 
     Args:
@@ -188,8 +187,6 @@ class AnoEdgeL(BaseModel):
         time_decay_factor: Factor in ``(0, 1]`` applied to sketches and local
             submatrices when the time bucket advances.
         warm_up: Number of learned edges before scoring begins.
-        normalize_score: Apply ``score / (1 + score)`` to the non-negative raw
-            score.
         seed: Seed for model-local sketch hash generation.
 
     References:
@@ -228,7 +225,6 @@ class AnoEdgeL(BaseModel):
         num_dense_submatrices: int = 1,
         time_decay_factor: float = 1.0,
         warm_up: int = 0,
-        normalize_score: bool = False,
         seed: int | None = None,
     ) -> None:
         sketch_rows = coerce_integer_count(sketch_rows, label="sketch_rows", minimum=1)
@@ -256,7 +252,6 @@ class AnoEdgeL(BaseModel):
         self.num_dense_submatrices = num_dense_submatrices
         self.time_decay_factor = time_decay_factor
         self.warm_up = warm_up
-        self.normalize_score = normalize_score
         self.seed = seed
 
         self._reset_state()
@@ -294,10 +289,6 @@ class AnoEdgeL(BaseModel):
         ]
         self._current_bucket: int | None = None
         self._samples_seen = 0
-
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
 
     @property
     def n_samples_seen(self) -> int:
@@ -386,7 +377,7 @@ class AnoEdgeL(BaseModel):
         """Preview the candidate-inclusive AnoEdge-L score without mutation."""
         event = self._boundary.preview(x)
         bucket, src, dst = event.bucket, event.source, event.destination
-        if self._samples_seen < self.warm_up:
+        if self._samples_seen < max(self.warm_up, 1):
             return 0.0
 
         rollover = self._current_bucket is not None and bucket > self._current_bucket
@@ -395,20 +386,4 @@ class AnoEdgeL(BaseModel):
             for plane, row, col in self._hashed_cells(src, dst)
         )
         score = float(max(score, 0.0))
-        if self.normalize_score:
-            return score / (1.0 + score)
         return score
-
-    def __repr__(self) -> str:
-        return (
-            "AnoEdgeL("
-            f"source_key={self.source_key!r}, destination_key={self.destination_key!r}, "
-            f"time_key={self.time_key!r}, sketch_rows={self.sketch_rows}, "
-            f"sketch_cols={self.sketch_cols}, n_hashes={self.n_hashes}, "
-            f"num_dense_submatrices={self.num_dense_submatrices}, "
-            f"time_decay_factor={self.time_decay_factor}, "
-            f"warm_up={self.warm_up}, "
-            f"normalize_score={self.normalize_score}, "
-            f"seed={self.seed}, "
-            f"samples_seen={self._samples_seen})"
-        )

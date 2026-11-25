@@ -63,11 +63,6 @@ class MovingVariance(_BaseMovingUnivariate):
     def score_one(self, x: dict[str, float]) -> float:
         return self._score_statistic_change(x, _variance)
 
-    def __repr__(self) -> str:
-        return (
-            f"MovingVariance(window_size={self.window_size}, abs_diff={self.abs_diff})"
-        )
-
 
 class MovingInterquartileRange(_BaseMovingOrderStatistic):
     """Score the change in linearly interpolated interquartile range."""

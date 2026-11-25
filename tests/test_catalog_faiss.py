@@ -60,10 +60,10 @@ def test_nested_resolution_is_reused_and_builds_independent_engines(monkeypatch)
         }
     ).resolve()
     first, second = resolved.build(), resolved.build()
-    assert first.engine is not second.engine
+    assert first.similarity_engine is not second.similarity_engine
     first.learn_one({"x": 0.0})
-    assert len(first.engine.window) == 1
-    assert len(second.engine.window) == 0
+    assert len(first.similarity_engine.window) == 1
+    assert len(second.similarity_engine.window) == 0
     assert calls == ["faiss", "knn"]
     assert (
         resolved.fingerprint

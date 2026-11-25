@@ -12,7 +12,6 @@ model = MIDAS(
     sketch_width=1024,
     warm_up=128,
     use_relational=True,
-    normalize_score=False,
     seed=42,
 )
 

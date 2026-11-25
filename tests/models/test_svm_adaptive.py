@@ -52,26 +52,6 @@ class TestIncrementalOneClassSVMAdaptiveKernel(unittest.TestCase):
         with self.assertRaises(ValueError):
             model.score_one(sample3)
 
-    def test_model_info(self):
-        """Test model information reporting."""
-        model = AdaptiveOneClassSVM(sv_budget=20)
-
-        # Initial state
-        info = model.get_model_info()
-        self.assertEqual(info["n_support_vectors"], 0)
-        self.assertEqual(info["n_samples_processed"], 0)
-
-        # After training
-        for i in range(10):
-            sample = {"x": float(i), "y": float(i**2)}
-            model.learn_one(sample)
-
-        info = model.get_model_info()
-        self.assertGreater(info["n_support_vectors"], 0)
-        self.assertEqual(info["n_samples_processed"], 10)
-        self.assertIn("gamma", info)
-        self.assertIn("rho", info)
-
     def test_empty_model_predictions(self):
         """Test model behavior before any training."""
         model = AdaptiveOneClassSVM()

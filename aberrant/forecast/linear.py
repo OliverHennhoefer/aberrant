@@ -83,7 +83,7 @@ class RLSRegressor(BaseRegressor):
         self.residual_alpha, self.min_scale = check_spread_parameters(
             residual_alpha, min_scale
         )
-        self.reset()
+        self._reset_state()
 
     @property
     def is_ready(self) -> bool:
@@ -104,7 +104,7 @@ class RLSRegressor(BaseRegressor):
             weights["intercept"] = float(self._weights[-1])
         return weights
 
-    def reset(self) -> None:
+    def _reset_state(self) -> None:
         """Forget coefficients, covariate names and the spread."""
         self._schema = FeatureSchema()
         self.n_samples_seen = 0
@@ -177,9 +177,3 @@ class RLSRegressor(BaseRegressor):
         self._schema.commit(prepared)
         self._weights, self._covariance, self._mae = new_weights, new_covariance, mae
         self.n_samples_seen += 1
-
-    def __repr__(self) -> str:
-        return (
-            f"RLSRegressor(forgetting={self.forgetting:g}, delta={self.delta:g}, "
-            f"fit_intercept={self.fit_intercept})"
-        )

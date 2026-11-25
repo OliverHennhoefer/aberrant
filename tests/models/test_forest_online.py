@@ -4,7 +4,6 @@ Real dataset tests are in tests/integration/test_detection_quality.py
 """
 
 import unittest
-from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -33,7 +32,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
             window_size=50,
             branching_factor=2,
             metric="axisparallel",
-            n_jobs=1,
             seed=42,
         )
 
@@ -50,7 +48,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
             window_size=256,
             branching_factor=3,
             metric="axisparallel",
-            n_jobs=1,
             seed=42,
         )
 
@@ -123,9 +120,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "metric must be 'axisparallel'"):
             OnlineIsolationForest(metric="unsupported")
 
-        with self.assertRaisesRegex(ValueError, "n_jobs must be -1 or a positive"):
-            OnlineIsolationForest(n_jobs=0)
-
     def test_empty_dict_handling(self):
         """Test handling of empty feature dictionary."""
         model = self.create_model()
@@ -138,13 +132,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         except (ValueError, KeyError):
             # Acceptable to reject empty dict
             pass
-
-    def test_n_jobs_minus_one_uses_all_available_cpus(self):
-        with patch("aberrant.model.forest.online.os.cpu_count", return_value=3):
-            model = OnlineIsolationForest(n_trees=2, n_jobs=-1, seed=42)
-
-        self.assertEqual(model.n_jobs, -1)
-        self.assertEqual(model._max_workers, 3)
 
     def test_nan_inf_handling(self):
         """Test handling of NaN and Inf values."""
@@ -178,7 +165,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
             max_leaf_samples=4,
             tree_type="fixed",
             window_size=10,  # Very small window for testing
-            n_jobs=1,
         )
 
         # Add points up to window size
@@ -204,22 +190,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
 
-    def test_batch_input_is_not_retained_by_reference(self):
-        model = OnlineIsolationForest(
-            n_trees=2,
-            max_leaf_samples=4,
-            window_size=10,
-            n_jobs=1,
-            seed=42,
-        )
-        batch = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
-        model.learn_batch(batch)
-
-        batch[:] = 99.0
-
-        np.testing.assert_array_equal(model.data_window[0], [1.0, 2.0])
-        np.testing.assert_array_equal(model.data_window[1], [3.0, 4.0])
-
     def test_type_variants(self):
         """Test different multiplier types (fixed vs adaptive)."""
         for type_name in ["fixed", "adaptive"]:
@@ -229,7 +199,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
                     max_leaf_samples=8,
                     tree_type=type_name,
                     window_size=50,
-                    n_jobs=1,
                 )
 
                 # Should initialize without error
@@ -276,24 +245,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
         self.assertIsInstance(score3, float)
         self.assertAlmostEqual(score1, score2, places=12)
 
-    def test_batch_then_mismatched_dict_does_not_corrupt_feature_width(self):
-        """Test dict conversion after batch training preserves learned feature width."""
-        model = self.create_model()
-        batch = np.array(
-            [[1.0, 2.0, 3.0, 4.0], [1.5, 2.5, 3.5, 4.5]],
-            dtype=np.float32,
-        )
-        model.learn_batch(batch)
-        self.assertEqual(model._n_features, 4)
-
-        with self.assertRaises(ValueError):
-            model.score_one({"a": 1.0, "b": 2.0, "c": 3.0})
-
-        # Ensure failed dict scoring does not mutate learned feature count.
-        self.assertEqual(model._n_features, 4)
-        scores = model.score_batch(np.array([[0.0, 0.0, 0.0, 0.0]], dtype=np.float32))
-        self.assertEqual(scores.shape, (1,))
-
     def test_extreme_values(self):
         """Test with extreme numeric values."""
         model = self.create_model()
@@ -321,25 +272,6 @@ class TestOnlineIsolationForestEdgeCases(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-def test_subsampled_tree_forgets_exactly_the_learned_membership():
-    tree = OnlineIsolationTree(
-        max_leaf_samples=32,
-        tree_type="fixed",
-        subsample=0.4,
-        branching_factor=2,
-        data_size=0,
-        rng=np.random.default_rng(42),
-    )
-    batch = np.arange(40.0).reshape(-1, 1)
-    tree.learn(batch)
-    retained = tree.data_size
-    assert 0 < retained < len(batch)
-    tree.unlearn(batch[:13])
-    tree.unlearn(batch[13:])
-    assert tree.data_size == 0
-    assert tree.root.data_size == 0
 
 
 def test_subsampled_forest_population_stays_within_window():
@@ -389,37 +321,7 @@ def _structure(node: _OnlineNode | None) -> object:
     )
 
 
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"max_leaf_samples": 4, "window_size": 30},
-        {"max_leaf_samples": 2, "tree_type": "fixed", "window_size": 25},
-        {"max_leaf_samples": 3, "subsample": 0.6, "window_size": 40},
-        {"max_leaf_samples": 1, "branching_factor": 3, "window_size": 20},
-    ],
-)
-def test_single_rows_update_trees_like_one_row_batches(params):
-    events = score_sequences.make_stream(seed=3, n_events=150, n_features=3)
-    rows = np.array([list(event.values()) for event in events], dtype=np.float32)
-    by_row = OnlineIsolationForest(n_trees=4, seed=11, **params)
-    by_batch = OnlineIsolationForest(n_trees=4, seed=11, **params)
-
-    for event, row in zip(events, rows, strict=True):
-        assert by_row.score_one(event) == by_batch.score_batch(row[np.newaxis])[0]
-        by_row.learn_one(event)
-        by_batch.learn_batch(row[np.newaxis])
-
-        assert by_row.normalization_factor == by_batch.normalization_factor
-        for tree, reference in zip(by_row.trees, by_batch.trees, strict=True):
-            assert tree.data_size == reference.data_size
-            assert tree.next_node_index == reference.next_node_index
-            assert tree._sample_membership == reference._sample_membership
-            assert _structure(tree.root) == _structure(reference.root)
-    np.testing.assert_array_equal(by_row.data_window, by_batch.data_window)
-
-
-@pytest.mark.parametrize("by_row", [True, False])
-def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn(by_row):
+def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn():
     tree = OnlineIsolationTree(
         max_leaf_samples=3,
         tree_type="fixed",
@@ -451,11 +353,8 @@ def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn(by_row)
     )
 
     # The leaf fills up and is rebuilt from points sampled inside [0, 1].
-    if by_row:
-        point = _Bounds.from_data(np.array([[0.5]]))
-        tree.learn_point(point, [0.5])
-    else:
-        tree.learn(np.array([[0.5]]))
+    point = _Bounds.from_data(np.array([[0.5]]))
+    tree.learn_point(point, [0.5])
     assert isinstance(tree.root, _OnlineBranch)
     rebuilt = tree.root.children[0]
     assert isinstance(rebuilt, _OnlineBranch)
@@ -465,10 +364,7 @@ def test_collapsing_branch_keeps_bounds_of_leaf_split_since_last_unlearn(by_row)
 
     # One unlearned point drops the root below the split threshold. The leaf it
     # becomes still bounds everything the root covered, as in 1.4.0.
-    if by_row:
-        tree.unlearn_point([7.0])
-    else:
-        tree.unlearn(np.array([[7.0]]))
+    tree.unlearn_point([7.0])
     assert isinstance(tree.root, _OnlineLeaf)
     assert tree.root.data_size == 2
     assert tree.root.bounds.minimum.tolist() == [0.0]
@@ -488,23 +384,3 @@ def test_single_rows_reject_float32_overflow():
     with pytest.raises(ValueError, match="only finite values"):
         model.score_one({"a": -1e39, "b": 0.0})
     assert model.data_size == 1
-
-
-@pytest.mark.parametrize("dtype", [np.uint8, np.int8, np.uint64, np.int64])
-def test_integer_batches_score_like_float_batches(dtype):
-    info = np.iinfo(dtype)
-    rng = np.random.default_rng(3)
-    data = rng.integers(0, 50, size=(120, 2)).astype(dtype)
-    # Extreme values, whose negation wraps in the input dtype.
-    data[::9] = info.min
-    data[4::9] = info.max
-    typed = OnlineIsolationForest(n_trees=5, max_leaf_samples=2, window_size=40, seed=2)
-    floats = OnlineIsolationForest(
-        n_trees=5, max_leaf_samples=2, window_size=40, seed=2
-    )
-    for row in data:
-        typed_score = typed.score_batch(row[np.newaxis, :])
-        float_row = row[np.newaxis, :].astype(np.float64)
-        np.testing.assert_array_equal(typed_score, floats.score_batch(float_row))
-        typed.learn_batch(row[np.newaxis, :])
-        floats.learn_batch(float_row)

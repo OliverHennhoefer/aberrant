@@ -20,7 +20,6 @@ class TestMIDAS(unittest.TestCase):
             "time_decay_factor": 0.5,
             "warm_up": 0,
             "use_relational": True,
-            "normalize_score": False,
             "seed": 42,
         }
         defaults.update(overrides)
@@ -239,21 +238,13 @@ class TestMIDAS(unittest.TestCase):
         self.assertEqual(model.n_samples_seen, 0)
         self.assertIsNone(model._current_bucket)
 
-    def test_normalize_score_bounds_output(self) -> None:
-        model = self.create_model(normalize_score=True)
-        for timestamp in range(1, 8):
-            model.learn_one({"src": 1.0, "dst": 2.0, "t": float(timestamp)})
-        score = model.score_one({"src": 1.0, "dst": 2.0, "t": 8.0})
-        self.assertGreaterEqual(score, 0.0)
-        self.assertLess(score, 1.0)
-
     def test_repr_contains_key_config(self) -> None:
         model = self.create_model(n_hashes=9, sketch_width=257)
         output = repr(model)
         self.assertIn("MIDAS", output)
         self.assertIn("n_hashes=9", output)
         self.assertIn("sketch_width=257", output)
-        self.assertIn("time_decay_factor=0.5", output)
+        self.assertNotIn("time_decay_factor=", output)
 
 
 if __name__ == "__main__":

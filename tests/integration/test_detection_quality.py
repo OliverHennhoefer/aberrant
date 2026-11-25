@@ -19,12 +19,12 @@ from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble
 from aberrant.model.distance import CellNeighborhoodDetector, SDOStream
 from aberrant.model.distance.knn import KNN
 from aberrant.model.forest import (
+    RHF,
     ASDIsolationForest,
     HalfSpaceTrees,
     MondrianIsolationForest,
     OnlineIsolationForest,
     RandomCutForest,
-    StreamRandomHistogramForest,
     XStream,
 )
 from aberrant.model.null import NullModel
@@ -111,7 +111,6 @@ CASES = [
             window_size=1024,
             branching_factor=2,
             metric="axisparallel",
-            n_jobs=1,
             seed=s,
         ),
         0.95,
@@ -119,9 +118,7 @@ CASES = [
     ),
     Case(
         "random-histogram-forest",
-        lambda s: StreamRandomHistogramForest(
-            n_trees=25, max_depth=10, window_size=256, seed=s
-        ),
+        lambda s: RHF(n_trees=25, max_depth=10, window_size=256, seed=s),
         0.96,
         0.77,
     ),
@@ -132,8 +129,6 @@ CASES = [
             sample_size=256,
             shingle_size=1,
             warm_up=256,
-            normalize_score=True,
-            score_scale=8.0,
             seed=s,
         ),
         0.86,

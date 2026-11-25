@@ -143,10 +143,6 @@ class MStream(BaseModel):
         self._state: _MStreamState | None = None
         self._samples_seen = 0
 
-    def reset(self) -> None:
-        """Reset learned state while keeping hyperparameters."""
-        self._reset_state()
-
     @property
     def n_samples_seen(self) -> int:
         """Number of observed samples processed via learn_one."""
@@ -510,12 +506,3 @@ class MStream(BaseModel):
 
         normalized = self._normalize_numeric(state.numeric, numeric, update=False)
         return self._score_prepared(state, bucket, normalized, categorical)
-
-    def __repr__(self) -> str:
-        return (
-            f"MStream(n_hashes={self.n_hashes}, sketch_width={self.sketch_width}, alpha={self.alpha}, "
-            f"time_key={self.time_key!r}, "
-            f"categorical_features={self.categorical_features!r}, "
-            f"warm_up={self.warm_up}, seed={self.seed}, "
-            f"samples_seen={self._samples_seen})"
-        )

@@ -3,6 +3,7 @@
 import abc
 import math
 
+from aberrant.base._parameters import Parameterized
 from aberrant.exceptions import ValidationError
 
 
@@ -17,7 +18,7 @@ def _finite_observation(x: float) -> float:
     return value
 
 
-class BaseDriftDetector(abc.ABC):
+class BaseDriftDetector(Parameterized, abc.ABC):
     """Abstract base class for scalar stream-change detectors.
 
     ``update`` processes one finite scalar and returns whether it signalled
@@ -26,7 +27,7 @@ class BaseDriftDetector(abc.ABC):
     monitored scalar can be an anomaly score, prediction error, residual,
     feature value, or another application-defined signal.
 
-    Subclasses implement ``update``, ``drift_detected``, and ``reset``. A drift
+    Subclasses implement ``update`` and ``drift_detected``. A drift
     flag is evidence of change in the monitored signal; it does not diagnose
     the cause or prescribe a response for an anomaly model.
     """
@@ -54,11 +55,3 @@ class BaseDriftDetector(abc.ABC):
             True if drift was detected, False otherwise.
         """
         raise NotImplementedError
-
-    @abc.abstractmethod
-    def reset(self) -> None:
-        """Reset the detector to its initial state."""
-        raise NotImplementedError
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}()"
