@@ -5,7 +5,7 @@ Thanks for contributing.
 ## Development setup
 
 ```bash
-uv sync --extra dev --extra docs
+uv sync --group docs
 ```
 
 Install local Git hooks (including pre-push checks):

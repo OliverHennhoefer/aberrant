@@ -27,22 +27,20 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "faiss-cpu" },
-    { name = "hypothesis" },
-    { name = "mkdocstrings-python" },
-    { name = "mypy" },
-    { name = "pip-audit" },
-    { name = "pre-commit" },
-    { name = "pygments" },
-    { name = "pytest" },
-    { name = "pytest-benchmark" },
-    { name = "pytest-cov" },
-    { name = "river" },
-    { name = "ruff" },
     { name = "scikit-learn" },
-    { name = "scipy" },
     { name = "torch" },
-    { name = "zensical" },
 ]
+dl = [
+    { name = "torch" },
+]
+eval = [
+    { name = "scikit-learn" },
+]
+faiss = [
+    { name = "faiss-cpu" },
+]
+
+[package.dev-dependencies]
 benchmark = [
     { name = "pytest-benchmark" },
     { name = "river" },
@@ -58,19 +56,10 @@ dev = [
     { name = "scipy" },
     { name = "torch" },
 ]
-dl = [
-    { name = "torch" },
-]
 docs = [
     { name = "mkdocstrings-python" },
     { name = "pygments" },
     { name = "zensical" },
-]
-eval = [
-    { name = "scikit-learn" },
-]
-faiss = [
-    { name = "faiss-cpu" },
 ]
 security = [
     { name = "pip-audit" },
@@ -78,45 +67,40 @@ security = [
 
 [package.metadata]
 requires-dist = [
-    { name = "faiss-cpu", marker = "extra == 'all'", specifier = ">=1.10.0,<2.0.0" },
-    { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.10.0,<2.0.0" },
-    { name = "filelock", specifier = ">=4.2.7,<5.0.0" },
-    { name = "hypothesis", marker = "extra == 'all'", specifier = ">=6.0.0,<7.0.0" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0.0,<7.0.0" },
-    { name = "mkdocstrings-python", marker = "extra == 'all'", specifier = ">=2.0.7,<3.0.0" },
-    { name = "mkdocstrings-python", marker = "extra == 'docs'", specifier = ">=2.0.7,<3.0.0" },
-    { name = "mypy", marker = "extra == 'all'", specifier = ">=1.13.0,<3.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0,<3.0.0" },
-    { name = "numpy", specifier = ">=2.2.3,<3.0.0" },
-    { name = "pip-audit", marker = "extra == 'all'", specifier = "==2.10.1" },
-    { name = "pip-audit", marker = "extra == 'security'", specifier = "==2.10.1" },
-    { name = "pre-commit", marker = "extra == 'all'", specifier = ">=4.0.0,<5.0.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0,<5.0.0" },
-    { name = "pygments", marker = "extra == 'all'", specifier = ">=2.20.0" },
-    { name = "pygments", marker = "extra == 'docs'", specifier = ">=2.20.0" },
-    { name = "pytest", marker = "extra == 'all'", specifier = ">=8.0.0,<10.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0,<10.0.0" },
-    { name = "pytest-benchmark", marker = "extra == 'all'", specifier = ">=5.3.1,<6.0.0" },
-    { name = "pytest-benchmark", marker = "extra == 'benchmark'", specifier = ">=5.3.1,<6.0.0" },
-    { name = "pytest-cov", marker = "extra == 'all'", specifier = ">=6.0.0,<8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0,<8.0.0" },
-    { name = "river", marker = "extra == 'all'", specifier = ">=0.22.0,<1.0.0" },
-    { name = "river", marker = "extra == 'benchmark'", specifier = ">=0.22.0,<1.0.0" },
-    { name = "ruff", marker = "extra == 'all'", specifier = ">=0.8.0,<1.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0,<1.0.0" },
-    { name = "scikit-learn", marker = "extra == 'all'", specifier = ">=1.9.1,<2.0.0" },
-    { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.9.1,<2.0.0" },
-    { name = "scikit-learn", marker = "extra == 'eval'", specifier = ">=1.9.1,<2.0.0" },
-    { name = "scipy", marker = "extra == 'all'", specifier = ">=1.17.1,<2.0.0" },
-    { name = "scipy", marker = "extra == 'dev'", specifier = ">=1.17.1,<2.0.0" },
-    { name = "torch", marker = "extra == 'all'", specifier = ">=2.15.0,<3.0.0" },
-    { name = "torch", marker = "extra == 'dev'", specifier = ">=2.6.0,<3.0.0" },
-    { name = "torch", marker = "extra == 'dl'", specifier = ">=2.6.0,<3.0.0" },
-    { name = "tqdm", specifier = ">=4.67.1,<5.0.0" },
-    { name = "zensical", marker = "extra == 'all'", specifier = ">=0.0.45,<0.1.0" },
-    { name = "zensical", marker = "extra == 'docs'", specifier = ">=0.0.45,<0.1.0" },
+    { name = "faiss-cpu", marker = "extra == 'all'", specifier = ">=1.10.0" },
+    { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.10.0" },
+    { name = "filelock", specifier = ">=4.2.7" },
+    { name = "numpy", specifier = ">=2.2.3" },
+    { name = "scikit-learn", marker = "extra == 'all'", specifier = ">=1.9.1" },
+    { name = "scikit-learn", marker = "extra == 'eval'", specifier = ">=1.9.1" },
+    { name = "torch", marker = "extra == 'all'", specifier = ">=2.6.0" },
+    { name = "torch", marker = "extra == 'dl'", specifier = ">=2.6.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
-provides-extras = ["all", "benchmark", "dev", "dl", "docs", "eval", "faiss", "security"]
+provides-extras = ["all", "dl", "eval", "faiss"]
+
+[package.metadata.requires-dev]
+benchmark = [
+    { name = "pytest-benchmark", specifier = ">=5.3.1,<6.0.0" },
+    { name = "river", specifier = ">=0.22.0,<1.0.0" },
+]
+dev = [
+    { name = "hypothesis", specifier = ">=6.0.0,<7.0.0" },
+    { name = "mypy", specifier = ">=1.13.0,<3.0.0" },
+    { name = "pre-commit", specifier = ">=4.0.0,<5.0.0" },
+    { name = "pytest", specifier = ">=8.0.0,<10.0.0" },
+    { name = "pytest-cov", specifier = ">=6.0.0,<8.0.0" },
+    { name = "ruff", specifier = ">=0.8.0,<1.0.0" },
+    { name = "scikit-learn", specifier = ">=1.9.1,<2.0.0" },
+    { name = "scipy", specifier = ">=1.17.1,<2.0.0" },
+    { name = "torch", specifier = ">=2.6.0,<3.0.0" },
+]
+docs = [
+    { name = "mkdocstrings-python", specifier = ">=2.0.7,<3.0.0" },
+    { name = "pygments", specifier = ">=2.20.0" },
+    { name = "zensical", specifier = ">=0.0.45,<0.1.0" },
+]
+security = [{ name = "pip-audit", specifier = "==2.10.1" }]
 
 [[package]]
 name = "ast-serialize"

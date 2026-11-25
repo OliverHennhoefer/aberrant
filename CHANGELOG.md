@@ -60,6 +60,12 @@ Semantic Versioning.
   two, depending on how NumPy and SciPy were built. An update of a default `KSWIN` costs
   about 30 µs instead of 320 µs, and it no longer changes the process-wide
   warning filters on each test, which was not thread-safe.
+- Runtime and optional dependencies have no upper version bounds, so
+  aberrant no longer blocks an application from upgrading NumPy, tqdm,
+  filelock, scikit-learn, PyTorch or FAISS. CI installs the lowest supported
+  versions and runs a smoke stream on Python 3.11.
+- The `all` extra installs only `eval`, `dl` and `faiss`.
+- The package declares its license as the SPDX expression `MIT` (PEP 639).
 - `MovingMedian`, `MovingQuantile` and `MovingInterquartileRange` keep their
   window sorted as they learn, so a score reads the order statistics in
   logarithmic time instead of sorting the window twice. Scores are
@@ -75,6 +81,8 @@ Semantic Versioning.
 
 ### Development
 
+- pytest rejects unknown markers and configuration keys, and an `xfail`
+  test that passes fails the run.
 - `LocalOutlierFactor` is checked score by score against scikit-learn's
   novelty LOF over a sliding window, for both metrics.
 - The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
@@ -82,6 +90,10 @@ Semantic Versioning.
 
 ### Removed
 
+- The `dev`, `docs`, `security` and `benchmark` extras. They are dependency
+  groups now (PEP 735), so contributor tools never reach a library
+  installation: `uv sync` installs `dev`, and `uv sync --group docs` adds the
+  documentation toolchain.
 - `GraphGatedOneClassSVM`. Its node models scored `rho - w·x` on unscaled
   features, which is negative for almost every point, and the score was
   clipped at 0, so it returned 0 for every sample on SHUTTLE and COVER

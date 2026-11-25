@@ -28,7 +28,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev --extra faiss
+        run: uv sync --locked --extra faiss
 
       - name: Validate release version
         if: startsWith(github.ref, 'refs/tags/')
