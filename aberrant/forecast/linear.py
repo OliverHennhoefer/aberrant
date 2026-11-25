@@ -13,6 +13,7 @@ from aberrant.forecast.base import BaseRegressor, check_spread_parameters
 from aberrant.utils.validation import (
     FeatureSchema,
     PreparedFeatures,
+    coerce_event_number,
     coerce_finite_number,
 )
 
@@ -136,7 +137,7 @@ class RLSRegressor(BaseRegressor):
 
     def learn_one(self, x: FeatureMap, y: float) -> None:
         """Learn the target ``y`` of the event with covariates ``x``."""
-        target = coerce_finite_number(y, label="y")
+        target = coerce_event_number(y, label="y")
         z, prepared = self._design(x)
         d = z.size
         if self._weights.size == 0:

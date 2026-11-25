@@ -6,8 +6,9 @@ from bisect import bisect_left, bisect_right, insort
 from collections import deque
 from collections.abc import Callable, Sequence
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import coerce_finite_number
+from aberrant.utils.validation import coerce_event_number
 
 _Statistic = Callable[[Sequence[float]], float]
 
@@ -17,14 +18,14 @@ def _extract_univariate_value(
 ) -> tuple[str, float]:
     """Validate a univariate sample and return its stable feature and value."""
     if len(x) != 1:
-        raise ValueError("Input must contain exactly one key-value pair.")
+        raise ValidationError("Input must contain exactly one key-value pair.")
 
     sample_feature = next(iter(x))
     if feature_name is not None and sample_feature != feature_name:
-        raise ValueError(
+        raise ValidationError(
             f"Input feature must be {feature_name!r}, got {sample_feature!r}."
         )
-    return feature_name or sample_feature, coerce_finite_number(
+    return feature_name or sample_feature, coerce_event_number(
         x[sample_feature],
         label=f"Feature '{sample_feature}'",
     )

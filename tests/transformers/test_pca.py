@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 
+from aberrant.base import ValidationError
 from aberrant.model.iforest import OnlineIsolationForest
 from aberrant.transform.projection.incremental_pca import IncrementalPCA
 
@@ -113,17 +114,17 @@ class TestIncrementalPCA(unittest.TestCase):
         ipca3 = IncrementalPCA(
             3, keys=["key_01", "key_02", "key_03", "key_04", "key_05"]
         )
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(ValidationError, "missing feature"):
             ipca3.learn_one(x)
 
     def test_rejects_schema_extras_during_learning_and_warmup_transform(self):
         ipca = IncrementalPCA(1, n0=3, keys=["x", "y"])
 
-        with self.assertRaisesRegex(ValueError, "unexpected feature"):
+        with self.assertRaisesRegex(ValidationError, "unexpected feature"):
             ipca.learn_one({"x": 1.0, "y": 2.0, "z": 3.0})
 
         ipca.learn_one({"x": 1.0, "y": 2.0})
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(ValidationError, "missing feature"):
             ipca.transform_one({"x": 1.0})
 
         self.assertEqual(ipca.n_samples_seen, 1)

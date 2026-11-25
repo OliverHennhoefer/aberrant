@@ -3,15 +3,17 @@
 import abc
 import math
 
+from aberrant.base.exceptions import ValidationError
+
 
 def _finite_observation(x: float) -> float:
     """Validate an observation before it reaches persistent detector state."""
     try:
         value = float(x)
     except (TypeError, ValueError) as e:
-        raise ValueError("observation must be numeric") from e
+        raise ValidationError("observation must be numeric") from e
     if not math.isfinite(value):
-        raise ValueError("observation must be finite")
+        raise ValidationError("observation must be finite")
     return value
 
 

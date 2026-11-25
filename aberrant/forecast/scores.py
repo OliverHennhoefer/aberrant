@@ -6,7 +6,7 @@ import math
 from typing import Literal
 
 from aberrant.base.forecast import Forecast
-from aberrant.utils.validation import coerce_finite_number
+from aberrant.utils.validation import coerce_event_number, coerce_finite_number
 
 NonconformityScore = Literal["absolute", "scaled", "cqr"]
 SCORES: tuple[NonconformityScore, ...] = ("absolute", "scaled", "cqr")
@@ -52,7 +52,7 @@ def nonconformity(
     is its own score stream, since forecast errors grow with the lead.
     """
     alpha = _check(score, alpha)
-    value = coerce_finite_number(y, label="y")
+    value = coerce_event_number(y, label="y")
     if score == "cqr":
         assert alpha is not None
         lo = forecast.quantile(lead, alpha / 2)

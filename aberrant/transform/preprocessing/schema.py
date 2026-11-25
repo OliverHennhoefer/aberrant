@@ -4,7 +4,6 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from copy import copy
 
-from aberrant.base.exceptions import ValidationError
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.validation import FeatureSchema, PreparedFeatures
@@ -70,10 +69,7 @@ class FeatureSchemaGuard(BaseTransformer):
         return dict(zip(prepared.names, prepared.values.tolist(), strict=True))
 
     def _prepare(self, x: dict[str, float]) -> PreparedFeatures:
-        try:
-            return self._schema.preview(x)
-        except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+        return self._schema.preview(x)
 
     def reset(self) -> None:
         """Forget a learned schema while preserving constructor configuration."""

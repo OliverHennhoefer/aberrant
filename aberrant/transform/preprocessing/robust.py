@@ -4,6 +4,7 @@ import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.utils.statistics import linear_quantile
@@ -135,7 +136,9 @@ class RollingRobustScaler(BaseTransformer):
             median = linear_quantile(ordered, 0.5)
             iqr = linear_quantile(ordered, 0.75) - linear_quantile(ordered, 0.25)
             if not math.isfinite(median) or not math.isfinite(iqr):
-                raise ValueError(f"Feature '{feature}' median and IQR must be finite")
+                raise ValidationError(
+                    f"Feature '{feature}' median and IQR must be finite"
+                )
             windows[feature] = window
             statistics[feature] = (median, iqr if iqr > 0.0 else self.fallback_scale)
         self._windows.update(windows)
@@ -159,13 +162,17 @@ class RollingRobustScaler(BaseTransformer):
                 # A finite result may exist even when subtraction overflows.
                 scaled = value / scale - median / scale
             if not math.isfinite(scaled):
-                raise ValueError(f"Feature '{feature}' scaled value must be finite")
+                raise ValidationError(
+                    f"Feature '{feature}' scaled value must be finite"
+                )
             transformed[feature] = scaled
         return transformed
 
     def _require_seen(self, feature: str) -> None:
         if feature not in self._statistics:
-            raise ValueError(f"Feature '{feature}' has not been seen during learning")
+            raise ValidationError(
+                f"Feature '{feature}' has not been seen during learning"
+            )
 
     def __repr__(self) -> str:
         return (

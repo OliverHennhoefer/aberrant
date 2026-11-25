@@ -41,10 +41,6 @@ support structural pipeline components without inheritance.
 
 ::: aberrant.base.AberrantError
 
-::: aberrant.base.ModelNotFittedError
-
-::: aberrant.base.TransformationError
-
 ::: aberrant.base.PipelineError
 
 ::: aberrant.base.ValidationError
@@ -56,8 +52,6 @@ support structural pipeline components without inheritance.
 ::: aberrant.base.UnknownComponentError
 
 ::: aberrant.base.MissingOptionalDependencyError
-
-::: aberrant.base.UnsupportedFeatureError
 
 ::: aberrant.base.IncompatibleComponentError
 

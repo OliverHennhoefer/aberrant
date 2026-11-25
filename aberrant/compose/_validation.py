@@ -7,7 +7,7 @@ from aberrant.base.exceptions import ConfigurationError
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
 from aberrant.base.readiness import ReadinessProtocol
 from aberrant.compose._types import INPUT, GraphComponent, GraphNode, MergeNode
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
+from aberrant.utils.validation import coerce_event_number, coerce_integer_count
 
 
 def predecessors(node: GraphComponent) -> tuple[str, ...]:
@@ -134,6 +134,6 @@ def checked_features(
     if expected is not None and set(value) != set(expected):
         raise ValueError(f"Feature schema changed; expected {expected!r}")
     return {
-        key: coerce_finite_number(value[key], label=f"Feature {key!r}")
+        key: coerce_event_number(value[key], label=f"Feature {key!r}")
         for key in (expected or tuple(value))
     }

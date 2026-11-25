@@ -11,7 +11,7 @@ from aberrant.calibration._registry import (
     OnlineCalibrator,
 )
 from aberrant.calibration._window import ScoreHistory
-from aberrant.utils.validation import coerce_finite_number
+from aberrant.utils.validation import coerce_event_number, coerce_finite_number
 
 
 class ScoreCalibrator:
@@ -75,7 +75,7 @@ class ScoreCalibrator:
 
     def update(self, key: Hashable, score: float) -> None:
         """Learn the score of the prediction issued for ``key``."""
-        score = coerce_finite_number(score, label="score")
+        score = coerce_event_number(score, label="score")
         self.method.update(key, score)
         self.history.push(score)
 

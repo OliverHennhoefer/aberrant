@@ -13,7 +13,7 @@ from aberrant import __version__
 from aberrant.base import ModelProtocol
 from aberrant.base.protocols import FeatureMap
 from aberrant.catalog import DetectorConfig, WarmupUnit
-from aberrant.utils.validation import coerce_finite_number
+from aberrant.utils.validation import coerce_event_number, coerce_finite_number
 
 from ._metrics import RankingMetrics
 from ._records import EvaluationRecord, EvaluationResult
@@ -168,7 +168,7 @@ class PrequentialEvaluator:
         if not x or any(not isinstance(key, str) or not key for key in x):
             raise ValueError("Events require non-empty string feature names")
         event = {
-            key: coerce_finite_number(value, label=f"Feature '{key}'")
+            key: coerce_event_number(value, label=f"Feature '{key}'")
             for key, value in x.items()
         }
         exclusion: Literal["warmup", "not_ready"] | None = None

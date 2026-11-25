@@ -7,6 +7,7 @@ from collections import deque
 
 import numpy as np
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.model import BaseModel
 from aberrant.model.timeseries._matrix_profile import (
     _normalized_window,
@@ -246,24 +247,24 @@ class XLagDAMP(BaseModel):
 
     def _extract_value(self, x: dict[str, float], *, mutate_schema: bool) -> float:
         if not x:
-            raise ValueError("Input dictionary cannot be empty")
+            raise ValidationError("Input dictionary cannot be empty")
         if len(x) != 1:
-            raise ValueError("XLagDAMP requires exactly one feature")
+            raise ValidationError("XLagDAMP requires exactly one feature")
 
         feature_name, raw_value = next(iter(x.items()))
         if not isinstance(feature_name, str):
-            raise ValueError("Feature key must be a string")
+            raise ValidationError("Feature key must be a string")
         if not isinstance(raw_value, int | float | np.number):
-            raise ValueError(f"Feature '{feature_name}' is not numeric")
+            raise ValidationError(f"Feature '{feature_name}' is not numeric")
         value = float(raw_value)
         if not np.isfinite(value):
-            raise ValueError(f"Feature '{feature_name}' must be finite")
+            raise ValidationError(f"Feature '{feature_name}' must be finite")
 
         if self._feature_name is None:
             if mutate_schema:
                 self._feature_name = feature_name
         elif feature_name != self._feature_name:
-            raise ValueError(
+            raise ValidationError(
                 "Inconsistent feature key. "
                 f"Expected '{self._feature_name}', received '{feature_name}'."
             )

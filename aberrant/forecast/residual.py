@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections import deque
 from typing import Literal
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.forecast import Forecast
 from aberrant.base.model import BaseModel
 from aberrant.base.protocols import FeatureMap, ForecasterProtocol, RegressorProtocol
 from aberrant.forecast.scores import nonconformity
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
+from aberrant.utils.validation import coerce_event_number, coerce_integer_count
 
 _SCORES = ("absolute", "scaled")
 
@@ -90,8 +91,8 @@ class ResidualDetector(BaseModel):
 
     def _split(self, x: FeatureMap) -> tuple[FeatureMap, float]:
         if self.target not in x:
-            raise ValueError(f"Event is missing the target {self.target!r}")
-        y = coerce_finite_number(x[self.target], label=f"Feature '{self.target}'")
+            raise ValidationError(f"Event is missing the target {self.target!r}")
+        y = coerce_event_number(x[self.target], label=f"Feature '{self.target}'")
         covariates = {key: value for key, value in x.items() if key != self.target}
         return covariates, y
 

@@ -8,8 +8,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from aberrant.base.exceptions import ValidationError
 from aberrant.base.model import BaseModel
-from aberrant.utils.validation import coerce_finite_number, coerce_integer_count
+from aberrant.utils.validation import coerce_event_number, coerce_integer_count
 
 
 @dataclass(slots=True)
@@ -162,11 +163,11 @@ class XStream(BaseModel):
     @staticmethod
     def _validate_input(x: dict[str, float]) -> None:
         if not x:
-            raise ValueError("Input dictionary cannot be empty")
+            raise ValidationError("Input dictionary cannot be empty")
         for key, value in x.items():
             if not isinstance(key, str):
-                raise ValueError("All feature keys must be strings")
-            coerce_finite_number(value, label=f"Feature '{key}'")
+                raise ValidationError("All feature keys must be strings")
+            coerce_event_number(value, label=f"Feature '{key}'")
 
     def _feature_seed(self, feature: str) -> int:
         seed_prefix = "none" if self.seed is None else str(self.seed)

@@ -1,6 +1,7 @@
 """Threshold model for simple boundary-based anomaly detection."""
 
 from aberrant.base.model import BaseModel
+from aberrant.utils.validation import coerce_feature_values
 
 
 class ThresholdModel(BaseModel):
@@ -59,12 +60,12 @@ class ThresholdModel(BaseModel):
         """
         Update the model with a single data point.
 
-        This method does nothing as the threshold model never learns.
+        The threshold model never learns; it only validates the event.
 
         Args:
             x: Feature dictionary with string keys and float values.
         """
-        pass
+        coerce_feature_values(x)
 
     def score_one(self, x: dict[str, float]) -> float:
         """
@@ -76,7 +77,7 @@ class ThresholdModel(BaseModel):
         Returns:
             1.0 if any feature violates its threshold(s), 0.0 otherwise.
         """
-        for feature, value in x.items():
+        for feature, value in coerce_feature_values(x).items():
             # Check ceiling violation
             if self.ceiling is not None:
                 if isinstance(self.ceiling, dict):
