@@ -12,19 +12,19 @@ from http.client import RemoteDisconnected
 from multiprocessing.queues import Queue
 from multiprocessing.synchronize import Event
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from urllib.error import URLError
 
 import numpy as np
 import pytest
 
+import aberrant.stream.dataset as dataset_api
 from aberrant.stream.dataset import Dataset
+from aberrant.stream.dataset import loader as loader_module
 from aberrant.stream.dataset.cache import CacheEntry, DatasetCacheStore
 from aberrant.stream.dataset.download import UrlLibDownloadBackend
 from aberrant.stream.dataset.loader import DatasetManager
 from aberrant.stream.dataset.registry import get_dataset_info
-from aberrant.stream.dataset.streamers import BatchStreamer
 
 
 def _publish_metadata_in_process(
@@ -106,162 +106,158 @@ def _cache_entry(payload: bytes, *, release_tag: str = "test-release") -> CacheE
     )
 
 
-def test_url_backend_retries_and_succeeds() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        destination = Path(temp_dir) / "shuttle.tmp"
-        backend = UrlLibDownloadBackend(retries=2, backoff_seconds=0.0)
+def test_url_backend_retries_and_succeeds(tmp_path: Path) -> None:
+    destination = tmp_path / "shuttle.tmp"
+    backend = UrlLibDownloadBackend(retries=2, backoff_seconds=0.0)
 
-        with patch(
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=[
+            URLError("temporary network issue"),
+            _FakeResponse(b"payload"),
+        ],
+    ) as mock_urlopen:
+        backend.download("https://example.com/shuttle.npz", destination)
+
+    assert mock_urlopen.call_count == 2
+    assert destination.read_bytes() == b"payload"
+
+
+def test_url_backend_raises_after_retry_exhaustion(tmp_path: Path) -> None:
+    destination = tmp_path / "shuttle.tmp"
+    backend = UrlLibDownloadBackend(retries=3, backoff_seconds=0.0)
+
+    with (
+        patch(
             "urllib.request.urlopen",
-            side_effect=[
-                URLError("temporary network issue"),
-                _FakeResponse(b"payload"),
-            ],
-        ) as mock_urlopen:
-            backend.download("https://example.com/shuttle.npz", destination)
+            side_effect=RemoteDisconnected("no response"),
+        ) as mock_urlopen,
+        pytest.raises(RuntimeError, match="after 3 attempts"),
+    ):
+        backend.download("https://example.com/shuttle.npz", destination)
 
-        assert mock_urlopen.call_count == 2
-        assert destination.read_bytes() == b"payload"
+    assert mock_urlopen.call_count == 3
 
 
-def test_url_backend_raises_after_retry_exhaustion() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        destination = Path(temp_dir) / "shuttle.tmp"
-        backend = UrlLibDownloadBackend(retries=3, backoff_seconds=0.0)
+def test_manager_rejects_checksum_mismatch_and_cleans_temporary_file(
+    tmp_path: Path,
+) -> None:
+    manager = DatasetManager(
+        cache_dir=tmp_path,
+        download_backend=_BytesDownloadBackend(_valid_npz_payload()),
+    )
 
-        with (
-            patch(
-                "urllib.request.urlopen",
-                side_effect=RemoteDisconnected("no response"),
-            ) as mock_urlopen,
-            pytest.raises(RuntimeError, match="after 3 attempts"),
-        ):
-            backend.download("https://example.com/shuttle.npz", destination)
+    with pytest.raises(RuntimeError, match="Checksum mismatch"):
+        manager.download(Dataset.SHUTTLE, force=True)
 
-        assert mock_urlopen.call_count == 3
+    assert not manager.cache.path("shuttle").exists()
+    assert not list(tmp_path.glob(".shuttle.npz.*.tmp"))
 
 
-def test_manager_rejects_checksum_mismatch_and_cleans_temporary_file() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        manager = DatasetManager(
-            cache_dir=temp_dir,
-            download_backend=_BytesDownloadBackend(_valid_npz_payload()),
-        )
+def test_manager_download_publishes_typed_metadata(tmp_path: Path) -> None:
+    payload = _valid_npz_payload()
+    payload_hash = hashlib.sha256(payload).hexdigest()
+    trusted_info = replace(get_dataset_info(Dataset.SHUTTLE), sha256=payload_hash)
+    backend = _BytesDownloadBackend(payload)
+    manager = DatasetManager(
+        cache_dir=tmp_path,
+        release_tag="test-release",
+        download_backend=backend,
+    )
 
-        with pytest.raises(RuntimeError, match="Checksum mismatch"):
-            manager.download(Dataset.SHUTTLE, force=True)
+    with patch(
+        "aberrant.stream.dataset.loader.get_dataset_info",
+        return_value=trusted_info,
+    ):
+        cached_path = manager.download(Dataset.SHUTTLE, force=True)
 
-        assert not manager.cache.path("shuttle").exists()
-        assert not list(Path(temp_dir).glob(".shuttle.npz.*.tmp"))
-
-
-def test_manager_download_publishes_typed_metadata() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        payload = _valid_npz_payload()
-        payload_hash = hashlib.sha256(payload).hexdigest()
-        trusted_info = replace(get_dataset_info(Dataset.SHUTTLE), sha256=payload_hash)
-        backend = _BytesDownloadBackend(payload)
-        manager = DatasetManager(
-            cache_dir=temp_dir,
-            release_tag="test-release",
-            download_backend=backend,
-        )
-
-        with patch(
-            "aberrant.stream.dataset.loader.get_dataset_info",
-            return_value=trusted_info,
-        ):
-            cached_path = manager.download(Dataset.SHUTTLE, force=True)
-
-        entry = manager.cache.read().datasets[Dataset.SHUTTLE.value]
-        assert cached_path.read_bytes() == payload
-        assert entry == _cache_entry(payload)
-        assert len(backend.calls) == 1
+    entry = manager.cache.read().datasets[Dataset.SHUTTLE.value]
+    assert cached_path.read_bytes() == payload
+    assert entry == _cache_entry(payload)
+    assert len(backend.calls) == 1
 
 
-def test_manager_reuses_validated_cached_artifact_without_downloading() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        payload = _valid_npz_payload()
-        trusted_info = replace(
-            get_dataset_info(Dataset.SHUTTLE),
-            sha256=hashlib.sha256(payload).hexdigest(),
-        )
-        backend = _BytesDownloadBackend(b"must not be written")
-        manager = DatasetManager(
-            cache_dir=temp_dir,
-            release_tag="test-release",
-            download_backend=backend,
-        )
-        destination = manager.cache.path(trusted_info.filename)
-        temporary_path = Path(temp_dir) / ".seed.tmp"
-        temporary_path.write_bytes(payload)
-        manager.cache.publish(
-            dataset_name=Dataset.SHUTTLE.value,
-            temporary_path=temporary_path,
-            destination=destination,
-            entry=_cache_entry(payload),
-        )
+def test_manager_reuses_validated_cached_artifact_without_downloading(
+    tmp_path: Path,
+) -> None:
+    payload = _valid_npz_payload()
+    trusted_info = replace(
+        get_dataset_info(Dataset.SHUTTLE),
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    backend = _BytesDownloadBackend(b"must not be written")
+    manager = DatasetManager(
+        cache_dir=tmp_path,
+        release_tag="test-release",
+        download_backend=backend,
+    )
+    destination = manager.cache.path(trusted_info.filename)
+    temporary_path = tmp_path / ".seed.tmp"
+    temporary_path.write_bytes(payload)
+    manager.cache.publish(
+        dataset_name=Dataset.SHUTTLE.value,
+        temporary_path=temporary_path,
+        destination=destination,
+        entry=_cache_entry(payload),
+    )
 
-        with patch(
-            "aberrant.stream.dataset.loader.get_dataset_info",
-            return_value=trusted_info,
-        ):
-            result = manager.download(Dataset.SHUTTLE)
+    with patch(
+        "aberrant.stream.dataset.loader.get_dataset_info",
+        return_value=trusted_info,
+    ):
+        result = manager.download(Dataset.SHUTTLE)
 
-        assert result == destination
-        assert backend.calls == []
-
-
-def test_load_rejects_unvalidated_cached_file_without_auto_download() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        manager = DatasetManager(cache_dir=temp_dir)
-        manager.cache.path("shuttle").write_bytes(b"not-an-npz")
-
-        with pytest.raises(FileNotFoundError, match="validated cache"):
-            manager.load(Dataset.SHUTTLE, auto_download=False)
+    assert result == destination
+    assert backend.calls == []
 
 
-def test_load_wraps_download_backend_failure() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        backend = _BytesDownloadBackend(b"", error=RuntimeError("offline"))
-        manager = DatasetManager(cache_dir=temp_dir, download_backend=backend)
+def test_load_rejects_unvalidated_cached_file_without_auto_download(
+    tmp_path: Path,
+) -> None:
+    manager = DatasetManager(cache_dir=tmp_path)
+    manager.cache.path("shuttle").write_bytes(b"not-an-npz")
 
-        with pytest.raises(RuntimeError, match="Failed to download dataset shuttle"):
-            manager.load(Dataset.SHUTTLE)
-
-        assert len(backend.calls) == 1
-
-
-def test_old_metadata_version_is_not_migrated() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        cache_dir = Path(temp_dir)
-        (cache_dir / "metadata.json").write_text(
-            json.dumps(
-                {
-                    "version": "1.0",
-                    "datasets": {
-                        "shuttle": {
-                            "downloaded": True,
-                            "hash": "legacy",
-                        }
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        snapshot = DatasetCacheStore(cache_dir).read()
-
-        assert snapshot.version == "2"
-        assert dict(snapshot.datasets) == {}
+    with pytest.raises(FileNotFoundError, match="validated cache"):
+        manager.load(Dataset.SHUTTLE, auto_download=False)
 
 
-def test_metadata_snapshot_is_immutable() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        snapshot = DatasetCacheStore(Path(temp_dir)).read()
+def test_load_wraps_download_backend_failure(tmp_path: Path) -> None:
+    backend = _BytesDownloadBackend(b"", error=RuntimeError("offline"))
+    manager = DatasetManager(cache_dir=tmp_path, download_backend=backend)
 
-        with pytest.raises(TypeError):
-            snapshot.datasets["shuttle"] = _cache_entry(b"payload")  # type: ignore[index]
+    with pytest.raises(RuntimeError, match="Failed to download dataset shuttle"):
+        manager.load(Dataset.SHUTTLE)
+
+    assert len(backend.calls) == 1
+
+
+def test_old_metadata_version_is_not_migrated(tmp_path: Path) -> None:
+    (tmp_path / "metadata.json").write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "datasets": {
+                    "shuttle": {
+                        "downloaded": True,
+                        "hash": "legacy",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    snapshot = DatasetCacheStore(tmp_path).read()
+
+    assert snapshot.version == "2"
+    assert dict(snapshot.datasets) == {}
+
+
+def test_metadata_snapshot_is_immutable(tmp_path: Path) -> None:
+    snapshot = DatasetCacheStore(tmp_path).read()
+
+    with pytest.raises(TypeError):
+        snapshot.datasets["shuttle"] = _cache_entry(b"payload")  # type: ignore[index]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Unix file-lock backend regression")
@@ -287,26 +283,26 @@ def test_cache_lock_preserves_unrelated_file_contents(
     assert dict(store.read().datasets) == {}
 
 
-def test_metadata_publication_is_atomic_and_leaves_no_temporary_file() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        cache_dir = Path(temp_dir)
-        store = DatasetCacheStore(cache_dir)
-        payload = b"payload"
-        temporary_path = cache_dir / ".artifact.tmp"
-        temporary_path.write_bytes(payload)
-        destination = store.path("shuttle")
+def test_metadata_publication_is_atomic_and_leaves_no_temporary_file(
+    tmp_path: Path,
+) -> None:
+    store = DatasetCacheStore(tmp_path)
+    payload = b"payload"
+    temporary_path = tmp_path / ".artifact.tmp"
+    temporary_path.write_bytes(payload)
+    destination = store.path("shuttle")
 
-        store.publish(
-            dataset_name="shuttle",
-            temporary_path=temporary_path,
-            destination=destination,
-            entry=_cache_entry(payload),
-        )
+    store.publish(
+        dataset_name="shuttle",
+        temporary_path=temporary_path,
+        destination=destination,
+        entry=_cache_entry(payload),
+    )
 
-        assert destination.read_bytes() == payload
-        assert store.metadata_file.exists()
-        assert not list(cache_dir.glob(".metadata.*.tmp"))
-        assert store.read().datasets["shuttle"] == _cache_entry(payload)
+    assert destination.read_bytes() == payload
+    assert store.metadata_file.exists()
+    assert not list(tmp_path.glob(".metadata.*.tmp"))
+    assert store.read().datasets["shuttle"] == _cache_entry(payload)
 
 
 @pytest.mark.parametrize("has_previous_artifact", [False, True])
@@ -444,69 +440,279 @@ def test_backup_cleanup_failure_keeps_successful_publication(tmp_path: Path) -> 
     assert backups[0].read_bytes() == b"previous"
 
 
-def test_metadata_updates_are_merged_across_processes() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        resolved_cache = str(Path(temp_dir).resolve())
-        context = multiprocessing.get_context("spawn")
-        ready = context.Queue()
-        start = context.Event()
-        processes = [
-            context.Process(
-                target=_publish_metadata_in_process,
-                args=(resolved_cache, dataset, ready, start),
-            )
-            for dataset in (Dataset.FRAUD, Dataset.SHUTTLE)
-        ]
+def test_metadata_updates_are_merged_across_processes(tmp_path: Path) -> None:
+    resolved_cache = str(tmp_path.resolve())
+    context = multiprocessing.get_context("spawn")
+    ready = context.Queue()
+    start = context.Event()
+    processes = [
+        context.Process(
+            target=_publish_metadata_in_process,
+            args=(resolved_cache, dataset, ready, start),
+        )
+        for dataset in (Dataset.FRAUD, Dataset.SHUTTLE)
+    ]
 
-        for process in processes:
-            process.start()
-        for _ in processes:
-            ready.get(timeout=10.0)
-        start.set()
-        for process in processes:
-            process.join(timeout=10.0)
-            assert process.exitcode == 0
+    for process in processes:
+        process.start()
+    for _ in processes:
+        ready.get(timeout=10.0)
+    start.set()
+    for process in processes:
+        process.join(timeout=10.0)
+        assert process.exitcode == 0
 
-        cached = DatasetManager(cache_dir=resolved_cache).list_cached()
-        assert set(cached) == {Dataset.FRAUD.value, Dataset.SHUTTLE.value}
-        assert all(isinstance(entry, CacheEntry) for entry in cached.values())
+    cached = DatasetManager(cache_dir=resolved_cache).list_cached()
+    assert set(cached) == {Dataset.FRAUD.value, Dataset.SHUTTLE.value}
+    assert all(isinstance(entry, CacheEntry) for entry in cached.values())
 
 
-def test_clear_cache_preserves_unrelated_files_in_shared_directory() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        cache_dir = Path(temp_dir)
-        unrelated = cache_dir / "application-data.txt"
-        unrelated.write_text("keep", encoding="utf-8")
-        manager = DatasetManager(cache_dir=cache_dir)
-        payload = b"cached"
-        temporary_path = cache_dir / ".shuttle.tmp"
-        temporary_path.write_bytes(payload)
-        destination = manager.cache.path("shuttle")
+def test_clear_cache_preserves_unrelated_files_in_shared_directory(
+    tmp_path: Path,
+) -> None:
+    unrelated = tmp_path / "application-data.txt"
+    unrelated.write_text("keep", encoding="utf-8")
+    manager = DatasetManager(cache_dir=tmp_path)
+    payload = b"cached"
+    temporary_path = tmp_path / ".shuttle.tmp"
+    temporary_path.write_bytes(payload)
+    destination = manager.cache.path("shuttle")
+    manager.cache.publish(
+        dataset_name=Dataset.SHUTTLE.value,
+        temporary_path=temporary_path,
+        destination=destination,
+        entry=_cache_entry(payload),
+    )
+
+    manager.clear_cache()
+
+    assert unrelated.read_text(encoding="utf-8") == "keep"
+    assert not destination.exists()
+    assert manager.cache.metadata_file.exists()
+    assert dict(manager.cache.read().datasets) == {}
+
+
+def test_cache_size_counts_only_registered_artifacts(tmp_path: Path) -> None:
+    manager = DatasetManager(cache_dir=tmp_path)
+    manager.cache.path("shuttle").write_bytes(b"owned")
+    (tmp_path / "unrelated.npz").write_bytes(b"not-owned")
+
+    assert manager.get_cache_size() == len(b"owned")
+
+
+_VALID_ENTRY = {"sha256": "a" * 64, "size": 3, "release_tag": "v1"}
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        [],
+        {"version": "2", "datasets": []},
+        {"version": "2", "datasets": {"": _VALID_ENTRY}},
+        {"version": "2", "datasets": {"shuttle": "entry"}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "sha256": 1}}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "size": "3"}}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "release_tag": 1}}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "sha256": "z" * 64}}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "size": -1}}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "size": True}}},
+        {"version": "2", "datasets": {"shuttle": {**_VALID_ENTRY, "release_tag": ""}}},
+    ],
+    ids=[
+        "root-array",
+        "datasets-array",
+        "empty-name",
+        "entry-string",
+        "sha-number",
+        "size-string",
+        "tag-number",
+        "sha-not-hex",
+        "size-negative",
+        "size-bool",
+        "tag-empty",
+    ],
+)
+def test_corrupt_metadata_reads_as_an_empty_cache(tmp_path: Path, metadata) -> None:
+    store = DatasetCacheStore(tmp_path)
+    store.metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+
+    assert dict(store.read().datasets) == {}
+
+
+def test_valid_metadata_entries_are_read_back(tmp_path: Path) -> None:
+    store = DatasetCacheStore(tmp_path)
+    store.metadata_file.write_text(
+        json.dumps({"version": "2", "datasets": {"shuttle": _VALID_ENTRY}}),
+        encoding="utf-8",
+    )
+
+    assert store.read().datasets["shuttle"] == CacheEntry(**_VALID_ENTRY)
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (lambda: DatasetCacheStore(Path("."), lock_timeout=0.0), "lock_timeout"),
+        (lambda: UrlLibDownloadBackend(retries=0), "retries"),
+        (lambda: UrlLibDownloadBackend(timeout=0.0), "timeout"),
+        (lambda: UrlLibDownloadBackend(backoff_seconds=-1.0), "backoff_seconds"),
+    ],
+)
+def test_cache_and_download_settings_must_be_positive(make, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        make()
+
+
+def _published_manager(
+    tmp_path: Path, payload: bytes, *, release_tag: str = "test-release"
+) -> tuple[DatasetManager, _BytesDownloadBackend]:
+    """A manager whose cache holds ``payload`` as a validated SHUTTLE artifact."""
+    backend = _BytesDownloadBackend(payload)
+    manager = DatasetManager(
+        cache_dir=tmp_path, release_tag=release_tag, download_backend=backend
+    )
+    temporary_path = tmp_path / ".seed.tmp"
+    temporary_path.write_bytes(payload)
+    manager.cache.publish(
+        dataset_name=Dataset.SHUTTLE.value,
+        temporary_path=temporary_path,
+        destination=manager.cache.path("shuttle"),
+        entry=_cache_entry(payload),
+    )
+    return manager, backend
+
+
+def _trusting(payload: bytes):
+    return patch(
+        "aberrant.stream.dataset.loader.get_dataset_info",
+        return_value=replace(
+            get_dataset_info(Dataset.SHUTTLE),
+            sha256=hashlib.sha256(payload).hexdigest(),
+        ),
+    )
+
+
+def test_cached_artifact_from_another_release_is_downloaded_again(
+    tmp_path: Path,
+) -> None:
+    payload = _valid_npz_payload()
+    manager, backend = _published_manager(tmp_path, payload, release_tag="newer")
+
+    with _trusting(payload):
+        manager.download(Dataset.SHUTTLE)
+
+    assert len(backend.calls) == 1
+    assert manager.cache.read().datasets["shuttle"].release_tag == "newer"
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        lambda path: path.write_bytes(path.read_bytes() + b"tail"),
+        lambda path: path.write_bytes(b"x" * path.stat().st_size),
+    ],
+    ids=["resized", "same-size-garbage"],
+)
+def test_tampered_cached_artifact_is_not_trusted(tmp_path: Path, tamper) -> None:
+    payload = _valid_npz_payload()
+    manager, _ = _published_manager(tmp_path, payload)
+    tamper(manager.cache.path("shuttle"))
+
+    with _trusting(payload), pytest.raises(FileNotFoundError, match="validated"):
+        manager.load(Dataset.SHUTTLE, auto_download=False)
+
+
+def test_archive_without_labels_is_rejected(tmp_path: Path) -> None:
+    buffer = io.BytesIO()
+    np.savez(buffer, X=np.ones((2, 2)))
+    manager = DatasetManager(
+        cache_dir=tmp_path, download_backend=_BytesDownloadBackend(buffer.getvalue())
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid NPZ dataset artifact"):
+        manager.download(Dataset.SHUTTLE)
+    assert not manager.cache.path("shuttle").exists()
+
+
+def test_failed_backup_copy_leaves_the_cache_untouched(tmp_path: Path) -> None:
+    payload = _valid_npz_payload()
+    manager, _ = _published_manager(tmp_path, payload)
+    replacement = tmp_path / ".replacement.tmp"
+    replacement.write_bytes(b"replacement")
+
+    with (
+        patch(
+            "aberrant.stream.dataset.cache.copyfile", side_effect=OSError("disk full")
+        ),
+        pytest.raises(OSError, match="disk full"),
+    ):
         manager.cache.publish(
-            dataset_name=Dataset.SHUTTLE.value,
-            temporary_path=temporary_path,
-            destination=destination,
-            entry=_cache_entry(payload),
+            dataset_name="shuttle",
+            temporary_path=replacement,
+            destination=manager.cache.path("shuttle"),
+            entry=_cache_entry(b"replacement"),
         )
 
-        manager.clear_cache()
-
-        assert unrelated.read_text(encoding="utf-8") == "keep"
-        assert not destination.exists()
-        assert manager.cache.metadata_file.exists()
-        assert dict(manager.cache.read().datasets) == {}
+    assert manager.cache.path("shuttle").read_bytes() == payload
+    assert manager.cache.read().datasets["shuttle"] == _cache_entry(payload)
+    assert not list(tmp_path.glob("*.bak"))
 
 
-def test_cache_size_counts_only_registered_artifacts() -> None:
-    with TemporaryDirectory(dir=".") as temp_dir:
-        cache_dir = Path(temp_dir)
-        manager = DatasetManager(cache_dir=cache_dir)
-        manager.cache.path("shuttle").write_bytes(b"owned")
-        (cache_dir / "unrelated.npz").write_bytes(b"not-owned")
+def test_clearing_one_dataset_keeps_the_others(tmp_path: Path) -> None:
+    payload = _valid_npz_payload()
+    manager, _ = _published_manager(tmp_path, payload)
+    fraud = tmp_path / ".fraud.tmp"
+    fraud.write_bytes(payload)
+    manager.cache.publish(
+        dataset_name=Dataset.FRAUD.value,
+        temporary_path=fraud,
+        destination=manager.cache.path(get_dataset_info(Dataset.FRAUD).filename),
+        entry=_cache_entry(payload),
+    )
 
-        assert manager.get_cache_size() == len(b"owned")
+    manager.clear_cache(Dataset.SHUTTLE)
+
+    assert set(manager.list_cached()) == {Dataset.FRAUD.value}
+    assert not manager.cache.path("shuttle").exists()
+    assert "cached_datasets=1" in repr(manager)
 
 
-def test_batch_streamer_rejects_non_positive_batch_size() -> None:
-    with pytest.raises(ValueError, match="batch_size must be positive"):
-        BatchStreamer(object(), batch_size=0)  # type: ignore[arg-type]
+def test_url_backend_reports_download_progress(tmp_path: Path, capsys) -> None:
+    destination = tmp_path / "shuttle.tmp"
+    backend = UrlLibDownloadBackend(show_progress=True)
+
+    with patch("urllib.request.urlopen", return_value=_FakeResponse(b"x" * 20_000)):
+        backend.download("https://example.com/shuttle.npz", destination)
+
+    assert destination.stat().st_size == 20_000
+    assert "Downloading shuttle.tmp" in capsys.readouterr().err
+
+
+@pytest.fixture
+def default_cache(tmp_path: Path):
+    previous = loader_module._DefaultManager.instance
+    dataset_api.set_cache_dir(tmp_path)
+    yield tmp_path
+    loader_module._DefaultManager.instance = previous
+
+
+def test_module_functions_use_the_default_manager(default_cache: Path) -> None:
+    payload = _valid_npz_payload()
+    manager = dataset_api.get_default_manager()
+    assert manager.cache_dir == default_cache
+    manager.download_backend = _BytesDownloadBackend(payload)
+
+    with _trusting(payload):
+        path = dataset_api.download(Dataset.SHUTTLE)
+        samples = list(dataset_api.load(Dataset.SHUTTLE).stream())
+
+    assert path.read_bytes() == payload
+    assert samples[1] == ({"feature_0": 3.0, "feature_1": 4.0}, 1)
+    assert set(dataset_api.list_cached()) == {Dataset.SHUTTLE.value}
+    info = dataset_api.get_cache_info()
+    assert info.directory == default_cache
+    assert info.size_bytes == len(payload)
+    assert info.datasets == (Dataset.SHUTTLE.value,)
+
+    dataset_api.clear_cache()
+    assert dataset_api.get_cache_info().datasets == ()

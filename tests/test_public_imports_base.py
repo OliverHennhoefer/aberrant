@@ -1,6 +1,7 @@
 """Public API import contract tests for base install."""
 
 import importlib
+import sys
 
 import pytest
 
@@ -181,3 +182,40 @@ def test_removed_compatibility_exports_stay_removed() -> None:
 def test_optional_exports_are_excluded_from_wildcard_contracts() -> None:
     assert "Architecture" not in base_api.__all__
     assert "Autoencoder" not in deep_api.__all__
+
+
+_LAZY_TORCH_EXPORTS = [
+    (base_api, "Architecture", "aberrant.base.architecture"),
+    (deep_api, "Autoencoder", "aberrant.model.deep.autoencoder"),
+]
+
+
+@pytest.mark.parametrize(("module", "name", "source"), _LAZY_TORCH_EXPORTS)
+def test_torch_exports_explain_the_missing_extra(
+    monkeypatch: pytest.MonkeyPatch, module, name, source
+) -> None:
+    monkeypatch.delattr(module, name, raising=False)
+    monkeypatch.delitem(sys.modules, source, raising=False)
+    monkeypatch.setitem(sys.modules, "torch", None)
+
+    with pytest.raises(ImportError, match="optional 'dl' dependencies"):
+        getattr(module, name)
+
+
+@pytest.mark.parametrize(("module", "name", "source"), _LAZY_TORCH_EXPORTS)
+def test_torch_exports_load_on_first_access(
+    monkeypatch: pytest.MonkeyPatch, module, name, source
+) -> None:
+    pytest.importorskip("torch")
+    monkeypatch.delattr(module, name, raising=False)
+
+    exported = getattr(module, name)
+
+    assert exported is getattr(importlib.import_module(source), name)
+    assert module.__dict__[name] is exported
+
+
+@pytest.mark.parametrize("module", [base_api, deep_api])
+def test_unknown_attributes_are_still_attribute_errors(module) -> None:
+    with pytest.raises(AttributeError, match="has no attribute 'Missing'"):
+        _ = module.Missing

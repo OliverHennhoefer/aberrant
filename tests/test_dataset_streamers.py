@@ -5,7 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from aberrant.stream.dataset.streamers import NpzStreamer
+from aberrant.stream.dataset.registry import Dataset, get_dataset_info
+from aberrant.stream.dataset.streamers import BatchStreamer, NpzStreamer
 
 
 @pytest.fixture
@@ -80,3 +81,57 @@ def test_stream_inside_context_preserves_context_archive(tmp_path: Path) -> None
 
     with pytest.raises(RuntimeError, match="not open"):
         iter(streamer)
+
+
+@pytest.mark.parametrize("option", ["feature_prefix", "label_column", "feature_column"])
+def test_column_names_must_be_non_empty(tmp_path: Path, option: str) -> None:
+    with pytest.raises(ValueError, match=option):
+        NpzStreamer(tmp_path / "samples.npz", **{option: ""})
+
+
+def test_missing_file_and_feature_array_are_reported(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="not found"):
+        list(NpzStreamer(tmp_path / "absent.npz").stream())
+
+    file_path = tmp_path / "samples.npz"
+    np.savez(file_path, features=[[1.0]], y=[0])
+    with pytest.raises(KeyError, match="Feature array 'X'"):
+        list(NpzStreamer(file_path).stream())
+    stream = NpzStreamer(file_path, feature_column="features", feature_prefix="f")
+    assert list(stream.stream()) == [({"f0": 1.0}, 0)]
+
+
+def test_progress_and_metadata_describe_a_registered_dataset(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    file_path = tmp_path / "samples.npz"
+    np.savez(file_path, X=[[1.0], [2.0]], y=[0, 1])
+    info = get_dataset_info(Dataset.SHUTTLE)
+    streamer = NpzStreamer(file_path, info, show_progress=True)
+
+    assert len(list(streamer.stream())) == 2
+    assert f"Loading {info.name}" in capsys.readouterr().err
+    assert streamer.get_metadata() is info
+    assert f"dataset={info.name!r}" in repr(streamer)
+    assert repr(NpzStreamer(file_path)) == f"NpzStreamer(file_path={str(file_path)!r})"
+
+
+@pytest.mark.parametrize(("rows", "sizes"), [(5, [2, 2, 1]), (4, [2, 2]), (0, [])])
+def test_batches_keep_order_and_yield_the_remainder(
+    tmp_path: Path, rows: int, sizes: list[int]
+) -> None:
+    file_path = tmp_path / "samples.npz"
+    np.savez(file_path, X=np.arange(rows, dtype=float).reshape(rows, 1), y=range(rows))
+    batches = BatchStreamer(NpzStreamer(file_path), batch_size=2)
+
+    streamed = list(batches.stream())
+
+    assert [len(features) for features, _ in streamed] == sizes
+    assert [label for _, labels in streamed for label in labels] == list(range(rows))
+    assert batches.get_metadata() is None
+    assert repr(batches).endswith("batch_size=2)")
+
+
+def test_batch_size_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        BatchStreamer(object(), batch_size=0)  # type: ignore[arg-type]
