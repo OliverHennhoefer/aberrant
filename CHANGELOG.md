@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog and the project aims to follow
 Semantic Versioning.
 
-## [Unreleased]
+## [2.0.0] - Unreleased
 
 ### Fixed
 
@@ -240,6 +240,8 @@ Semantic Versioning.
 
 ### Development
 
+- CI runs ruff and mypy once, in a `lint` job, and the `test` matrix over
+  Python 3.11 to 3.14 on Linux and Windows runs only the tests.
 - The 25 per-model scripts under `examples/models/` gave way to one script
   per model family (`forest.py`, `distance.py`, `sketch.py`, `stat.py`,
   `svm.py`, `deep.py`, `graph.py`, `timeseries.py`, `forecast.py`). They
