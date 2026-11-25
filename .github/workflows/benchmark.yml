@@ -35,7 +35,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev --extra benchmark
+        run: uv sync --locked --group benchmark
 
       - name: Benchmark quality tests
         run: uv run --locked python -m pytest tests/integration -m benchmark -q

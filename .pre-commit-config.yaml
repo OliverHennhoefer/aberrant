@@ -70,5 +70,5 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        args: [tests/, -v, --tb=short]
+        args: [tests/, -n, auto, -q, --tb=short]
         stages: [pre-commit]

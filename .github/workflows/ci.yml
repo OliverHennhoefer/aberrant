@@ -138,7 +138,7 @@ jobs:
         run: uv run --locked python -m mypy aberrant
 
       - name: Unit tests
-        run: uv run --locked python -m pytest tests --ignore=tests/integration -q
+        run: uv run --locked python -m pytest tests --ignore=tests/integration -n auto -q
 
   extras-smoke:
     runs-on: ubuntu-latest
@@ -171,6 +171,9 @@ jobs:
           assert isinstance(engine.search({"x": 0.5, "y": 0.5}, n_neighbors=1), float)
           PY
 
+      - name: Compare ECOD and COPOD with PyOD
+        run: uv run --locked --with "pyod==3.6.9" python -m pytest tests/models/test_stat_ecdf.py -k pyod_aggregation_matches_pyod -q
+
       - name: FAISS model smoke tests
         run: |
           uv run --locked python -m pytest tests/models/test_distance_knn.py tests/test_catalog_faiss.py tests/transformers/test_pca_pipeline.py -q
@@ -196,7 +199,7 @@ jobs:
         run: uv sync --locked
 
       - name: Integration smoke
-        run: uv run --locked python -m pytest tests/integration -q
+        run: uv run --locked python -m pytest tests/integration -n auto -q
 
   coverage:
     runs-on: ubuntu-latest
@@ -215,11 +218,13 @@ jobs:
       - name: Install Python
         run: uv python install 3.11
 
+      # FAISS is installed so the coverage report includes the FAISS engine,
+      # which the extras job tests.
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --extra faiss
 
       - name: Coverage
-        run: uv run --locked python -m pytest tests --ignore=tests/integration --cov=aberrant --cov-branch --cov-report=xml --cov-report=term-missing -q
+        run: uv run --locked python -m pytest tests --ignore=tests/integration -n auto --cov=aberrant --cov-report=xml --cov-report=term-missing:skip-covered -q
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

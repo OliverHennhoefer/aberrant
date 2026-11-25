@@ -71,6 +71,7 @@ dev = [
     "pre-commit>=4.0.0,<5.0.0",
     "pytest>=8.0.0,<10.0.0",
     "pytest-cov>=6.0.0,<8.0.0",
+    "pytest-xdist>=3.6.0,<4.0.0",
     "hypothesis>=6.0.0,<7.0.0",
     "mypy>=1.13.0,<3.0.0",
     "scikit-learn>=1.9.1,<2.0.0",
@@ -103,8 +104,24 @@ path = "aberrant/__init__.py"
 exclude = [".github", ".pre-commit-config.yaml", "codecov.yml"]
 
 [tool.pytest.ini_options]
-addopts = ["--strict-markers", "--strict-config"]
+addopts = ["--strict-markers", "--strict-config", "-m", "not benchmark"]
+markers = [
+    "benchmark: slow quality checks; the nightly Benchmark workflow runs them",
+]
 xfail_strict = true
+
+[tool.coverage.run]
+source = ["aberrant"]
+branch = true
+
+[tool.coverage.report]
+# Bodies that never run by design: abstract methods, typing overloads and
+# imports that exist only for the type checker.
+exclude_also = [
+    "@(abc\\.)?abstractmethod",
+    "@(typing\\.)?overload",
+    "if TYPE_CHECKING:",
+]
 
 [tool.uv]
 required-version = ">=0.12.18"
@@ -115,12 +132,6 @@ constraint-dependencies = [
     "setuptools>=84.1.0",
     "virtualenv>=21.14.10",
 ]
-
-[tool.pytest.ini_options]
-markers = [
-    "benchmark: slow quality checks; the nightly Benchmark workflow runs them",
-]
-addopts = "-m 'not benchmark'"
 
 # Ruff configuration
 [tool.ruff]

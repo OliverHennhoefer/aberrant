@@ -21,14 +21,21 @@ Run these before opening a PR:
 ```bash
 uv run python -m ruff check .
 uv run python -m mypy aberrant
-uv run python -m pytest -q
+uv run python -m pytest -n auto -q
 uv build
+```
+
+`-n auto` runs the tests on every CPU core with pytest-xdist. Leave it out to
+debug a single test. To see which lines the unit tests miss:
+
+```bash
+uv run python -m pytest tests --ignore=tests/integration -n auto --cov=aberrant --cov-report=term-missing:skip-covered -q
 ```
 
 To run integration tests directly:
 
 ```bash
-uv run python -m pytest tests/integration -q
+uv run python -m pytest tests/integration -n auto -q
 ```
 
 They check each detector's ROC-AUC and PR-AUC against floors in
@@ -40,7 +47,7 @@ Slow checks (more seeds, shuffled COVER, comparisons with river) are marked
 `benchmark` and run nightly. To run them locally:
 
 ```bash
-uv sync --extra dev --extra benchmark
+uv sync --group benchmark
 uv run python -m pytest tests/integration -m benchmark -q
 ```
 
