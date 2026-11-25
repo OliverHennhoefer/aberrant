@@ -7,6 +7,7 @@ from time import perf_counter_ns
 from typing import Literal, TypeVar, cast
 
 from aberrant._utils.validation import coerce_finite_number
+from aberrant.base._parameters import Parameterized
 from aberrant.base.protocols import ModelProtocol, TransformerProtocol
 from aberrant.base.readiness import Readiness
 from aberrant.compose._learning import LearningPass, LearningTransactions
@@ -28,7 +29,7 @@ T = TypeVar("T")
 MODEL = "$model"
 
 
-class GraphPipeline:
+class GraphPipeline(Parameterized):
     """A numeric feature DAG ending in exactly one online model.
 
     Learning uses each transformer's post-update representation, but only when
@@ -39,7 +40,13 @@ class GraphPipeline:
     This is model-ending composition, not a transformer with provisional
     outputs. Existing linear ``Pipeline`` deliberately retains its eager
     learning behaviour. Applications own calibration and alarm policies.
+
+    ``get_params()``, ``clone()``, ``reset()`` and ``repr`` work as on every
+    component. The observer is a process-local diagnostic: a clone shares it,
+    and a pickle drops it.
     """
+
+    _transient = ("observer",)
 
     def __init__(
         self,
@@ -74,12 +81,6 @@ class GraphPipeline:
     @property
     def failed(self) -> bool:
         return self._failure is not None
-
-    def __getstate__(self) -> dict[str, object]:
-        """Observers are process-local diagnostics, never checkpoint resources."""
-        state = self.__dict__.copy()
-        state["observer"] = None
-        return state
 
     def learn_one(self, x: dict[str, float]) -> None:
         """Commit one staged pass, or roll back every transactional learner.

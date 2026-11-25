@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from contextlib import ExitStack
-from typing import NoReturn, overload
+from typing import Any, NoReturn, Self, cast, overload
 
 from aberrant.exceptions import IncompatibleComponentError, PipelineError
 
@@ -129,6 +130,28 @@ class Pipeline:
             x = self._checked_transform(transformer, x)
         return x
 
+    def get_params(self) -> dict[str, Any]:
+        """Return the two components this pipeline was built from."""
+        return {"first": self.first, "second": self.second}
+
+    def clone(self) -> Self:
+        """Return a new, untrained pipeline of clones of every stage.
+
+        Raises:
+            TypeError: A stage has no ``clone()``.
+        """
+        stages = [_cloned(stage) for stage in (*self._prefix, self._terminal)]
+        pipeline = stages[0]
+        for stage in stages[1:]:
+            pipeline = Pipeline(pipeline, stage)
+        return cast("Self", pipeline)
+
+    def reset(self) -> None:
+        """Forget everything learned, as if this pipeline were just built."""
+        fresh = self.clone()
+        self._prefix = fresh._prefix
+        self._terminal = fresh._terminal
+
     def __getnewargs__(
         self,
     ) -> tuple[TransformerProtocol, TransformerProtocol | ModelProtocol]:
@@ -154,6 +177,13 @@ class Pipeline:
                 "Each transformer must return a dict[str, float] from transform_one."
             )
         return transformed
+
+
+def _cloned(stage: Any) -> Any:
+    clone = getattr(stage, "clone", None)
+    if not callable(clone):
+        raise TypeError(f"{type(stage).__name__} has no clone() to rebuild it from")
+    return clone()
 
 
 class TransformerPipeline(Pipeline):
@@ -200,6 +230,15 @@ class ModelPipeline(Pipeline):
                 "The final component must return a numeric score from score_one."
             )
         return float(score)
+
+    def learn_many(self, xs: Iterable[FeatureMap]) -> None:
+        """Learn the events of ``xs`` in order."""
+        for x in xs:
+            self.learn_one(x)
+
+    def score_many(self, xs: Iterable[FeatureMap]) -> list[float]:
+        """Score the events of ``xs`` against the current state, without learning."""
+        return [self.score_one(x) for x in xs]
 
     def __or__(self, other: NoReturn) -> NoReturn:
         raise IncompatibleComponentError(

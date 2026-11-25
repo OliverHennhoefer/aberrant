@@ -7,9 +7,14 @@ from collections.abc import Callable
 import pytest
 
 from aberrant.base import ReadinessUnit
+from aberrant.calibration import ScoreCalibrator
 from aberrant.catalog import create_model, create_transformer, model_capabilities
+from aberrant.compose import GraphNode, GraphPipeline, MergeNode
 from aberrant.drift import ADWIN, KSWIN, PageHinkley
 from aberrant.forecast import HoltWinters, RLSRegressor, SeasonalNaive
+from aberrant.model.forest import HalfSpaceTrees
+from aberrant.model.stat import MovingCovariance
+from aberrant.transform import MinMaxScaler, Select, StandardScaler
 from tests.catalog_cases import (
     MODEL_IDS,
     TRANSFORMER_IDS,
@@ -238,3 +243,100 @@ def test_drift_detector_contract(detector):
     built.reset()
     assert [built.update(value) for value in signal] == expected
     assert set(built.get_params()) == _signature_names(built)
+
+
+_PAIRS = [{"x": float(index % 9), "y": float(index % 4)} for index in range(120)]
+
+
+def _linear():
+    return StandardScaler() | MinMaxScaler() | HalfSpaceTrees(seed=7)
+
+
+def _graph(observer=None):
+    return GraphPipeline(
+        [
+            GraphNode("x", Select(features=["x"])),
+            GraphNode("y", Select(features=["y"])),
+            GraphNode("scaled", StandardScaler(), input="x"),
+            MergeNode("features", ("scaled", "y")),
+        ],
+        MovingCovariance(window_size=16),
+        output="features",
+        observer=observer,
+    )
+
+
+@pytest.mark.parametrize("factory", [_linear, _graph], ids=["linear", "graph"])
+def test_pipeline_contract(factory):
+    expected = _scores(factory(), _PAIRS)
+    pipeline = factory()
+    _scores(pipeline, _PAIRS[:60])
+    probe = _PAIRS[60:]
+    before = [pipeline.score_one(event) for event in probe]
+
+    clone = pipeline.clone()
+    assert not clone.readiness.ready
+    assert _scores(clone, _PAIRS) == expected
+    assert [pipeline.score_one(event) for event in probe] == before
+    restored = pickle.loads(pickle.dumps(pipeline))
+    assert _scores(restored, probe) == _scores(pipeline, probe)
+    pipeline.reset()
+    assert _scores(pipeline, _PAIRS) == expected
+    assert repr(pipeline) == repr(factory())
+    assert str(pipeline) != ""
+
+
+def test_linear_pipeline_parameters_and_batches():
+    pipeline = _linear()
+    rebuilt = type(pipeline)(**pipeline.get_params())
+    single = _linear()
+    for event in _PAIRS[:60]:
+        single.learn_one(event)
+    rebuilt.learn_many(_PAIRS[:60])
+
+    assert rebuilt.score_many(_PAIRS[60:]) == [
+        single.score_one(event) for event in _PAIRS[60:]
+    ]
+
+
+def test_graph_pipeline_parameters_rebuild_it_and_share_the_observer():
+    seen = []
+    graph = _graph(seen.append)
+
+    assert set(graph.get_params()) == _signature_names(graph)
+    assert repr(graph).startswith("GraphPipeline(nodes=(GraphNode(id='x', ")
+    clone = graph.clone()
+    assert clone.observer is graph.observer
+    clone.learn_one(_PAIRS[0])
+    assert seen
+    assert pickle.loads(pickle.dumps(graph)).observer is None
+
+
+def test_calibrator_contract():
+    scores = [float(index % 11) / 10.0 for index in range(80)]
+
+    def thresholds(calibrator):
+        out = []
+        for key, score in enumerate(scores):
+            out.append(calibrator.predict(key))
+            calibrator.update(key, score)
+        return out
+
+    def build():
+        return ScoreCalibrator("aci", alpha=0.1, window=40, gamma=0.02)
+
+    calibrator = build()
+    expected = thresholds(build())
+    params = calibrator.get_params()
+    assert params == {"method": "aci", "alpha": 0.1, "window": 40, "gamma": 0.02}
+    assert thresholds(ScoreCalibrator(params.pop("method"), **params)) == expected
+    thresholds(calibrator)
+    assert thresholds(calibrator.clone()) == expected
+    calibrator.reset()
+    assert thresholds(calibrator) == expected
+    assert repr(calibrator) == (
+        "ScoreCalibrator('aci', alpha=0.1, window=40, gamma=0.02)"
+    )
+    assert (
+        repr(ScoreCalibrator("aci", alpha=0.1)) == "ScoreCalibrator('aci', alpha=0.1)"
+    )
