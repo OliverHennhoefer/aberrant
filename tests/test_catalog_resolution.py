@@ -155,7 +155,8 @@ _ADDED_AFTER_BASELINE = frozenset(
 
 
 def test_existing_core_schema_contract_is_unchanged():
-    # Captured from the reviewed 1.3.0/Python 3.11 baseline before this refactor.
+    # Captured from the reviewed 1.3.0/Python 3.11 baseline before this refactor,
+    # less GraphGatedOneClassSVM, which was removed later.
     schemas = {
         f"{spec.kind.value}/{spec.id}": spec.parameter_schema()
         for catalog in (MODEL_CATALOG, TRANSFORMER_CATALOG, SIMILARITY_ENGINE_CATALOG)
@@ -168,7 +169,7 @@ def test_existing_core_schema_contract_is_unchanged():
     )
     assert (
         digest.hexdigest()
-        == "63a3c1e292b5e22361e0304cd81b6a6d4c65fd8159efbb4cafb4e3348682daee"
+        == "4a5da4e360e605aa229307713673ddf6267f845f23a450898e67ab5d1d5fb7f7"
     )
 
 
@@ -176,14 +177,6 @@ def test_existing_core_schema_contract_is_unchanged():
     ("config", "fingerprint"),
     [
         (example(), "8f87e74a7056c6b4364d6abcaba1ed0015e1a93d2161874e52290b4e96ad2a75"),
-        (
-            DetectorConfig(
-                ComponentConfig(
-                    "graph_gated_one_class_svm", {"graph": {"0": [1], "1": []}}
-                )
-            ),
-            "f85771fcf13dbdeb1aa5174699e82163b6416ef82a1badd7f286c31261a36a56",
-        ),
         (
             DetectorConfig(
                 ComponentConfig("moving_average", {"window_size": 8}),
