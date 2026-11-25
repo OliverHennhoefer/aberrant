@@ -437,16 +437,6 @@ def test_cancellation_after_nontransactional_model_update_disables_graph():
     assert not graph.readiness.ready
 
 
-def test_old_minmax_checkpoint_restores_default_extrapolation():
-    scaler = MinMaxScaler()
-    scaler.learn_one({"x": 1.0})
-    scaler.learn_one({"x": 2.0})
-    del scaler.clip
-    restored = pickle.loads(pickle.dumps(scaler))
-    assert not restored.clip
-    assert restored.transform_one({"x": 3.0}) == {"x": 2.0}
-
-
 def test_online_pca_keeps_a_real_orthogonal_basis_on_degenerate_stream():
     scaler = StandardScaler()
     projection = IncrementalPCA(n_components=2, warm_up=3)

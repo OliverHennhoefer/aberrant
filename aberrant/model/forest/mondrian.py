@@ -427,6 +427,8 @@ class MondrianIsolationForest(BaseModel):
         https://proceedings.neurips.cc/paper_files/paper/2014/hash/195f15384c2a79cedf293e4a847ce85c-Abstract.html
     """
 
+    _transient = ("_planned",)
+
     def __init__(
         self,
         *,
@@ -461,12 +463,6 @@ class MondrianIsolationForest(BaseModel):
         self._schema = FeatureSchema()
         self._window: deque[np.ndarray] = deque(maxlen=window_size)
         self._planned: _Plan | None = None
-
-    def __getstate__(self) -> dict[str, object]:
-        state = self.__dict__.copy()
-        # Planned walks are a cache of the trees, not part of the model.
-        state["_planned"] = None
-        return state
 
     @property
     def readiness(self) -> Readiness:

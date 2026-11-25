@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Hashable
+from typing import Any
 
 from aberrant._utils.validation import coerce_event_number, coerce_finite_number
+from aberrant.base._parameters import checked_state, versioned_state
 from aberrant.base.descriptors import invalid
 from aberrant.calibration._registry import CALIBRATORS, CalibratorSpec, OnlineCalibrator
 from aberrant.calibration._window import ScoreHistory
@@ -59,6 +61,14 @@ class ScoreCalibrator:
         self.params = spec.resolve(params)
         self.history = ScoreHistory(window)
         self.method: OnlineCalibrator = spec.factory(self.history, alpha, self.params)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """The calibrator state, stamped with the aberrant version."""
+        return versioned_state(self.__dict__)
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore state saved by this aberrant version."""
+        self.__dict__.update(checked_state(self, state))
 
     @property
     def spec(self) -> CalibratorSpec:

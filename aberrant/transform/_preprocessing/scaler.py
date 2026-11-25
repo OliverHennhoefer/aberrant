@@ -72,10 +72,6 @@ class MinMaxScaler(BaseTransformer):
         self.min: dict[str, float] = {}
         self.max: dict[str, float] = {}
 
-    def __setstate__(self, state: dict[str, object]) -> None:
-        """Older trusted checkpoints predate the additive clipping option."""
-        self.__dict__.update({"clip": False, **state})
-
     @property
     def readiness(self) -> Readiness:
         return Readiness(bool(self.min), int(bool(self.min)), 1)

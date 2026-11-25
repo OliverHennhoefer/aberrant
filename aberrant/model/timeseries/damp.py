@@ -162,6 +162,8 @@ class DAMP(BaseModel):
         https://sites.google.com/view/discord-aware-matrix-profile/documentation
     """
 
+    _transient = ("_scored",)
+
     def __init__(
         self,
         *,
@@ -205,12 +207,6 @@ class DAMP(BaseModel):
         self._last_score = 0.0
         # The search result of the value scored last, keyed by its bits.
         self._scored: tuple[str, tuple[float, float] | None] | None = None
-
-    def __getstate__(self) -> dict[str, object]:
-        """Leave the search result of the last scored value out of pickles."""
-        state = self.__dict__.copy()
-        state["_scored"] = None
-        return state
 
     @property
     def n_samples_seen(self) -> int:

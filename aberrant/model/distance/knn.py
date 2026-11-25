@@ -43,6 +43,8 @@ class KNN(BaseModel):
         https://doi.org/10.1145/335191.335437
     """
 
+    _transient = ("_faiss_module", "_index")
+
     def __init__(
         self,
         *,
@@ -67,15 +69,9 @@ class KNN(BaseModel):
         self._next = 0
         self._index: Any = None
 
-    def __getstate__(self) -> dict[str, object]:
-        state = self.__dict__.copy()
-        # FAISS indexes and modules do not pickle; the window rebuilds the index.
-        state["_faiss_module"] = None
-        state["_index"] = None
-        return state
-
-    def __setstate__(self, state: dict[str, object]) -> None:
-        self.__dict__.update(state)
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore the window; the FAISS index is rebuilt from it."""
+        super().__setstate__(state)
         if self.backend == "faiss":
             self._faiss_module = _faiss()
 

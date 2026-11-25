@@ -2,7 +2,31 @@
 
 import copy
 import inspect
-from typing import Any, Self
+from typing import Any, ClassVar, Self
+
+from aberrant import __version__
+from aberrant.exceptions import IncompatibleStateError
+
+VERSION_KEY = "__aberrant_version__"
+
+
+def versioned_state(state: dict[str, Any]) -> dict[str, Any]:
+    """``state`` stamped with the running aberrant version."""
+    return {**state, VERSION_KEY: __version__}
+
+
+def checked_state(component: object, state: dict[str, Any]) -> dict[str, Any]:
+    """``state`` without its stamp, if this aberrant version saved it.
+
+    Raises:
+        IncompatibleStateError: Another version, or a release before 2.0,
+            saved the state.
+    """
+    state = dict(state)
+    saved = state.pop(VERSION_KEY, None)
+    if saved != __version__:
+        raise IncompatibleStateError(type(component).__name__, saved, __version__)
+    return state
 
 
 def _constructor_parameters(cls: type) -> list[inspect.Parameter]:
@@ -35,7 +59,24 @@ class Parameterized:
     component. ``clone()`` builds that component, ``reset()`` turns this
     instance into it, and ``repr`` shows the parameters that differ from their
     defaults.
+
+    Pickles carry the aberrant version that wrote them, and only that version
+    restores them. Attributes named in ``_transient`` are caches: pickles store
+    ``None`` in their place.
     """
+
+    _transient: ClassVar[tuple[str, ...]] = ()
+
+    def __getstate__(self) -> dict[str, Any]:
+        """The instance state, without caches, stamped with the version."""
+        state = self.__dict__.copy()
+        for name in self._transient:
+            state[name] = None
+        return versioned_state(state)
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore state saved by this aberrant version."""
+        self.__dict__.update(checked_state(self, state))
 
     def get_params(self) -> dict[str, Any]:
         """Return the constructor parameters of this instance by name."""

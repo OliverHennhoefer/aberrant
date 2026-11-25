@@ -414,6 +414,8 @@ class RHF(BaseModel):
         Original implementation: https://github.com/stefannesic/streamRHF
     """
 
+    _transient = ("_previewed",)
+
     def __init__(
         self,
         *,
@@ -440,13 +442,6 @@ class RHF(BaseModel):
         # The point that was scored last and the insertions planned for it,
         # applied if the same point is learned next.
         self._previewed: tuple[np.ndarray, list[_Insertion]] | None = None
-
-    def __getstate__(self) -> dict[str, object]:
-        # Previewed insertions only cache work for the next learn, so pickles
-        # leave them out and scoring never changes a pickled model.
-        state = self.__dict__.copy()
-        state["_previewed"] = None
-        return state
 
     def _build_forest(self, points: list[np.ndarray]) -> None:
         names = self._schema.names
