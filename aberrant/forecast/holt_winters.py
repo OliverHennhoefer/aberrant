@@ -34,10 +34,10 @@ class HoltWinters(BaseForecaster):
         min_scale: Positive floor for the reported spread, in target units.
 
     Notes:
-        Two cycles initialize the model as in
-        :class:`~aberrant.model.timeseries.SeasonalResidualDetector`, whose
-        scores equal this forecaster's lead-1 residual divided by its lead-1
-        spread. Every lead's spread starts at the mean absolute error of the
+        Exactly two cycles initialize the model. Their mean difference gives
+        the per-observation trend, the detrended values at each seasonal
+        position give the seasonal components, and the second cycle's mean,
+        advanced to its last position, gives the level. Every lead's spread starts at the mean absolute error of the
         fitted warm-up model, then fades towards that lead's own errors. State
         is O(season_length + horizon^2) and each event costs O(horizon).
         Unrepresentable arithmetic raises OverflowError without changing state.

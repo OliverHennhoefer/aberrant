@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 
 from aberrant.forecast import HoltWinters, ResidualDetector, SeasonalNaive
-from aberrant.model.timeseries import SeasonalResidualDetector
 
 
 def _series(n: int, season: int, seed: int = 0) -> list[float]:
@@ -82,23 +81,24 @@ def test_holt_winters_multi_step_follows_component_equations() -> None:
 
 
 @pytest.mark.parametrize("season", [2, 7, 24])
-@pytest.mark.parametrize("horizon", [1, 5])
-def test_holt_winters_lead_one_reproduces_seasonal_residual_detector(
-    season: int, horizon: int
+def test_holt_winters_lead_one_scores_do_not_depend_on_the_horizon(
+    season: int,
 ) -> None:
     params = {"alpha": 0.3, "beta": 0.1, "gamma": 0.2, "residual_alpha": 0.1}
-    reference = SeasonalResidualDetector(season, **params)
-    raw = SeasonalResidualDetector(season, normalize=False, **params)
-    scaled = ResidualDetector(HoltWinters(season, horizon=horizon, **params), "v")
-    absolute = ResidualDetector(
-        HoltWinters(season, horizon=horizon, **params), "v", score="absolute"
-    )
+    detectors = [
+        ResidualDetector(HoltWinters(season, horizon=horizon, **params), "v", score=s)
+        for horizon in (1, 5)
+        for s in ("scaled", "absolute")
+    ]
     for y in _series(30 * season, season, seed=season):
         x = {"v": y}
-        assert scaled.score_one(x) == reference.score_one(x)
-        assert absolute.score_one(x) == raw.score_one(x)
-        for model in (reference, raw, scaled, absolute):
-            model.learn_one(x)
+        short_scaled, short_absolute, long_scaled, long_absolute = (
+            detector.score_one(x) for detector in detectors
+        )
+        assert long_scaled == short_scaled
+        assert long_absolute == short_absolute
+        for detector in detectors:
+            detector.learn_one(x)
 
 
 def test_overflow_leaves_state_unchanged_and_pickle_continues() -> None:

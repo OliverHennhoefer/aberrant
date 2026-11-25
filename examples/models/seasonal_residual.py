@@ -2,14 +2,14 @@
 
 import numpy as np
 
-from aberrant.model.timeseries import SeasonalResidualDetector
+from aberrant.forecast import HoltWinters, ResidualDetector
 
 rng = np.random.default_rng(42)
 season_length = 24
 noise_scale = 0.5
-# Set the residual-scale floor in requests to the simulated observation noise.
-detector = SeasonalResidualDetector(
-    season_length=season_length, key="requests", min_scale=noise_scale
+# Set the spread floor in requests to the simulated observation noise.
+detector = ResidualDetector(
+    HoltWinters(season_length=season_length, min_scale=noise_scale), "requests"
 )
 normal_scores = []
 peak: tuple[float, int, float, float, float] | None = None

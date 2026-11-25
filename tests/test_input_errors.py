@@ -21,7 +21,6 @@ _MODEL_PARAMS: dict[str, dict[str, object]] = {
         "target": "a",
         "model": {"id": "seasonal_naive", "params": {"season_length": 4}},
     },
-    "seasonal_residual_detector": {"season_length": 4},
     "multivariate_rolling_matrix_profile": {"subsequence_length": 4},
     "rolling_matrix_profile": {"subsequence_length": 4},
     "x_lag_damp": {"subsequence_length": 4},
@@ -42,7 +41,6 @@ _MULTIVARIATE_STATISTICS = {
 _UNIVARIATE_MODELS = {
     "rolling_matrix_profile",
     "x_lag_damp",
-    "seasonal_residual_detector",
 }
 
 

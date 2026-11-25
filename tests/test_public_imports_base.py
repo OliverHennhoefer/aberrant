@@ -63,7 +63,6 @@ from aberrant.model.svm import IncrementalOneClassSVMAdaptiveKernel
 from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
-    SeasonalResidualDetector,
     XLagDAMP,
 )
 from aberrant.stream import Dataset, load
@@ -116,7 +115,6 @@ def test_public_imports_base_smoke() -> None:
         XLagDAMP is not None
         and RollingMatrixProfile is not None
         and MultivariateRollingMatrixProfile is not None
-        and SeasonalResidualDetector is not None
     )
     assert MovingAverage is not None
     assert MovingCovariance is not None

@@ -155,11 +155,6 @@ def _quantile_warmup(params: Parameters) -> WarmupRequirement:
     return _events(min(window_size, max(10, int(window_size * 0.1))))
 
 
-def _seasonal_warmup(params: Parameters) -> WarmupRequirement:
-    season_length = params.get("season_length")
-    return _events(None if season_length is None else 2 * _as_int(season_length))
-
-
 # Forecasters that predict the target from the event's other features at lead 0
 # instead of forecasting the series ahead.
 _REGRESSORS = frozenset({"rls_regressor"})
@@ -900,20 +895,6 @@ _MODEL_SPECS = (
             feature_count=ONE_FEATURE,
             score_kind=ScoreKind.NON_NEGATIVE,
             warmup=_matrix_profile_warmup,
-            state=StateKind.BOUNDED,
-            resettable=True,
-        ),
-    ),
-    _model(
-        "seasonal_residual_detector",
-        "SeasonalResidualDetector",
-        "aberrant.model.timeseries",
-        "time_series",
-        _capabilities(
-            event_kind=EventKind.UNIVARIATE,
-            feature_count=ONE_FEATURE,
-            score_kind=ScoreKind.NON_NEGATIVE,
-            warmup=_seasonal_warmup,
             state=StateKind.BOUNDED,
             resettable=True,
         ),

@@ -101,8 +101,6 @@ if forecast is not None:
     spread = forecast.spread(seasonal.lead)
 ```
 
-`ResidualDetector(HoltWinters(m, ...), target)` scores exactly as
-`SeasonalResidualDetector(m, ...)` does.
 
 ## Calibrating forecast scores
 
