@@ -12,7 +12,6 @@ Packages:
     exceptions: the errors aberrant raises
     forecast: forecasters and forecast-residual detection
     model: anomaly detection models, grouped by family
-    similarity: nearest-neighbour search engines
     stream: benchmark datasets and replay streams
     transform: scalers, feature selection and projections
 """

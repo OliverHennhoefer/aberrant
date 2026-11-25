@@ -135,7 +135,7 @@ pip install aberrant
 | --- | --- |
 | `eval` | scikit-learn metrics for model evaluation |
 | `dl` | the PyTorch-backed `Autoencoder` |
-| `faiss` | the FAISS similarity-search engine used by models such as `KNN` |
+| `faiss` | the FAISS backend of `KNN` (`backend="faiss"`) |
 | `all` | `eval`, `dl` and `faiss` together |
 
 For example:

@@ -14,7 +14,6 @@ from aberrant.base import ModelProtocol
 from aberrant.catalog import (
     CATALOG_FORMAT_VERSION,
     MODEL_CATALOG,
-    SIMILARITY_ENGINE_CATALOG,
     TRANSFORMER_CATALOG,
     ComponentConfig,
     ComponentKind,
@@ -41,7 +40,6 @@ from aberrant.model.timeseries import (
     MultivariateRollingMatrixProfile,
     RollingMatrixProfile,
 )
-from aberrant.similarity import BaseSimilaritySearchEngine
 
 PUBLIC_MODEL_MODULES = (
     "aberrant.model",
@@ -84,7 +82,6 @@ def test_catalog_manifest_is_json_compatible() -> None:
     assert isinstance(manifest["aberrant_version"], str)
     assert len(manifest["models"]) == len(MODEL_CATALOG)
     assert len(manifest["transformers"]) == len(TRANSFORMER_CATALOG)
-    assert len(manifest["similarity_engines"]) == len(SIMILARITY_ENGINE_CATALOG)
     json.dumps(manifest, allow_nan=False)
 
 
@@ -113,12 +110,9 @@ def test_manifest_defers_optional_runtime_inspection(tmp_path: Path) -> None:
     manifest = json.loads(result.stdout)
     models = {entry["id"]: entry for entry in manifest["models"]}
     autoencoder = models["autoencoder"]
-    faiss = manifest["similarity_engines"][0]
-
-    assert autoencoder["available"] and faiss["available"]
+    assert autoencoder["available"]
     assert autoencoder["parameters"] is None
     assert autoencoder["capabilities"] is None
-    assert faiss["parameters"] is None
     assert models["online_isolation_forest"]["parameters"] is not None
     assert models["online_isolation_forest"]["capabilities"] is not None
 
@@ -142,10 +136,10 @@ def test_parameter_schema_reports_types_defaults_and_required_values() -> None:
         "manhattan",
     ]
     assert (
-        get_model_spec("knn").parameter_schema()["properties"]["similarity_engine"][
+        get_model_spec("residual_detector").parameter_schema()["properties"]["model"][
             "x-aberrant-component-kind"
         ]
-        == "similarity_engine"
+        == "forecaster"
     )
 
 
@@ -323,38 +317,6 @@ def test_sdo_observer_warmup_matches_scoring_readiness(
     assert model.n_observers == ready_count
     assert warmup.is_satisfied(model.n_observers)
     assert model.score_one(query) > 0.0
-
-
-def test_knn_capabilities_resolve_nested_engine_warmup() -> None:
-    capabilities = get_model_spec("knn").capabilities(
-        {
-            "k": 5,
-            "similarity_engine": {
-                "id": "faiss",
-                "params": {"window_size": 100, "warm_up": 20},
-            },
-        }
-    )
-
-    assert capabilities.warmup.minimum == 20
-    assert capabilities.warmup.unit is WarmupUnit.EVENTS
-    assert capabilities.feature_schema is FeatureSchemaKind.FIXED
-    assert capabilities.score_kind is ScoreKind.NON_NEGATIVE
-    assert capabilities.state is StateKind.BOUNDED
-    assert capabilities.higher_is_more_anomalous
-    assert capabilities.warmup.remaining(7) == 13
-    assert capabilities.warmup.is_satisfied(20)
-
-    with pytest.raises(ConfigurationError, match="k <= warm_up <= window_size"):
-        get_model_spec("knn").capabilities(
-            {
-                "k": 30,
-                "similarity_engine": {
-                    "id": "faiss",
-                    "params": {"window_size": 100, "warm_up": 20},
-                },
-            }
-        )
 
 
 @pytest.mark.parametrize("zone", [None, 0, 3, 7])
@@ -703,30 +665,6 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
     assert get_model_spec("damp").capabilities().warmup.minimum is None
 
 
-class _WindowedEngine(BaseSimilaritySearchEngine):
-    def __init__(self, warm_up: int, window_size: int | None) -> None:
-        self.warm_up = warm_up
-        self.window_size = window_size
-
-    def append(self, x: dict[str, float]) -> None:
-        pass
-
-    def search(self, x: dict[str, float], n_neighbors: int) -> float:
-        return 0.0
-
-
-def test_knn_warmup_reads_a_runtime_engine_instance() -> None:
-    spec = get_model_spec("knn")
-    engine = _WindowedEngine(warm_up=5, window_size=10)
-
-    assert spec.capabilities({"k": 3, "similarity_engine": engine}).warmup.minimum == 5
-    unbounded = _WindowedEngine(warm_up=5, window_size=None)
-    assert spec.capabilities({"k": 5, "similarity_engine": unbounded}).warmup.minimum
-    for k, broken in [(6, engine), (1, _WindowedEngine(warm_up=11, window_size=10))]:
-        with pytest.raises(ConfigurationError, match="k <= warm_up <= window_size"):
-            spec.capabilities({"k": k, "similarity_engine": broken})
-
-
 @pytest.mark.parametrize(
     ("component_id", "params", "names"),
     [
@@ -831,7 +769,7 @@ def test_capability_records_reject_impossible_bounds(factory, message) -> None:
 
 
 def test_indeterminate_warmup_is_neither_satisfied_nor_pending() -> None:
-    warmup = WarmupRequirement(None, WarmupUnit.ENGINE_DEFINED)
+    warmup = WarmupRequirement(None, WarmupUnit.EVENTS)
 
     assert warmup.remaining(10) is None
     assert warmup.is_satisfied(10) is None

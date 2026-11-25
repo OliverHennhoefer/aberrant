@@ -245,6 +245,7 @@ def test_every_export_has_one_public_home() -> None:
     [
         "aberrant.model.iforest",
         "aberrant.base.exceptions",
+        "aberrant.similarity",
         "aberrant.base.similarity",
         "aberrant.base.architecture",
         "aberrant._utils.similar",

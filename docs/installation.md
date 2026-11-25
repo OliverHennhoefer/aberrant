@@ -29,7 +29,7 @@ drift detectors, and dataset streaming.
 | --- | --- | --- |
 | `eval` | The evaluation examples and scikit-learn metrics | `scikit-learn` |
 | `dl` | The user-supplied PyTorch `Autoencoder` | `torch` |
-| `faiss` | `FaissSimilaritySearchEngine`, commonly used with `KNN` | `faiss-cpu` |
+| `faiss` | the FAISS backend of `KNN` | `faiss-cpu` |
 | `all` | Every optional capability above | all of the above |
 
 Extras can be combined in one installation:
@@ -49,7 +49,7 @@ Extras can be combined in one installation:
 !!! important "Optional imports are explicit"
 
     `Autoencoder` and the neural-network `Architecture` base require the `dl`
-    extra. The FAISS engine requires the `faiss` extra. Core package imports do
+    extra. `KNN(backend="faiss")` requires the `faiss` extra. Core package imports do
     not import either optional dependency.
 
 ## Verify the installation

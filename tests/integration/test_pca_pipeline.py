@@ -1,12 +1,8 @@
 import unittest
 
 import numpy as np
-import pytest
 
-pytest.importorskip("faiss")
-
-from aberrant.model.distance.knn import KNN
-from aberrant.similarity import FaissSimilaritySearchEngine
+from aberrant.model.distance import KNN
 from aberrant.stream import Dataset, load
 from aberrant.transform import IncrementalPCA, StandardScaler
 
@@ -24,8 +20,7 @@ class TestPCAPipelineIntegration(unittest.TestCase):
         self.pca = IncrementalPCA(
             n_components=5, warm_up=50
         )  # Reduce to 5D from higher dim
-        self.engine = FaissSimilaritySearchEngine(window_size=200, warm_up=25)
-        self.knn = KNN(k=10, similarity_engine=self.engine)
+        self.knn = KNN(k=10, window_size=200)
 
         # Test different pipeline configurations
         # Now Pipeline supports | operator for chaining
@@ -169,12 +164,7 @@ class TestPCAPipelineIntegration(unittest.TestCase):
         # PCA should have learned incrementally (samples seen should increase)
         self.assertGreater(self.pca.n_samples_seen, initial_pca_samples)
 
-        # Engine should have bounded size due to window_size parameter
-        if hasattr(self.engine, "vectors"):
-            current_engine_size = len(self.engine.vectors)
-            self.assertLessEqual(
-                current_engine_size, self.engine.window_size + 50
-            )  # Allow some tolerance
+        self.assertLessEqual(self.knn.n_samples_seen, self.knn.window_size)
 
 
 if __name__ == "__main__":

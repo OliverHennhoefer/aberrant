@@ -12,7 +12,6 @@ from typing import cast
 
 from aberrant.base import ModelProtocol, Pipeline, TransformerProtocol
 from aberrant.exceptions import ConfigurationError, ConfigurationIssue
-from aberrant.similarity._base import BaseSimilaritySearchEngine
 
 from ._parameters import (
     ConstructorParameters,
@@ -24,7 +23,6 @@ from ._parameters import (
 from ._registry import (
     get_forecaster_spec,
     get_model_spec,
-    get_similarity_engine_spec,
     get_transformer_spec,
 )
 from ._specs import (
@@ -261,8 +259,6 @@ def _as_component_config(
 
 
 def _dependency_spec(kind: ComponentKind, component_id: str) -> ComponentSpec:
-    if kind is ComponentKind.SIMILARITY_ENGINE:
-        return get_similarity_engine_spec(component_id)
     if kind is ComponentKind.FORECASTER:
         return get_forecaster_spec(component_id)
     raise RuntimeError(f"Unsupported nested component kind: {kind.value}")
@@ -411,29 +407,6 @@ def create_transformer(
             f"Catalog transformer '{component_id}' has an invalid interface"
         )
     return transformer
-
-
-def create_similarity_engine(
-    component_id: str,
-    params: Mapping[str, object] | None = None,
-) -> BaseSimilaritySearchEngine:
-    """Construct an allowlisted built-in similarity-search engine."""
-    spec = get_similarity_engine_spec(component_id)
-    engine = (
-        _Resolution()
-        .component(
-            spec,
-            ComponentConfig(component_id, params or {}),
-            (),
-            declarative=False,
-        )
-        .build()
-    )
-    if not isinstance(engine, BaseSimilaritySearchEngine):  # pragma: no cover
-        raise RuntimeError(
-            f"Catalog similarity engine '{component_id}' has an invalid interface"
-        )
-    return engine
 
 
 @dataclass(frozen=True, slots=True)
