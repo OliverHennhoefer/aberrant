@@ -58,7 +58,7 @@ class TestStreamSpot(unittest.TestCase):
             time_key="t",
             sketch_dim=256,
             shingle_size=2,
-            num_clusters=8,
+            n_clusters=8,
             max_graphs=256,
             warm_up=16,
             seed=42,

@@ -54,7 +54,7 @@ def _capabilities(
     feature_schema: FeatureSchemaValue = FeatureSchemaKind.FIXED,
     score_kind: ScoreKindValue,
     state: StateKindValue,
-    warmup_unit: ReadinessUnit = ReadinessUnit.EVENTS,
+    warm_up_unit: ReadinessUnit = ReadinessUnit.EVENTS,
     requires_unit_interval: bool = False,
 ) -> Callable[[Parameters], ModelCapabilities]:
     """Declare what a model accepts and keeps; its warm-up comes from an instance."""
@@ -75,8 +75,8 @@ def _capabilities(
             feature_count=resolved_feature_count,
             feature_schema=resolved_feature_schema,
             score_kind=resolved_score_kind,
-            warmup=None,
-            warmup_unit=warmup_unit,
+            warm_up=None,
+            warm_up_unit=warm_up_unit,
             state=resolved_state,
             requires_unit_interval=requires_unit_interval,
         )
@@ -187,8 +187,8 @@ def _ensemble_capabilities(params: Parameters) -> ModelCapabilities:
             if params.get("normalize") == "rank"
             else ScoreKind.SIGNED
         ),
-        warmup=None,
-        warmup_unit=ReadinessUnit.EVENTS,
+        warm_up=None,
+        warm_up_unit=ReadinessUnit.EVENTS,
         state=StateKind.GROWING if StateKind.GROWING in states else StateKind.BOUNDED,
         requires_unit_interval=any(m.requires_unit_interval for m in members),
     )
@@ -349,7 +349,7 @@ _MODEL_SPECS = (
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
             state=StateKind.BOUNDED,
-            warmup_unit=ReadinessUnit.OBSERVERS,
+            warm_up_unit=ReadinessUnit.OBSERVERS,
         ),
     ),
     _model(
@@ -398,7 +398,7 @@ _MODEL_SPECS = (
             feature_count=_graph_edge_features,
             score_kind=ScoreKind.NON_NEGATIVE,
             state=StateKind.BOUNDED,
-            warmup_unit=ReadinessUnit.ACTIVE_GRAPHS,
+            warm_up_unit=ReadinessUnit.ACTIVE_GRAPHS,
         ),
     ),
     _model(
@@ -490,7 +490,7 @@ _MODEL_SPECS = (
             feature_count=_time_aware_features,
             score_kind=ScoreKind.NON_NEGATIVE,
             state=StateKind.BOUNDED,
-            warmup_unit=ReadinessUnit.BUCKETS,
+            warm_up_unit=ReadinessUnit.BUCKETS,
         ),
     ),
     _model(
@@ -813,7 +813,7 @@ def _calendar_names(
 ) -> tuple[str, ...] | None:
     if inputs is None:
         return None
-    timestamp = cast(str, params["timestamp"])
+    timestamp = cast(str, params["time_key"])
     if timestamp not in inputs:
         raise ValueError("The timestamp feature must exist in the input")
     added = tuple(

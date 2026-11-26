@@ -73,7 +73,7 @@ def test_estimated_reference_is_invariant_to_the_signal_scale():
 
 
 def test_warm_up_never_signals():
-    detector = CUSUM(warmup=10)
+    detector = CUSUM(warm_up=10)
     assert not any(detector.update(value) for value in [0.0] * 9 + [1e9])
 
 
@@ -109,7 +109,7 @@ def test_in_control_noise_rarely_alarms():
 
 
 def test_any_change_from_a_constant_warm_up_signals():
-    detector = CUSUM(warmup=5)
+    detector = CUSUM(warm_up=5)
     stream = [3.0] * 20
     assert _first_signal(detector, stream) is None
     assert detector.update(3.0 + 1e-9)
@@ -117,12 +117,12 @@ def test_any_change_from_a_constant_warm_up_signals():
 
 
 def test_extreme_values_keep_the_state_finite():
-    detector = CUSUM(warmup=4)
+    detector = CUSUM(warm_up=4)
     for value in [1e308, -1e308] * 50:
         detector.update(value)
         assert not math.isnan(detector.statistic)
 
-    detector = CUSUM(warmup=4)
+    detector = CUSUM(warm_up=4)
     for value in [1e308] * 4:
         detector.update(value)
     assert detector.update(-1e308)
@@ -132,7 +132,7 @@ def test_extreme_values_keep_the_state_finite():
 def test_pickled_detector_continues_identically():
     rng = np.random.default_rng(6)
     stream = np.concatenate([rng.standard_normal(200), rng.standard_normal(200) + 2])
-    detector = CUSUM(warmup=50)
+    detector = CUSUM(warm_up=50)
     for value in stream[:220]:
         detector.update(value)
     restored = pickle.loads(pickle.dumps(detector))
@@ -147,7 +147,7 @@ def test_pickled_detector_continues_identically():
         ({"k": math.inf}, "k must be"),
         ({"h": 0.0}, "h must be"),
         ({"h": math.nan}, "h must be"),
-        ({"warmup": 1}, "warmup"),
+        ({"warm_up": 1}, "warm_up"),
         ({"target": math.inf}, "target must be finite"),
         ({"scale": 0.0}, "scale must be"),
         ({"scale": -1.0}, "scale must be"),

@@ -16,7 +16,7 @@ def main() -> None:
     events = list(islice(load(Dataset.SHUTTLE), 20_000))
     detector = StandardScaler() | AdaptiveOneClassSVM(seed=1)
     evaluator = PrequentialEvaluator(
-        detector, warmup=500, metrics=True, metric_window_size=None
+        detector, warm_up=500, metrics=True, metric_window_size=None
     )
     result = evaluator.evaluate(events)
     print(

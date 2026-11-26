@@ -41,7 +41,7 @@ class PrequentialEvaluator:
     Args:
         model: An existing structural model, or a catalog configuration from
             which a fresh model is built. Existing models are never reset.
-        warmup: Number of successful learns excluded before scoring, on top
+        warm_up: Number of successful learns excluded before scoring, on top
             of the model's own warm-up. After them, an event is excluded as
             ``"not_ready"`` while the model's ``readiness`` is not ready, and
             still learned.
@@ -69,14 +69,14 @@ class PrequentialEvaluator:
         self,
         model: ModelProtocol | DetectorConfig,
         *,
-        warmup: int = 0,
+        warm_up: int = 0,
         learn_filter: LearnFilter | None = None,
         learn_policy_name: str | None = None,
         metrics: bool = False,
         metric_window_size: int | None = 1000,
         measure_time: bool = True,
     ) -> None:
-        _nonnegative_int(warmup, "warmup")
+        _nonnegative_int(warm_up, "warm_up")
         if metric_window_size is not None:
             _nonnegative_int(metric_window_size, "metric_window_size")
             if metric_window_size == 0:
@@ -107,13 +107,13 @@ class PrequentialEvaluator:
         self.model: ModelProtocol = (
             resolved.build() if resolved is not None else cast(ModelProtocol, model)
         )
-        self._warmup = warmup
+        self._warm_up = warm_up
         self._learn_filter = learn_filter
         self._policy_name = learn_policy_name or "learn_all"
         self._window_size = metric_window_size
         self._measure_time = measure_time
         self._n_seen = self._n_scored = self._n_learned = 0
-        self._n_warmup = self._n_not_ready = 0
+        self._n_warm_up = self._n_not_ready = 0
         self._n_labeled = self._n_positive = 0
         self._score_ns = self._learn_ns = 0
 
@@ -132,9 +132,9 @@ class PrequentialEvaluator:
             key: coerce_event_number(value, label=f"Feature '{key}'")
             for key, value in x.items()
         }
-        exclusion: Literal["warmup", "not_ready"] | None = None
-        if self._n_learned < self._warmup:
-            exclusion = "warmup"
+        exclusion: Literal["warm_up", "not_ready"] | None = None
+        if self._n_learned < self._warm_up:
+            exclusion = "warm_up"
         elif not self.model.readiness.ready:
             exclusion = "not_ready"
 
@@ -170,7 +170,7 @@ class PrequentialEvaluator:
         )
         self._n_seen += 1
         self._n_learned += int(learn)
-        self._n_warmup += int(exclusion == "warmup")
+        self._n_warm_up += int(exclusion == "warm_up")
         self._n_not_ready += int(exclusion == "not_ready")
         self._score_ns += score_ns or 0
         self._learn_ns += learn_ns or 0
@@ -203,7 +203,7 @@ class PrequentialEvaluator:
             n_seen=self._n_seen,
             n_scored=self._n_scored,
             n_learned=self._n_learned,
-            n_warmup=self._n_warmup,
+            n_warm_up=self._n_warm_up,
             n_not_ready=self._n_not_ready,
             n_labeled=self._n_labeled,
             prevalence=prevalence,
@@ -218,6 +218,6 @@ class PrequentialEvaluator:
             package_version=__version__,
             config=self._config,
             config_fingerprint=self._fingerprint,
-            warmup=self._warmup,
+            warm_up=self._warm_up,
             learn_policy_name=self._policy_name,
         )

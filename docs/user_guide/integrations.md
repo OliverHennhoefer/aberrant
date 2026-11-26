@@ -75,7 +75,7 @@ capabilities = model_capabilities(
     },
 )
 
-assert capabilities.warmup == 131
+assert capabilities.warm_up == 131
 assert capabilities.score_kind.value == "non_negative"
 assert capabilities.state.value == "bounded"
 ```
@@ -94,17 +94,17 @@ availability metadata, but their `parameters` and model `capabilities` are
 needed; these calls may load its optional runtime.
 
 Catalog warm-up is the `required` count of a freshly built model's
-`readiness`, in `warmup_unit`, so the catalog and the model cannot disagree. It
+`readiness`, in `warm_up_unit`, so the catalog and the model cannot disagree. It
 is `None` when the parameters are incomplete or the count depends on the data.
 It is the minimum history required by the algorithm's scoring
 contract. It is not a recommendation for threshold calibration. A production
 application can require a longer calibration period without replacing the
 model-specific metadata.
 
-Always supply counts in `warmup.unit` to `remaining()` and `is_satisfied()`.
-For SDOStream the unit is `observers`: use `model.n_observers`, since observer
-insertion is sampled and learned event counts cannot determine readiness.
-Its minimum accounts for both `warm_up` and `n_neighbors`.
+Count progress in `warm_up_unit`, or read the model's own `readiness`, which
+uses the same unit. For SDOStream the unit is `observers`, since observer
+insertion is sampled and learned event counts cannot determine readiness; its
+minimum accounts for both `warm_up` and `n_neighbors`.
 
 `feature_schema` distinguishes fixed-key models from feature-evolving and
 unrestricted ones. `requires_unit_interval` identifies hard input-domain
@@ -142,7 +142,7 @@ config = DetectorConfig.from_mapping(
 )
 
 detector = config.build()
-minimum_model_warmup = config.capabilities().warmup
+minimum_model_warmup = config.capabilities().warm_up
 config_fingerprint = config.fingerprint()
 ```
 
@@ -257,7 +257,7 @@ config = DetectorConfig.from_mapping(
         }
     }
 )
-config.capabilities().warmup  # 53: two seasons, then the lead
+config.capabilities().warm_up  # 53: two seasons, then the lead
 detector = config.build()
 ```
 

@@ -22,10 +22,10 @@ upstream schema changes, or a genuine rise in anomalies.
 
 | Detector | Change signal | State and test cadence | Direction |
 | --- | --- | --- | --- |
-| `ADWIN` | Difference in means across candidate splits of an adaptive window | Exponential-histogram buckets; checks every `clock` observations after `grace_period` | Either direction |
-| `CUSUM` | Standardized cumulative sums against a reference mean and deviation | Constant-size sums after a `warmup` that estimates the reference, unless `target` and `scale` fix it | Configurable `"up"`, `"down"`, or `"both"` |
+| `ADWIN` | Difference in means across candidate splits of an adaptive window | Exponential-histogram buckets; checks every `clock` observations after `warm_up` | Either direction |
+| `CUSUM` | Standardized cumulative sums against a reference mean and deviation | Constant-size sums after a `warm_up` that estimates the reference, unless `target` and `scale` fix it | Configurable `"up"`, `"down"`, or `"both"` |
 | `KSWIN` | Two-sample Kolmogorov-Smirnov difference between the latest `stat_size` values and a seeded random sample from the earlier fixed window | Fixed `window_size`; tests whenever the window is full | Any distributional difference exposed by the KS statistic |
-| `PageHinkley` | Cumulative deviation from a running mean | Constant-size cumulative statistics after `min_instances` | Configurable `"up"`, `"down"`, or `"both"` |
+| `PageHinkley` | Cumulative deviation from a running mean | Constant-size cumulative statistics after `warm_up` | Configurable `"up"`, `"down"`, or `"both"` |
 
 All four reject non-numeric and non-finite observations. `update` returns
 whether the observation signalled drift, and `reset()` clears the learned state
@@ -46,9 +46,9 @@ Implementation-specific details matter:
 - CUSUM standardizes each observation, so `k` and `h` are in standard
   deviations and mean the same on every signal. `k` is half the shift it
   detects fastest and `h` sets the false-alarm rate. On normal observations
-  the defaults `k = 0.5`, `h = 10` and `warmup = 100` pass about 20,000
+  the defaults `k = 0.5`, `h = 10` and `warm_up = 100` pass about 20,000
   observations between false alarms and find a one-deviation shift after
-  about 20. A shorter `warmup` estimates the deviation less reliably and
+  about 20. A shorter `warm_up` estimates the deviation less reliably and
   alarms more often.
   After a signal it estimates the reference again, so the new level becomes
   normal. `direction` and `onset` tell which way the mean moved and how many
@@ -66,7 +66,7 @@ sensitive so the short demonstration detects the increase deterministically.
 from aberrant.drift import PageHinkley
 
 detector = PageHinkley(
-    min_instances=10,
+    warm_up=10,
     delta=0.0,
     threshold=4.0,
     alpha=1.0,
@@ -100,7 +100,7 @@ from aberrant.model.stat import MovingZScore
 
 model = MovingZScore(window_size=5)
 monitor = PageHinkley(
-    min_instances=5,
+    warm_up=5,
     delta=0.0,
     threshold=0.25,
     mode="up",

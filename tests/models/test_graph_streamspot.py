@@ -19,7 +19,7 @@ class TestStreamSpot(unittest.TestCase):
             "time_key": "t",
             "sketch_dim": 64,
             "shingle_size": 2,
-            "num_clusters": 4,
+            "n_clusters": 4,
             "max_graphs": 32,
             "warm_up": 4,
             "seed": 42,
@@ -36,7 +36,7 @@ class TestStreamSpot(unittest.TestCase):
         self.assertEqual(model.time_key, "t")
         self.assertEqual(model.sketch_dim, 1024)
         self.assertEqual(model.shingle_size, 2)
-        self.assertEqual(model.num_clusters, 8)
+        self.assertEqual(model.n_clusters, 8)
         self.assertEqual(model.max_graphs, 4096)
         self.assertEqual(model.warm_up, 32)
 
@@ -58,11 +58,11 @@ class TestStreamSpot(unittest.TestCase):
         with self.assertRaises(ValueError):
             StreamSpot(shingle_size=0)
         with self.assertRaises(ValueError):
-            StreamSpot(num_clusters=0)
+            StreamSpot(n_clusters=0)
         with self.assertRaises(ValueError):
             StreamSpot(max_graphs=0)
         with self.assertRaises(ValueError):
-            StreamSpot(num_clusters=5, max_graphs=4)
+            StreamSpot(n_clusters=5, max_graphs=4)
         with self.assertRaises(ValueError):
             StreamSpot(warm_up=0)
         with self.assertRaises(ValueError):
@@ -170,7 +170,7 @@ class TestStreamSpot(unittest.TestCase):
         model = self.create_model(
             edge_type_key="etype",
             shingle_size=1,
-            num_clusters=1,
+            n_clusters=1,
             warm_up=1,
             max_graphs=8,
         )
@@ -193,7 +193,7 @@ class TestStreamSpot(unittest.TestCase):
             edge_type_key=None,
             shingle_size=1,
             max_graphs=5,
-            num_clusters=2,
+            n_clusters=2,
             warm_up=1,
         )
         for i in range(100):
@@ -211,7 +211,7 @@ class TestStreamSpot(unittest.TestCase):
 
     def test_eviction_drops_the_least_recently_seen_graph(self) -> None:
         model = self.create_model(
-            edge_type_key=None, max_graphs=8, num_clusters=2, warm_up=1
+            edge_type_key=None, max_graphs=8, n_clusters=2, warm_up=1
         )
         rng = np.random.default_rng(4)
         last_seen: dict[float, int] = {}
@@ -254,11 +254,11 @@ class TestStreamSpot(unittest.TestCase):
         )
 
     def test_repr_contains_key_config(self) -> None:
-        model = self.create_model(sketch_dim=128, num_clusters=6, max_graphs=64)
+        model = self.create_model(sketch_dim=128, n_clusters=6, max_graphs=64)
         output = repr(model)
         self.assertIn("StreamSpot", output)
         self.assertIn("sketch_dim=128", output)
-        self.assertIn("num_clusters=6", output)
+        self.assertIn("n_clusters=6", output)
         self.assertIn("max_graphs=64", output)
 
 

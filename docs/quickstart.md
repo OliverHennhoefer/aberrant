@@ -68,7 +68,7 @@ reporting the score, so each score is compared with earlier scores only:
 from aberrant.calibration import ScoreCalibrator
 
 score_stream = [0.10, 0.12, 0.09, 0.15, 0.11, 0.13, 0.92, 0.14]
-threshold = ScoreCalibrator("split", alpha=0.2, window=5)
+threshold = ScoreCalibrator("split", alpha=0.2, window_size=5)
 
 for t, score in enumerate(score_stream):
     limit = threshold.predict(t)

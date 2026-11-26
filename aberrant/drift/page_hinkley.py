@@ -18,7 +18,7 @@ class PageHinkley(BaseDriftDetector):
     and triggers drift when this deviation exceeds a threshold.
 
     Args:
-        min_instances: Minimum number of observations before detection
+        warm_up: Minimum number of observations before detection
             starts. Default is 30.
         delta: Magnitude of changes to tolerate. Smaller values make the
             detector more sensitive. Default is 0.005.
@@ -51,15 +51,13 @@ class PageHinkley(BaseDriftDetector):
     def __init__(
         self,
         *,
-        min_instances: int = 30,
+        warm_up: int = 30,
         delta: float = 0.005,
         threshold: float = 50.0,
         alpha: float = 0.9999,
         mode: Literal["up", "down", "both"] = "both",
     ) -> None:
-        min_instances = coerce_integer_count(
-            min_instances, label="min_instances", minimum=1
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=1)
         if delta < 0:
             raise ValueError("delta must be non-negative")
         if threshold <= 0:
@@ -69,7 +67,7 @@ class PageHinkley(BaseDriftDetector):
         if mode not in ("up", "down", "both"):
             raise ValueError("mode must be 'up', 'down', or 'both'")
 
-        self.min_instances = min_instances
+        self.warm_up = warm_up
         self.delta = delta
         self.threshold = threshold
         self.alpha = alpha
@@ -153,7 +151,7 @@ class PageHinkley(BaseDriftDetector):
         self._max_sum_down = max(self._max_sum_down, self._sum_down)
 
         # Check for drift after minimum instances
-        if self._n >= self.min_instances:
+        if self._n >= self.warm_up:
             self._check_drift()
 
         return self._drift_detected

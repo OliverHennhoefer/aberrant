@@ -282,7 +282,7 @@ from aberrant.forecast import HoltWinters, interval, nonconformity
 
 lead = 2
 model = HoltWinters(season_length=12, horizon=lead)
-calibrator = ScoreCalibrator("aci", alpha=0.1, window=200)
+calibrator = ScoreCalibrator("aci", alpha=0.1, window_size=200)
 pending = {}
 
 for step, y in enumerate(series):

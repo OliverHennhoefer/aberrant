@@ -26,10 +26,10 @@ class CUSUM(BaseDriftDetector):
     reference gives about 470 and 10.
 
     Unless ``target`` and ``scale`` fix them, the mean and sample standard
-    deviation of the first ``warmup`` observations are the in-control
+    deviation of the first ``warm_up`` observations are the in-control
     reference, and the sums start after them. On the update after a signal
     the sums restart, and an estimated reference is estimated again from
-    the next ``warmup`` observations, so the new level becomes the
+    the next ``warm_up`` observations, so the new level becomes the
     reference. An estimated deviation that comes out low raises the false
     alarm rate, so a shorter warm-up alarms more often.
     A warm-up that contains the change hides it.
@@ -40,7 +40,7 @@ class CUSUM(BaseDriftDetector):
     Args:
         k: Allowance, in standard deviations. Default is 0.5.
         h: Decision threshold, in standard deviations. Default is 10.0.
-        warmup: Observations that estimate the reference. Default is 100.
+        warm_up: Observations that estimate the reference. Default is 100.
         target: In-control mean. Estimated when ``None``.
         scale: In-control standard deviation. Estimated when ``None``.
         mode: Direction of change to detect:
@@ -74,12 +74,12 @@ class CUSUM(BaseDriftDetector):
         *,
         k: float = 0.5,
         h: float = 10.0,
-        warmup: int = 100,
+        warm_up: int = 100,
         target: float | None = None,
         scale: float | None = None,
         mode: Literal["up", "down", "both"] = "both",
     ) -> None:
-        warmup = coerce_integer_count(warmup, label="warmup", minimum=2)
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=2)
         if not (math.isfinite(k) and k >= 0):
             raise ValueError("k must be a finite, non-negative number")
         if not (math.isfinite(h) and h > 0):
@@ -93,7 +93,7 @@ class CUSUM(BaseDriftDetector):
 
         self.k = k
         self.h = h
-        self.warmup = warmup
+        self.warm_up = warm_up
         self.target = target
         self.scale = scale
         self.mode = mode
@@ -181,7 +181,7 @@ class CUSUM(BaseDriftDetector):
     def _estimated_count(self) -> int:
         if self.target is not None and self.scale is not None:
             return 0
-        return self.warmup
+        return self.warm_up
 
     def _reference(self) -> float:
         return self._mean if self.target is None else self.target

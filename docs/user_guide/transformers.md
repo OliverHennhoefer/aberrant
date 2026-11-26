@@ -13,7 +13,7 @@ can precede another transformer or one terminal model in a pipeline.
 | `OneHotEncoder` | None | Each declared feature becomes `{feature}_{category}` per category and `{feature}_other` | Fixed output for every event; a missing category sets its indicators to NaN for an `Imputer` |
 | `FrequencyEncoder` | Per-feature category counts, over all or the last `window_size` values | Same keys, each category replaced by its learned share | A rare or new category becomes a small value; a missing category stays NaN for an `Imputer` |
 | `SignedLog` | None | Same keys, `sign(x) * log(1 + abs(x))` for `apply_to` | Compresses heavy tails; keeps order and sign, maps 0 to 0 |
-| `CalendarFeatures` | None | Other keys, then `{timestamp}_{cycle}_sin` and `_cos` | Day, week and year position of a Unix timestamp in `timezone` |
+| `CalendarFeatures` | None | Other keys, then `{time_key}_{cycle}_sin` and `_cos` | Day, week and year position of a Unix timestamp in `timezone` |
 | `MinMaxScaler` | Per-feature running minimum and maximum | Same keys, values mapped to `feature_range` | A value outside the learned extrema can transform outside the requested range; a constant learned feature maps to the lower bound |
 | `StandardScaler` | Per-feature count, mean, and population variance accumulator | Same keys, centered values and optionally population-standardized values | A feature with zero learned variance maps to `0.0`; `with_std=False` centers without scaling |
 | `RollingRobustScaler` | Per-feature recent window, median, and interquartile range | Same keys, median-centered and IQR-scaled values | Exact linearly interpolated quartiles; zero IQR uses `fallback_scale` to preserve deviations; calibration can be frozen |
@@ -69,7 +69,7 @@ of its position in each cycle, so 23:59 lies next to 00:00:
 ```python
 from aberrant.transform import CalendarFeatures
 
-calendar = CalendarFeatures(timestamp="t", cycles=["day", "week"], timezone="UTC")
+calendar = CalendarFeatures(time_key="t", cycles=["day", "week"], timezone="UTC")
 row = calendar.transform_one({"t": 1_700_000_000.0, "load": 0.4})
 assert list(row) == ["load", "t_day_sin", "t_day_cos", "t_week_sin", "t_week_cos"]
 ```

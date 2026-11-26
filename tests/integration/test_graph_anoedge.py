@@ -13,7 +13,7 @@ class TestAnoEdgeL(unittest.TestCase):
             sketch_rows=128,
             sketch_cols=128,
             n_hashes=4,
-            num_dense_submatrices=1,
+            n_dense_submatrices=1,
             time_decay_factor=1.0,
             seed=42,
         )

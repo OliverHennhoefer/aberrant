@@ -154,9 +154,9 @@ def test_capabilities_resolve_from_model_parameters() -> None:
     statistic = model_capabilities("moving_covariance", {"window_size": 20})
     edge = model_capabilities("midas", {"time_key": None})
 
-    assert random_cut.warmup == 13
+    assert random_cut.warm_up == 13
     assert random_cut.score_kind is ScoreKind.NON_NEGATIVE
-    assert xstream.warmup == 256
+    assert xstream.warm_up == 256
     assert xstream.state is StateKind.BOUNDED
     assert xstream.feature_schema is FeatureSchemaKind.EVOLVING
     assert statistic.score_kind is ScoreKind.NON_NEGATIVE
@@ -182,7 +182,7 @@ def test_xstream_warmup_matches_scoring_readiness(
         "window_size": window_size,
         "seed": 1,
     }
-    assert model_capabilities("xstream", params).warmup == 8
+    assert model_capabilities("xstream", params).warm_up == 8
     model = create_model("xstream", params)
     query = {"x": 20.0}
 
@@ -208,8 +208,8 @@ def test_sdo_warmup_counts_sampled_observers_instead_of_events() -> None:
     model.learn_one({"x": 1.0})
 
     assert model.n_observers == 1
-    assert capabilities.warmup_unit is ReadinessUnit.OBSERVERS
-    assert capabilities.warmup == 2
+    assert capabilities.warm_up_unit is ReadinessUnit.OBSERVERS
+    assert capabilities.warm_up == 2
     assert model.readiness.observed == 1
     assert not model.readiness.ready
     assert model.score_one({"x": 20.0}) == 0.0
@@ -229,7 +229,7 @@ def test_sdo_observer_warmup_matches_scoring_readiness(
         "warm_up": warm_up,
         "seed": 1,
     }
-    assert model_capabilities("sdostream", params).warmup == ready_count
+    assert model_capabilities("sdostream", params).warm_up == ready_count
     model = create_model("sdostream", params)
     assert isinstance(model, SDOStream)
     query = {"x": 20.0}
@@ -261,9 +261,9 @@ def test_matrix_profile_catalog_capabilities_and_warmup(zone) -> None:
     assert not capabilities.feature_count.accepts(2)
     assert capabilities.score_kind is ScoreKind.NON_NEGATIVE
     assert capabilities.state is StateKind.BOUNDED
-    assert capabilities.warmup_unit is ReadinessUnit.EVENTS
+    assert capabilities.warm_up_unit is ReadinessUnit.EVENTS
     expected = 4 + (1 if zone is None else zone)
-    assert capabilities.warmup == expected
+    assert capabilities.warm_up == expected
     for index in range(expected + 2):
         assert model.readiness.ready == (index >= expected)
         assert (
@@ -286,7 +286,7 @@ def test_matrix_profile_parameter_schema_and_manifest(model_id, model_class) -> 
     assert schema["properties"]["normalize"] == {"type": "boolean", "default": True}
     assert schema["properties"]["window_size"]["default"] is None
     assert schema["properties"]["exclusion_zone"]["default"] is None
-    assert model_capabilities(spec.id).warmup is None
+    assert model_capabilities(spec.id).warm_up is None
     entry = next(
         entry for entry in catalog_manifest()["models"] if entry["id"] == model_id
     )
@@ -309,9 +309,9 @@ def test_multivariate_matrix_profile_capabilities_and_warmup(zone) -> None:
     assert capabilities.feature_count.maximum is None
     assert capabilities.score_kind is ScoreKind.NON_NEGATIVE
     assert capabilities.state is StateKind.BOUNDED
-    assert capabilities.warmup_unit is ReadinessUnit.EVENTS
+    assert capabilities.warm_up_unit is ReadinessUnit.EVENTS
     expected = 4 + (1 if zone is None else zone)
-    assert capabilities.warmup == expected
+    assert capabilities.warm_up == expected
     for index in range(expected + 2):
         event = {"a": float(index), "b": float(index % 3)}
         assert model.readiness.ready == (index >= expected)
@@ -586,7 +586,7 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
     params: dict[str, object] = {"subsequence_length": 8}
     if start_index is not None:
         params["start_index"] = start_index
-    warmup = model_capabilities("damp", params).warmup
+    warmup = model_capabilities("damp", params).warm_up
     model = create_model("damp", params)
 
     for index in range(ready_count):
@@ -595,7 +595,7 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
 
     assert warmup == ready_count
     assert model.readiness.ready
-    assert model_capabilities("damp").warmup is None
+    assert model_capabilities("damp").warm_up is None
 
 
 @pytest.mark.parametrize(
@@ -625,7 +625,7 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
         ("signed_log", {"apply_to": ["b"]}, ("a", "b", "c")),
         (
             "calendar_features",
-            {"timestamp": "b", "cycles": ["week"]},
+            {"time_key": "b", "cycles": ["week"]},
             ("a", "c", "b_week_sin", "b_week_cos"),
         ),
     ],
@@ -661,7 +661,7 @@ def test_rename_names_stay_unknown_until_inputs_are_known() -> None:
         ("one_hot_encoder", {"categories": {"z": ["x"]}}, "must exist in the input"),
         ("frequency_encoder", {"features": ["z"]}, "must exist in the input"),
         ("signed_log", {"apply_to": ["z"]}, "must exist in the input"),
-        ("calendar_features", {"timestamp": "z"}, "must exist in the input"),
+        ("calendar_features", {"time_key": "z"}, "must exist in the input"),
     ],
 )
 def test_transformers_reject_names_that_cannot_be_resolved(

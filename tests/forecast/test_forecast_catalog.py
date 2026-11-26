@@ -177,8 +177,8 @@ def test_forecaster_warmup_matches_the_first_forecast(forecaster, lead) -> None:
         1,
         1,
     )
-    assert capabilities.warmup_unit is ReadinessUnit.EVENTS
-    assert capabilities.warmup == _first_forecast(config.build())
+    assert capabilities.warm_up_unit is ReadinessUnit.EVENTS
+    assert capabilities.warm_up == _first_forecast(config.build())
 
 
 def test_regressor_takes_covariates_and_its_warmup_is_left_to_the_events() -> None:
@@ -187,7 +187,7 @@ def test_regressor_takes_covariates_and_its_warmup_is_left_to_the_events() -> No
 
     assert capabilities.event_kind is EventKind.TABULAR
     assert capabilities.feature_count.minimum == 2
-    assert capabilities.warmup is None
+    assert capabilities.warm_up is None
     detector = config.build()
     assert isinstance(detector.model, RLSRegressor)
     assert detector.lead == 0
@@ -201,7 +201,7 @@ def test_directly_created_detectors_resolve_the_same_capabilities() -> None:
         "residual_detector", {"model": RLSRegressor(), "target": "y"}
     )
 
-    assert forecaster.warmup == 8
+    assert forecaster.warm_up == 8
     assert regressor.event_kind is EventKind.TABULAR
 
 

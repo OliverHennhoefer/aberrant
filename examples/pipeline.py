@@ -24,7 +24,7 @@ def main() -> None:
     }
     for name, pipeline in pipelines.items():
         evaluator = PrequentialEvaluator(
-            pipeline, warmup=500, metrics=True, metric_window_size=None
+            pipeline, warm_up=500, metrics=True, metric_window_size=None
         )
         result = evaluator.evaluate(events)
         print(

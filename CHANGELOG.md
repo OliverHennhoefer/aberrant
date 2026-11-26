@@ -319,7 +319,17 @@ Semantic Versioning.
   - Warm-up: `warm_up`, in the unit the docstring names (was
     `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`,
     `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`
-    and `IncrementalPCA`'s `n0`).
+    and `IncrementalPCA`'s `n0`, `ADWIN`'s `grace_period`, `PageHinkley`'s
+    `min_instances`, and `warmup` on `CUSUM`, `PrequentialEvaluator` and
+    `ForecastEvaluator`). Results follow: `EvaluationResult.warm_up` and
+    `n_warm_up`, the exclusion `"warm_up"`, `ForecastResult.warm_up`, and
+    `ModelCapabilities.warm_up` and `warm_up_unit`, which the catalog
+    manifest lists under `warm_up`.
+  - Window length: `window_size`, on `ScoreCalibrator` and `ScoreHistory`
+    too (was `window`).
+  - Counts: an `n_` prefix, so `AnoEdgeL(n_dense_submatrices=...)` and
+    `StreamSpot(n_clusters=...)` (were `num_dense_submatrices` and
+    `num_clusters`).
   - Hash rows and counters per row: `n_hashes` and `sketch_width` (was
     `count_min_rows`/`count_min_cols` on `MIDAS` and `ISCONNA`,
     `rows`/`buckets` on `MStream`, `hash_num`/`bins` on `RSHash`,
@@ -340,7 +350,8 @@ Semantic Versioning.
 - **Breaking:** detector configurations and the catalog manifest use format
   version 2. A version 1 configuration is rejected; rename its ids and
   parameters as listed above and set `"version": 2`.
-- **Breaking:** every public class and function has exactly one import path.
+- **Breaking:** every public class and function has exactly one import path,
+  and `aberrant.exceptions` exports only its exceptions.
   - `aberrant.model.iforest` is now `aberrant.model.forest`.
   - The exceptions moved from `aberrant.base` to `aberrant.exceptions`.
   - `Forecast` is imported from `aberrant.forecast` only.

@@ -8,7 +8,7 @@ the score distribution shifts.
 ```python
 from aberrant.calibration import ScoreCalibrator
 
-calibrator = ScoreCalibrator("aci", alpha=0.01, window=500)
+calibrator = ScoreCalibrator("aci", alpha=0.01, window_size=500)
 for t, score in enumerate(scores):
     alarm = score > calibrator.predict(t)
     calibrator.update(t, score)

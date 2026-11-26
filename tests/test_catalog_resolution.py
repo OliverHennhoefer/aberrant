@@ -46,7 +46,7 @@ def test_each_component_occurrence_resolves_once(monkeypatch, operation):
     monkeypatch.setattr(ComponentSpec, "resolved_parameters", record)
     config = example()
     if operation == "evaluator":
-        PrequentialEvaluator(config, warmup=2)
+        PrequentialEvaluator(config, warm_up=2)
     elif operation == "resolve":
         resolved = resolve_detector_config(config.as_dict())
         assert isinstance(resolved, ResolvedDetectorConfig)

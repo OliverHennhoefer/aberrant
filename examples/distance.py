@@ -23,7 +23,7 @@ def main() -> None:
     }
     for name, detector in detectors.items():
         evaluator = PrequentialEvaluator(
-            detector, warmup=500, metrics=True, metric_window_size=None
+            detector, warm_up=500, metrics=True, metric_window_size=None
         )
         result = evaluator.evaluate(events)
         print(

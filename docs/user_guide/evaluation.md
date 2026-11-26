@@ -27,7 +27,7 @@ config = DetectorConfig(
 )
 evaluator = PrequentialEvaluator(
     config,
-    warmup=64,
+    warm_up=64,
     metrics=True,
     metric_window_size=1000,
 )
@@ -45,8 +45,8 @@ print(result.average_precision, result.roc_auc, result.config_fingerprint)
 Every event before the model's `readiness` is ready is excluded as
 `"not_ready"`, whatever the model counts: events, buckets, observers or active
 graphs, and for a pipeline the readiness of each stage. Readiness is read from
-the prior state, before the candidate is scored. An explicit `warmup` excludes
-that many further **successful learning calls** first, as `"warmup"`, for a
+the prior state, before the candidate is scored. An explicit `warm_up` excludes
+that many further **successful learning calls** first, as `"warm_up"`, for a
 calibration period on top of the model's own. Excluded events have
 `score=None`, and their labels do not enter metrics.
 
@@ -249,7 +249,7 @@ from aberrant.evaluate import ForecastEvaluator
 from aberrant.forecast import AutoRegressive
 
 values = [math.sin(t / 3) for t in range(1000)]
-evaluator = ForecastEvaluator(AutoRegressive(order=2, horizon=3), warmup=200)
+evaluator = ForecastEvaluator(AutoRegressive(order=2, horizon=3), warm_up=200)
 result = evaluator.evaluate(values)
 for scores in result.leads:
     print(scores.lead, scores.mae, scores.rmse, scores.mase, scores.spread_ratio)

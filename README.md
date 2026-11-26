@@ -54,11 +54,11 @@ for event, _ in islice(stream, 512):
 detector = SDOStream(max_observers=128, seed=42)
 evaluator = PrequentialEvaluator(
     detector,
-    warmup=256,
+    warm_up=256,
     metrics=True,
     metric_window_size=None,  # Retain all labeled scores for full-stream metrics.
 )
-threshold = ScoreCalibrator("split", alpha=0.01, window=256)
+threshold = ScoreCalibrator("split", alpha=0.01, window_size=256)
 drift = ADWIN(max_window_size=2048)
 
 projected_stream = ((preprocess.transform_one(event), label) for event, label in stream)

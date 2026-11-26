@@ -7,6 +7,8 @@ so code that ran on 1.5 fails loudly on 2.0 where it needs a change: with an
 that needs one. The [changelog](../changelog.md) has the details and the
 reasons.
 
+aberrant 2.0 requires Python 3.12 or newer.
+
 Pickles written by 1.x do not load in 2.0. They raise
 `IncompatibleStateError`; rebuild each component and let it learn again from
 your events.
@@ -18,8 +20,10 @@ HalfSpaceTrees(25, 8)  # 1.x
 HalfSpaceTrees(n_trees=25, height=8)  # 2.0
 ```
 
-Only the wrapped component of `ResidualDetector(model, target=...)` and the
-method of `ScoreCalibrator(method, alpha=...)` stay positional. Integer
+Only wrapped components and the calibration method stay positional:
+`ResidualDetector(model, target=...)`, `ScoreEnsemble(models, ...)`,
+`EnsembleForecaster(forecasters, ...)`, `LagForecaster(regressor, ...)` and
+`ScoreCalibrator(method, alpha=...)`. Integer
 parameters reject floats and booleans: a value such as `25.0` read from JSON
 needs `int(...)`.
 
@@ -40,7 +44,9 @@ needs `int(...)`.
 | Concept | 2.0 name | 1.x names |
 | --- | --- | --- |
 | Tree count | `n_trees` | `n_estimators`, `num_trees` |
-| Warm-up | `warm_up` | `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`, `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`, `n0` |
+| Warm-up | `warm_up` | `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`, `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`, `n0`; `grace_period` on `ADWIN`, `min_instances` on `PageHinkley`, `warmup` on `CUSUM` and the evaluators |
+| Window length | `window_size` | `window` on `ScoreCalibrator` and `ScoreHistory` |
+| Counts | `n_dense_submatrices`, `n_clusters` | `num_dense_submatrices` on `AnoEdgeL`, `num_clusters` on `StreamSpot` |
 | Hash rows and width | `n_hashes`, `sketch_width` | `count_min_rows`/`count_min_cols`, `rows`/`buckets`, `hash_num`/`bins`, `cms_num_hashes`/`cms_width` |
 | Fixed feature order | `features` | `keys` |
 
@@ -69,7 +75,7 @@ Every public name has exactly one import path.
 
 | Removed | Use |
 | --- | --- |
-| `QuantileThreshold`, `predict_one`, `predict_threshold` | Compare `score_one` with a threshold from `ScoreCalibrator`, such as `ScoreCalibrator("split", alpha=0.01, window=1000)` |
+| `QuantileThreshold`, `predict_one`, `predict_threshold` | Compare `score_one` with a threshold from `ScoreCalibrator`, such as `ScoreCalibrator("split", alpha=0.01, window_size=1000)` |
 | `normalize_score`, `score_scale` | Raw scores, mapped to a common scale by `aberrant.calibration` |
 | `SeasonalResidualDetector` | `ResidualDetector(HoltWinters(season_length=m), target="x")` |
 | `StationaryRegionNeighborDetector` | `CellNeighborhoodDetector` |
@@ -87,7 +93,7 @@ Every public name has exactly one import path.
   `readiness`: whether it has learned enough, and how much it has seen and
   needs. A model scores `0.0` until it is ready, and so does a
   `GraphPipeline` instead of raising. `PrequentialEvaluator` excludes events
-  while the model is not ready; `warmup` excludes further events on top.
+  while the model is not ready; `warm_up` excludes further events on top.
 - **Scores.** Higher is more anomalous, `0.0` until ready, and the raw
   statistic otherwise. `OnlineIsolationForest` scores `0.0`, not `1.0`, before
   it can normalize.
@@ -106,4 +112,12 @@ Every public name has exactly one import path.
   iterate it directly instead of calling `.stream()`. Files are cached in
   `ABERRANT_DATA_DIR` or `~/.cache/aberrant`, so the first load downloads
   again.
+- **Evaluation results.** `EvaluationResult.warm_up` and `n_warm_up`, the
+  exclusion `"warm_up"`, `ForecastResult.warm_up`, and
+  `ModelCapabilities.warm_up` and `warm_up_unit` replace their `warmup`
+  spellings; the catalog manifest lists the warm-up under `warm_up`.
+- **Missing values.** Models and transformers reject an absent feature,
+  `None` or NaN with `ValidationError`. Put an `Imputer` first when events can
+  have gaps. Forecasters take `learn_one(None)` for a missing value, and a
+  custom forecaster must accept it too.
 - **Dependencies.** The core installation depends on NumPy alone.
