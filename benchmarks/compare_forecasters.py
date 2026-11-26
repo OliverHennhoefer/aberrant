@@ -17,7 +17,9 @@ learning and forecasting.
 The series cover a stationary autoregression, a seasonal autoregression, a
 random walk, a noisy trend with a fixed season, and a series that wanders in
 both its level and its season (``(1 - B)(1 - B^m) y = e``), and a series
-that switches from the autoregression to a noisy fixed season halfway. All innovations are
+that switches from the autoregression to a noisy fixed season halfway. A
+self-exciting threshold autoregression (SETAR), whose dynamics differ below
+and above 0, needs a nonlinear model. All innovations are
 standard normal, so the best possible lead-1 error is ``sqrt(2 / pi)``, about
 0.80, wherever the model class contains the process.
 """
@@ -37,7 +39,11 @@ from aberrant.forecast import (
     EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
+    KNNRegressor,
+    LagForecaster,
+    RandomFourierRegressor,
     SeasonalNaive,
+    SGDRegressor,
 )
 
 SEASON = 12
@@ -64,6 +70,11 @@ def series(n: int, seed: int) -> dict[str, list[float]]:
         "trend_season": [float(v) for v in trend + rng.standard_normal(n)],
         "wandering_season": _recursive(
             n, seed, lambda y, e: y[-1] + y[-12] - y[-13] + e
+        ),
+        "setar": _recursive(
+            n,
+            seed,
+            lambda y, e: (0.8 * y[-1] + 1.0 if y[-1] < 0 else -0.6 * y[-1] - 0.5) + e,
         ),
         "regime_switch": [
             *_recursive(n // 2, seed, lambda y, e: 0.6 * y[-1] - 0.3 * y[-2] + e),
@@ -101,6 +112,17 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
             seasonal_order=1,
             difference=1,
             seasonal_difference=1,
+        ),
+        "Lag(RandomFourier, p=3)": lambda: LagForecaster(
+            RandomFourierRegressor(seed=0), horizon=horizon, order=3
+        ),
+        "Lag(KNN, p=3)": lambda: LagForecaster(
+            KNNRegressor(k=10, weighted=True),
+            horizon=horizon,
+            order=3,
+        ),
+        "Lag(SGD Huber, p=3)": lambda: LagForecaster(
+            SGDRegressor(), horizon=horizon, order=3
         ),
         "Ensemble(HW, Kalman, 2 AR)": lambda: EnsembleForecaster(
             [

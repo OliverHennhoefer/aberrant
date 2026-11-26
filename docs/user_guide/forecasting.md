@@ -16,7 +16,7 @@ differ in what they predict from, which shows in how they are called:
 | Learn | `learn_one(y)` | `learn_one(x, y)` |
 | Predict | `forecast_one()` | `predict_one(x)` |
 | Leads | `1..horizon` | `0` |
-| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster` | `RLSRegressor` |
+| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster` | `RLSRegressor`, `RandomFourierRegressor`, `PassiveAggressiveRegressor`, `SGDRegressor`, `KNNRegressor` |
 
 The target is its own argument, never a key of `x`, so a regressor cannot see
 the value it predicts and transformers in front of it never touch the target.
@@ -97,7 +97,12 @@ mean absolute error.
 value on the values before it, the same phase of earlier cycles and the
 phase itself, and forecasts longer leads by feeding its predictions back.
 With `RLSRegressor` it is the autoregression above; with a nonlinear
-regressor it follows dynamics no linear model can.
+regressor it follows dynamics no linear model can. `RandomFourierRegressor`
+is kernel ridge regression online and fits smooth bends; `KNNRegressor`
+forecasts the future of the most similar recent situations;
+`SGDRegressor` uses the Huber loss, so an anomaly in the target barely moves
+it; and `PassiveAggressiveRegressor` is the cheapest linear learner. All four
+standardize their covariates and target over their first `warm_up` events.
 `benchmarks/compare_forecasters.py` compares all of them on synthetic series.
 
 ## One value, many forecasts

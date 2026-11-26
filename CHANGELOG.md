@@ -50,6 +50,14 @@ Semantic Versioning.
   sine and cosine terms of the phase, on an optionally differenced series.
   Leads beyond 1 are forecast recursively. The catalog lists it as
   `lag_forecaster`, with its regressor nested in `regressor`.
+- Online regressors, each also usable in `LagForecaster` and
+  `ResidualDetector`: `RandomFourierRegressor` (kernel ridge regression by
+  random Fourier features and recursive least squares),
+  `PassiveAggressiveRegressor` (PA-II), `SGDRegressor` (AdaGrad on the Huber
+  loss) and `KNNRegressor` (nearest recent events). They standardize their
+  covariates and target over a `warm_up`. The catalog lists them as
+  `random_fourier_regressor`, `passive_aggressive_regressor`,
+  `sgd_regressor` and `knn_regressor`.
 - `attribute_one(x)` on `LODA`, `MovingMahalanobisDistance` and
   `HalfSpaceTrees`, alongside `OnlineECOD` and `OnlineCOPOD`: each feature's
   share of the score, without learning. The shares sum to the score minus

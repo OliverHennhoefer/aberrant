@@ -11,7 +11,11 @@ from aberrant.forecast import (
     AutoRegressive,
     HoltWinters,
     KalmanForecaster,
+    KNNRegressor,
+    PassiveAggressiveRegressor,
+    RandomFourierRegressor,
     SeasonalNaive,
+    SGDRegressor,
 )
 
 
@@ -22,6 +26,10 @@ def _classes() -> list[type]:
         KSWIN,
         PageHinkley,
         AutoRegressive,
+        KNNRegressor,
+        PassiveAggressiveRegressor,
+        RandomFourierRegressor,
+        SGDRegressor,
         HoltWinters,
         KalmanForecaster,
         SeasonalNaive,
