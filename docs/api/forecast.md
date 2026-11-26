@@ -19,6 +19,8 @@ Forecasters learn one series with `learn_one(y)` and forecast it with
 
 ::: aberrant.forecast.LagForecaster
 
+::: aberrant.forecast.EchoStateForecaster
+
 ::: aberrant.forecast.RLSRegressor
 
 ::: aberrant.forecast.RandomFourierRegressor

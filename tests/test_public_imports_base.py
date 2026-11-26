@@ -38,6 +38,7 @@ from aberrant.exceptions import ConfigurationError
 from aberrant.forecast import (
     AdaptiveRandomForestRegressor,
     AutoRegressive,
+    EchoStateForecaster,
     EnsembleForecaster,
     HoeffdingTreeRegressor,
     HoltWinters,
@@ -158,6 +159,7 @@ def test_forecast_public_imports_base_smoke() -> None:
         RandomFourierRegressor,
         SGDRegressor,
         AutoRegressive,
+        EchoStateForecaster,
         EnsembleForecaster,
         HoltWinters,
         KalmanForecaster,

@@ -10,6 +10,7 @@ from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.exceptions import ValidationError
 from aberrant.forecast import (
     AutoRegressive,
+    EchoStateForecaster,
     HoltWinters,
     KalmanForecaster,
     LagForecaster,
@@ -97,6 +98,7 @@ def test_drift_detectors_reject_malformed_values(detector, value):
         KalmanForecaster,
         AutoRegressive,
         lambda: LagForecaster(RLSRegressor()),
+        EchoStateForecaster,
     ],
 )
 @pytest.mark.parametrize("value", [math.nan, math.inf, "x"])

@@ -45,6 +45,12 @@ Semantic Versioning.
   absolute error, with `forgetting` for weights that follow a change. The
   catalog lists it as `ensemble_forecaster`, whose `forecasters` are a list
   of nested forecasters; `ComponentDependency.many` marks such a parameter.
+- `aberrant.forecast.EchoStateForecaster`: an echo state network. A fixed
+  random reservoir of leaky tanh units, scaled to `spectral_radius`, keeps a
+  fading memory of the standardized, optionally differenced series, and a
+  linear readout learns online by recursive least squares. Leads beyond 1
+  feed the forecasts back into the reservoir. The catalog lists it as
+  `echo_state_forecaster`.
 - `aberrant.forecast.LagForecaster`: forecasts a series with any regressor
   of its own past: recent values, the same phase of earlier cycles and
   sine and cosine terms of the phase, on an optionally differenced series.

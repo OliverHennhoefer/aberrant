@@ -37,6 +37,7 @@ from aberrant.base.protocols import ForecasterProtocol
 from aberrant.forecast import (
     AdaptiveRandomForestRegressor,
     AutoRegressive,
+    EchoStateForecaster,
     EnsembleForecaster,
     HoeffdingTreeRegressor,
     HoltWinters,
@@ -131,6 +132,10 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
         ),
         "Lag(ARF, p=3)": lambda: LagForecaster(
             AdaptiveRandomForestRegressor(seed=0), horizon=horizon, order=3
+        ),
+        "EchoState": lambda: EchoStateForecaster(horizon=horizon, seed=0),
+        "EchoState(D=1, m=12)": lambda: EchoStateForecaster(
+            horizon=horizon, season_length=SEASON, seasonal_difference=1, seed=0
         ),
         "Ensemble(HW, Kalman, 2 AR)": lambda: EnsembleForecaster(
             [

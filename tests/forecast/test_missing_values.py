@@ -7,6 +7,7 @@ import pytest
 
 from aberrant.forecast import (
     AutoRegressive,
+    EchoStateForecaster,
     EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
@@ -39,6 +40,9 @@ FORECASTERS = {
     "autoregressive": lambda: AutoRegressive(
         horizon=HORIZON, season_length=4, seasonal_difference=1
     ),
+    "echo_state": lambda: EchoStateForecaster(
+        horizon=HORIZON, season_length=4, seasonal_difference=1, warm_up=8, seed=0
+    ),
 }
 
 
@@ -69,7 +73,9 @@ def test_after_a_gap_the_forecast_is_the_longer_lead_issued_before_it(name, gap)
     assert min(after.scale[HORIZON - gap :]) >= before.scale[-1] - 1e-12
 
 
-@pytest.mark.parametrize("name", ["naive", "holt_winters", "autoregressive", "lagged"])
+@pytest.mark.parametrize(
+    "name", ["naive", "holt_winters", "autoregressive", "lagged", "echo_state"]
+)
 def test_a_forecast_issued_after_a_gap_is_not_scored_at_its_own_lead(name):
     series = _series(60)
     before = _learned(name, series).forecast_one()
