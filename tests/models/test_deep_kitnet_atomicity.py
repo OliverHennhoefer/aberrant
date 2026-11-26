@@ -16,9 +16,9 @@ from aberrant.model.deep.kitnet import OnlineAutoencoderEnsemble
 def test_later_child_overflow_does_not_publish_earlier_updates(adaptive: bool) -> None:
     model = OnlineAutoencoderEnsemble(
         max_ae_size=1,
-        feature_map_grace=1,
-        ad_grace=0 if adaptive else 1,
-        adaptive_after_warmup=adaptive,
+        feature_map_warm_up=1,
+        detector_warm_up=0 if adaptive else 1,
+        adaptive_after_warm_up=adaptive,
         seed=2,
     )
     model.learn_one({"x": 0.0, "y": 0.0})
@@ -39,7 +39,7 @@ def test_later_child_overflow_does_not_publish_earlier_updates(adaptive: bool) -
 
 def test_output_overflow_does_not_publish_child_updates() -> None:
     model = OnlineAutoencoderEnsemble(
-        max_ae_size=1, feature_map_grace=1, ad_grace=1, seed=7
+        max_ae_size=1, feature_map_warm_up=1, detector_warm_up=1, seed=7
     )
     model.learn_one({"x": 0.0, "y": 0.0})
     assert model._output_ae is not None
@@ -67,8 +67,8 @@ def test_rejected_feature_map_transition_preserves_moments_schema_and_rng(
 ) -> None:
     model = OnlineAutoencoderEnsemble(
         max_ae_size=1,
-        feature_map_grace=grace,
-        ad_grace=0,
+        feature_map_warm_up=grace,
+        detector_warm_up=0,
         learning_rate=1e308,
         seed=seed,
     )

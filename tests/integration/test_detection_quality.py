@@ -225,11 +225,11 @@ CASES = [
             StandardScaler()
             | OnlineAutoencoderEnsemble(
                 max_ae_size=4,
-                feature_map_grace=256,
-                ad_grace=512,
+                feature_map_warm_up=256,
+                detector_warm_up=512,
                 learning_rate=0.03,
                 hidden_ratio=0.75,
-                adaptive_after_warmup=False,
+                adaptive_after_warm_up=False,
                 seed=s,
             )
         ),

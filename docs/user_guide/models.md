@@ -407,15 +407,15 @@ parity with a published one-class SVM solver.
 `OnlineAutoencoderEnsemble` is NumPy-backed and available in the base install.
 It has three observable phases:
 
-1. `feature_map_warmup`: collect correlation statistics for
-   `feature_map_grace` events;
-2. `detector_warmup`: train sub-autoencoders and the output autoencoder for
-   `ad_grace` events;
+1. `feature_map_warm_up`: collect correlation statistics for that many
+   events;
+2. `detector_warm_up`: train sub-autoencoders and the output autoencoder for
+   that many further events;
 3. `ready`: return non-negative reconstruction-error scores, optionally
-   continuing to adapt when `adaptive_after_warmup=True`.
+   continuing to adapt when `adaptive_after_warm_up=True`.
 
-The parameter names (`feature_map_grace`, `ad_grace`) and phase names are
-deliberately different. This is a lightweight KitNET-inspired adaptation using
+Each warm-up phase carries the name of the parameter that sets its length.
+This is a lightweight KitNET-inspired adaptation using
 raw inputs and simple NumPy autoencoders, not score- or procedure-equivalent to
 the authors' normalized denoising implementation. The source method is
 [Kitsune/KitNET](https://www.ndss-symposium.org/ndss-paper/kitsune-an-ensemble-of-autoencoders-for-online-network-intrusion-detection/).

@@ -12,8 +12,8 @@ from aberrant._utils.validation import FeatureSchema, coerce_integer_count
 from aberrant.base.model import BaseModel
 from aberrant.base.readiness import Readiness
 
-_PHASE_FEATURE_MAP = "feature_map_warmup"
-_PHASE_DETECTOR = "detector_warmup"
+_PHASE_FEATURE_MAP = "feature_map_warm_up"
+_PHASE_DETECTOR = "detector_warm_up"
 _PHASE_READY = "ready"
 
 
@@ -143,16 +143,16 @@ class OnlineAutoencoderEnsemble(BaseModel):
     - ``score_one`` computes one anomaly score without mutating state.
 
     Warm-up phases:
-    - ``feature_map_warmup``: build feature groups from correlations.
-    - ``detector_warmup``: train ensemble and output autoencoders.
+    - ``feature_map_warm_up``: build feature groups from correlations.
+    - ``detector_warm_up``: train ensemble and output autoencoders.
     - ``ready``: score samples; optionally keep adapting if enabled.
 
     Args:
         max_ae_size: Maximum number of input features assigned to one ensemble
             autoencoder.
-        feature_map_grace: Number of learned samples used to estimate feature
+        feature_map_warm_up: Number of learned samples used to estimate feature
             correlations before the autoencoder ensemble is created.
-        ad_grace: Number of subsequent learned samples used to train the
+        detector_warm_up: Number of subsequent learned samples used to train the
             ensemble and output autoencoder before scoring begins. A value of
             zero trains once on the feature-map transition sample and becomes
             ready immediately.
@@ -161,7 +161,7 @@ class OnlineAutoencoderEnsemble(BaseModel):
         hidden_ratio: Hidden-layer width as a fraction of input width, in
             ``(0, 1]``. Width is rounded up and, for inputs wider than one,
             capped below the input width.
-        adaptive_after_warmup: Continue training on calls to ``learn_one``
+        adaptive_after_warm_up: Continue training on calls to ``learn_one``
             after the model reaches the ready phase.
         seed: Seed for model-local NumPy generators. ``None`` selects
             nondeterministic generator initialization.
@@ -177,29 +177,31 @@ class OnlineAutoencoderEnsemble(BaseModel):
         self,
         *,
         max_ae_size: int = 10,
-        feature_map_grace: int = 5_000,
-        ad_grace: int = 50_000,
+        feature_map_warm_up: int = 5_000,
+        detector_warm_up: int = 50_000,
         learning_rate: float = 0.1,
         hidden_ratio: float = 0.75,
-        adaptive_after_warmup: bool = False,
+        adaptive_after_warm_up: bool = False,
         seed: int | None = None,
     ) -> None:
         max_ae_size = coerce_integer_count(max_ae_size, label="max_ae_size", minimum=1)
-        feature_map_grace = coerce_integer_count(
-            feature_map_grace, label="feature_map_grace", minimum=1
+        feature_map_warm_up = coerce_integer_count(
+            feature_map_warm_up, label="feature_map_warm_up", minimum=1
         )
-        ad_grace = coerce_integer_count(ad_grace, label="ad_grace", minimum=0)
+        detector_warm_up = coerce_integer_count(
+            detector_warm_up, label="detector_warm_up", minimum=0
+        )
         if not math.isfinite(learning_rate) or learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
         if not (0.0 < hidden_ratio <= 1.0):
             raise ValueError("hidden_ratio must be in (0, 1]")
 
         self.max_ae_size = max_ae_size
-        self.feature_map_grace = feature_map_grace
-        self.ad_grace = ad_grace
+        self.feature_map_warm_up = feature_map_warm_up
+        self.detector_warm_up = detector_warm_up
         self.learning_rate = learning_rate
         self.hidden_ratio = hidden_ratio
-        self.adaptive_after_warmup = adaptive_after_warmup
+        self.adaptive_after_warm_up = adaptive_after_warm_up
         self.seed = seed
 
         self._reset_state()
@@ -386,12 +388,12 @@ class OnlineAutoencoderEnsemble(BaseModel):
         """Publish moments and an optional detector transition as one event."""
         total, squared, cross = self._preview_feature_statistics(x_vec)
         samples = self._feature_map_samples + 1
-        if samples >= self.feature_map_grace:
+        if samples >= self.feature_map_warm_up:
             groups = self._build_feature_groups(total, squared, cross, samples)
             # A rejected transition must not consume the next detector's seeds.
             rng = deepcopy(self.rng)
             ensemble, output_ae = self._create_detector(groups, rng)
-            if self.ad_grace == 0:
+            if self.detector_warm_up == 0:
                 # Ensure "ready" implies detector weights saw at least one sample.
                 self._train_detector(x_vec, groups, ensemble, output_ae)
 
@@ -401,19 +403,21 @@ class OnlineAutoencoderEnsemble(BaseModel):
                 output_ae,
             )
             self.rng = rng
-            self._detector_samples = int(self.ad_grace == 0)
-            self._phase = _PHASE_READY if self.ad_grace == 0 else _PHASE_DETECTOR
+            self._detector_samples = int(self.detector_warm_up == 0)
+            self._phase = (
+                _PHASE_READY if self.detector_warm_up == 0 else _PHASE_DETECTOR
+            )
 
         self._sum, self._sum_sq, self._sum_cross = total, squared, cross
         self._feature_map_samples = samples
 
     @property
     def readiness(self) -> Readiness:
-        """Ready after the feature-map and detector grace periods."""
+        """Ready after the feature-map and detector warm-ups."""
         return Readiness(
             self._phase == _PHASE_READY,
             self._samples_seen,
-            self.feature_map_grace + self.ad_grace,
+            self.feature_map_warm_up + self.detector_warm_up,
         )
 
     def learn_one(self, x: dict[str, float]) -> None:
@@ -428,9 +432,9 @@ class OnlineAutoencoderEnsemble(BaseModel):
                 x_vec, self._feature_groups, self._ensemble, self._output_ae
             )
             self._detector_samples += 1
-            if self._detector_samples >= self.ad_grace:
+            if self._detector_samples >= self.detector_warm_up:
                 self._phase = _PHASE_READY
-        elif self._phase == _PHASE_READY and self.adaptive_after_warmup:
+        elif self._phase == _PHASE_READY and self.adaptive_after_warm_up:
             self._train_detector(
                 x_vec, self._feature_groups, self._ensemble, self._output_ae
             )

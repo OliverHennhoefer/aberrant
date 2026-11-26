@@ -44,7 +44,7 @@ needs `int(...)`.
 | Concept | 2.0 name | 1.x names |
 | --- | --- | --- |
 | Tree count | `n_trees` | `n_estimators`, `num_trees` |
-| Warm-up | `warm_up` | `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`, `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`, `n0`; `grace_period` on `ADWIN`, `min_instances` on `PageHinkley`, `warmup` on `CUSUM` and the evaluators |
+| Warm-up | `warm_up` | `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`, `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`, `n0`; `feature_map_grace` and `ad_grace` on `OnlineAutoencoderEnsemble` (now `feature_map_warm_up` and `detector_warm_up`, with `adaptive_after_warm_up`); `grace_period` on `ADWIN`, `min_instances` on `PageHinkley`, `warmup` on `CUSUM` and the evaluators |
 | Window length | `window_size` | `window` on `ScoreCalibrator` and `ScoreHistory` |
 | Counts | `n_dense_submatrices`, `n_clusters` | `num_dense_submatrices` on `AnoEdgeL`, `num_clusters` on `StreamSpot` |
 | Hash rows and width | `n_hashes`, `sketch_width` | `count_min_rows`/`count_min_cols`, `rows`/`buckets`, `hash_num`/`bins`, `cms_num_hashes`/`cms_width` |

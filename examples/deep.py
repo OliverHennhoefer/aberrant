@@ -26,7 +26,9 @@ def main() -> None:
     detectors = {
         # KitNET learns its feature map, then its autoencoders, before scoring.
         "OnlineAutoencoderEnsemble": MinMaxScaler()
-        | OnlineAutoencoderEnsemble(feature_map_grace=500, ad_grace=2_000, seed=1),
+        | OnlineAutoencoderEnsemble(
+            feature_map_warm_up=500, detector_warm_up=2_000, seed=1
+        ),
         "Autoencoder": MinMaxScaler()
         | Autoencoder(
             model=network,

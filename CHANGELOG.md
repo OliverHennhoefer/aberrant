@@ -65,7 +65,7 @@ Semantic Versioning.
   `CalibratorSpec.extrapolates` marks such methods.
 - `aberrant.evaluate.vus`: VUS-ROC and VUS-PR (Paparrizos et al., VLDB
   2022), the volume under the range-based ROC and PR surfaces over margins
-  from 0 to `window`. Each labeled anomaly range counts as one event, with
+  from 0 to `window_size`. Each labeled anomaly range counts as one event, with
   partial credit near it. It follows the reference package's
   `RangeAUC_volume_opt` and needs NumPy only.
 - `aberrant.drift.CUSUM`: the two-sided tabular CUSUM on standardized
@@ -327,7 +327,10 @@ Semantic Versioning.
     `ForecastEvaluator`). Results follow: `EvaluationResult.warm_up` and
     `n_warm_up`, the exclusion `"warm_up"`, `ForecastResult.warm_up`, and
     `ModelCapabilities.warm_up` and `warm_up_unit`, which the catalog
-    manifest lists under `warm_up`.
+    manifest lists under `warm_up`. `OnlineAutoencoderEnsemble` has two
+    warm-ups, `feature_map_warm_up` and `detector_warm_up` (were
+    `feature_map_grace` and `ad_grace`), which also name its phases, and
+    `adaptive_after_warm_up` (was `adaptive_after_warmup`).
   - Window length: `window_size`, on `ScoreCalibrator` and `ScoreHistory`
     too (was `window`).
   - Counts: an `n_` prefix, so `AnoEdgeL(n_dense_submatrices=...)` and
