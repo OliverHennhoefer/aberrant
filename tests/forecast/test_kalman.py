@@ -196,3 +196,153 @@ def test_reset_forgets_everything():
     assert not model.readiness.ready
     assert model.forecast_one() is None
     assert model.n_samples_seen == 0
+
+
+def _seasonal_filter(values, ratios, season, horizon, prior=1e9):
+    """A textbook filter of a level, a slope and a trigonometric season."""
+    level_ratio, slope_ratio, season_ratio = ratios
+    season_length, harmonics = season
+    blocks = [np.array([[1.0, 1.0], [0.0, 1.0]])]
+    observe, noise = [1.0, 0.0], [level_ratio, slope_ratio]
+    for j in range(1, harmonics + 1):
+        frequency = 2 * np.pi * j / season_length
+        if 2 * j == season_length:
+            blocks.append(np.array([[np.cos(frequency)]]))
+            observe += [1.0]
+            noise += [season_ratio]
+        else:
+            c, s = np.cos(frequency), np.sin(frequency)
+            blocks.append(np.array([[c, s], [-s, c]]))
+            observe += [1.0, 0.0]
+            noise += [season_ratio, season_ratio]
+    size = len(observe)
+    transition = np.zeros((size, size))
+    at = 0
+    for block in blocks:
+        transition[at : at + len(block), at : at + len(block)] = block
+        at += len(block)
+    observe, noise = np.array(observe), np.diag(noise)
+    state, covariance = np.zeros(size), prior * np.eye(size)
+    standardized = []
+    for value in values:
+        if value is not None:
+            spread = observe @ covariance @ observe + 1
+            error = value - observe @ state
+            gain = covariance @ observe / spread
+            state = state + gain * error
+            covariance = covariance - np.outer(gain, observe @ covariance)
+            # A value the prior dominates fits the state and gives no error.
+            if spread < math.sqrt(prior):
+                standardized.append(error * error / spread)
+        state = transition @ state
+        covariance = transition @ covariance @ transition.T + noise
+    variance = float(np.mean(standardized))
+    means, scales = [], []
+    for _ in range(horizon):
+        means.append(observe @ state)
+        scales.append(math.sqrt(variance * (observe @ covariance @ observe + 1)))
+        state = transition @ state
+        covariance = transition @ covariance @ transition.T + noise
+    return means, scales
+
+
+@pytest.mark.parametrize(("season_length", "harmonics"), [(4, 2), (7, 3), (12, 2)])
+def test_a_season_matches_a_matrix_filter_with_a_vague_prior(season_length, harmonics):
+    rng = np.random.default_rng(5)
+    t = np.arange(120)
+    values: list[float | None] = list(
+        np.cumsum(0.3 * rng.standard_normal(120))
+        + 2 * np.sin(2 * np.pi * t / season_length)
+        + rng.standard_normal(120)
+    )
+    for gap in (2, 40, 41, 77):
+        values[gap] = None
+    model = KalmanForecaster(
+        horizon=2 * season_length,
+        level_ratio=0.1,
+        slope_ratio=0.001,
+        season_length=season_length,
+        season_ratio=0.01,
+        harmonics=harmonics,
+        residual_alpha=1e-9,
+    )
+    for value in values:
+        model.learn_one(value)
+
+    means, scales = _seasonal_filter(
+        values, (0.1, 0.001, 0.01), (season_length, harmonics), 2 * season_length
+    )
+    forecast = model.forecast_one()
+    assert forecast.mean == pytest.approx(means, rel=1e-6)
+    assert forecast.scale == pytest.approx(scales, rel=1e-6)
+
+
+def test_a_fixed_season_is_forecast_exactly():
+    pattern = [3.0, -1.0, 4.0, 1.0, -5.0, 9.0]
+    model = KalmanForecaster(
+        horizon=8, level_ratio=0.0, slope_ratio=0.0, season_length=6
+    )
+    for t in range(30):
+        model.learn_one(10.0 + 0.5 * t + pattern[t % 6])
+    expected = [10.0 + 0.5 * t + pattern[t % 6] for t in range(30, 38)]
+    assert model.forecast_one().mean == pytest.approx(expected, abs=1e-9)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "required"),
+    [
+        ({"season_length": 12}, 13),
+        ({"season_length": 12, "harmonics": 2, "slope_ratio": 0.0}, 7),
+        ({"season_length": 7}, 8),
+    ],
+)
+def test_a_season_is_ready_after_one_value_per_state(kwargs, required):
+    model = KalmanForecaster(**kwargs)
+    assert model.readiness.required == required
+    rng = np.random.default_rng(6)
+    for _ in range(required):
+        assert model.forecast_one() is None
+        model.learn_one(float(rng.standard_normal()))
+    assert model.readiness.ready and model.readiness.observed == required
+
+
+def test_seasonal_spreads_are_calibrated_at_every_lead():
+    rng = np.random.default_rng(7)
+    n, horizon, season = 20_000, 12, 12
+    level = np.cumsum(math.sqrt(0.05) * rng.standard_normal(n))
+    pattern = 3 * np.sin(2 * np.pi * np.arange(n) / season)
+    values = 2.0 * (level + pattern + rng.standard_normal(n))
+
+    model = KalmanForecaster(
+        horizon=horizon, season_length=season, harmonics=1, residual_alpha=0.01
+    )
+    issued = []
+    inside = np.zeros(horizon)
+    counted = 0
+    for t, value in enumerate(values):
+        if t >= 500:
+            counted += 1
+            for lead in range(1, horizon + 1):
+                forecast = issued[t - lead]
+                z = (value - forecast.point(lead)) / forecast.spread(lead)
+                inside[lead - 1] += abs(z) <= 1.645
+        model.learn_one(value)
+        issued.append(model.forecast_one())
+
+    assert inside / counted == pytest.approx([0.9] * horizon, abs=0.015)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"season_length": 0},
+        {"season_length": 2.0},
+        {"season_ratio": -0.1},
+        {"harmonics": 1},
+        {"season_length": 12, "harmonics": 0},
+        {"season_length": 12, "harmonics": 7},
+    ],
+)
+def test_rejects_invalid_seasons(kwargs):
+    with pytest.raises(ValueError):
+        KalmanForecaster(**kwargs)

@@ -26,11 +26,13 @@ Semantic Versioning.
   and deviation are estimated over a warm-up, again after each signal, unless
   `target` and `scale` fix them. `direction` and `onset` say which way the
   mean moved and when the change most likely began.
-- `aberrant.forecast.KalmanForecaster`: local level, or local linear trend
-  with `slope_ratio`, forecasts from an exact diffuse Kalman filter. Its
-  spread is the predictive standard deviation of each lead, with the noise
-  variance estimated online, and `learn_one(None)` learns a missing reading.
-  The catalog lists it as `kalman_forecaster`.
+- `aberrant.forecast.KalmanForecaster`: a structural time series model,
+  forecast from an exact diffuse Kalman filter. It has a local level, a slope
+  with `slope_ratio`, and a trigonometric season with `season_length`, whose
+  `harmonics` trade detail for fewer states on long cycles. Its spread is the
+  predictive standard deviation of each lead, with the noise variance
+  estimated online, and `learn_one(None)` learns a missing reading. The
+  catalog lists it as `kalman_forecaster`.
 - `aberrant.forecast.AutoRegressive`: a seasonal autoregression on a
   differenced series (SARIMA without moving-average terms) whose weights
   recursive least squares with forgetting updates at every value. Leads

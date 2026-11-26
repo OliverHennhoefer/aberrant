@@ -64,8 +64,9 @@ lead an error that belongs to a longer one.
 
 `SeasonalNaive`, `HoltWinters` and `AutoRegressive` report each lead's faded
 mean absolute error as its spread. `KalmanForecaster` reports the standard deviation of its
-predictive distribution, from a local level (or, with `slope_ratio`, a local
-linear trend) model whose noise variance it estimates online. That spread
+predictive distribution, from a structural model of a level, optionally a
+slope (`slope_ratio`) and a season (`season_length`), whose noise variance it
+estimates online. That spread
 grows with the lead as the model says it should, and on Gaussian noise
 `|y - mean| / spread` stays within 1.645 for 90% of values at every lead.
 `level_ratio` sets how quickly it follows the series; the default matches
@@ -73,8 +74,11 @@ exponential smoothing with weight 0.2.
 
 ## Choosing a forecaster
 
-`HoltWinters` suits a series whose season repeats with noise around it.
-`KalmanForecaster` suits a level, or a trend, that wanders without a season.
+`HoltWinters` and `KalmanForecaster` with `season_length` suit a series whose
+season repeats with noise around it. The Kalman filter's spreads are
+predictive standard deviations that grow with the lead as its model says, and
+`harmonics` keeps a long cycle, such as a day of minutes, to a few states.
+Without a season, `KalmanForecaster` suits a level, or a trend, that wanders.
 `AutoRegressive` suits a series whose values depend on the recent past and on
 the same phase of earlier cycles, which is common in telemetry from
 controlled processes: it fits a seasonal autoregression online, differences a

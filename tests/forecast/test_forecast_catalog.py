@@ -112,6 +112,7 @@ def test_residual_detector_takes_its_forecaster_as_a_nested_component() -> None:
         ({"id": "holt_winters", "params": {"season_length": 6, "horizon": 5}}, 5),
         ({"id": "kalman_forecaster", "params": {}}, None),
         ({"id": "kalman_forecaster", "params": {"slope_ratio": 0.0, "horizon": 4}}, 3),
+        ({"id": "kalman_forecaster", "params": {"season_length": 12}}, None),
         ({"id": "autoregressive", "params": {}}, None),
         (
             {

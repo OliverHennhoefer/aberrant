@@ -9,7 +9,9 @@ forecasts leads ``1..horizon`` after each one. For each series and forecaster
 the table reports the mean absolute error at lead 1 and at the longest lead
 over the events after ``--burn-in``, and how that error compares with the
 reported spread: the forecasters report a faded mean absolute error, so a
-ratio near 1 means the spread is calibrated. Microseconds per event cover
+ratio near 1 means the spread is calibrated. ``KalmanForecaster`` reports a
+predictive standard deviation instead, whose ratio is ``sqrt(2 / pi)``, about
+0.80, when it is calibrated on Gaussian errors. Microseconds per event cover
 learning and forecasting.
 
 The series cover a stationary autoregression, a seasonal autoregression, a
@@ -72,6 +74,12 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
         "HoltWinters(m=12)": lambda: HoltWinters(season_length=SEASON, horizon=horizon),
         "Kalman(level)": lambda: KalmanForecaster(horizon=horizon),
         "Kalman(trend)": lambda: KalmanForecaster(horizon=horizon, slope_ratio=0.01),
+        "Kalman(season)": lambda: KalmanForecaster(
+            horizon=horizon, season_length=SEASON
+        ),
+        "Kalman(season, h=2)": lambda: KalmanForecaster(
+            horizon=horizon, season_length=SEASON, harmonics=2
+        ),
         "AR(p=2)": lambda: AutoRegressive(horizon=horizon, order=2),
         "AR(p=2, P=1, m=12)": lambda: AutoRegressive(
             horizon=horizon, order=2, season_length=SEASON, seasonal_order=1
