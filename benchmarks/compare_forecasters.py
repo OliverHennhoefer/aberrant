@@ -1,8 +1,9 @@
-"""Compare the accuracy and the spreads of aberrant's forecasters.
+"""Compare the accuracy, the spreads and the cost of aberrant's forecasters.
 
 This script is not part of CI. Run it from the repository root::
 
     uv run python benchmarks/compare_forecasters.py
+    uv run python benchmarks/compare_forecasters.py --seeds 3 --markdown
 
 Every forecaster learns the same synthetic series one value at a time and
 forecasts leads ``1..horizon`` after each one. For each series and forecaster
@@ -12,16 +13,23 @@ reported spread: the forecasters report a faded mean absolute error, so a
 ratio near 1 means the spread is calibrated. ``KalmanForecaster`` reports a
 predictive standard deviation instead, whose ratio is ``sqrt(2 / pi)``, about
 0.80, when it is calibrated on Gaussian errors. Microseconds per event cover
-learning and forecasting.
+learning and forecasting. With ``--seeds`` above 1 every number is the mean
+over that many series of each kind.
 
 The series cover a stationary autoregression, a seasonal autoregression, a
-random walk, a noisy trend with a fixed season, and a series that wanders in
+random walk, a noisy trend with a fixed season, a series that wanders in
 both its level and its season (``(1 - B)(1 - B^m) y = e``), and a series
 that switches from the autoregression to a noisy fixed season halfway. A
 self-exciting threshold autoregression (SETAR), whose dynamics differ below
-and above 0, needs a nonlinear model. All innovations are
-standard normal, so the best possible lead-1 error is ``sqrt(2 / pi)``, about
-0.80, wherever the model class contains the process.
+and above 0, and a noisy logistic map need a nonlinear model. Except for the
+logistic map, all innovations are standard normal, so the best possible
+lead-1 error is ``sqrt(2 / pi)``, about 0.80, wherever the model class
+contains the process.
+
+The summary ranks the forecasters by their lead-1 error relative to the best
+forecaster on each series, as a geometric mean over all series: 1.00 means
+best everywhere. It also counts the series a forecaster is best or within 2% of
+the best on.
 """
 
 from __future__ import annotations
@@ -33,7 +41,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from aberrant.base.protocols import ForecasterProtocol
+from aberrant.base.protocols import ForecasterProtocol, RegressorProtocol
 from aberrant.forecast import (
     AdaptiveRandomForestRegressor,
     AutoRegressive,
@@ -44,12 +52,15 @@ from aberrant.forecast import (
     KalmanForecaster,
     KNNRegressor,
     LagForecaster,
+    PassiveAggressiveRegressor,
     RandomFourierRegressor,
+    RLSRegressor,
     SeasonalNaive,
     SGDRegressor,
 )
 
 SEASON = 12
+Results = dict[str, dict[str, tuple[float, ...]]]
 
 
 def _recursive(n: int, seed: int, step: Callable[[list[float], float], float]):
@@ -58,6 +69,15 @@ def _recursive(n: int, seed: int, step: Callable[[list[float], float], float]):
     for e in rng.standard_normal(n):
         values.append(step(values, float(e)))
     return values[SEASON + 1 :]
+
+
+def _logistic(n: int, seed: int) -> list[float]:
+    rng = np.random.default_rng(seed)
+    values = [0.3]
+    for e in rng.standard_normal(n - 1):
+        x = 3.7 * values[-1] * (1 - values[-1]) + 0.005 * float(e)
+        values.append(min(max(x, 0.001), 0.999))
+    return values
 
 
 def series(n: int, seed: int) -> dict[str, list[float]]:
@@ -87,71 +107,76 @@ def series(n: int, seed: int) -> dict[str, list[float]]:
                 + rng.standard_normal(n - n // 2)
             ),
         ],
+        "logistic": _logistic(n, seed),
     }
 
 
 def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
+    h = horizon
+    m = SEASON
+
+    def lagged(
+        regressor: Callable[[], RegressorProtocol],
+    ) -> Callable[[], ForecasterProtocol]:
+        return lambda: LagForecaster(regressor(), horizon=h, order=3)
+
+    def classic() -> list[ForecasterProtocol]:
+        return [
+            HoltWinters(season_length=m, horizon=h),
+            KalmanForecaster(horizon=h, season_length=m),
+            AutoRegressive(horizon=h, order=2, season_length=m, seasonal_order=1),
+            AutoRegressive(
+                horizon=h,
+                order=2,
+                season_length=m,
+                seasonal_order=1,
+                difference=1,
+                seasonal_difference=1,
+            ),
+        ]
+
     return {
-        "SeasonalNaive(m=12)": lambda: SeasonalNaive(
-            season_length=SEASON, horizon=horizon
+        "SeasonalNaive": lambda: SeasonalNaive(season_length=m, horizon=h),
+        "HoltWinters": lambda: HoltWinters(season_length=m, horizon=h),
+        "Kalman(level, fixed)": lambda: KalmanForecaster(horizon=h, learn_ratios=False),
+        "Kalman(level)": lambda: KalmanForecaster(horizon=h),
+        "Kalman(trend)": lambda: KalmanForecaster(horizon=h, slope_ratio=0.01),
+        "Kalman(season, fixed)": lambda: KalmanForecaster(
+            horizon=h, season_length=m, learn_ratios=False
         ),
-        "HoltWinters(m=12)": lambda: HoltWinters(season_length=SEASON, horizon=horizon),
-        "Kalman(level)": lambda: KalmanForecaster(horizon=horizon),
-        "Kalman(trend)": lambda: KalmanForecaster(horizon=horizon, slope_ratio=0.01),
-        "Kalman(season)": lambda: KalmanForecaster(
-            horizon=horizon, season_length=SEASON
+        "Kalman(season)": lambda: KalmanForecaster(horizon=h, season_length=m),
+        "Kalman(trend, season)": lambda: KalmanForecaster(
+            horizon=h, slope_ratio=0.01, season_length=m
         ),
-        "Kalman(season, h=2)": lambda: KalmanForecaster(
-            horizon=horizon, season_length=SEASON, harmonics=2
-        ),
-        "AR(p=2)": lambda: AutoRegressive(horizon=horizon, order=2),
-        "AR(p=2, P=1, m=12)": lambda: AutoRegressive(
-            horizon=horizon, order=2, season_length=SEASON, seasonal_order=1
+        "AR(p=2)": lambda: AutoRegressive(horizon=h, order=2),
+        "AR(p=2, P=1)": lambda: AutoRegressive(
+            horizon=h, order=2, season_length=m, seasonal_order=1
         ),
         "AR(p=2, P=1, d=1, D=1)": lambda: AutoRegressive(
-            horizon=horizon,
+            horizon=h,
             order=2,
-            season_length=SEASON,
+            season_length=m,
             seasonal_order=1,
             difference=1,
             seasonal_difference=1,
         ),
-        "Lag(RandomFourier, p=3)": lambda: LagForecaster(
-            RandomFourierRegressor(seed=0), horizon=horizon, order=3
+        "Lag(RLS)": lagged(RLSRegressor),
+        "Lag(PassiveAggressive)": lagged(PassiveAggressiveRegressor),
+        "Lag(SGD Huber)": lagged(SGDRegressor),
+        "Lag(RandomFourier)": lagged(lambda: RandomFourierRegressor(seed=0)),
+        "Lag(KNN)": lagged(lambda: KNNRegressor(k=10, weighted=True)),
+        "Lag(HoeffdingTree)": lagged(HoeffdingTreeRegressor),
+        "Lag(AdaptiveForest)": lagged(lambda: AdaptiveRandomForestRegressor(seed=0)),
+        "EchoState": lambda: EchoStateForecaster(horizon=h, seed=0),
+        "EchoState(D=1)": lambda: EchoStateForecaster(
+            horizon=h, season_length=m, seasonal_difference=1, seed=0
         ),
-        "Lag(KNN, p=3)": lambda: LagForecaster(
-            KNNRegressor(k=10, weighted=True),
-            horizon=horizon,
-            order=3,
-        ),
-        "Lag(SGD Huber, p=3)": lambda: LagForecaster(
-            SGDRegressor(), horizon=horizon, order=3
-        ),
-        "Lag(HoeffdingTree, p=3)": lambda: LagForecaster(
-            HoeffdingTreeRegressor(), horizon=horizon, order=3
-        ),
-        "Lag(ARF, p=3)": lambda: LagForecaster(
-            AdaptiveRandomForestRegressor(seed=0), horizon=horizon, order=3
-        ),
-        "EchoState": lambda: EchoStateForecaster(horizon=horizon, seed=0),
-        "EchoState(D=1, m=12)": lambda: EchoStateForecaster(
-            horizon=horizon, season_length=SEASON, seasonal_difference=1, seed=0
-        ),
-        "Ensemble(HW, Kalman, 2 AR)": lambda: EnsembleForecaster(
+        "Ensemble(classic)": lambda: EnsembleForecaster(classic()),
+        "Ensemble(mixed)": lambda: EnsembleForecaster(
             [
-                HoltWinters(season_length=SEASON, horizon=horizon),
-                KalmanForecaster(horizon=horizon, season_length=SEASON),
-                AutoRegressive(
-                    horizon=horizon, order=2, season_length=SEASON, seasonal_order=1
-                ),
-                AutoRegressive(
-                    horizon=horizon,
-                    order=2,
-                    season_length=SEASON,
-                    seasonal_order=1,
-                    difference=1,
-                    seasonal_difference=1,
-                ),
+                *classic(),
+                LagForecaster(HoeffdingTreeRegressor(), horizon=h, order=3),
+                EchoStateForecaster(horizon=h, seed=0),
             ]
         ),
     }
@@ -183,30 +208,98 @@ def evaluate(
     return first, last, *ratios, 1e6 * elapsed / len(values)
 
 
+def summary(results: Results) -> list[tuple[str, float, int, float]]:
+    """Relative lead-1 error, series near the best, and cost, best first.
+
+    The relative error is the geometric mean over the series of each
+    forecaster's lead-1 error over the best one's, so no series with tiny
+    errors outweighs the others.
+    """
+    labels = next(iter(results.values())).keys()
+    rows = []
+    for label in labels:
+        logs, near, micros = [], 0, []
+        for by_label in results.values():
+            best = min(row[0] for row in by_label.values())
+            ratio = by_label[label][0] / best
+            logs.append(math.log(ratio))
+            near += ratio <= 1.02
+            micros.append(by_label[label][4])
+        relative = math.exp(float(np.mean(logs)))
+        rows.append((label, relative, near, float(np.mean(micros))))
+    return sorted(rows, key=lambda row: row[1])
+
+
+def run(events: int, burn_in: int, horizon: int, seeds: range) -> Results:
+    """Mean scores of every forecaster on every series over ``seeds``."""
+    factories = forecasters(horizon)
+    totals: dict[str, dict[str, list[tuple[float, ...]]]] = {}
+    for seed in seeds:
+        for name, values in series(events, seed).items():
+            for label, factory in factories.items():
+                row = evaluate(factory(), values, horizon, burn_in)
+                if not all(math.isfinite(v) for v in row):
+                    raise RuntimeError(f"{label} on {name} gave {row}")
+                totals.setdefault(name, {}).setdefault(label, []).append(row)
+    return {
+        name: {
+            label: tuple(float(v) for v in np.mean(rows, axis=0))
+            for label, rows in by_label.items()
+        }
+        for name, by_label in totals.items()
+    }
+
+
+def _print_table(results: Results, h: int) -> None:
+    print(
+        f"{'series':<17} {'forecaster':<23} {'MAE@1':>7} {f'MAE@{h}':>7} "
+        f"{'ratio@1':>8} {f'ratio@{h}':>8} {'us/event':>9}"
+    )
+    for name, by_label in results.items():
+        for label, (mae1, mae_h, ratio1, ratio_h, micros) in by_label.items():
+            print(
+                f"{name:<17} {label:<23} {mae1:7.3f} {mae_h:7.3f} "
+                f"{ratio1:8.2f} {ratio_h:8.2f} {micros:9.1f}"
+            )
+        print()
+    print(
+        f"{'forecaster':<23} {'relative MAE@1':>15} {'near best':>10} {'us/event':>9}"
+    )
+    for label, relative, near, micros in summary(results):
+        print(f"{label:<23} {relative:15.3f} {near:10d} {micros:9.1f}")
+
+
+def _print_markdown(results: Results, h: int) -> None:
+    count = len(results)
+    print(f"| Forecaster | Relative MAE@1 | Near best (of {count}) | µs per event |")
+    print("| --- | ---: | ---: | ---: |")
+    for label, relative, near, micros in summary(results):
+        print(f"| `{label}` | {relative:.3f} | {near} | {micros:.0f} |")
+    print()
+    print(f"| Series | Best MAE@1 | Best forecaster | Best MAE@{h} |")
+    print("| --- | ---: | --- | ---: |")
+    for name, by_label in results.items():
+        label, row = min(by_label.items(), key=lambda item: item[1][0])
+        best_h = min(other[1] for other in by_label.values())
+        print(f"| {name} | {row[0]:.3f} | `{label}` | {best_h:.3f} |")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--events", type=int, default=4000)
     parser.add_argument("--burn-in", type=int, default=1000)
     parser.add_argument("--horizon", type=int, default=6)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seeds", type=int, default=1)
+    parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args()
 
-    h = args.horizon
-    print(
-        f"{'series':<17} {'forecaster':<23} {'MAE@1':>7} {f'MAE@{h}':>7} "
-        f"{'ratio@1':>8} {f'ratio@{h}':>8} {'us/event':>9}"
-    )
-    for name, values in series(args.events, args.seed).items():
-        for label, factory in forecasters(h).items():
-            row = evaluate(factory(), values, h, args.burn_in)
-            if not all(math.isfinite(v) for v in row):
-                raise RuntimeError(f"{label} on {name} gave {row}")
-            mae1, mae_h, ratio1, ratio_h, micros = row
-            print(
-                f"{name:<17} {label:<23} {mae1:7.3f} {mae_h:7.3f} "
-                f"{ratio1:8.2f} {ratio_h:8.2f} {micros:9.1f}"
-            )
-        print()
+    seeds = range(args.seed, args.seed + args.seeds)
+    results = run(args.events, args.burn_in, args.horizon, seeds)
+    if args.markdown:
+        _print_markdown(results, args.horizon)
+    else:
+        _print_table(results, args.horizon)
 
 
 if __name__ == "__main__":
