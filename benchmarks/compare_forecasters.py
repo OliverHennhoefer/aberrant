@@ -36,12 +36,13 @@ from __future__ import annotations
 
 import argparse
 import math
-import time
 from collections.abc import Callable
+from typing import cast
 
 import numpy as np
 
 from aberrant.base.protocols import ForecasterProtocol, RegressorProtocol
+from aberrant.evaluate import ForecastEvaluator
 from aberrant.forecast import (
     AdaptiveRandomForestRegressor,
     AutoRegressive,
@@ -185,27 +186,16 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
 def evaluate(
     model: ForecasterProtocol, values: list[float], horizon: int, burn_in: int
 ) -> tuple[float, float, float, float, float]:
-    errors: dict[int, list[float]] = {1: [], horizon: []}
-    spreads: dict[int, list[float]] = {1: [], horizon: []}
-    pending: list[tuple[int, object]] = []
-    start = time.perf_counter()
-    for index, y in enumerate(values):
-        model.learn_one(y)
-        forecast = model.forecast_one()
-        if forecast is not None and index >= burn_in:
-            pending.append((index, forecast))
-    elapsed = time.perf_counter() - start
-    for origin, forecast in pending:
-        for lead, lead_errors in errors.items():
-            target = origin + lead
-            if target < len(values):
-                lead_errors.append(abs(values[target] - forecast.point(lead)))
-                spreads[lead].append(forecast.scale[lead - 1])
-    first, last = (float(np.mean(errors[lead])) for lead in (1, horizon))
-    ratios = (
-        float(np.mean(errors[lead]) / np.mean(spreads[lead])) for lead in (1, horizon)
+    result = ForecastEvaluator(model, warmup=burn_in).evaluate(values)
+    first, last = result.lead(1), result.lead(horizon)
+    micros = ((result.forecast_time_ns or 0) + (result.learn_time_ns or 0)) / 1e3
+    return (
+        cast(float, first.mae),
+        cast(float, last.mae),
+        cast(float, first.spread_ratio),
+        cast(float, last.spread_ratio),
+        micros / len(values),
     )
-    return first, last, *ratios, 1e6 * elapsed / len(values)
 
 
 def summary(results: Results) -> list[tuple[str, float, int, float]]:

@@ -9,6 +9,12 @@ Semantic Versioning.
 
 ### Added
 
+- `aberrant.evaluate.ForecastEvaluator`: forecast-before-learn evaluation of
+  a forecaster. Every observed value is scored once at each lead, and each
+  lead reports MAE, RMSE, bias, MASE against the seasonal naive forecast,
+  and the ratio of the error to the issued spread. Missing values are
+  learned and not scored, and pending forecasts take O(horizon) memory.
+  `benchmarks/compare_forecasters.py` uses it.
 - `ScoreCalibrator("spot")` and `ScoreCalibrator("dspot")`: streaming peaks
   over threshold (Siffer et al., KDD 2017) over the calibration window. A
   generalized Pareto tail fitted to the window's peaks gives thresholds for
