@@ -8,8 +8,9 @@ class import paths or model-specific warm-up formulas.
 ## Reuse resolved configuration
 
 Resolve once when initializing a service or evaluator. Resolution applies
-constructor defaults, validates types and feature widths, and resolves
-capabilities without constructing or learning any algorithms.
+constructor defaults, validates types and feature widths, and builds the model
+once to read its capabilities, so a constructor error surfaces here. Nothing
+is learned.
 
 ```python
 from aberrant.catalog import DetectorConfig
@@ -34,11 +35,12 @@ model. Persist canonical configuration and learned detector state using the
 application's checkpoint policy; keep resolved plans as process-local metadata.
 Caller-supplied runtime dependencies retain their own ownership and lifetime.
 
-`normalized()` and `fingerprint()` keep their narrower validation boundary:
+`normalized()` and `fingerprint()` keep a narrower validation boundary:
 they do not construct algorithms or require compatible pipeline feature counts.
 Fingerprints use the existing canonical JSON representation and reject non-JSON
 values, including Python runtime dependencies, even when those are buildable.
-Algorithm constructor invariants are checked when building.
+Algorithm constructor invariants are checked by `resolve()`, `capabilities()`
+and `build()`.
 
 Configuration exceptions retain their messages and subclasses and expose an
 immutable tuple of `ConfigurationIssue` records through `error.issues`. A record

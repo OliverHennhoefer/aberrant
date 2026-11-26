@@ -207,7 +207,16 @@ class TestMondrianForest(unittest.TestCase):
         """Requested subspace should be clipped by feature dimensionality."""
         forest = MondrianForest(n_trees=3, subspace_size=10, seed=42)
         forest.learn_one({"x": 1.0, "y": 2.0})
-        self.assertEqual(forest.subspace_size, 2)
+        self.assertTrue(all(len(tree.selected_indices) == 2 for tree in forest.trees))
+        self.assertEqual(forest.subspace_size, 10)
+
+    def test_reset_forgets_the_feature_count(self):
+        """A reset forest samples its subspaces from the next stream's features."""
+        forest = MondrianForest(n_trees=3, subspace_size=10, seed=42)
+        forest.learn_one({"x": 1.0, "y": 2.0})
+        forest.reset()
+        forest.learn_one(dict.fromkeys("abcdef", 1.0))
+        self.assertTrue(all(len(tree.selected_indices) == 6 for tree in forest.trees))
 
     def test_input_validation(self):
         """Forest should reject empty, non-numeric, and non-finite input."""

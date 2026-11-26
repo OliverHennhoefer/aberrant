@@ -410,7 +410,8 @@ class MondrianIsolationForest(BaseModel):
 
     Args:
         n_trees: Number of trees in the forest.
-        subspace_size: Number of features sampled per tree.
+        subspace_size: Number of features sampled per tree, at most the
+            number of features in the stream.
         lifetime: Mondrian lifetime budget.
         seed: Random seed for reproducibility.
         window_size: Optional bound on recent observations used to replace the
@@ -554,7 +555,7 @@ class MondrianIsolationForest(BaseModel):
 
     def _initialize_features(self, feature_count: int) -> None:
         """Create all trees for a validated feature width."""
-        self.subspace_size = min(self.subspace_size, feature_count)
+        subspace_size = min(self.subspace_size, feature_count)
         self.trees = []
 
         max_seed = np.iinfo(np.int64).max
@@ -562,7 +563,7 @@ class MondrianIsolationForest(BaseModel):
             selected_indices = np.asarray(
                 self.rng.choice(
                     feature_count,
-                    size=self.subspace_size,
+                    size=subspace_size,
                     replace=False,
                 ),
                 dtype=np.int64,

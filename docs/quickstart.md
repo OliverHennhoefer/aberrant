@@ -77,11 +77,11 @@ for t, score in enumerate(score_stream):
     print(f"score={score:.2f}, threshold={limit:.2f}, alarm={alarm}")
 ```
 
-`split` uses the conformal quantile of the last `window` scores. Until the
+`split` uses the conformal quantile of the last `window_size` scores. Until the
 window holds enough scores for that quantile, the threshold is only the
 largest absolute score seen so far, so the example ignores alarms while the
 window fills. The
-[calibration guide](user_guide/calibration.md) compares the fifteen methods.
+[calibration guide](user_guide/calibration.md) compares the seventeen methods.
 
 ## Continue from here
 

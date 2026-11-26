@@ -131,6 +131,9 @@ Semantic Versioning.
 
 ### Fixed
 
+- `MondrianIsolationForest` keeps the `subspace_size` it was built with.
+  Learning used to lower it to the number of features, so `reset()` and
+  `clone()` after a narrow stream sampled too few features from a wider one.
 - The transform API page documents every transformer again; its entries
   had lost their class names. The pipeline and transformer guides build
   their `OnlineIsolationForest` with a window it accepts, and the custom
@@ -252,12 +255,12 @@ Semantic Versioning.
   read `readiness.ready`.
 - **Breaking:** the catalog reads each model's warm-up from a freshly built
   instance's `readiness` instead of recomputing it, so the two cannot drift.
-  `ModelCapabilities.warmup` is that `required` count or `None`, and
-  `warmup_unit` its unit. `model_capabilities(id, params)` replaces
+  `ModelCapabilities.warm_up` is that `required` count or `None`, and
+  `warm_up_unit` its unit. `model_capabilities(id, params)` replaces
   `ModelSpec.capabilities(params)`. Resolving a `DetectorConfig` now builds the
   model once, so constructor errors surface at resolution.
 - **Breaking:** `PrequentialEvaluator` excludes events while the model's
-  `readiness` is not ready, for any unit and for pipelines. `warmup` (default
+  `readiness` is not ready, for any unit and for pipelines. `warm_up` (default
   `0`) excludes further learned events on top of that. The `readiness` callback
   and `higher_is_more_anomalous` are gone, and metrics always rank higher
   scores as more anomalous.
@@ -394,7 +397,7 @@ Semantic Versioning.
 - Runtime and optional dependencies have no upper version bounds, so
   aberrant no longer blocks an application from upgrading NumPy,
   scikit-learn, PyTorch or FAISS. CI installs the lowest supported
-  versions and runs a smoke stream on Python 3.11.
+  versions and runs a smoke stream on Python 3.12.
 - The `all` extra installs only `eval`, `dl` and `faiss`.
 - The package declares its license as the SPDX expression `MIT` (PEP 639).
 - `StreamSpot` keeps its graphs in least-recently-seen order,
@@ -408,7 +411,7 @@ Semantic Versioning.
 ### Development
 
 - CI runs ruff and mypy once, in a `lint` job, and the `test` matrix over
-  Python 3.11 to 3.14 on Linux and Windows runs only the tests.
+  Python 3.12 to 3.14 on Linux and Windows runs only the tests.
 - The 25 per-model scripts under `examples/models/` gave way to one script
   per model family (`forest.py`, `distance.py`, `sketch.py`, `stat.py`,
   `svm.py`, `deep.py`, `graph.py`, `timeseries.py`, `forecast.py`). They
@@ -486,9 +489,9 @@ Semantic Versioning.
   `residual_detector` ID with a nested `holt_winters` model.
 - **Breaking:** `QuantileThreshold` and its catalog ID `quantile_threshold`.
   Models return scores only, and alarm thresholds come from
-  `aberrant.calibration`: `ScoreCalibrator("split", alpha=0.01, window=1000)`
-  keeps the conformal quantile of a rolling score window, and fourteen other
-  methods adapt to drift. Compare each score with `predict(t)` before calling
+  `aberrant.calibration`: `ScoreCalibrator("split", alpha=0.01, window_size=1000)`
+  keeps the conformal quantile of a rolling score window, and sixteen other
+  methods adapt to drift or extrapolate the tail. Compare each score with `predict(t)` before calling
   `update(t, score)`. The catalog's `score` event kind went with it.
 - **Breaking:** `predict_one` and `predict_threshold` on
   `CellNeighborhoodDetector`, `AnoEdgeL`, `StreamSpot` and `LODA`, and

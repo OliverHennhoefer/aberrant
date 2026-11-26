@@ -86,7 +86,8 @@ assert detected_at is not None
 
 `drift_detected` describes only the **last** update. Read and handle it in the
 same iteration. ADWIN, CUSUM and Page-Hinkley soft-reset on the update after a signal;
-KSWIN clears its window immediately when it signals. Their `n_detections`
+KSWIN keeps only its latest `stat_size` values when it signals, so its next
+test comes `window_size - stat_size` observations later. Their `n_detections`
 counters remain available until an explicit `reset()`.
 
 ## Monitor a model score
