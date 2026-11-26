@@ -55,7 +55,7 @@ TRANSFORMER_PARAMS: dict[str, dict[str, object]] = {
     "deseasonalize": {"season_length": 4},
     "one_hot_encoder": {"categories": {"b": ["x", "y"]}},
     "frequency_encoder": {"features": ["b"], "window_size": 10},
-    "calendar_features": {"timestamp": "a", "cycles": ["day", "year"]},
+    "calendar_features": {"time_key": "a", "cycles": ["day", "year"]},
 }
 _CATEGORICAL = {"one_hot_encoder", "frequency_encoder"}
 _EDGE_MODELS = {"anoedge_l", "isconna", "midas", "streamspot"}

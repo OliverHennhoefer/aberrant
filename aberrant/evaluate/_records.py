@@ -20,7 +20,7 @@ class EvaluationRecord:
     label: int | None
     score: float | None
     learned: bool
-    exclusion: Literal["warmup", "not_ready"] | None
+    exclusion: Literal["warm_up", "not_ready"] | None
     score_time_ns: int | None
     learn_time_ns: int | None
 
@@ -40,7 +40,7 @@ class EvaluationResult:
     n_seen: int
     n_scored: int
     n_learned: int
-    n_warmup: int
+    n_warm_up: int
     n_not_ready: int
     n_labeled: int
     prevalence: float | None
@@ -55,5 +55,5 @@ class EvaluationResult:
     package_version: str
     config: DetectorConfig | None
     config_fingerprint: str | None
-    warmup: int
+    warm_up: int
     learn_policy_name: str

@@ -114,12 +114,12 @@ def test_catalog_warmup_is_the_learned_events_readiness_needs(component_id):
     params = quick_params(component_id)
     model = create_model(component_id, params)
     capabilities = model_capabilities(component_id, params)
-    assert capabilities.warmup == model.readiness.required
-    assert capabilities.warmup_unit is model.readiness.unit
-    if capabilities.warmup_unit is not ReadinessUnit.EVENTS:
+    assert capabilities.warm_up == model.readiness.required
+    assert capabilities.warm_up_unit is model.readiness.unit
+    if capabilities.warm_up_unit is not ReadinessUnit.EVENTS:
         pytest.skip("only an event count maps onto learned events")
-    assert capabilities.warmup is not None
-    for index, event in enumerate(_events(component_id, capabilities.warmup)):
+    assert capabilities.warm_up is not None
+    for index, event in enumerate(_events(component_id, capabilities.warm_up)):
         assert not model.readiness.ready, f"ready after {index} events"
         model.learn_one(event)
     assert model.readiness.ready
@@ -341,19 +341,19 @@ def test_calibrator_contract():
         return out
 
     def build():
-        return ScoreCalibrator("aci", alpha=0.1, window=40, gamma=0.02)
+        return ScoreCalibrator("aci", alpha=0.1, window_size=40, gamma=0.02)
 
     calibrator = build()
     expected = thresholds(build())
     params = calibrator.get_params()
-    assert params == {"method": "aci", "alpha": 0.1, "window": 40, "gamma": 0.02}
+    assert params == {"method": "aci", "alpha": 0.1, "window_size": 40, "gamma": 0.02}
     assert thresholds(ScoreCalibrator(params.pop("method"), **params)) == expected
     thresholds(calibrator)
     assert thresholds(calibrator.clone()) == expected
     calibrator.reset()
     assert thresholds(calibrator) == expected
     assert repr(calibrator) == (
-        "ScoreCalibrator('aci', alpha=0.1, window=40, gamma=0.02)"
+        "ScoreCalibrator('aci', alpha=0.1, window_size=40, gamma=0.02)"
     )
     assert (
         repr(ScoreCalibrator("aci", alpha=0.1)) == "ScoreCalibrator('aci', alpha=0.1)"

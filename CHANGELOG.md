@@ -39,6 +39,11 @@ Semantic Versioning.
   timestamp by the sine and cosine of its position in the day, week or year
   of a time zone. The catalog lists them as `signed_log` and
   `calendar_features`.
+- `aberrant.datasets.synthetic` generates a labelled stream of correlated,
+  seasonal features with spikes, level shifts, bursts of variance,
+  flatlines and decouplings injected after a clean prefix, without a
+  download. `SyntheticStream.anomalies` lists each one's kind, feature and
+  events.
 - `aberrant.model.ScoreEnsemble` combines two or more detectors. Each
   member's score is ranked or z-scored against that member's last
   `window_size` learned scores, and the results are combined by mean, max
@@ -185,6 +190,8 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** aberrant requires Python 3.12 or newer and is tested on 3.12
+  to 3.14.
 - **Breaking:** `ForecasterProtocol.learn_one` takes `None` for a missing
   value, and every forecaster accepts it. `SeasonalNaive` and `HoltWinters`
   advance without a correction, report the spread of the longer lead each
@@ -312,7 +319,17 @@ Semantic Versioning.
   - Warm-up: `warm_up`, in the unit the docstring names (was
     `warm_up_samples`, `warmup_samples`, `warm_up_buckets`, `warm_up_slides`,
     `warm_up_graphs`, `warm_up_observers`, `init_sample_size`, `min_samples`
-    and `IncrementalPCA`'s `n0`).
+    and `IncrementalPCA`'s `n0`, `ADWIN`'s `grace_period`, `PageHinkley`'s
+    `min_instances`, and `warmup` on `CUSUM`, `PrequentialEvaluator` and
+    `ForecastEvaluator`). Results follow: `EvaluationResult.warm_up` and
+    `n_warm_up`, the exclusion `"warm_up"`, `ForecastResult.warm_up`, and
+    `ModelCapabilities.warm_up` and `warm_up_unit`, which the catalog
+    manifest lists under `warm_up`.
+  - Window length: `window_size`, on `ScoreCalibrator` and `ScoreHistory`
+    too (was `window`).
+  - Counts: an `n_` prefix, so `AnoEdgeL(n_dense_submatrices=...)` and
+    `StreamSpot(n_clusters=...)` (were `num_dense_submatrices` and
+    `num_clusters`).
   - Hash rows and counters per row: `n_hashes` and `sketch_width` (was
     `count_min_rows`/`count_min_cols` on `MIDAS` and `ISCONNA`,
     `rows`/`buckets` on `MStream`, `hash_num`/`bins` on `RSHash`,
@@ -333,7 +350,8 @@ Semantic Versioning.
 - **Breaking:** detector configurations and the catalog manifest use format
   version 2. A version 1 configuration is rejected; rename its ids and
   parameters as listed above and set `"version": 2`.
-- **Breaking:** every public class and function has exactly one import path.
+- **Breaking:** every public class and function has exactly one import path,
+  and `aberrant.exceptions` exports only its exceptions.
   - `aberrant.model.iforest` is now `aberrant.model.forest`.
   - The exceptions moved from `aberrant.base` to `aberrant.exceptions`.
   - `Forecast` is imported from `aberrant.forecast` only.

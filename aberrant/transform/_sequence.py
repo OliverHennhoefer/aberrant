@@ -7,7 +7,7 @@ from array import array
 from bisect import bisect_left, bisect_right, insort
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal
 
 from aberrant._utils.validation import coerce_feature_values, coerce_finite_number
 from aberrant.base.readiness import Readiness
@@ -15,7 +15,7 @@ from aberrant.base.transformer import BaseTransformer
 from aberrant.exceptions import ValidationError
 
 State = tuple[Any, ...]
-Window: TypeAlias = "array[float]"
+type Window = "array[float]"
 ChangeKind = Literal["difference", "percent"]
 Statistic = Literal[
     "sum",

@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from collections import deque
 from itertools import product
-from typing import TypeAlias
 
 import numpy as np
 
@@ -13,8 +12,8 @@ from aberrant._utils.validation import NumericEventBoundary, coerce_integer_coun
 from aberrant.base.model import BaseModel
 from aberrant.base.readiness import Readiness
 
-_Cell: TypeAlias = tuple[int, ...]
-_Entry: TypeAlias = tuple[int, _Cell]
+type _Cell = tuple[int, ...]
+type _Entry = tuple[int, _Cell]
 _MAX_NEIGHBOR_OFFSETS = 20_000
 # Added to the squared radius so rounding cannot drop a neighbor on the boundary.
 _DISTANCE_TOLERANCE = 1e-9

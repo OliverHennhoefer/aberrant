@@ -47,7 +47,7 @@ def _predictive(prior: _Prior, st: _Suff) -> StudentT:
 
 def _empirical_prior(h: ScoreHistory, k0: float = 0.5, a0: float = 1.0) -> _Prior:
     """A weak prior centred on the recent scores (empirical Bayes)."""
-    xs = h.recent(h.window)
+    xs = h.recent(h.window_size)
     n = 0
     mean = m2 = 0.0
     for x in xs:

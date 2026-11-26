@@ -27,7 +27,7 @@ CLIPPED = sorted(key for key, spec in CALIBRATORS.items() if not spec.extrapolat
 
 @pytest.mark.parametrize("method", CLIPPED)
 def test_thresholds_stay_within_the_scores_seen(method):
-    calibrator = ScoreCalibrator(method, alpha=0.1, window=50)
+    calibrator = ScoreCalibrator(method, alpha=0.1, window_size=50)
     largest = 0.0
     for t, score in enumerate(_scores(200)):
         threshold = calibrator.predict(t)
@@ -40,7 +40,7 @@ def test_thresholds_stay_within_the_scores_seen(method):
 @pytest.mark.parametrize("method", sorted(CALIBRATORS))
 def test_a_pickled_calibrator_continues_identically(method):
     scores = _scores(300)
-    original = ScoreCalibrator(method, alpha=0.1, window=50)
+    original = ScoreCalibrator(method, alpha=0.1, window_size=50)
     for t in range(150):
         original.predict(t)
         if t >= 2:
@@ -54,7 +54,7 @@ def test_a_pickled_calibrator_continues_identically(method):
 
 @pytest.mark.parametrize("method", ["split", "aci", "dtaci", "qt", "pid", "saocp"])
 def test_long_run_coverage_is_near_the_target(method):
-    calibrator = ScoreCalibrator(method, alpha=0.1, window=200)
+    calibrator = ScoreCalibrator(method, alpha=0.1, window_size=200)
     covered = []
     for t, score in enumerate(_scores(3000)):
         threshold = calibrator.predict(t)
@@ -67,7 +67,7 @@ def test_long_run_coverage_is_near_the_target(method):
 
 @pytest.mark.parametrize("method", sorted(CALIBRATORS))
 def test_feedback_for_an_unknown_key_still_joins_the_history(method):
-    calibrator = ScoreCalibrator(method, alpha=0.1, window=30)
+    calibrator = ScoreCalibrator(method, alpha=0.1, window_size=30)
     scores = _scores(60)
     for score in scores:
         calibrator.update("never issued", score)
@@ -80,10 +80,12 @@ def test_feedback_for_an_unknown_key_still_joins_the_history(method):
 
 
 def test_the_calibrator_describes_its_method():
-    calibrator = ScoreCalibrator("eci", alpha=0.1, window=40, c=2)
+    calibrator = ScoreCalibrator("eci", alpha=0.1, window_size=40, c=2)
 
     assert calibrator.spec is CALIBRATORS["eci"]
-    assert repr(calibrator) == "ScoreCalibrator('eci', alpha=0.1, window=40, c=2.0)"
+    assert (
+        repr(calibrator) == "ScoreCalibrator('eci', alpha=0.1, window_size=40, c=2.0)"
+    )
 
 
 def test_parameters_default_and_validate():
@@ -164,7 +166,7 @@ def test_only_the_rolling_split_promises_exchangeable_coverage():
 
 @pytest.mark.parametrize("method", sorted(CALIBRATORS))
 def test_the_history_stays_bounded_on_a_long_stream(method):
-    calibrator = ScoreCalibrator(method, alpha=0.1, window=20)
+    calibrator = ScoreCalibrator(method, alpha=0.1, window_size=20)
     history = calibrator.history
     for t, score in enumerate(_scores(3000)):
         calibrator.predict(t)
@@ -177,7 +179,7 @@ def test_the_history_stays_bounded_on_a_long_stream(method):
 
 
 def test_the_history_gives_its_latest_scores_oldest_first():
-    history = ScoreHistory(window=3, lookback=5)
+    history = ScoreHistory(window_size=3, lookback=5)
     for score in (1.0, -4.0, 2.0, 3.0, 0.5, 6.0, 7.0):
         history.push(score)
 
@@ -192,7 +194,7 @@ def test_the_history_gives_its_latest_scores_oldest_first():
 
 
 def test_a_window_longer_than_the_lookback_is_kept_whole():
-    history = ScoreHistory(window=8, lookback=2)
+    history = ScoreHistory(window_size=8, lookback=2)
     for score in range(20):
         history.push(float(score))
 

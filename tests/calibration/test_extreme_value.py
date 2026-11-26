@@ -27,7 +27,7 @@ def test_the_fit_recovers_the_tail_shape(sample, gamma):
 
 
 def _run(method, scores, *, alpha, window, **params):
-    calibrator = ScoreCalibrator(method, alpha=alpha, window=window, **params)
+    calibrator = ScoreCalibrator(method, alpha=alpha, window_size=window, **params)
     thresholds = []
     for t, score in enumerate(scores):
         thresholds.append(calibrator.predict(t))
@@ -89,8 +89,8 @@ def test_dspot_follows_a_drifting_level():
 
 def test_before_a_fit_the_threshold_is_the_window_quantile():
     scores = _exponential(MIN_SCORES - 1)
-    spot = ScoreCalibrator("spot", alpha=0.1, window=200)
-    split = ScoreCalibrator("split", alpha=0.1, window=200)
+    spot = ScoreCalibrator("spot", alpha=0.1, window_size=200)
+    split = ScoreCalibrator("split", alpha=0.1, window_size=200)
     for t, score in enumerate(scores):
         assert spot.predict(t) == split.predict(t)
         spot.update(t, score)

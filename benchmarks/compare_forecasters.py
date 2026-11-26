@@ -186,7 +186,7 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
 def evaluate(
     model: ForecasterProtocol, values: list[float], horizon: int, burn_in: int
 ) -> tuple[float, float, float, float, float]:
-    result = ForecastEvaluator(model, warmup=burn_in).evaluate(values)
+    result = ForecastEvaluator(model, warm_up=burn_in).evaluate(values)
     first, last = result.lead(1), result.lead(horizon)
     micros = ((result.forecast_time_ns or 0) + (result.learn_time_ns or 0)) / 1e3
     return (

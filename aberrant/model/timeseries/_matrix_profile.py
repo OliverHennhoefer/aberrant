@@ -7,18 +7,13 @@ from collections import deque
 from collections.abc import Callable, Iterable
 from functools import lru_cache
 from itertools import chain, islice
-from typing import Generic, TypeVar, cast
+from typing import cast
 
 import numpy as np
 
 from aberrant._utils.validation import FeatureSchema, PreparedFeatures
 from aberrant.base.model import BaseModel
 from aberrant.base.readiness import Readiness
-
-_Sample = TypeVar("_Sample", float, np.ndarray)
-_Statistics = TypeVar(
-    "_Statistics", tuple[int, float, float], list[tuple[int, float, float]]
-)
 
 
 def _resolve_parameters(
@@ -55,7 +50,10 @@ def _resolve_parameters(
     return resolved_window, resolved_zone
 
 
-class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
+class _BaseRollingMatrixProfile[
+    Sample: (float, np.ndarray),
+    Statistics: (tuple[int, float, float], list[tuple[int, float, float]]),
+](BaseModel):
     """Keep observations, window statistics, and absolute indices aligned."""
 
     _expected_size: int | None = None
@@ -80,8 +78,8 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
     def _reset_state(self) -> None:
         """Clear history, schema, and absolute indices; preserve configuration."""
         self._schema = FeatureSchema(expected_size=self._expected_size)
-        self._history: deque[_Sample] = deque(maxlen=self.window_size)
-        self._statistics: deque[_Statistics] = deque(
+        self._history: deque[Sample] = deque(maxlen=self.window_size)
+        self._statistics: deque[Statistics] = deque(
             maxlen=self.window_size - self.subsequence_length + 1
         )
         self._samples_seen = 0
@@ -106,13 +104,13 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
     def _learn(
         self,
         prepared: PreparedFeatures,
-        value: _Sample,
-        summarize: Callable[[np.ndarray], _Statistics],
+        value: Sample,
+        summarize: Callable[[np.ndarray], Statistics],
     ) -> None:
         statistics = None
         if len(self._history) >= self.subsequence_length - 1:
             # Iterate from the newest end so learning remains O(m), not O(W).
-            tail: list[_Sample] = list(
+            tail: list[Sample] = list(
                 islice(reversed(self._history), self.subsequence_length - 1)
             )
             query = np.asarray([*reversed(tail), value], dtype=np.float64)
@@ -125,8 +123,8 @@ class _BaseRollingMatrixProfile(BaseModel, Generic[_Sample, _Statistics]):
         self._samples_seen += 1
 
     def _query(
-        self, value: _Sample
-    ) -> tuple[np.ndarray, np.ndarray, list[_Statistics], int]:
+        self, value: Sample
+    ) -> tuple[np.ndarray, np.ndarray, list[Statistics], int]:
         """Prepare an eligible reference series and query without advancing state."""
         history = np.asarray(self._history, dtype=np.float64)
         egress = int(len(history) == self.window_size)

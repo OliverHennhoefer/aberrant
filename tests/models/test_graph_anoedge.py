@@ -67,7 +67,7 @@ class TestAnoEdgeL(unittest.TestCase):
             "sketch_rows": 64,
             "sketch_cols": 64,
             "n_hashes": 4,
-            "num_dense_submatrices": 1,
+            "n_dense_submatrices": 1,
             "time_decay_factor": 1.0,
             "warm_up": 0,
             "seed": 42,
@@ -83,7 +83,7 @@ class TestAnoEdgeL(unittest.TestCase):
         self.assertEqual(model.sketch_rows, 256)
         self.assertEqual(model.sketch_cols, 256)
         self.assertEqual(model.n_hashes, 4)
-        self.assertEqual(model.num_dense_submatrices, 1)
+        self.assertEqual(model.n_dense_submatrices, 1)
         self.assertEqual(model.time_decay_factor, 1.0)
         self.assertEqual(model.warm_up, 0)
 
@@ -105,12 +105,12 @@ class TestAnoEdgeL(unittest.TestCase):
         with self.assertRaises(ValueError):
             AnoEdgeL(n_hashes=0)
         with self.assertRaises(ValueError):
-            AnoEdgeL(num_dense_submatrices=0)
+            AnoEdgeL(n_dense_submatrices=0)
         with self.assertRaises(ValueError):
             AnoEdgeL(
                 sketch_rows=2,
                 sketch_cols=2,
-                num_dense_submatrices=3,
+                n_dense_submatrices=3,
             )
         with self.assertRaises(ValueError):
             AnoEdgeL(time_decay_factor=0.0)
@@ -224,7 +224,7 @@ class TestAnoEdgeL(unittest.TestCase):
             sketch_rows=12,
             sketch_cols=13,
             n_hashes=5,
-            num_dense_submatrices=2,
+            n_dense_submatrices=2,
         )
         sketch_shape = model._sketch.shape
         for i in range(500):
@@ -255,13 +255,13 @@ class TestAnoEdgeL(unittest.TestCase):
             sketch_rows=15,
             sketch_cols=17,
             n_hashes=6,
-            num_dense_submatrices=2,
+            n_dense_submatrices=2,
         )
         output = repr(model)
         self.assertIn("AnoEdgeL", output)
         self.assertIn("sketch_rows=15", output)
         self.assertIn("sketch_cols=17", output)
-        self.assertIn("num_dense_submatrices=2", output)
+        self.assertIn("n_dense_submatrices=2", output)
 
 
 if __name__ == "__main__":

@@ -86,8 +86,8 @@ class FeatureCount:
 class ModelCapabilities:
     """Resolved operational facts for one model configuration.
 
-    ``warmup`` is the ``required`` count of a freshly built model's
-    ``readiness``, in ``warmup_unit``. It is ``None`` when the configuration
+    ``warm_up`` is the ``required`` count of a freshly built model's
+    ``readiness``, in ``warm_up_unit``. It is ``None`` when the configuration
     cannot be built yet or the count depends on the data.
     """
 
@@ -95,8 +95,8 @@ class ModelCapabilities:
     feature_count: FeatureCount
     feature_schema: FeatureSchemaKind
     score_kind: ScoreKind
-    warmup: int | None
-    warmup_unit: ReadinessUnit
+    warm_up: int | None
+    warm_up_unit: ReadinessUnit
     state: StateKind
     requires_unit_interval: bool = False
 
@@ -107,7 +107,7 @@ class ModelCapabilities:
             "feature_count": self.feature_count.as_dict(),
             "feature_schema": self.feature_schema.value,
             "score_kind": self.score_kind.value,
-            "warmup": {"required": self.warmup, "unit": self.warmup_unit.value},
+            "warm_up": {"required": self.warm_up, "unit": self.warm_up_unit.value},
             "state": self.state.value,
             "requires_unit_interval": self.requires_unit_interval,
         }

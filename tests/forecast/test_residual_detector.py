@@ -129,7 +129,7 @@ def test_runs_in_prequential_evaluation() -> None:
 def test_lead_two_scores_feed_a_calibrator_with_delayed_feedback() -> None:
     rng = np.random.default_rng(4)
     model = HoltWinters(season_length=12, horizon=2)
-    calibrator = ScoreCalibrator("aci", alpha=0.1, window=200, gamma=0.005)
+    calibrator = ScoreCalibrator("aci", alpha=0.1, window_size=200, gamma=0.005)
     pending: dict[int, tuple[Forecast, float]] = {}
     misses = []
     t = np.arange(6000)

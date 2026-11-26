@@ -73,7 +73,7 @@ def test_forecasts_before_learning_and_scores_each_lead_once() -> None:
 
 
 def test_warmup_skips_forecasts_issued_before_it() -> None:
-    evaluator = ForecastEvaluator(LastValue(horizon=1), warmup=2, measure_time=False)
+    evaluator = ForecastEvaluator(LastValue(horizon=1), warm_up=2, measure_time=False)
     records = list(evaluator.iter_evaluate([1.0, 3.0, 4.0, 8.0]))
     assert [record.forecast is not None for record in records] == [
         False,
@@ -108,9 +108,9 @@ def test_mase_scales_by_the_seasonal_naive_error() -> None:
 
 def test_matches_a_direct_loop_on_a_real_forecaster() -> None:
     values = [math.sin(t / 3) + 0.01 * ((t * 7919) % 11) for t in range(600)]
-    result = ForecastEvaluator(AutoRegressive(order=2, horizon=3), warmup=100).evaluate(
-        values
-    )
+    result = ForecastEvaluator(
+        AutoRegressive(order=2, horizon=3), warm_up=100
+    ).evaluate(values)
     model = AutoRegressive(order=2, horizon=3)
     errors: list[float] = []
     for index, y in enumerate(values):
@@ -171,8 +171,8 @@ def test_results_are_frozen_and_timed() -> None:
 @pytest.mark.parametrize(
     "params",
     [
-        {"warmup": -1},
-        {"warmup": True},
+        {"warm_up": -1},
+        {"warm_up": True},
         {"season_length": 0},
         {"season_length": 1.0},
         {"measure_time": 1},

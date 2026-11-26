@@ -43,7 +43,7 @@ class SPOT:
         self.alpha = alpha
         self.level = level
         self.depth = depth
-        self.size = history.window
+        self.size = history.window_size
         self.window: deque[float] = deque(maxlen=self.size)
         self._sorted: list[float] = []
         self._recent: deque[float] = deque(maxlen=depth or 1)

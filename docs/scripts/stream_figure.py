@@ -69,7 +69,7 @@ def make_stream() -> np.ndarray:
 def score_stream(stream: np.ndarray) -> tuple[np.ndarray, list[int]]:
     """Score each event before learning it and collect threshold alerts."""
     detector = StandardScaler() | LocalOutlierFactor(k=10, window_size=300)
-    threshold = ScoreCalibrator("split", alpha=0.002, window=1000)
+    threshold = ScoreCalibrator("split", alpha=0.002, window_size=1000)
     scores = np.zeros(len(stream))
     alerts = []
     for index, row in enumerate(stream):

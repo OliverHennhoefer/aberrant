@@ -39,12 +39,12 @@ class ValueModel(RecordingModel):
 
 def test_score_before_learn_and_warmup_boundary():
     model = RecordingModel()
-    evaluator = PrequentialEvaluator(model, warmup=2, measure_time=False)
+    evaluator = PrequentialEvaluator(model, warm_up=2, measure_time=False)
     records = list(
         evaluator.iter_evaluate([({"x": float(i)}, i % 2) for i in range(4)])
     )
     assert [r.score for r in records] == [None, None, 2.0, 3.0]
-    assert [r.exclusion for r in records] == ["warmup", "warmup", None, None]
+    assert [r.exclusion for r in records] == ["warm_up", "warm_up", None, None]
     assert model.calls == [
         ("learn", 0.0),
         ("learn", 1.0),
@@ -54,7 +54,7 @@ def test_score_before_learn_and_warmup_boundary():
         ("learn", 3.0),
     ]
     result = evaluator.result()
-    assert (result.n_seen, result.n_scored, result.n_learned, result.n_warmup) == (
+    assert (result.n_seen, result.n_scored, result.n_learned, result.n_warm_up) == (
         4,
         2,
         4,
@@ -82,7 +82,7 @@ def test_model_readiness_uses_prior_model_state():
 def test_learning_filter_counts_only_successful_learns_for_warmup():
     evaluator = PrequentialEvaluator(
         RecordingModel(),
-        warmup=2,
+        warm_up=2,
         learn_filter=lambda x, _s: x["x"] > 0,
         learn_policy_name="positive_features",
     )
@@ -113,7 +113,7 @@ def test_filter_can_skip_scored_events_without_hiding_their_metrics():
 def test_pipeline_preserves_post_update_learning_and_prior_state_scoring():
     model = ValueModel()
     pipeline = StandardScaler() | model
-    evaluator = PrequentialEvaluator(pipeline, warmup=2)
+    evaluator = PrequentialEvaluator(pipeline, warm_up=2)
     evaluator.update({"x": 0.0})
     evaluator.update({"x": 2.0})
     record = evaluator.update({"x": 3.0})
@@ -253,9 +253,9 @@ def test_learning_failure_does_not_advance_evaluator():
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"warmup": -1},
-        {"warmup": True},
-        {"warmup": 1.5},
+        {"warm_up": -1},
+        {"warm_up": True},
+        {"warm_up": 1.5},
         {"metric_window_size": 0},
         {"metric_window_size": True},
         {"metric_window_size": -1},
@@ -299,7 +299,7 @@ def test_config_constructs_fresh_model_and_resolves_metadata():
     first = PrequentialEvaluator(config)
     second = PrequentialEvaluator(config)
     assert first.model is not second.model
-    assert first.result().warmup == 0
+    assert first.result().warm_up == 0
     assert first.result().config_fingerprint == config.fingerprint()
     assert first.result().config.as_dict()["model"]["params"]["seed"] == 19
 
@@ -358,7 +358,7 @@ def test_missing_optional_dependency_is_actionable_and_disabled_mode_works(monke
 def test_window_metrics_match_reference_and_retain_only_labeled_scored_events():
     metrics = pytest.importorskip("sklearn.metrics")
     evaluator = PrequentialEvaluator(
-        ValueModel(), warmup=1, metrics=True, metric_window_size=3
+        ValueModel(), warm_up=1, metrics=True, metric_window_size=3
     )
     records = list(
         evaluator.iter_evaluate(

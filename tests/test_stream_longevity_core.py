@@ -90,7 +90,7 @@ def test_clock_rejects_decreasing_integers_beyond_float_range() -> None:
 
 
 @pytest.mark.parametrize(
-    "parameter", ["clock", "max_buckets", "min_window_length", "grace_period"]
+    "parameter", ["clock", "max_buckets", "min_window_length", "warm_up"]
 )
 @pytest.mark.parametrize("value", [True, 1.5, math.inf, math.nan])
 def test_adwin_rejects_parameters_that_disable_compression_or_detection(
@@ -231,7 +231,7 @@ def test_evaluator_and_pipeline_retained_memory_plateau(metrics: bool) -> None:
     scaler = RollingRobustScaler(window_size=17)
     model = FeatureSchemaGuard(features=["x"]) | scaler | MovingZScore(window_size=17)
     evaluator = PrequentialEvaluator(
-        model, warmup=17, metrics=metrics, metric_window_size=31, measure_time=False
+        model, warm_up=17, metrics=metrics, metric_window_size=31, measure_time=False
     )
     # Exclude imports and initial allocations; compare live traced bytes rather
     # than RSS, whose allocator high-water marks do not measure retained state.

@@ -60,7 +60,7 @@ class ForecastResult:
     n_observed: int
     n_forecasts: int
     horizon: int
-    warmup: int
+    warm_up: int
     season_length: int
     leads: tuple[LeadScores, ...]
     forecast_time_ns: int | None
@@ -152,7 +152,7 @@ class ForecastEvaluator:
 
     Args:
         forecaster: The forecaster, used as it is and never reset.
-        warmup: Number of values learned before forecasts are scored.
+        warm_up: Number of values learned before forecasts are scored.
             Forecasts the forecaster declines (``None``) are never scored.
         season_length: Lag of the naive forecast that scales ``mase``; 1
             compares with the last value.
@@ -167,7 +167,7 @@ class ForecastEvaluator:
         self,
         forecaster: ForecasterProtocol,
         *,
-        warmup: int = 0,
+        warm_up: int = 0,
         season_length: int = 1,
         measure_time: bool = True,
     ) -> None:
@@ -176,8 +176,8 @@ class ForecastEvaluator:
         horizon = forecaster.horizon
         if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
             raise ValueError("forecaster.horizon must be a positive integer")
-        if isinstance(warmup, bool) or not isinstance(warmup, int) or warmup < 0:
-            raise ValueError("warmup must be a non-negative integer")
+        if isinstance(warm_up, bool) or not isinstance(warm_up, int) or warm_up < 0:
+            raise ValueError("warm_up must be a non-negative integer")
         if (
             isinstance(season_length, bool)
             or not isinstance(season_length, int)
@@ -188,7 +188,7 @@ class ForecastEvaluator:
             raise ValueError("measure_time must be a boolean")
         self.forecaster = forecaster
         self._horizon = horizon
-        self._warmup = warmup
+        self._warm_up = warm_up
         self._measure_time = measure_time
         self._pending: deque[tuple[int, Forecast | None]] = deque(maxlen=horizon)
         self._totals = [_LeadTotals() for _ in range(horizon)]
@@ -197,7 +197,7 @@ class ForecastEvaluator:
         self._forecast_ns = self._learn_ns = 0
 
     def _scored(self, forecast: Forecast | None) -> Forecast | None:
-        if forecast is None or self._n_seen < self._warmup:
+        if forecast is None or self._n_seen < self._warm_up:
             return None
         if not isinstance(forecast, Forecast):
             raise TypeError("forecast_one must return a Forecast or None")
@@ -270,7 +270,7 @@ class ForecastEvaluator:
             n_observed=self._n_observed,
             n_forecasts=self._n_forecasts,
             horizon=self._horizon,
-            warmup=self._warmup,
+            warm_up=self._warm_up,
             season_length=self._seasonal.season_length,
             leads=tuple(
                 totals.scores(lead, naive)

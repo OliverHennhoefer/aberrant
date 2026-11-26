@@ -73,8 +73,8 @@ class SignedLog(_Stateless):
 class CalendarFeatures(_Stateless):
     """Replace a timestamp by its position in the day, week and year.
 
-    The ``timestamp`` feature, in seconds since the Unix epoch, becomes
-    ``{timestamp}_{cycle}_sin`` and ``{timestamp}_{cycle}_cos`` for each
+    The ``time_key`` feature, in seconds since the Unix epoch, becomes
+    ``{time_key}_{cycle}_sin`` and ``{time_key}_{cycle}_cos`` for each
     cycle, appended after the other features. Sine and cosine put the end of
     a cycle next to its start, so 23:59 is close to 00:00. ``"day"`` follows
     the local time of day, ``"week"`` the weekday from Monday and ``"year"``
@@ -84,7 +84,7 @@ class CalendarFeatures(_Stateless):
     that never repeats. Other features pass through unchanged.
 
     Args:
-        timestamp: The timestamp feature.
+        time_key: The timestamp feature, as for the models that take one.
         cycles: The cycles to add, each at most once.
         timezone: An IANA time zone name, such as ``"Europe/Berlin"``, or a
             ``tzinfo``. Names other than ``"UTC"`` need the system's time
@@ -94,12 +94,12 @@ class CalendarFeatures(_Stateless):
     def __init__(
         self,
         *,
-        timestamp: str = "t",
+        time_key: str = "t",
         cycles: Sequence[Cycle] = ("day", "week"),
         timezone: str | tzinfo = "UTC",
     ) -> None:
-        if not isinstance(timestamp, str) or not timestamp:
-            raise ValueError("timestamp must be a non-empty feature name")
+        if not isinstance(time_key, str) or not time_key:
+            raise ValueError("time_key must be a non-empty feature name")
         if isinstance(cycles, str | bytes) or not isinstance(cycles, Sequence):
             raise ValueError("cycles must be a sequence of cycles, not a string")
         if (
@@ -108,29 +108,29 @@ class CalendarFeatures(_Stateless):
             or len(set(cycles)) != len(cycles)
         ):
             raise ValueError(f"cycles must be distinct ones of {', '.join(_CYCLES)}")
-        self.timestamp = timestamp
+        self.time_key = time_key
         self.cycles = list(cycles)
         self.timezone = timezone
         self._zone = _zone(timezone)
 
     def transform_one(self, x: dict[str, float]) -> dict[str, float]:
         """The other features, then the timestamp's cycle positions."""
-        if self.timestamp not in x:
-            raise ValidationError(f"Missing timestamp feature '{self.timestamp}'")
+        if self.time_key not in x:
+            raise ValidationError(f"Missing timestamp feature '{self.time_key}'")
         seconds = coerce_event_number(
-            x[self.timestamp], label=f"Feature '{self.timestamp}'"
+            x[self.time_key], label=f"Feature '{self.time_key}'"
         )
         try:
             moment = datetime.fromtimestamp(seconds, self._zone)
         except (OverflowError, OSError, ValueError) as error:
             raise ValidationError(
-                f"Feature '{self.timestamp}' is not a representable time"
+                f"Feature '{self.time_key}' is not a representable time"
             ) from error
-        result = {name: value for name, value in x.items() if name != self.timestamp}
+        result = {name: value for name, value in x.items() if name != self.time_key}
         for cycle in self.cycles:
             angle = 2 * math.pi * _phase(moment, cycle)
             for part, value in (("sin", math.sin(angle)), ("cos", math.cos(angle))):
-                name = f"{self.timestamp}_{cycle}_{part}"
+                name = f"{self.time_key}_{cycle}_{part}"
                 if name in result:
                     raise ValidationError(f"Features already exist: ['{name}']")
                 result[name] = value

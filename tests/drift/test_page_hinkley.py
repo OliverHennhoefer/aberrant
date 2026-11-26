@@ -11,7 +11,7 @@ class TestPageHinkley(unittest.TestCase):
     def test_initialization_default_params(self):
         """Test PageHinkley initialization with default parameters."""
         detector = PageHinkley()
-        self.assertEqual(detector.min_instances, 30)
+        self.assertEqual(detector.warm_up, 30)
         self.assertEqual(detector.delta, 0.005)
         self.assertEqual(detector.threshold, 50.0)
         self.assertEqual(detector.alpha, 0.9999)
@@ -22,28 +22,26 @@ class TestPageHinkley(unittest.TestCase):
     def test_initialization_custom_params(self):
         """Test PageHinkley initialization with custom parameters."""
         detector = PageHinkley(
-            min_instances=50,
+            warm_up=50,
             delta=0.01,
             threshold=100.0,
             alpha=0.999,
             mode="up",
         )
-        self.assertEqual(detector.min_instances, 50)
+        self.assertEqual(detector.warm_up, 50)
         self.assertEqual(detector.delta, 0.01)
         self.assertEqual(detector.threshold, 100.0)
         self.assertEqual(detector.alpha, 0.999)
         self.assertEqual(detector.mode, "up")
 
-    def test_invalid_min_instances(self):
-        """Test that invalid min_instances raises ValueError."""
+    def test_invalid_warm_up(self):
+        """Test that invalid warm_up raises ValueError."""
         with self.assertRaises(ValueError) as context:
-            PageHinkley(min_instances=0)
-        self.assertIn(
-            "min_instances must be a positive integer", str(context.exception)
-        )
+            PageHinkley(warm_up=0)
+        self.assertIn("warm_up must be a positive integer", str(context.exception))
 
         with self.assertRaises(ValueError):
-            PageHinkley(min_instances=-1)
+            PageHinkley(warm_up=-1)
 
     def test_invalid_delta(self):
         """Test that negative delta raises ValueError."""
@@ -93,10 +91,10 @@ class TestPageHinkley(unittest.TestCase):
             detector.update(v)
         self.assertAlmostEqual(detector.mean, 3.0, places=5)
 
-    def test_no_drift_before_min_instances(self):
-        """Test that no drift is detected before min_instances."""
-        detector = PageHinkley(min_instances=100)
-        # Add data with clear mean shift, but under min_instances
+    def test_no_drift_before_warm_up(self):
+        """Test that no drift is detected before warm_up."""
+        detector = PageHinkley(warm_up=100)
+        # Add data with clear mean shift, but under warm_up
         for _ in range(50):
             detector.update(0.0)
         for _ in range(49):
@@ -114,7 +112,7 @@ class TestPageHinkley(unittest.TestCase):
 
     def test_drift_detected_mode_up(self):
         """Test drift detection in 'up' mode."""
-        detector = PageHinkley(min_instances=20, threshold=30.0, delta=0.001, mode="up")
+        detector = PageHinkley(warm_up=20, threshold=30.0, delta=0.001, mode="up")
         # Stable phase
         for _ in range(50):
             detector.update(0.0)
@@ -129,9 +127,7 @@ class TestPageHinkley(unittest.TestCase):
 
     def test_drift_detected_mode_down(self):
         """Test drift detection in 'down' mode."""
-        detector = PageHinkley(
-            min_instances=20, threshold=30.0, delta=0.001, mode="down"
-        )
+        detector = PageHinkley(warm_up=20, threshold=30.0, delta=0.001, mode="down")
         # Stable phase at high value
         for _ in range(50):
             detector.update(10.0)
@@ -146,9 +142,7 @@ class TestPageHinkley(unittest.TestCase):
 
     def test_drift_detected_mode_both(self):
         """Test drift detection in 'both' mode."""
-        detector = PageHinkley(
-            min_instances=20, threshold=30.0, delta=0.001, mode="both"
-        )
+        detector = PageHinkley(warm_up=20, threshold=30.0, delta=0.001, mode="both")
         # Stable phase
         for _ in range(50):
             detector.update(5.0)
@@ -181,10 +175,10 @@ class TestPageHinkley(unittest.TestCase):
 
     def test_repr(self):
         """Test string representation."""
-        detector = PageHinkley(min_instances=50, threshold=100.0, mode="up")
+        detector = PageHinkley(warm_up=50, threshold=100.0, mode="up")
         repr_str = repr(detector)
         self.assertIn("PageHinkley", repr_str)
-        self.assertIn("min_instances=50", repr_str)
+        self.assertIn("warm_up=50", repr_str)
         self.assertIn("threshold=100.0", repr_str)
         self.assertIn("mode='up'", repr_str)
 
@@ -194,7 +188,7 @@ class TestPageHinkleyAutoReset(unittest.TestCase):
 
     def test_auto_reset_on_subsequent_update(self):
         """Test that state resets automatically after drift is detected."""
-        detector = PageHinkley(min_instances=20, threshold=30.0, delta=0.001)
+        detector = PageHinkley(warm_up=20, threshold=30.0, delta=0.001)
 
         # Phase 1: Build up stable state
         for _ in range(50):
@@ -218,7 +212,7 @@ class TestPageHinkleyAutoReset(unittest.TestCase):
 
     def test_multiple_drift_detection(self):
         """Test that multiple drifts can be detected in sequence."""
-        detector = PageHinkley(min_instances=20, threshold=25.0, delta=0.001)
+        detector = PageHinkley(warm_up=20, threshold=25.0, delta=0.001)
 
         drifts_detected = []
 
@@ -253,7 +247,7 @@ class TestPageHinkleyAutoReset(unittest.TestCase):
 
     def test_n_detections_increments_correctly(self):
         """Test that n_detections counts multiple drifts correctly."""
-        detector = PageHinkley(min_instances=20, threshold=25.0, delta=0.001)
+        detector = PageHinkley(warm_up=20, threshold=25.0, delta=0.001)
 
         # Trigger multiple drifts
         for mean in [0, 20, -20, 40]:

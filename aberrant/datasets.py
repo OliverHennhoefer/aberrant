@@ -5,6 +5,9 @@ against the dataset's SHA-256 before it is cached, and a cached file again
 before it is read, so a corrupt or tampered file is never parsed. Files are
 cached in ``ABERRANT_DATA_DIR``, or ``~/.cache/aberrant`` when that is unset.
 
+`synthetic` generates a labelled stream with known anomalies instead, without
+a download.
+
 Labels are for evaluation: an unsupervised model learns from the features
 alone.
 
@@ -24,14 +27,16 @@ import os
 import secrets
 import shutil
 import urllib.request
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
-from typing import IO
+from typing import IO, Literal
 
 import numpy as np
+
+from aberrant._utils.validation import coerce_finite_number, coerce_integer_count
 
 RELEASE_URL = (
     "https://github.com/OliverHennhoefer/nonconform/releases/download/v0.9.17-datasets"
@@ -417,16 +422,214 @@ class DatasetStream:
         return features, labels
 
     def __iter__(self) -> Iterator[Sample]:
-        features, labels = self.arrays()
-        names = [f"feature_{index}" for index in range(features.shape[1])]
-        for row, label in zip(features.tolist(), labels.tolist(), strict=True):
-            yield dict(zip(names, row, strict=True)), int(label)
+        return _samples(*self.arrays())
 
     def __len__(self) -> int:
         return len(self.arrays()[1])
 
     def __repr__(self) -> str:
         return f"DatasetStream({str(self.path)!r})"
+
+
+def _samples(features: np.ndarray, labels: np.ndarray) -> Iterator[Sample]:
+    names = [f"feature_{index}" for index in range(features.shape[1])]
+    for row, label in zip(features.tolist(), labels.tolist(), strict=True):
+        yield dict(zip(names, row, strict=True)), int(label)
+
+
+Anomaly = Literal["spike", "level_shift", "variance", "flatline", "decoupling"]
+"""A kind of anomaly `synthetic` can inject."""
+_ANOMALIES: tuple[Anomaly, ...] = (
+    "spike",
+    "level_shift",
+    "variance",
+    "flatline",
+    "decoupling",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class InjectedAnomaly:
+    """One anomaly of a synthetic stream.
+
+    Attributes:
+        kind: What was injected, one of `Anomaly`.
+        feature: The feature it changed.
+        start: Its first event.
+        stop: The event after its last one.
+    """
+
+    kind: Anomaly
+    feature: str
+    start: int
+    stop: int
+
+
+class SyntheticStream:
+    """A generated labelled stream, replayed row by row like `DatasetStream`.
+
+    Attributes:
+        anomalies: Every injected anomaly, in order.
+    """
+
+    def __init__(
+        self,
+        features: np.ndarray,
+        labels: np.ndarray,
+        anomalies: tuple[InjectedAnomaly, ...],
+    ) -> None:
+        self._features = features
+        self._labels = labels
+        self.anomalies = anomalies
+
+    def arrays(self) -> tuple[np.ndarray, np.ndarray]:
+        """Copies of the feature matrix and the label vector."""
+        return self._features.copy(), self._labels.copy()
+
+    def __iter__(self) -> Iterator[Sample]:
+        return _samples(self._features, self._labels)
+
+    def __len__(self) -> int:
+        return len(self._labels)
+
+    def __repr__(self) -> str:
+        return (
+            f"SyntheticStream(n_samples={len(self)}, "
+            f"n_features={self._features.shape[1]}, "
+            f"n_anomalies={len(self.anomalies)})"
+        )
+
+
+def synthetic(
+    *,
+    n_samples: int = 5000,
+    n_features: int = 3,
+    anomalies: Sequence[Anomaly] = _ANOMALIES,
+    n_anomalies: int = 10,
+    length: int = 20,
+    clean_prefix: int | None = None,
+    season_length: int | None = 100,
+    noise: float = 0.1,
+    seed: int = 0,
+) -> SyntheticStream:
+    """Generate a labelled stream with known anomalies, without a download.
+
+    Every feature follows one shared signal, a seasonal cycle plus a slow
+    random walk, with its own offset, weight and noise, so the features are
+    correlated. After ``clean_prefix`` normal events, ``n_anomalies``
+    anomalies follow at random places that never overlap, taking the kinds
+    in ``anomalies`` in turn, each on one random feature:
+
+    - ``"spike"``: one event six standard deviations off.
+    - ``"level_shift"``: ``length`` events shifted by three deviations.
+    - ``"variance"``: ``length`` events with three times the spread.
+    - ``"flatline"``: ``length`` events stuck at one value, like a frozen
+      sensor.
+    - ``"decoupling"``: ``length`` events that follow the shared signal in
+      the opposite direction, so each value looks normal on its own but the
+      relationship between the features breaks. Needs two features.
+
+    Every event of an anomaly is labelled 1. The same arguments always give
+    the same stream.
+
+    Args:
+        n_samples: Events in the stream.
+        n_features: Features per event, named ``feature_0``, ``feature_1``, ...
+        anomalies: The kinds to inject, used in turn.
+        n_anomalies: Anomalies to inject.
+        length: Events per anomaly, except a spike.
+        clean_prefix: Normal events before the first anomaly, for warm-up;
+            ``None`` takes a fifth of the stream.
+        season_length: Events per cycle of the shared signal, or ``None``
+            for none.
+        noise: Standard deviation of each feature's own noise.
+        seed: Seed of the generator.
+    """
+    n_samples = coerce_integer_count(n_samples, label="n_samples")
+    n_features = coerce_integer_count(n_features, label="n_features")
+    n_anomalies = coerce_integer_count(n_anomalies, label="n_anomalies", minimum=0)
+    length = coerce_integer_count(length, label="length")
+    prefix = (
+        n_samples // 5
+        if clean_prefix is None
+        else coerce_integer_count(clean_prefix, label="clean_prefix", minimum=0)
+    )
+    noise = coerce_finite_number(noise, label="noise")
+    if noise < 0:
+        raise ValueError("noise must be at least 0")
+    kinds = _kinds(anomalies, n_features)
+    slot = (n_samples - prefix) // n_anomalies if n_anomalies else n_samples
+    if prefix > n_samples or slot < length:
+        raise ValueError(
+            "n_samples leaves too little room after clean_prefix for "
+            "n_anomalies anomalies of this length"
+        )
+
+    rng = np.random.default_rng(seed)
+    shared = _shared_signal(rng, n_samples, season_length)
+    offsets = rng.uniform(-1.0, 1.0, n_features)
+    weights = rng.uniform(0.5, 1.5, n_features) * rng.choice([-1.0, 1.0], n_features)
+    own = rng.normal(0.0, noise, (n_samples, n_features))
+    features = offsets + np.outer(shared, weights) + own
+    scale = np.maximum(features[: prefix or n_samples].std(axis=0), 1e-12)
+    labels = np.zeros(n_samples, dtype=np.int64)
+
+    injected = []
+    for index in range(n_anomalies):
+        kind = kinds[index % len(kinds)]
+        column = int(rng.integers(n_features))
+        size = 1 if kind == "spike" else length
+        start = prefix + index * slot + int(rng.integers(slot - size + 1))
+        stop = start + size
+        window = features[start:stop, column]
+        if kind == "decoupling":
+            following = offsets[column] - shared[start:stop] * weights[column]
+            window[:] = following + own[start:stop, column]
+        else:
+            _distort(window, kind, scale[column], rng)
+        labels[start:stop] = 1
+        injected.append(InjectedAnomaly(kind, f"feature_{column}", start, stop))
+    return SyntheticStream(features, labels, tuple(injected))
+
+
+def _kinds(anomalies: Sequence[Anomaly], n_features: int) -> tuple[Anomaly, ...]:
+    if isinstance(anomalies, str) or not anomalies:
+        raise ValueError("anomalies must be a non-empty sequence of kinds")
+    kinds = tuple(anomalies)
+    if any(kind not in _ANOMALIES for kind in kinds) or len(set(kinds)) != len(kinds):
+        raise ValueError(f"anomalies must be distinct ones of {', '.join(_ANOMALIES)}")
+    if "decoupling" in kinds and n_features < 2:
+        raise ValueError("decoupling anomalies need at least two features")
+    return kinds
+
+
+def _shared_signal(
+    rng: np.random.Generator, n_samples: int, season_length: int | None
+) -> np.ndarray:
+    """A slow mean-reverting random walk, plus a seasonal cycle if asked."""
+    walk = np.empty(n_samples)
+    level = 0.0
+    for index, step in enumerate(rng.normal(0.0, 0.05, n_samples)):
+        level = 0.98 * level + step
+        walk[index] = level
+    if season_length is None:
+        return walk
+    season = coerce_integer_count(season_length, label="season_length")
+    return walk + np.sin(2 * np.pi * np.arange(n_samples) / season)
+
+
+def _distort(
+    window: np.ndarray, kind: Anomaly, scale: float, rng: np.random.Generator
+) -> None:
+    sign = float(rng.choice([-1.0, 1.0]))
+    if kind == "spike":
+        window += sign * 6 * scale
+    elif kind == "level_shift":
+        window += sign * 3 * scale
+    elif kind == "variance":
+        window += rng.normal(0.0, 3 * scale, len(window))
+    else:
+        window[:] = window[0]
 
 
 def data_dir() -> Path:
@@ -517,11 +720,15 @@ def load(dataset: Dataset | str, *, fetch: bool = True) -> DatasetStream:
 __all__ = [
     "DATASETS",
     "RELEASE_URL",
+    "Anomaly",
     "Dataset",
     "DatasetInfo",
     "DatasetStream",
+    "InjectedAnomaly",
     "Sample",
+    "SyntheticStream",
     "data_dir",
     "download",
     "load",
+    "synthetic",
 ]

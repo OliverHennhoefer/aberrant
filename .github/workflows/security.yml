@@ -40,7 +40,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install locked dependencies
         run: uv sync --locked --group security

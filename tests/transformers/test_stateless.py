@@ -66,7 +66,7 @@ def test_positions_follow_the_given_time_zone() -> None:
 
 
 def test_calendar_rejects_a_missing_or_unusable_timestamp() -> None:
-    transform = CalendarFeatures(timestamp="ts", cycles=["day"])
+    transform = CalendarFeatures(time_key="ts", cycles=["day"])
     for event in ({"load": 1.0}, {"ts": math.inf}, {"ts": 1e300}):
         with pytest.raises(ValidationError):
             transform.learn_one(event)
@@ -77,7 +77,7 @@ def test_calendar_rejects_a_missing_or_unusable_timestamp() -> None:
 @pytest.mark.parametrize(
     "params",
     [
-        {"timestamp": ""},
+        {"time_key": ""},
         {"cycles": "day"},
         {"cycles": []},
         {"cycles": ["hour"]},

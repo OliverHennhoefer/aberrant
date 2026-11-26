@@ -569,7 +569,7 @@ def _capabilities(
     assert isinstance(model.spec, ModelSpec)
     with _at((*model.loc, "params")):
         capabilities = model.spec._resolved_capabilities(model.params)
-    capabilities = _with_warmup(capabilities, _model_instance(model))
+    capabilities = _with_warm_up(capabilities, _model_instance(model))
     if feature_count is not None and not capabilities.feature_count.accepts(
         feature_count
     ):
@@ -590,16 +590,16 @@ def _capabilities(
     return capabilities
 
 
-def _with_warmup(
+def _with_warm_up(
     capabilities: ModelCapabilities, model: ModelProtocol
 ) -> ModelCapabilities:
     readiness = model.readiness
-    if readiness.unit is not capabilities.warmup_unit:  # pragma: no cover
+    if readiness.unit is not capabilities.warm_up_unit:  # pragma: no cover
         raise RuntimeError(
             f"{type(model).__name__} counts its warm-up in {readiness.unit.value}, "
-            f"but the catalog declares {capabilities.warmup_unit.value}"
+            f"but the catalog declares {capabilities.warm_up_unit.value}"
         )
-    return replace(capabilities, warmup=readiness.required)
+    return replace(capabilities, warm_up=readiness.required)
 
 
 def model_capabilities(
@@ -620,7 +620,7 @@ def model_capabilities(
         model = create_model(component_id, params)
     except ConfigurationError:
         return capabilities
-    return _with_warmup(capabilities, model)
+    return _with_warm_up(capabilities, model)
 
 
 def catalog_manifest() -> dict[str, object]:

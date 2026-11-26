@@ -14,26 +14,26 @@ LOOKBACK = 1024
 
 
 class ScoreHistory:
-    """The latest scores in arrival order, and the last ``window`` of them sorted.
+    """The latest scores in arrival order, and the last ``window_size`` of them sorted.
 
     Every calibrator of one score stream reads the same history. A calibrator
     learns a score in :meth:`~aberrant.calibration.OnlineCalibrator.update`
     before the score joins the history, so it adapts against the window it
     predicted from.
 
-    The history keeps the last ``max(window, lookback)`` scores, so its memory
+    The history keeps the last ``max(window_size, lookback)`` scores, so its memory
     stays bounded on an endless stream.
 
     Args:
-        window: Number of recent scores in the calibration window.
+        window_size: Number of recent scores in the calibration window.
         lookback: Number of recent scores that :meth:`recent`,
             :meth:`recent_range` and :meth:`spread` can reach.
     """
 
-    def __init__(self, window: int, lookback: int = LOOKBACK) -> None:
-        self.window = coerce_integer_count(window, label="window")
+    def __init__(self, window_size: int, lookback: int = LOOKBACK) -> None:
+        self.window_size = coerce_integer_count(window_size, label="window_size")
         self.lookback = max(
-            self.window, coerce_integer_count(lookback, label="lookback")
+            self.window_size, coerce_integer_count(lookback, label="lookback")
         )
         # One more than the window, so the score leaving it is still at hand.
         self._recent: deque[float] = deque(maxlen=self.lookback + 1)
@@ -61,8 +61,8 @@ class ScoreHistory:
         self._recent.append(score)
         self._count += 1
         bisect.insort_left(self._sorted, score)
-        if len(self._sorted) > self.window:
-            _remove_sorted(self._sorted, self._recent[-1 - self.window])
+        if len(self._sorted) > self.window_size:
+            _remove_sorted(self._sorted, self._recent[-1 - self.window_size])
         self._max_abs = max(self._max_abs, abs(score))
 
     def recent(self, n: int) -> list[float]:

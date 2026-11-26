@@ -30,7 +30,7 @@ def main() -> None:
             transformers=(ComponentConfig("standard_scaler"),),
         )
         evaluator = PrequentialEvaluator(
-            config, warmup=64, metrics=True, metric_window_size=None
+            config, warm_up=64, metrics=True, metric_window_size=None
         )
         result = evaluator.evaluate(events)
         print(

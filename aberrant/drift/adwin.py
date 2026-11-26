@@ -26,7 +26,7 @@ class ADWIN(BaseDriftDetector):
         max_buckets: Maximum number of buckets per level. Default is 5.
         min_window_length: Minimum subwindow size for comparison.
             Default is 5.
-        grace_period: Number of samples before drift detection starts.
+        warm_up: Number of samples before drift detection starts.
             Default is 10.
         max_window_size: Optional hard bound on represented observations.
             Oldest whole buckets are discarded when the bound is exceeded,
@@ -60,7 +60,7 @@ class ADWIN(BaseDriftDetector):
         clock: int = 32,
         max_buckets: int = 5,
         min_window_length: int = 5,
-        grace_period: int = 10,
+        warm_up: int = 10,
         max_window_size: int | None = None,
     ) -> None:
         if not 0 < delta < 1:
@@ -70,9 +70,7 @@ class ADWIN(BaseDriftDetector):
         min_window_length = coerce_integer_count(
             min_window_length, label="min_window_length"
         )
-        grace_period = coerce_integer_count(
-            grace_period, label="grace_period", minimum=0
-        )
+        warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=0)
         if max_window_size is not None:
             max_window_size = coerce_integer_count(
                 max_window_size, label="max_window_size"
@@ -86,7 +84,7 @@ class ADWIN(BaseDriftDetector):
         self.clock = clock
         self.max_buckets = max_buckets
         self.min_window_length = min_window_length
-        self.grace_period = grace_period
+        self.warm_up = warm_up
         self.max_window_size = max_window_size
 
         self._reset_state()
@@ -246,7 +244,7 @@ class ADWIN(BaseDriftDetector):
         if self._width < 2 * self.min_window_length:
             return
 
-        if self._samples_since_reset <= self.grace_period:
+        if self._samples_since_reset <= self.warm_up:
             return
 
         # Try different split points

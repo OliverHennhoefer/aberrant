@@ -26,7 +26,7 @@ class ScoreCalibrator:
         method: Identifier of a method in :data:`CALIBRATORS`.
         alpha: Target miscoverage, so ``1 - alpha`` of scores should fall at
             or below the threshold.
-        window: Number of recent scores in the calibration window.
+        window_size: Number of recent scores in the calibration window.
         **params: Method parameters; omitted ones take their defaults.
 
     Raises:
@@ -40,7 +40,7 @@ class ScoreCalibrator:
         ```python
         from aberrant.calibration import ScoreCalibrator
 
-        calibrator = ScoreCalibrator("aci", alpha=0.1, window=100, gamma=0.01)
+        calibrator = ScoreCalibrator("aci", alpha=0.1, window_size=100, gamma=0.01)
         for t, score in enumerate([0.2, 0.4, 0.1, 0.3]):
             threshold = calibrator.predict(t)
             calibrator.update(t, score)
@@ -52,7 +52,7 @@ class ScoreCalibrator:
         method: str,
         *,
         alpha: float,
-        window: int = _DEFAULT_WINDOW,
+        window_size: int = _DEFAULT_WINDOW,
         **params: object,
     ) -> None:
         spec = CALIBRATORS.get(method)
@@ -69,7 +69,7 @@ class ScoreCalibrator:
         self.method_id = method
         self.alpha = alpha
         self.params = spec.resolve(params)
-        self.history = ScoreHistory(window)
+        self.history = ScoreHistory(window_size)
         self.method: OnlineCalibrator = spec.factory(self.history, alpha, self.params)
 
     def __getstate__(self) -> dict[str, Any]:
@@ -107,11 +107,11 @@ class ScoreCalibrator:
         self.history.push(score)
 
     def get_params(self) -> dict[str, Any]:
-        """Return the method, ``alpha``, ``window`` and every method parameter."""
+        """Return the method, ``alpha``, ``window_size`` and every method parameter."""
         return {
             "method": self.method_id,
             "alpha": self.alpha,
-            "window": self.history.window,
+            "window_size": self.history.window_size,
             **self.params,
         }
 
@@ -126,7 +126,7 @@ class ScoreCalibrator:
 
     def __repr__(self) -> str:
         """Show the method, ``alpha`` and every parameter not at its default."""
-        defaults = {"window": _DEFAULT_WINDOW, **self.spec.defaults()}
+        defaults = {"window_size": _DEFAULT_WINDOW, **self.spec.defaults()}
         shown = "".join(
             f", {name}={value!r}"
             for name, value in self.get_params().items()

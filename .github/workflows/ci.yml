@@ -31,7 +31,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install base dependencies only
         run: uv sync --locked --no-dev
@@ -75,7 +75,7 @@ jobs:
 
       - name: Lowest supported dependencies smoke
         run: |
-          uv venv .venv-lowest --python 3.11
+          uv venv .venv-lowest --python 3.12
           VIRTUAL_ENV=.venv-lowest uv pip install --resolution lowest-direct .
           .venv-lowest/bin/python -I - <<'PY'
           import numpy
@@ -114,7 +114,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --locked
@@ -133,10 +133,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.12", "3.13", "3.14"]
         # Pull requests test Windows on the oldest and newest Python only;
         # main runs the whole matrix.
-        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"}]') || fromJSON('[]') }}
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","python-version":"3.13"}]') || fromJSON('[]') }}
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
@@ -170,7 +170,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install extras
         run: uv sync --locked --extra faiss
@@ -211,7 +211,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --locked
@@ -231,7 +231,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --locked --group notebooks
@@ -273,7 +273,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       # FAISS is installed so the coverage report includes the FAISS backend
       # of KNN, which the extras job tests.
@@ -310,7 +310,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Build sdist and wheel
         run: uv build

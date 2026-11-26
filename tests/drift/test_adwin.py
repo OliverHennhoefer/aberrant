@@ -16,7 +16,7 @@ class TestADWIN(unittest.TestCase):
         self.assertEqual(detector.clock, 32)
         self.assertEqual(detector.max_buckets, 5)
         self.assertEqual(detector.min_window_length, 5)
-        self.assertEqual(detector.grace_period, 10)
+        self.assertEqual(detector.warm_up, 10)
         self.assertEqual(detector.width, 0)
         self.assertEqual(detector.n_detections, 0)
         self.assertFalse(detector.drift_detected)
@@ -28,13 +28,13 @@ class TestADWIN(unittest.TestCase):
             clock=16,
             max_buckets=10,
             min_window_length=10,
-            grace_period=20,
+            warm_up=20,
         )
         self.assertEqual(detector.delta, 0.01)
         self.assertEqual(detector.clock, 16)
         self.assertEqual(detector.max_buckets, 10)
         self.assertEqual(detector.min_window_length, 10)
-        self.assertEqual(detector.grace_period, 20)
+        self.assertEqual(detector.warm_up, 20)
 
     def test_invalid_delta(self):
         """Test that invalid delta values raise ValueError."""
@@ -67,10 +67,10 @@ class TestADWIN(unittest.TestCase):
         with self.assertRaises(ValueError):
             ADWIN(min_window_length=0)
 
-    def test_invalid_grace_period(self):
-        """Test that invalid grace_period values raise ValueError."""
+    def test_invalid_warm_up(self):
+        """Test that invalid warm_up values raise ValueError."""
         with self.assertRaises(ValueError):
-            ADWIN(grace_period=-1)
+            ADWIN(warm_up=-1)
 
     def test_update_increases_width(self):
         """Test that update increases window width."""
@@ -148,7 +148,7 @@ class TestADWIN(unittest.TestCase):
 
     def test_drift_detected_on_mean_shift(self):
         """Test that drift is detected when mean shifts."""
-        detector = ADWIN(delta=0.002, grace_period=5)
+        detector = ADWIN(delta=0.002, warm_up=5)
         # First phase: mean = 0
         for _ in range(200):
             detector.update(0.0)
@@ -209,7 +209,7 @@ class TestADWINAutoReset(unittest.TestCase):
 
     def test_auto_reset_on_subsequent_update(self):
         """Test that state resets automatically after drift is detected."""
-        detector = ADWIN(delta=0.002, grace_period=5)
+        detector = ADWIN(delta=0.002, warm_up=5)
 
         # Phase 1: Build up stable state with mean=0
         for _ in range(200):
@@ -234,7 +234,7 @@ class TestADWINAutoReset(unittest.TestCase):
 
     def test_multiple_drift_detection(self):
         """Test that multiple drifts can be detected in sequence."""
-        detector = ADWIN(delta=0.002, grace_period=5, clock=8)
+        detector = ADWIN(delta=0.002, warm_up=5, clock=8)
 
         drifts_detected = []
 
@@ -270,7 +270,7 @@ class TestADWINAutoReset(unittest.TestCase):
 
     def test_n_detections_increments_correctly(self):
         """Test that n_detections counts multiple drifts correctly."""
-        detector = ADWIN(delta=0.01, grace_period=5)
+        detector = ADWIN(delta=0.01, warm_up=5)
 
         # Trigger multiple drifts
         for _phase, mean in enumerate([0, 100, -100, 200]):

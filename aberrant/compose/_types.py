@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from typing import Literal
 
 from aberrant.base.protocols import TransformerProtocol
 from aberrant.base.readiness import Readiness
@@ -37,9 +37,9 @@ class MergeNode:
         object.__setattr__(self, "inputs", tuple(self.inputs))
 
 
-GraphComponent: TypeAlias = GraphNode | MergeNode
+type GraphComponent = GraphNode | MergeNode
 """A node of a `GraphPipeline`."""
-FeatureValues: TypeAlias = tuple[tuple[str, float], ...]
+type FeatureValues = tuple[tuple[str, float], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +69,7 @@ class NodeObservation:
     duration_ns: int
 
 
-Observer: TypeAlias = Callable[[NodeObservation], None]
+type Observer = Callable[[NodeObservation], None]
 """A callback that receives each node's observation after it ran."""
 
 

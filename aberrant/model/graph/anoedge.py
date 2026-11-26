@@ -183,7 +183,7 @@ class AnoEdgeL(BaseModel):
         sketch_rows: Row dimension of every higher-order sketch plane.
         sketch_cols: Column dimension of every higher-order sketch plane.
         n_hashes: Number of independently hashed sketch planes.
-        num_dense_submatrices: Local dense submatrices maintained per plane. It
+        n_dense_submatrices: Local dense submatrices maintained per plane. It
             cannot exceed either sketch dimension.
         time_decay_factor: Factor in ``(0, 1]`` applied to sketches and local
             submatrices when the time bucket advances.
@@ -203,13 +203,13 @@ class AnoEdgeL(BaseModel):
         sketch_rows: int,
         sketch_cols: int,
         n_hashes: int,
-        num_dense_submatrices: int,
+        n_dense_submatrices: int,
         time_decay_factor: float,
         warm_up: int,
     ) -> None:
-        if num_dense_submatrices > min(sketch_rows, sketch_cols):
+        if n_dense_submatrices > min(sketch_rows, sketch_cols):
             raise ValueError(
-                "num_dense_submatrices cannot exceed either sketch dimension"
+                "n_dense_submatrices cannot exceed either sketch dimension"
             )
         if not (0.0 < time_decay_factor <= 1.0):
             raise ValueError("time_decay_factor must be in (0, 1]")
@@ -223,7 +223,7 @@ class AnoEdgeL(BaseModel):
         sketch_rows: int = 256,
         sketch_cols: int = 256,
         n_hashes: int = 4,
-        num_dense_submatrices: int = 1,
+        n_dense_submatrices: int = 1,
         time_decay_factor: float = 1.0,
         warm_up: int = 0,
         seed: int | None = None,
@@ -231,15 +231,15 @@ class AnoEdgeL(BaseModel):
         sketch_rows = coerce_integer_count(sketch_rows, label="sketch_rows", minimum=1)
         sketch_cols = coerce_integer_count(sketch_cols, label="sketch_cols", minimum=1)
         n_hashes = coerce_integer_count(n_hashes, label="n_hashes", minimum=1)
-        num_dense_submatrices = coerce_integer_count(
-            num_dense_submatrices, label="num_dense_submatrices", minimum=1
+        n_dense_submatrices = coerce_integer_count(
+            n_dense_submatrices, label="n_dense_submatrices", minimum=1
         )
         warm_up = coerce_integer_count(warm_up, label="warm_up", minimum=0)
         self._validate_parameters(
             sketch_rows=sketch_rows,
             sketch_cols=sketch_cols,
             n_hashes=n_hashes,
-            num_dense_submatrices=num_dense_submatrices,
+            n_dense_submatrices=n_dense_submatrices,
             time_decay_factor=time_decay_factor,
             warm_up=warm_up,
         )
@@ -250,7 +250,7 @@ class AnoEdgeL(BaseModel):
         self.sketch_rows = sketch_rows
         self.sketch_cols = sketch_cols
         self.n_hashes = n_hashes
-        self.num_dense_submatrices = num_dense_submatrices
+        self.n_dense_submatrices = n_dense_submatrices
         self.time_decay_factor = time_decay_factor
         self.warm_up = warm_up
         self.seed = seed
@@ -282,10 +282,7 @@ class AnoEdgeL(BaseModel):
             dtype=np.float64,
         )
         self._dense_submatrices = [
-            [
-                _DenseSubmatrix(index, index)
-                for index in range(self.num_dense_submatrices)
-            ]
+            [_DenseSubmatrix(index, index) for index in range(self.n_dense_submatrices)]
             for _ in range(self.n_hashes)
         ]
         self._current_bucket: int | None = None

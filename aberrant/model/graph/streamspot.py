@@ -51,7 +51,7 @@ class StreamSpot(BaseModel):
 
     Notes:
     - Scores are continuous and non-negative.
-    - State is bounded by ``max_graphs``, ``sketch_dim``, and ``num_clusters``.
+    - State is bounded by ``max_graphs``, ``sketch_dim``, and ``n_clusters``.
 
     Args:
         graph_key: Input field identifying the graph to which an edge belongs.
@@ -63,7 +63,7 @@ class StreamSpot(BaseModel):
             bucket. ``None`` uses one-based arrival order.
         sketch_dim: Number of signed-count coordinates per graph sketch.
         shingle_size: Number of consecutive per-graph edge tokens in a shingle.
-        num_clusters: Maximum number of online Euclidean cluster centers.
+        n_clusters: Maximum number of online Euclidean cluster centers.
         max_graphs: Maximum number of active per-graph sketches. Least-recently
             learned graph state is evicted when the limit is exceeded.
         warm_up: Number of active graph sketches required before
@@ -114,12 +114,12 @@ class StreamSpot(BaseModel):
         *,
         sketch_dim: int,
         shingle_size: int,
-        num_clusters: int,
+        n_clusters: int,
         max_graphs: int,
         warm_up: int,
     ) -> None:
-        if num_clusters > max_graphs:
-            raise ValueError("num_clusters must be less than or equal to max_graphs")
+        if n_clusters > max_graphs:
+            raise ValueError("n_clusters must be less than or equal to max_graphs")
         if warm_up > max_graphs:
             raise ValueError("warm_up must be less than or equal to max_graphs")
 
@@ -133,15 +133,13 @@ class StreamSpot(BaseModel):
         time_key: str | None = "t",
         sketch_dim: int = 1024,
         shingle_size: int = 2,
-        num_clusters: int = 8,
+        n_clusters: int = 8,
         max_graphs: int = 4096,
         warm_up: int = 32,
         seed: int | None = None,
     ) -> None:
         sketch_dim = coerce_integer_count(sketch_dim, label="sketch_dim", minimum=1)
-        num_clusters = coerce_integer_count(
-            num_clusters, label="num_clusters", minimum=1
-        )
+        n_clusters = coerce_integer_count(n_clusters, label="n_clusters", minimum=1)
         shingle_size = coerce_integer_count(
             shingle_size, label="shingle_size", minimum=1
         )
@@ -167,13 +165,13 @@ class StreamSpot(BaseModel):
         self._validate_hyperparameters(
             sketch_dim=sketch_dim,
             shingle_size=shingle_size,
-            num_clusters=num_clusters,
+            n_clusters=n_clusters,
             max_graphs=max_graphs,
             warm_up=warm_up,
         )
         self.sketch_dim = sketch_dim
         self.shingle_size = shingle_size
-        self.num_clusters = num_clusters
+        self.n_clusters = n_clusters
         self.max_graphs = max_graphs
         self.warm_up = warm_up
         self.seed = seed
@@ -197,9 +195,9 @@ class StreamSpot(BaseModel):
         self._graph_last_seen: OrderedDict[float, int] = OrderedDict()
 
         self._cluster_centers = np.zeros(
-            (self.num_clusters, self.sketch_dim), dtype=np.float64
+            (self.n_clusters, self.sketch_dim), dtype=np.float64
         )
-        self._cluster_counts = np.zeros(self.num_clusters, dtype=np.float64)
+        self._cluster_counts = np.zeros(self.n_clusters, dtype=np.float64)
         self._initialized_clusters = 0
 
         self._clock = MonotonicClock(integer_like=True)
@@ -385,7 +383,7 @@ class StreamSpot(BaseModel):
         return nearest_index, max(nearest_dist_sq, 0.0)
 
     def _update_clusters(self, sketch: np.ndarray) -> None:
-        if self._initialized_clusters < self.num_clusters:
+        if self._initialized_clusters < self.n_clusters:
             idx = self._initialized_clusters
             self._cluster_centers[idx] = sketch
             self._cluster_counts[idx] = 1.0

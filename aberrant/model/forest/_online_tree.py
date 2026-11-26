@@ -6,7 +6,6 @@ from bisect import bisect_right
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TypeAlias
 
 import numpy as np
 
@@ -91,7 +90,7 @@ class _OnlineBranch:
     split_bounds: _Bounds | None = None
 
 
-_OnlineNode: TypeAlias = _EmptyLeaf | _OnlineLeaf | _OnlineBranch
+type _OnlineNode = _EmptyLeaf | _OnlineLeaf | _OnlineBranch
 
 
 class OnlineIsolationTree:

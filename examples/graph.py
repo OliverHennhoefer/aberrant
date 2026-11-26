@@ -54,7 +54,7 @@ def _graphs() -> list[Sample]:
 
 def _report(name: str, detector: ModelProtocol, events: list[Sample]) -> None:
     evaluator = PrequentialEvaluator(
-        detector, warmup=500, metrics=True, metric_window_size=None
+        detector, warm_up=500, metrics=True, metric_window_size=None
     )
     result = evaluator.evaluate(events)
     print(
