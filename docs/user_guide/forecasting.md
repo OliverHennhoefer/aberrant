@@ -237,6 +237,30 @@ if forecast is not None:
 ```
 
 
+### Own past and covariates together
+
+A forecaster learns only its target, and a regressor only the covariates of
+the same event. To model both, the target's own past and other features, put
+`Lags` in front of a regressor: the lagged target becomes a covariate like
+any other. With a linear regressor this is an autoregression with exogenous
+inputs (ARX), and with a tree or neighbours regressor a nonlinear one:
+
+```python
+from aberrant.forecast import ResidualDetector, RLSRegressor
+from aberrant.transform import Lags
+
+detector = Lags(lags=[1, 2], apply_to=["load"]) | ResidualDetector(
+    RLSRegressor(), target="load"
+)
+for x in stream:  # {"load": 41.0, "temperature": 18.5}
+    score = detector.score_one(x)
+    detector.learn_one(x)
+```
+
+`Difference` in front of the lags models changes instead of levels. This
+scores each event against a prediction from its own covariates (lead 0);
+forecasts several leads ahead use only the series' own past.
+
 ## Calibrating forecast scores
 
 `nonconformity(forecast, lead, y, score)` scores one value against one

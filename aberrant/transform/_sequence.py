@@ -55,16 +55,16 @@ def _positive_number(value: object, name: str) -> float:
     return number
 
 
-def _features(features: Sequence[str] | None) -> list[str] | None:
-    if features is None:
+def _apply_to(apply_to: Sequence[str] | None) -> list[str] | None:
+    if apply_to is None:
         return None
-    if isinstance(features, str | bytes):
-        raise ValueError("features must be a sequence of names, not a string")
-    names = list(features)
+    if isinstance(apply_to, str | bytes):
+        raise ValueError("apply_to must be a sequence of names, not a string")
+    names = list(apply_to)
     if not names or any(not isinstance(name, str) or not name for name in names):
-        raise ValueError("features must contain non-empty feature names")
+        raise ValueError("apply_to must contain non-empty feature names")
     if len(names) != len(set(names)):
-        raise ValueError("features cannot contain duplicates")
+        raise ValueError("apply_to cannot contain duplicates")
     return names
 
 
@@ -128,8 +128,8 @@ class _SequenceTransformer(BaseTransformer):
 
     _keeps_input = False
 
-    def __init__(self, features: Sequence[str] | None) -> None:
-        self.features = _features(features)
+    def __init__(self, apply_to: Sequence[str] | None) -> None:
+        self.apply_to = _apply_to(apply_to)
         self._states: dict[str, State] = {}
         self._seen: dict[str, int] = {}
         self._learned: tuple[dict[str, float], dict[str, float]] | None = None
@@ -176,12 +176,14 @@ class _SequenceTransformer(BaseTransformer):
         return Readiness(bool(self._seen) and observed >= required, observed, required)
 
     def _selected(self, values: dict[str, float]) -> list[str]:
-        if self.features is None:
+        if self.apply_to is None:
             return list(values)
-        missing = [name for name in self.features if name not in values]
+        missing = [name for name in self.apply_to if name not in values]
         if missing:
-            raise ValidationError(f"Missing selected features: {sorted(missing)}")
-        return self.features
+            raise ValidationError(
+                f"Missing features named in apply_to: {sorted(missing)}"
+            )
+        return self.apply_to
 
     def _outputs(
         self, values: dict[str, float]
@@ -254,13 +256,13 @@ class Lags(_SequenceTransformer):
 
     Args:
         lags: Distinct positive lags, in events.
-        features: Features to lag; ``None`` lags every feature of each event.
+        apply_to: Features to lag; ``None`` lags every feature of each event.
     """
 
     _keeps_input = True
 
     def __init__(
-        self, *, lags: Sequence[int] = (1,), features: Sequence[str] | None = None
+        self, *, lags: Sequence[int] = (1,), apply_to: Sequence[str] | None = None
     ) -> None:
         if isinstance(lags, str | bytes) or not isinstance(lags, Sequence):
             raise ValueError("lags must be a sequence of positive integers")
@@ -268,7 +270,7 @@ class Lags(_SequenceTransformer):
         if not checked or len(checked) != len(set(checked)):
             raise ValueError("lags must be distinct and non-empty")
         self.lags = sorted(checked)
-        super().__init__(features)
+        super().__init__(apply_to)
 
     @property
     def lead(self) -> int:
@@ -303,7 +305,7 @@ class Difference(_SequenceTransformer):
     Args:
         lag: Events between the value and its reference.
         kind: ``"difference"`` or ``"percent"``.
-        features: Features to difference; ``None`` uses every feature.
+        apply_to: Features to difference; ``None`` uses every feature.
     """
 
     def __init__(
@@ -311,13 +313,13 @@ class Difference(_SequenceTransformer):
         *,
         lag: int = 1,
         kind: ChangeKind = "difference",
-        features: Sequence[str] | None = None,
+        apply_to: Sequence[str] | None = None,
     ) -> None:
         self.lag = _positive_int(lag, "lag")
         if kind not in ("difference", "percent"):
             raise ValueError("kind must be 'difference' or 'percent'")
         self.kind = kind
-        super().__init__(features)
+        super().__init__(apply_to)
 
     @property
     def lead(self) -> int:
@@ -351,14 +353,14 @@ class ExponentialSmoother(_SequenceTransformer):
 
     Args:
         span: Events a value's weight spans; 1 copies the input.
-        features: Features to smooth; ``None`` uses every feature.
+        apply_to: Features to smooth; ``None`` uses every feature.
     """
 
     def __init__(
-        self, *, span: int = 10, features: Sequence[str] | None = None
+        self, *, span: int = 10, apply_to: Sequence[str] | None = None
     ) -> None:
         self.span = _positive_int(span, "span")
-        super().__init__(features)
+        super().__init__(apply_to)
 
     @property
     def lead(self) -> int:
@@ -388,7 +390,7 @@ class Despike(_SequenceTransformer):
     Args:
         window_size: Values in the window, at least 3.
         threshold: Scaled deviations beyond which a value is a spike.
-        features: Features to despike; ``None`` uses every feature.
+        apply_to: Features to despike; ``None`` uses every feature.
     """
 
     def __init__(
@@ -396,11 +398,11 @@ class Despike(_SequenceTransformer):
         *,
         window_size: int = 7,
         threshold: float = 3.0,
-        features: Sequence[str] | None = None,
+        apply_to: Sequence[str] | None = None,
     ) -> None:
         self.window_size = _positive_int(window_size, "window_size", 3)
         self.threshold = _positive_number(threshold, "threshold")
-        super().__init__(features)
+        super().__init__(apply_to)
 
     @property
     def lead(self) -> int:
@@ -456,7 +458,7 @@ class RollingStatistic(_SequenceTransformer):
         window_size: Values in the window.
         statistic: The statistic, as listed above.
         quantile: Probability in [0, 1] for ``statistic="quantile"``.
-        features: Features to replace; ``None`` uses every feature.
+        apply_to: Features to replace; ``None`` uses every feature.
     """
 
     def __init__(
@@ -465,7 +467,7 @@ class RollingStatistic(_SequenceTransformer):
         window_size: int = 10,
         statistic: Statistic = "mean",
         quantile: float = 0.5,
-        features: Sequence[str] | None = None,
+        apply_to: Sequence[str] | None = None,
     ) -> None:
         self.window_size = _positive_int(window_size, "window_size")
         if statistic not in _STATISTIC:
@@ -475,7 +477,7 @@ class RollingStatistic(_SequenceTransformer):
         if not 0 <= probability <= 1:
             raise ValueError("quantile must be in [0, 1]")
         self.quantile = probability
-        super().__init__(features)
+        super().__init__(apply_to)
 
     @property
     def lead(self) -> int:
@@ -679,7 +681,7 @@ class Deseasonalize(_SequenceTransformer):
     Args:
         season_length: Events in one cycle, at least 2.
         memory: Cycles the levels average over.
-        features: Features to deseasonalize; ``None`` uses every feature.
+        apply_to: Features to deseasonalize; ``None`` uses every feature.
     """
 
     def __init__(
@@ -687,11 +689,11 @@ class Deseasonalize(_SequenceTransformer):
         *,
         season_length: int,
         memory: int = 10,
-        features: Sequence[str] | None = None,
+        apply_to: Sequence[str] | None = None,
     ) -> None:
         self.season_length = _positive_int(season_length, "season_length", 2)
         self.memory = _positive_int(memory, "memory")
-        super().__init__(features)
+        super().__init__(apply_to)
 
     @property
     def lead(self) -> int:

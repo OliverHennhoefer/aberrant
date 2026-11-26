@@ -296,11 +296,11 @@ def test_deseasonalize_removes_a_cycle_and_ignores_one_odd_value() -> None:
 
 
 def test_selected_features_change_and_the_others_pass() -> None:
-    change = Difference(features=["a"])
+    change = Difference(apply_to=["a"])
     change.learn_one({"a": 1.0, "b": 1.0})
     change.learn_one({"a": 3.0, "b": 7.0})
     assert change.transform_one({"a": 3.0, "b": 7.0}) == {"a": 2.0, "b": 7.0}
-    with pytest.raises(ValidationError, match="Missing selected"):
+    with pytest.raises(ValidationError, match="apply_to"):
         change.learn_one({"b": 1.0})
 
 
@@ -314,7 +314,7 @@ def test_every_feature_keeps_its_own_history() -> None:
 
 def test_a_lag_name_that_exists_is_rejected() -> None:
     with pytest.raises(ValidationError, match="already exists"):
-        Lags(features=["a"]).learn_one({"a": 1.0, "a_lag1": 2.0})
+        Lags(apply_to=["a"]).learn_one({"a": 1.0, "a_lag1": 2.0})
 
 
 def test_a_failed_downstream_update_restores_the_history() -> None:
@@ -349,9 +349,9 @@ def test_results_must_be_finite() -> None:
         (Lags, {"lags": [1, 1]}),
         (Lags, {"lags": [0]}),
         (Lags, {"lags": "1"}),
-        (Lags, {"features": "a"}),
-        (Lags, {"features": []}),
-        (Lags, {"features": ["a", "a"]}),
+        (Lags, {"apply_to": "a"}),
+        (Lags, {"apply_to": []}),
+        (Lags, {"apply_to": ["a", "a"]}),
         (Difference, {"lag": 0}),
         (Difference, {"kind": "ratio"}),
         (ExponentialSmoother, {"span": 0}),

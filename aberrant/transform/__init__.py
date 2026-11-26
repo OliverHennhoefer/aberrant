@@ -2,6 +2,7 @@
 
 from aberrant.transform._preprocessing import (
     FeatureSchemaGuard,
+    Imputer,
     MinMaxScaler,
     Passthrough,
     Rename,
@@ -28,6 +29,7 @@ __all__ = [
     "RollingStatistic",
     "IncrementalPCA",
     "FeatureSchemaGuard",
+    "Imputer",
     "MinMaxScaler",
     "RandomProjection",
     "RollingRobustScaler",

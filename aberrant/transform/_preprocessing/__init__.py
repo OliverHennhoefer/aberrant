@@ -1,5 +1,6 @@
 """Preprocessing transformers for streaming data."""
 
+from aberrant.transform._preprocessing.impute import Imputer
 from aberrant.transform._preprocessing.robust import RollingRobustScaler
 from aberrant.transform._preprocessing.scaler import MinMaxScaler, StandardScaler
 from aberrant.transform._preprocessing.schema import FeatureSchemaGuard
@@ -7,6 +8,7 @@ from aberrant.transform._preprocessing.selection import Passthrough, Rename, Sel
 
 __all__ = [
     "FeatureSchemaGuard",
+    "Imputer",
     "MinMaxScaler",
     "RollingRobustScaler",
     "StandardScaler",

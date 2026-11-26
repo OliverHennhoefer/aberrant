@@ -8,6 +8,8 @@ not learn.
 
 ::: aberrant.transform.FeatureSchemaGuard
 
+::: aberrant.transform.Imputer
+
 ::: aberrant.transform.MinMaxScaler
 
 ::: aberrant.transform.StandardScaler

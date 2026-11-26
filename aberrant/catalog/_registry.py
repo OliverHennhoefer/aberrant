@@ -676,8 +676,8 @@ def _lagged_names(
     if inputs is None:
         return None
     lags = sorted(cast(Sequence[int], params["lags"]))
-    features = params["features"]
-    lagged = inputs if features is None else cast(Sequence[str], features)
+    apply_to = params["apply_to"]
+    lagged = inputs if apply_to is None else cast(Sequence[str], apply_to)
     if not set(lagged).issubset(inputs):
         raise ValueError("Lagged features must exist in the input")
     names = (*inputs, *(f"{name}_lag{lag}" for name in lagged for lag in lags))
@@ -688,12 +688,36 @@ def _lagged_names(
 
 def _lagged_count(params: Parameters, inputs: int | None) -> int | None:
     lags = len(cast(Sequence[int], params["lags"]))
-    features = params["features"]
-    if features is None:
+    apply_to = params["apply_to"]
+    if apply_to is None:
         return None if inputs is None else inputs * (1 + lags)
     return (
-        None if inputs is None else inputs + len(cast(Sequence[str], features)) * lags
+        None if inputs is None else inputs + len(cast(Sequence[str], apply_to)) * lags
     )
+
+
+def _imputed_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    features = params.get("features")
+    names = inputs if features is None else tuple(cast(Sequence[str], features))
+    if names is None:
+        return None
+    if inputs is not None and features is not None and set(inputs) != set(names):
+        raise ValueError("Imputed features must match the input")
+    if not params["indicate"]:
+        return names
+    indicated = (*names, *(f"{name}_missing" for name in names))
+    if len(indicated) != len(set(indicated)):
+        raise ValueError("Missing indicators produce duplicate features")
+    return indicated
+
+
+def _imputed_count(params: Parameters, inputs: int | None) -> int | None:
+    count = _schema_features(params, inputs)
+    if count is None:
+        return None
+    return 2 * count if params["indicate"] else count
 
 
 def _transformer(
@@ -749,6 +773,14 @@ _TRANSFORMER_SPECS = (
         module="aberrant.transform",
         family="validation",
         resolver=_schema_features,
+    ),
+    _transformer(
+        component_id="imputer",
+        class_name="Imputer",
+        module="aberrant.transform",
+        family="validation",
+        resolver=_imputed_count,
+        names_resolver=_imputed_names,
     ),
     _transformer(
         component_id="min_max_scaler",
