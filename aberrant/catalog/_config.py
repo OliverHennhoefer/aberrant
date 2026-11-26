@@ -267,6 +267,8 @@ def _as_component_config(
 def _dependency_spec(kind: ComponentKind, component_id: str) -> ComponentSpec:
     if kind is ComponentKind.FORECASTER:
         return get_forecaster_spec(component_id)
+    if kind is ComponentKind.MODEL:
+        return get_model_spec(component_id)
     raise RuntimeError(f"Unsupported nested component kind: {kind.value}")
 
 

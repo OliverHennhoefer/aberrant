@@ -152,6 +152,50 @@ def _residual_features(params: Parameters) -> FeatureCount:
     return FeatureCount(2) if _wraps_regressor(params) else ONE_FEATURE
 
 
+def _member_capabilities(params: Parameters) -> list[ModelCapabilities]:
+    """The declared capabilities of each ensemble member given as configuration."""
+    members = []
+    for model in cast(Sequence[object], params.get("models") or ()):
+        if not isinstance(model, Mapping):
+            continue
+        component_id = model.get("id")
+        if not isinstance(component_id, str):
+            raise TypeError("each model needs a model id")
+        nested = model.get("params") or {}
+        if not isinstance(nested, Mapping):
+            raise TypeError("model params must be a mapping")
+        spec = get_model_spec(component_id)
+        members.append(spec._resolved_capabilities(spec.resolved_parameters(nested)))
+    return members
+
+
+def _ensemble_capabilities(params: Parameters) -> ModelCapabilities:
+    members = _member_capabilities(params)
+    kinds = {member.event_kind for member in members}
+    if len(kinds) > 1:
+        raise ValueError("ensemble members must take the same kind of event")
+    minimum = max((member.feature_count.minimum for member in members), default=1)
+    maxima = [m.feature_count.maximum for m in members if m.feature_count.maximum]
+    maximum = min(maxima) if maxima else None
+    if maximum is not None and maximum < minimum:
+        raise ValueError("ensemble members accept no common feature count")
+    states = {member.state for member in members}
+    return ModelCapabilities(
+        event_kind=kinds.pop() if kinds else EventKind.TABULAR,
+        feature_count=FeatureCount(minimum, maximum),
+        feature_schema=FeatureSchemaKind.FIXED,
+        score_kind=(
+            ScoreKind.ZERO_TO_ONE
+            if params.get("normalize") == "rank"
+            else ScoreKind.SIGNED
+        ),
+        warmup=None,
+        warmup_unit=ReadinessUnit.EVENTS,
+        state=StateKind.GROWING if StateKind.GROWING in states else StateKind.BOUNDED,
+        requires_unit_interval=any(m.requires_unit_interval for m in members),
+    )
+
+
 def _xstream_state(params: Parameters) -> StateKind:
     return (
         StateKind.GROWING
@@ -571,6 +615,14 @@ _MODEL_SPECS = (
             state=StateKind.BOUNDED,
         ),
         dependencies=(ComponentDependency("model", ComponentKind.FORECASTER),),
+    ),
+    _model(
+        "score_ensemble",
+        "ScoreEnsemble",
+        "aberrant.model",
+        "ensemble",
+        _ensemble_capabilities,
+        dependencies=(ComponentDependency("models", ComponentKind.MODEL, many=True),),
     ),
     _model(
         "rolling_matrix_profile",
