@@ -27,6 +27,18 @@ Semantic Versioning.
   feature, `None` or NaN, with the feature's last value, its mean or a
   constant, and adds `{feature}_missing` indicators on request. Only
   observed values are learned. The catalog lists it as `imputer`.
+- Categorical features: `aberrant.transform.OneHotEncoder` replaces a
+  feature by one indicator per declared category plus `{feature}_other`,
+  and `FrequencyEncoder` by the share of learned values, over all or the
+  last `window_size`, with the same category. Categories are text or
+  integers compared as text; a missing category comes out as NaN for an
+  `Imputer`. The catalog lists them as `one_hot_encoder` and
+  `frequency_encoder`.
+- `aberrant.transform.SignedLog` compresses heavy tails with
+  `sign(x) * log(1 + |x|)`, and `CalendarFeatures` replaces a Unix
+  timestamp by the sine and cosine of its position in the day, week or year
+  of a time zone. The catalog lists them as `signed_log` and
+  `calendar_features`.
 - `aberrant.model.ScoreEnsemble` combines two or more detectors. Each
   member's score is ranked or z-scored against that member's last
   `window_size` learned scores, and the results are combined by mean, max

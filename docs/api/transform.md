@@ -10,6 +10,14 @@ not learn.
 
 ::: aberrant.transform.Imputer
 
+::: aberrant.transform.OneHotEncoder
+
+::: aberrant.transform.FrequencyEncoder
+
+::: aberrant.transform.SignedLog
+
+::: aberrant.transform.CalendarFeatures
+
 ::: aberrant.transform.MinMaxScaler
 
 ::: aberrant.transform.StandardScaler

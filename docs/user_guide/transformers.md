@@ -10,6 +10,10 @@ can precede another transformer or one terminal model in a pipeline.
 | --- | --- | --- | --- |
 | `FeatureSchemaGuard` | Configured or first-learned feature schema | Same keys and values in schema order | Rejects invalid values or a changed feature set |
 | `Imputer` | Per-feature last value, or count and mean | Schema keys, then `{feature}_missing` when `indicate` | Fills an absent, `None` or NaN value; ready once every feature was observed |
+| `OneHotEncoder` | None | Each declared feature becomes `{feature}_{category}` per category and `{feature}_other` | Fixed output for every event; a missing category sets its indicators to NaN for an `Imputer` |
+| `FrequencyEncoder` | Per-feature category counts, over all or the last `window_size` values | Same keys, each category replaced by its learned share | A rare or new category becomes a small value; a missing category stays NaN for an `Imputer` |
+| `SignedLog` | None | Same keys, `sign(x) * log(1 + abs(x))` for `apply_to` | Compresses heavy tails; keeps order and sign, maps 0 to 0 |
+| `CalendarFeatures` | None | Other keys, then `{timestamp}_{cycle}_sin` and `_cos` | Day, week and year position of a Unix timestamp in `timezone` |
 | `MinMaxScaler` | Per-feature running minimum and maximum | Same keys, values mapped to `feature_range` | A value outside the learned extrema can transform outside the requested range; a constant learned feature maps to the lower bound |
 | `StandardScaler` | Per-feature count, mean, and population variance accumulator | Same keys, centered values and optionally population-standardized values | A feature with zero learned variance maps to `0.0`; `with_std=False` centers without scaling |
 | `RollingRobustScaler` | Per-feature recent window, median, and interquartile range | Same keys, median-centered and IQR-scaled values | Exact linearly interpolated quartiles; zero IQR uses `fallback_scale` to preserve deviations; calibration can be frozen |
@@ -23,7 +27,56 @@ can precede another transformer or one terminal model in a pipeline.
 | `Deseasonalize` | Per-feature level and spread per position of the cycle | Same keys, the value less its position's level | Levels average over `memory` cycles; one odd value moves them at most four spreads |
 
 All built-in transformers reject non-numeric or non-finite values before updating their
-persistent state.
+persistent state. The encoders take text or integer categories for their
+features and pass every other feature on unchanged.
+
+## Categorical features
+
+Detectors take numbers, so a categorical field goes through an encoder first.
+`OneHotEncoder` suits a few known categories, and its `{feature}_other`
+indicator flags any category it was not told about. `FrequencyEncoder` suits
+many or unknown categories: it replaces a category by its share of the
+learned values, so a detector sees a rare one as an unusual value.
+
+```python
+from aberrant.model.forest import HalfSpaceTrees
+from aberrant.transform import FrequencyEncoder, Imputer, OneHotEncoder
+
+detector = (
+    OneHotEncoder(categories={"method": ["GET", "POST"]})
+    | FrequencyEncoder(features=["endpoint"], window_size=1000)
+    | Imputer(strategy="constant", value=0.0, indicate=True)
+    | HalfSpaceTrees(seed=1)
+)
+detector.learn_one({"method": "GET", "endpoint": "/login", "size": 0.2})
+score = detector.score_one({"method": "PUT", "endpoint": "/admin", "size": 0.9})
+```
+
+Categories compare as text, so `2`, `2.0` and `"2"` are one category. A
+missing category is not learned and comes out as NaN, which an `Imputer`
+after the encoders fills.
+
+## Heavy tails and the clock
+
+`SignedLog` suits counts, sizes and latencies that span orders of magnitude,
+where a few large values would otherwise dominate distances and splits. To
+bound values instead, `MinMaxScaler(clip=True)` clips to its range.
+
+`CalendarFeatures` lets a detector learn what is usual at each time of day
+or week. It replaces the timestamp, which never repeats, by sine and cosine
+of its position in each cycle, so 23:59 lies next to 00:00:
+
+```python
+from aberrant.transform import CalendarFeatures
+
+calendar = CalendarFeatures(timestamp="t", cycles=["day", "week"], timezone="UTC")
+row = calendar.transform_one({"t": 1_700_000_000.0, "load": 0.4})
+assert list(row) == ["load", "t_day_sin", "t_day_cos", "t_week_sin", "t_week_cos"]
+```
+
+Positions follow the local clock of `timezone`, so a pattern tied to working
+hours keeps its place across daylight saving time. Zone names other than
+`"UTC"` need the system's time zone database or the `tzdata` package.
 
 ## Scaling one stream
 

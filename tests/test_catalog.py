@@ -616,6 +616,18 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
             ("a", "b", "c", "a_lag1", "b_lag1", "c_lag1"),
         ),
         ("deseasonalize", {"season_length": 4}, ("a", "b", "c")),
+        (
+            "one_hot_encoder",
+            {"categories": {"b": ["x", 2]}},
+            ("a", "b_x", "b_2", "b_other", "c"),
+        ),
+        ("frequency_encoder", {"features": ["b"]}, ("a", "b", "c")),
+        ("signed_log", {"apply_to": ["b"]}, ("a", "b", "c")),
+        (
+            "calendar_features",
+            {"timestamp": "b", "cycles": ["week"]},
+            ("a", "c", "b_week_sin", "b_week_cos"),
+        ),
     ],
 )
 def test_transformers_resolve_output_names_without_learning(
@@ -646,6 +658,10 @@ def test_rename_names_stay_unknown_until_inputs_are_known() -> None:
         ("rename", {"mapping": {"z": "x"}}, "must exist in the input"),
         ("rename", {"mapping": {"a": "b"}}, "duplicate features"),
         ("lags", {"apply_to": ["z"]}, "must exist in the input"),
+        ("one_hot_encoder", {"categories": {"z": ["x"]}}, "must exist in the input"),
+        ("frequency_encoder", {"features": ["z"]}, "must exist in the input"),
+        ("signed_log", {"apply_to": ["z"]}, "must exist in the input"),
+        ("calendar_features", {"timestamp": "z"}, "must exist in the input"),
     ],
 )
 def test_transformers_reject_names_that_cannot_be_resolved(

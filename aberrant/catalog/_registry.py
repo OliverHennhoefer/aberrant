@@ -772,6 +772,78 @@ def _imputed_count(params: Parameters, inputs: int | None) -> int | None:
     return 2 * count if params["indicate"] else count
 
 
+def _one_hot_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if inputs is None:
+        return None
+    categories = cast(Mapping[str, Sequence[object]], params["categories"])
+
+    def indicators(name: str) -> tuple[str, ...]:
+        texts = (*(str(value) for value in categories[name]), "other")
+        return tuple(f"{name}_{text}" for text in texts)
+
+    if not set(categories).issubset(inputs):
+        raise ValueError("Encoded features must exist in the input")
+    names: list[str] = []
+    for name in inputs:
+        names.extend(indicators(name) if name in categories else (name,))
+    if len(names) != len(set(names)):
+        raise ValueError("One-hot indicators clash with features of the same name")
+    return tuple(names)
+
+
+def _one_hot_count(params: Parameters, inputs: int | None) -> int | None:
+    if inputs is None:
+        return None
+    categories = cast(Mapping[str, Sequence[object]], params["categories"])
+    return inputs + sum(len(values) for values in categories.values())
+
+
+def _frequency_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if inputs is None:
+        return None
+    if not set(cast(Sequence[str], params["features"])).issubset(inputs):
+        raise ValueError("Encoded features must exist in the input")
+    return inputs
+
+
+def _calendar_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if inputs is None:
+        return None
+    timestamp = cast(str, params["timestamp"])
+    if timestamp not in inputs:
+        raise ValueError("The timestamp feature must exist in the input")
+    added = tuple(
+        f"{timestamp}_{cycle}_{part}"
+        for cycle in cast(Sequence[str], params["cycles"])
+        for part in ("sin", "cos")
+    )
+    names = (*(name for name in inputs if name != timestamp), *added)
+    if len(names) != len(set(names)):
+        raise ValueError("Calendar features clash with features of the same name")
+    return names
+
+
+def _calendar_count(params: Parameters, inputs: int | None) -> int | None:
+    if inputs is None:
+        return None
+    return inputs - 1 + 2 * len(cast(Sequence[str], params["cycles"]))
+
+
+def _signed_log_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    apply_to = cast(Sequence[str] | None, params.get("apply_to"))
+    if inputs is not None and apply_to is not None and not set(apply_to) <= set(inputs):
+        raise ValueError("Transformed features must exist in the input")
+    return inputs
+
+
 def _transformer(
     *,
     component_id: str,
@@ -833,6 +905,38 @@ _TRANSFORMER_SPECS = (
         family="validation",
         resolver=_imputed_count,
         names_resolver=_imputed_names,
+    ),
+    _transformer(
+        component_id="one_hot_encoder",
+        class_name="OneHotEncoder",
+        module="aberrant.transform",
+        family="encoding",
+        resolver=_one_hot_count,
+        names_resolver=_one_hot_names,
+    ),
+    _transformer(
+        component_id="frequency_encoder",
+        class_name="FrequencyEncoder",
+        module="aberrant.transform",
+        family="encoding",
+        resolver=_preserve_features,
+        names_resolver=_frequency_names,
+    ),
+    _transformer(
+        component_id="signed_log",
+        class_name="SignedLog",
+        module="aberrant.transform",
+        family="preprocessing",
+        resolver=_preserve_features,
+        names_resolver=_signed_log_names,
+    ),
+    _transformer(
+        component_id="calendar_features",
+        class_name="CalendarFeatures",
+        module="aberrant.transform",
+        family="encoding",
+        resolver=_calendar_count,
+        names_resolver=_calendar_names,
     ),
     _transformer(
         component_id="min_max_scaler",
