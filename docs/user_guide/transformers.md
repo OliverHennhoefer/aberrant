@@ -25,6 +25,7 @@ can precede another transformer or one terminal model in a pipeline.
 | `Despike` | Per-feature recent window | Same keys, a spike replaced by the window median | Hampel rule on `threshold` scaled MADs; a flat window replaces nothing |
 | `RollingStatistic` | Per-feature recent window | Same keys, a window statistic | Location, spread, quantiles, slope, z-scores, rank, RMS or shape |
 | `Deseasonalize` | Per-feature level and spread per position of the cycle | Same keys, the value less its position's level | Levels average over `memory` cycles; one odd value moves them at most four spreads |
+| `Select`, `Rename`, `Passthrough` | None | The named features in the given order, the same values under new names, or an unchanged copy | Stateless; they route features, mostly between the branches of a [`GraphPipeline`](graph_pipelines.md) |
 
 All built-in transformers reject non-numeric or non-finite values before updating their
 persistent state. The encoders take text or integer categories for their

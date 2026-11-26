@@ -6,10 +6,9 @@ It is a standalone Python API using the base package dependencies. Applications
 own saved designs, bindings, user interfaces, calibration and alarm policies.
 
 ```python
-from aberrant.compose import GraphNode, GraphPipeline, MergeNode, Select
+from aberrant.compose import GraphNode, GraphPipeline, MergeNode
 from aberrant.model.stat import MovingCovariance
-from aberrant.transform import StandardScaler
-from aberrant.transform import IncrementalPCA
+from aberrant.transform import IncrementalPCA, Select, StandardScaler
 
 graph = GraphPipeline(
     [
@@ -41,9 +40,10 @@ Temperature bypasses both scaling and projection. Moving the merge before PCA
 would project temperature as well. Each node runs once per pass, even when its
 output feeds several branches. Merge inputs concatenate features in the declared
 order; duplicate feature names raise an error rather than silently overwriting
-values. Use `Rename({"component_0": "left_component"})` on one branch to resolve
-collisions. `Select`, `Rename` and `Passthrough` also work with ordinary `|`
-pipelines and declarative transformer catalog entries.
+values. Use `Rename(mapping={"component_0": "left_component"})` on one branch to resolve
+collisions. `Select`, `Rename` and `Passthrough` live in `aberrant.transform`
+and also work in ordinary `|` pipelines and as declarative transformer catalog
+entries (`select`, `rename`, `passthrough`).
 
 ## Initialization and learning order
 
@@ -71,8 +71,8 @@ are frozen dataclasses. `score_one` is read-only and returns `0.0` until the
 complete path and terminal are ready, like every model. Use one serial owner for graph
 execution; concurrent calls are not supported.
 
-The graph API does not change existing `Pipeline` or `DetectorConfig` version 1.
-Linear pipelines retain their eager learning and provisional transformer
+A graph is built in Python: `DetectorConfig` describes linear pipelines only.
+Linear pipelines keep their eager learning and provisional transformer
 outputs. A `GraphPipeline` already ends in a model and cannot accept another
 stage through `|`.
 

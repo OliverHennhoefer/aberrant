@@ -28,9 +28,9 @@ post-update transform downstream. See [Pipelines](pipelines.md).
 | Component | Expected input |
 | --- | --- |
 | General multivariate detector | A non-empty `dict[str, float]` with finite numeric values and, for schema-owning models, the same feature-key set after the first successful `learn_one` |
-| Univariate moving statistic, `RollingMatrixProfile`, and `DAMP` | Exactly one consistently named numeric feature |
+| `MovingZScore`, `MovingMAD`, `RollingMatrixProfile`, and `DAMP` | Exactly one consistently named numeric feature |
 | `MultivariateRollingMatrixProfile` | One or more fixed named channels per aligned observation; every event supplies all channels |
-| Bivariate covariance/correlation statistic | Exactly two consistently named numeric features |
+| `MovingCovariance` and `MovingCorrelationCoefficient` | Exactly two consistently named numeric features |
 | Edge-stream detector | Named source and destination fields, usually integer-like, plus the configured timestamp field when `time_key` is not `None` |
 | Drift detector | One finite scalar passed to `update(value)` |
 
@@ -89,7 +89,8 @@ alerting warm-up explicit in application code.
 -   **[Transformers](transformers.md)** and **[Pipelines](pipelines.md)**
 
     Incremental preprocessing, projection, structural protocols, and update
-    order.
+    order. [Branched pipelines](graph_pipelines.md) merge several
+    preprocessing paths in front of one model.
 
 -   **[Application integration](integrations.md)**
 
@@ -100,9 +101,22 @@ alerting warm-up explicit in application code.
 
     Labelled benchmarks and local NPZ archives replayed as streams.
 
+-   **[Score calibration](calibration.md)**
+
+    Online alarm thresholds on scores, with delayed feedback.
+
+-   **[Forecast-based detection](forecasting.md)**
+
+    Online forecasters and regressors, and detectors that score their misses.
+
 -   **[Drift detection](drift.md)** and **[Evaluation](evaluation.md)**
 
     Scalar change monitoring and leakage-resistant stream evaluation.
+
+-   **[Upgrading to 2.0](upgrading.md)** and **[Coming from river or PySAD](migrating.md)**
+
+    Every change that 1.x code needs, and how the other libraries' components
+    map onto aberrant's.
 
 -   **[Best practices](best_practices.md)**
 

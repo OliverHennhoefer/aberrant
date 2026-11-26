@@ -113,10 +113,19 @@ matters.
 
 - Isolation forests, distance and density methods, bounded sketches, dynamic
   graph detectors, online statistics, experimental SVMs, scalar time-series
-  discord detection, and reconstruction models.
-- Incremental scaling and projection transformers that compose with `|`.
+  discord detection, reconstruction models, and `ScoreEnsemble` to combine them.
+- Online forecasters and regressors, and `ResidualDetector` to score their
+  misses at any lead.
+- Transformers that compose with `|`: imputation, categorical encoding,
+  scaling, lags, differences, rolling statistics, deseasonalizing and
+  projection.
+- `ScoreCalibrator`, seventeen online methods that turn scores into alarm
+  thresholds.
 - ADWIN, CUSUM, KSWIN, and Page-Hinkley drift detectors for scalar monitoring signals.
-- A registry-backed, checksum-validated benchmark dataset cache.
+- Prequential evaluation for detectors and forecasters, with range-aware
+  VUS metrics.
+- A catalog that builds detectors from declarative configurations.
+- Checksum-validated benchmark datasets and a synthetic stream generator.
 - Runtime-checkable component protocols and `py.typed` metadata for downstream
   type checking.
 

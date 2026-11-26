@@ -81,6 +81,7 @@ print(f"{alerts} alerts, {drift.n_detections} score drift signals")
 ## Why aberrant
 
 - **Broad toolbox.** Forest, density, sketch, graph, matrix-profile, SVM and autoencoder detectors.
+- **Forecast-based detection.** Online forecasters and regressors whose misses become anomaly scores.
 - **Score to alert.** Drift detectors and adaptive thresholds turn scores into decisions.
 - **Built for services.** `|` pipelines, bounded state, detectors built from plain configuration.
 - **Measured on the stream.** Prequential evaluation, benchmark streams, separate timings.
@@ -160,15 +161,16 @@ pip install "aberrant[eval,faiss]"
 | Adaptive margin-based detection | [Online SVM models](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#svm-detectors) |
 | Learned reconstruction error | [`OnlineAutoencoderEnsemble` or the optional PyTorch `Autoencoder`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#reconstruction-detectors) |
 | Detecting distribution drift | [`ADWIN`, `CUSUM`, `KSWIN`, or `PageHinkley`](https://oliverhennhoefer.github.io/aberrant/api/drift/) |
+| Several detectors voting on one scale | [`ScoreEnsemble`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#combining-detectors) |
 | A fixed bound on raw features | [`ThresholdModel`](https://oliverhennhoefer.github.io/aberrant/user_guide/models/#core-utility-models) |
 | Misses of an online forecast or regression, at any lead | [`ResidualDetector` with `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster`, `EchoStateForecaster`, `SeasonalNaive`, `RLSRegressor` or another online regressor](https://oliverhennhoefer.github.io/aberrant/user_guide/forecasting/) |
-| An alarm threshold that adapts online, with delayed feedback | [`ScoreCalibrator` with ACI, conformal PID, SAOCP and twelve more](https://oliverhennhoefer.github.io/aberrant/user_guide/calibration/) |
+| An alarm threshold that adapts online, with delayed feedback | [`ScoreCalibrator` with ACI, conformal PID, SPOT and fourteen more](https://oliverhennhoefer.github.io/aberrant/user_guide/calibration/) |
 
 See the [model guide](https://oliverhennhoefer.github.io/aberrant/user_guide/models/)
 for inputs, score interpretation, warm-up behavior, and memory characteristics.
 
 <details>
-<summary><strong>Included public model families</strong></summary>
+<summary><strong>Included components</strong></summary>
 
 | Family | Implementations |
 | --- | --- |
@@ -180,8 +182,14 @@ for inputs, score interpretation, warm-up behavior, and memory characteristics.
 | SVM | `AdaptiveOneClassSVM` |
 | Statistical | `MovingZScore`, `MovingMAD`, `MovingCorrelationCoefficient`, `MovingCovariance`, `MovingMahalanobisDistance`, `OnlineECOD`, `OnlineCOPOD` |
 | Reconstruction | `OnlineAutoencoderEnsemble`, optional `Autoencoder` |
+| Ensemble | `ScoreEnsemble` |
 | Fixed rule | `ThresholdModel` |
 | Baselines | `NullModel`, `RandomModel` |
+| Forecast residuals | `ResidualDetector` |
+| Forecasters | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `LagForecaster`, `EchoStateForecaster`, `EnsembleForecaster` |
+| Online regressors | `RLSRegressor`, `RandomFourierRegressor`, `PassiveAggressiveRegressor`, `SGDRegressor`, `KNNRegressor`, `HoeffdingTreeRegressor`, `AdaptiveRandomForestRegressor` |
+| Transformers | `FeatureSchemaGuard`, `Imputer`, `OneHotEncoder`, `FrequencyEncoder`, `SignedLog`, `CalendarFeatures`, `MinMaxScaler`, `StandardScaler`, `RollingRobustScaler`, `Lags`, `Difference`, `ExponentialSmoother`, `Despike`, `RollingStatistic`, `Deseasonalize`, `IncrementalPCA`, `RandomProjection`, `Select`, `Rename`, `Passthrough` |
+| Score calibration | `ScoreCalibrator` with seventeen methods |
 | Drift detection | `ADWIN`, `CUSUM`, `KSWIN`, `PageHinkley` |
 
 </details>

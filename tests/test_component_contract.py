@@ -149,6 +149,14 @@ def test_model_reset_matches_a_fresh_model(component_id):
 
 
 @pytest.mark.parametrize("component_id", MODEL_IDS)
+def test_learning_leaves_model_parameters_unchanged(component_id):
+    model = _model(component_id)
+    before = repr(model.get_params())
+    _scores(model, _events(component_id))
+    assert repr(model.get_params()) == before
+
+
+@pytest.mark.parametrize("component_id", MODEL_IDS)
 def test_model_pickle_keeps_learned_state(component_id):
     events = _events(component_id)
     model = _model(component_id)

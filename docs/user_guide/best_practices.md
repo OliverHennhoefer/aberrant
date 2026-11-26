@@ -17,9 +17,9 @@ substitute for detector-specific calibration or an application threat model.
   NaN, with `ValidationError`. Put an `Imputer` first to fill it in, with
   `indicate=True` when missingness itself may be anomalous. Forecasters are
   the exception: `learn_one(None)` learns that a step is missing.
-- Reject non-finite values before they reach static threshold wrappers too.
-  Stateful numeric boundaries reject them, but `ThresholdModel` is a rule
-  evaluator rather than a general numeric validator.
+- Decide where a rejected event goes. Every model, `ThresholdModel` included,
+  raises `ValidationError` for a non-numeric or non-finite value, so a broken
+  sensor never passes as a normal reading.
 - Keep feature units stable. A distance, reconstruction error, radius, or
   covariance threshold calibrated in one unit system is not portable to
   another.
@@ -72,7 +72,7 @@ assuming transform-then-learn is equivalent.
 - With `time_key=None`, time-aware models use arrival order. Retries, buffering,
   and partition merges can therefore change semantics.
 - With an explicit `time_key`, aberrant accepts non-decreasing time. Equal
-  values are valid; a later smaller value raises `ValueError`.
+  values are valid; a later smaller value raises `ValidationError`.
 - Models based on buckets require integer-like timestamps. Do not silently
   round wall-clock values in application code.
 - `score_one` previews but does not commit shared model time. A subsequent
@@ -141,8 +141,11 @@ When you checkpoint components:
 ## Long running streams
 
 The streaming interface alone does not guarantee constant memory or unlimited
-numeric lifetime. The package-wide longevity audit exercises all built-in model
-families, transformers, drift detectors, evaluation, batching, and native FAISS.
+numeric lifetime. The longevity audit exercises the detector families,
+the scalers and projections, drift detectors, evaluation, and native FAISS.
+The forecasters, sequence transformers, encoders, `ScoreEnsemble` and the
+calibrators that 2.0 added are not part of that audit yet; their docstrings
+state what each one retains.
 The bounds below assume fixed feature dimensions and constructor parameters;
 they describe retained observations and arrays, excluding exact lifetime counters.
 
@@ -155,20 +158,19 @@ they describe retained observations and arrays, excluding exact lifetime counter
 | `MIDAS`, `ISCONNA`, `AnoEdgeL`, `StreamSpot` | Fixed sketches or configured active-graph budgets. Novel node/graph identities do not accumulate without eviction. |
 | `AdaptiveOneClassSVM` | Fixed support-vector and feature-map budgets. |
 | `RollingMatrixProfile`, `MultivariateRollingMatrixProfile`, `DAMP` | Configured rolling series and lag arrays. DAMP rejects constant subsequences. |
-| All ten univariate moving statistics, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
+| `MovingZScore`, `MovingMAD`, `MovingCovariance`, `MovingCorrelationCoefficient`, `MovingMahalanobisDistance` | Configured observation windows and feature matrices. Exact rolling order statistics and moments operate on bounded histories. |
 | `ThresholdModel`, `NullModel`, `RandomModel` | Fixed rule configuration or generator state. |
 | `OnlineAutoencoderEnsemble` | Fixed feature-map statistics and network weights; frozen and adaptive phases retain no observation history. |
 | `Autoencoder`, bundled feedforward/LSTM architectures | Fixed tensor buffers, network parameters, gradients, and ordinary optimizer state. Supplied architectures, losses, and optimizers can have their own unbounded state or numeric failures. |
 | `MinMaxScaler`, `StandardScaler`, `RollingRobustScaler` | State grows with **distinct feature names**. Place `FeatureSchemaGuard` first to enforce a finite schema. Robust windows are bounded per feature, not across an unlimited feature vocabulary. |
 | `FeatureSchemaGuard`, `RandomProjection`, `IncrementalPCA` | Fixed schema/projection arrays. PCA retains only its first `warm_up` events during initialization, then releases them. |
 | `ADWIN`, `CUSUM`, `KSWIN`, `PageHinkley` | Default ADWIN uses O(log N) buckets on stationary streams; `max_window_size` bounds its represented history by discarding oldest whole buckets. KSWIN has a fixed window; CUSUM and Page-Hinkley use scalar statistics. |
-| `Pipeline`, `PrequentialEvaluator`, `BatchStreamer` | Pipeline retains components; evaluation retains at most `metric_window_size` labeled scores; batching retains at most `batch_size` events. Evaluation with `metric_window_size=None` explicitly retains O(N) scores when metrics are enabled. |
+| `Pipeline`, `PrequentialEvaluator` | Pipeline retains components; evaluation retains at most `metric_window_size` labeled scores. Evaluation with `metric_window_size=None` explicitly retains O(N) scores when metrics are enabled. |
 | NPZ loading, dataset cache, download and validation | NPZ iteration materializes the complete feature and label arrays. It is a finite benchmark source, not an out-of-core or infinite source. Downloads and hashing use bounded byte chunks; cached artifacts occupy disk. |
 
 For bounded service operation, consume records incrementally, enforce a fixed
-schema, use positive integer window/batch sizes, and keep both the input queue
-and output sink bounded. `iter_evaluate` and `BatchStreamer` can consume infinite
-generators lazily; `evaluate` returns only after its input ends. Close generators
+schema, use positive integer window sizes, and keep both the input queue
+and output sink bounded. `iter_evaluate` consumes infinite generators lazily; `evaluate` returns only after its input ends. Close generators
 when stopping early. Storing all outputs with `list`, or accepting arrivals faster
 than processing, can exhaust application memory independently of model bounds.
 
@@ -177,9 +179,6 @@ Numeric limits remain observable even with bounded data retention:
 - Exact Python counters occupy O(log N) bits; cumulative floating-point counts
   eventually lose unit precision. ISCONNA's fixed-width pattern counters saturate
   at the signed 64-bit maximum rather than wrapping negative.
-- `RSHash` normalizes faded occupancy by a lifetime sample count.
-  Its absolute scores can approach 1 on a long stationary stream with positive
-  decay; calibrate against recent scores rather than assume a stationary scale.
 - Shared integer clocks and `MIDAS`/`ISCONNA`/`AnoEdgeL` edge identifiers remain
   exact past `2**53` when supplied as Python/NumPy integers. The numeric
   identifiers in `StreamSpot` and categorical vectors in
@@ -213,17 +212,10 @@ Windows installation FAISS required `FAISS_OPT_LEVEL=generic` and importing
 failures. Native index sizes and FIFO scores were checked; native allocator leak
 instrumentation and CUDA testing were unavailable.
 
-Verified on 2026-10-08 with Windows, CPython 3.12.10, NumPy 2.3.5, SciPy 1.16.3,
-PyTorch 2.13.0 CPU, and FAISS 1.13.0: the complete unit and integration run
-finished with **1,963 passed, 109 passing subtests, 5 strict expected failures,
-and 1 CUDA skip**. The four longevity suites contain 240 cases. Additional
-focused suites cover rejected ensemble events, timestamp representation, and
-integer-capacity contracts. The five expected
-failures reproduce FAISS/SDOStream/LOF extreme-value distance errors and the two
-external Adam limitations above; they are unresolved constraints. Ruff lint and
-formatting, mypy across 95 source files, wheel/sdist builds, and an isolated
-built-wheel import/bounded-mode smoke check also passed. Integration used a
-validated local SHUTTLE artifact; no dataset downloads were needed.
+CI runs these suites on every change, on Linux and Windows with CPython 3.12
+to 3.14. Five strict expected failures reproduce the FAISS, SDOStream and LOF
+extreme-value distance errors and the two external Adam limitations above;
+they are unresolved constraints.
 
 ## Deployment checklist
 
