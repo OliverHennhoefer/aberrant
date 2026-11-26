@@ -36,6 +36,7 @@ from aberrant.evaluate import (
 )
 from aberrant.exceptions import ConfigurationError
 from aberrant.forecast import (
+    AutoRegressive,
     HoltWinters,
     KalmanForecaster,
     ResidualDetector,
@@ -142,6 +143,7 @@ def test_forecast_public_imports_base_smoke() -> None:
     assert base_api.ForecasterProtocol is not None
     assert base_api.RegressorProtocol is not None
     for component in (
+        AutoRegressive,
         HoltWinters,
         KalmanForecaster,
         ResidualDetector,

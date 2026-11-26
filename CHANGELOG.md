@@ -31,6 +31,13 @@ Semantic Versioning.
   spread is the predictive standard deviation of each lead, with the noise
   variance estimated online, and `learn_one(None)` learns a missing reading.
   The catalog lists it as `kalman_forecaster`.
+- `aberrant.forecast.AutoRegressive`: a seasonal autoregression on a
+  differenced series (SARIMA without moving-average terms) whose weights
+  recursive least squares with forgetting updates at every value. Leads
+  beyond 1 are forecast recursively, the spread is each lead's faded mean
+  absolute error, and `learn_one(None)` learns a missing value. The catalog
+  lists it as `autoregressive`. `benchmarks/compare_forecasters.py` compares
+  every forecaster on synthetic series.
 - `attribute_one(x)` on `LODA`, `MovingMahalanobisDistance` and
   `HalfSpaceTrees`, alongside `OnlineECOD` and `OnlineCOPOD`: each feature's
   share of the score, without learning. The shares sum to the score minus

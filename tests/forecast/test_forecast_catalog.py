@@ -18,6 +18,7 @@ from aberrant.catalog import (
 )
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.forecast import (
+    AutoRegressive,
     HoltWinters,
     KalmanForecaster,
     ResidualDetector,
@@ -56,12 +57,14 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "seasonal_naive",
         "holt_winters",
         "kalman_forecaster",
+        "autoregressive",
         "rls_regressor",
     }
     classes = {
         "seasonal_naive": SeasonalNaive,
         "holt_winters": HoltWinters,
         "kalman_forecaster": KalmanForecaster,
+        "autoregressive": AutoRegressive,
         "rls_regressor": RLSRegressor,
     }
     for component_id, spec in FORECASTER_CATALOG.items():
@@ -109,6 +112,19 @@ def test_residual_detector_takes_its_forecaster_as_a_nested_component() -> None:
         ({"id": "holt_winters", "params": {"season_length": 6, "horizon": 5}}, 5),
         ({"id": "kalman_forecaster", "params": {}}, None),
         ({"id": "kalman_forecaster", "params": {"slope_ratio": 0.0, "horizon": 4}}, 3),
+        ({"id": "autoregressive", "params": {}}, None),
+        (
+            {
+                "id": "autoregressive",
+                "params": {
+                    "horizon": 3,
+                    "season_length": 4,
+                    "seasonal_order": 1,
+                    "difference": 1,
+                },
+            },
+            2,
+        ),
     ],
 )
 def test_forecaster_warmup_matches_the_first_forecast(forecaster, lead) -> None:

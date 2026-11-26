@@ -16,7 +16,7 @@ differ in what they predict from, which shows in how they are called:
 | Learn | `learn_one(y)` | `learn_one(x, y)` |
 | Predict | `forecast_one()` | `predict_one(x)` |
 | Leads | `1..horizon` | `0` |
-| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster` | `RLSRegressor` |
+| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive` | `RLSRegressor` |
 
 The target is its own argument, never a key of `x`, so a regressor cannot see
 the value it predicts and transformers in front of it never touch the target.
@@ -62,14 +62,26 @@ lead an error that belongs to a longer one.
 
 ## Spreads
 
-`SeasonalNaive` and `HoltWinters` report each lead's faded mean absolute
-error as its spread. `KalmanForecaster` reports the standard deviation of its
+`SeasonalNaive`, `HoltWinters` and `AutoRegressive` report each lead's faded
+mean absolute error as its spread. `KalmanForecaster` reports the standard deviation of its
 predictive distribution, from a local level (or, with `slope_ratio`, a local
 linear trend) model whose noise variance it estimates online. That spread
 grows with the lead as the model says it should, and on Gaussian noise
 `|y - mean| / spread` stays within 1.645 for 90% of values at every lead.
 `level_ratio` sets how quickly it follows the series; the default matches
 exponential smoothing with weight 0.2.
+
+## Choosing a forecaster
+
+`HoltWinters` suits a series whose season repeats with noise around it.
+`KalmanForecaster` suits a level, or a trend, that wanders without a season.
+`AutoRegressive` suits a series whose values depend on the recent past and on
+the same phase of earlier cycles, which is common in telemetry from
+controlled processes: it fits a seasonal autoregression online, differences a
+series that wanders, and leaves less correlation in its errors than the
+smoothing methods do. Start with `order=2`, and add `season_length` with
+`seasonal_order=1` for a seasonal series. `benchmarks/compare_forecasters.py`
+compares all of them on synthetic series.
 
 ## One value, many forecasts
 

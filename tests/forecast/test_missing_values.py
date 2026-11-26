@@ -5,13 +5,21 @@ import pickle
 import numpy as np
 import pytest
 
-from aberrant.forecast import HoltWinters, KalmanForecaster, SeasonalNaive
+from aberrant.forecast import (
+    AutoRegressive,
+    HoltWinters,
+    KalmanForecaster,
+    SeasonalNaive,
+)
 
 HORIZON = 6
 FORECASTERS = {
     "naive": lambda: SeasonalNaive(season_length=4, horizon=HORIZON),
     "holt_winters": lambda: HoltWinters(season_length=4, horizon=HORIZON),
     "kalman": lambda: KalmanForecaster(horizon=HORIZON, slope_ratio=0.01),
+    "autoregressive": lambda: AutoRegressive(
+        horizon=HORIZON, season_length=4, seasonal_difference=1
+    ),
 }
 
 
@@ -42,7 +50,7 @@ def test_after_a_gap_the_forecast_is_the_longer_lead_issued_before_it(name, gap)
     assert min(after.scale[HORIZON - gap :]) >= before.scale[-1] - 1e-12
 
 
-@pytest.mark.parametrize("name", ["naive", "holt_winters"])
+@pytest.mark.parametrize("name", ["naive", "holt_winters", "autoregressive"])
 def test_a_forecast_issued_after_a_gap_is_not_scored_at_its_own_lead(name):
     series = _series(60)
     before = _learned(name, series).forecast_one()
