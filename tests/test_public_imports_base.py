@@ -40,9 +40,14 @@ from aberrant.forecast import (
     EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
+    KNNRegressor,
+    LagForecaster,
+    PassiveAggressiveRegressor,
+    RandomFourierRegressor,
     ResidualDetector,
     RLSRegressor,
     SeasonalNaive,
+    SGDRegressor,
     interval,
     nonconformity,
 )
@@ -144,10 +149,15 @@ def test_forecast_public_imports_base_smoke() -> None:
     assert base_api.ForecasterProtocol is not None
     assert base_api.RegressorProtocol is not None
     for component in (
+        KNNRegressor,
+        PassiveAggressiveRegressor,
+        RandomFourierRegressor,
+        SGDRegressor,
         AutoRegressive,
         EnsembleForecaster,
         HoltWinters,
         KalmanForecaster,
+        LagForecaster,
         ResidualDetector,
         RLSRegressor,
         SeasonalNaive,

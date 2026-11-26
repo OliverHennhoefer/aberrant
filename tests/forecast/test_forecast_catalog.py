@@ -22,9 +22,14 @@ from aberrant.forecast import (
     EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
+    KNNRegressor,
+    LagForecaster,
+    PassiveAggressiveRegressor,
+    RandomFourierRegressor,
     ResidualDetector,
     RLSRegressor,
     SeasonalNaive,
+    SGDRegressor,
 )
 
 
@@ -59,16 +64,26 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters",
         "kalman_forecaster",
         "autoregressive",
+        "lag_forecaster",
         "ensemble_forecaster",
         "rls_regressor",
+        "random_fourier_regressor",
+        "passive_aggressive_regressor",
+        "sgd_regressor",
+        "knn_regressor",
     }
     classes = {
         "seasonal_naive": SeasonalNaive,
         "holt_winters": HoltWinters,
         "kalman_forecaster": KalmanForecaster,
         "autoregressive": AutoRegressive,
+        "lag_forecaster": LagForecaster,
         "ensemble_forecaster": EnsembleForecaster,
         "rls_regressor": RLSRegressor,
+        "random_fourier_regressor": RandomFourierRegressor,
+        "passive_aggressive_regressor": PassiveAggressiveRegressor,
+        "sgd_regressor": SGDRegressor,
+        "knn_regressor": KNNRegressor,
     }
     for component_id, spec in FORECASTER_CATALOG.items():
         assert spec.kind is ComponentKind.FORECASTER
@@ -254,3 +269,37 @@ def test_an_ensemble_member_error_names_its_position() -> None:
                 },
             }
         ).build()
+
+
+def test_a_lag_forecaster_takes_its_regressor_as_a_nested_component() -> None:
+    config = _config(
+        {
+            "id": "lag_forecaster",
+            "params": {"regressor": {"id": "rls_regressor"}, "order": 2},
+        }
+    )
+    capabilities = config.capabilities()
+    assert capabilities.event_kind is EventKind.UNIVARIATE
+    detector = config.build()
+    assert isinstance(detector.model, LagForecaster)
+    assert isinstance(detector.model.regressor, RLSRegressor)
+    with pytest.raises(ConfigurationError, match="regressor"):
+        _config(
+            {"id": "lag_forecaster", "params": {"regressor": {"id": "seasonal_naive"}}}
+        ).build()
+
+
+@pytest.mark.parametrize(
+    "regressor",
+    [
+        "random_fourier_regressor",
+        "passive_aggressive_regressor",
+        "sgd_regressor",
+        "knn_regressor",
+    ],
+)
+def test_new_regressors_score_covariates_at_lead_zero(regressor) -> None:
+    config = _config({"id": regressor, "params": {}})
+    capabilities = config.capabilities()
+    assert capabilities.event_kind is EventKind.TABULAR
+    assert config.build().lead == 0

@@ -10,6 +10,8 @@ from aberrant.forecast import (
     EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
+    LagForecaster,
+    RLSRegressor,
     SeasonalNaive,
 )
 
@@ -26,6 +28,13 @@ FORECASTERS = {
             SeasonalNaive(season_length=4, horizon=HORIZON),
             KalmanForecaster(horizon=HORIZON, slope_ratio=0.01),
         ]
+    ),
+    "lagged": lambda: LagForecaster(
+        RLSRegressor(),
+        horizon=HORIZON,
+        order=2,
+        season_length=4,
+        seasonal_difference=1,
     ),
     "autoregressive": lambda: AutoRegressive(
         horizon=HORIZON, season_length=4, seasonal_difference=1
@@ -60,7 +69,7 @@ def test_after_a_gap_the_forecast_is_the_longer_lead_issued_before_it(name, gap)
     assert min(after.scale[HORIZON - gap :]) >= before.scale[-1] - 1e-12
 
 
-@pytest.mark.parametrize("name", ["naive", "holt_winters", "autoregressive"])
+@pytest.mark.parametrize("name", ["naive", "holt_winters", "autoregressive", "lagged"])
 def test_a_forecast_issued_after_a_gap_is_not_scored_at_its_own_lead(name):
     series = _series(60)
     before = _learned(name, series).forecast_one()

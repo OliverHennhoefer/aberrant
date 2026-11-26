@@ -112,7 +112,15 @@ def _graph_edge_features(params: Parameters) -> FeatureCount:
 
 # Forecasters that predict the target from the event's other features at lead 0
 # instead of forecasting the series ahead.
-_REGRESSORS = frozenset({"rls_regressor"})
+_REGRESSORS = frozenset(
+    {
+        "rls_regressor",
+        "random_fourier_regressor",
+        "passive_aggressive_regressor",
+        "sgd_regressor",
+        "knn_regressor",
+    }
+)
 
 
 def _wraps_regressor(params: Parameters) -> bool:
@@ -783,6 +791,14 @@ _FORECASTER_SPECS = (
         import_path="aberrant.forecast.AutoRegressive",
     ),
     ComponentSpec(
+        id="lag_forecaster",
+        display_name="LagForecaster",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.LagForecaster",
+        dependencies=(ComponentDependency("regressor", ComponentKind.FORECASTER),),
+    ),
+    ComponentSpec(
         id="ensemble_forecaster",
         display_name="EnsembleForecaster",
         kind=ComponentKind.FORECASTER,
@@ -798,6 +814,34 @@ _FORECASTER_SPECS = (
         kind=ComponentKind.FORECASTER,
         family="forecast",
         import_path="aberrant.forecast.RLSRegressor",
+    ),
+    ComponentSpec(
+        id="random_fourier_regressor",
+        display_name="RandomFourierRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.RandomFourierRegressor",
+    ),
+    ComponentSpec(
+        id="passive_aggressive_regressor",
+        display_name="PassiveAggressiveRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.PassiveAggressiveRegressor",
+    ),
+    ComponentSpec(
+        id="sgd_regressor",
+        display_name="SGDRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.SGDRegressor",
+    ),
+    ComponentSpec(
+        id="knn_regressor",
+        display_name="KNNRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.KNNRegressor",
     ),
 )
 

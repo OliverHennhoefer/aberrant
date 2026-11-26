@@ -125,10 +125,11 @@ class RLSRegressor(BaseRegressor):
     def readiness(self) -> Readiness:
         """Ready once a spread has been measured, after ``d + 1`` events.
 
-        ``required`` is ``None`` until the first event sets ``d``.
+        ``d`` counts the coefficients, the intercept included, and
+        ``required`` is ``None`` until the first event sets it.
         """
         names = self._schema.names
-        required = None if names is None else len(names) + 1
+        required = None if names is None else len(names) + self.fit_intercept + 1
         return Readiness(self._mae is not None, self.n_samples_seen, required)
 
     @property

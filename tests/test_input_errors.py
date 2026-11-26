@@ -12,6 +12,8 @@ from aberrant.forecast import (
     AutoRegressive,
     HoltWinters,
     KalmanForecaster,
+    LagForecaster,
+    RLSRegressor,
     SeasonalNaive,
 )
 from tests.catalog_cases import (
@@ -94,6 +96,7 @@ def test_drift_detectors_reject_malformed_values(detector, value):
         lambda: HoltWinters(season_length=2),
         KalmanForecaster,
         AutoRegressive,
+        lambda: LagForecaster(RLSRegressor()),
     ],
 )
 @pytest.mark.parametrize("value", [math.nan, math.inf, "x"])

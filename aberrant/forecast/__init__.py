@@ -16,8 +16,15 @@ from aberrant.forecast.base import BaseForecaster, BaseRegressor
 from aberrant.forecast.ensemble import EnsembleForecaster
 from aberrant.forecast.holt_winters import HoltWinters
 from aberrant.forecast.kalman import KalmanForecaster
+from aberrant.forecast.lagged import LagForecaster
 from aberrant.forecast.linear import RLSRegressor
 from aberrant.forecast.naive import SeasonalNaive
+from aberrant.forecast.regressors import (
+    KNNRegressor,
+    PassiveAggressiveRegressor,
+    RandomFourierRegressor,
+    SGDRegressor,
+)
 from aberrant.forecast.residual import ResidualDetector
 from aberrant.forecast.scores import NonconformityScore, interval, nonconformity
 
@@ -28,10 +35,15 @@ __all__ = [
     "EnsembleForecaster",
     "Forecast",
     "HoltWinters",
+    "KNNRegressor",
     "KalmanForecaster",
+    "LagForecaster",
     "NonconformityScore",
+    "PassiveAggressiveRegressor",
     "RLSRegressor",
+    "RandomFourierRegressor",
     "ResidualDetector",
+    "SGDRegressor",
     "SeasonalNaive",
     "interval",
     "nonconformity",
