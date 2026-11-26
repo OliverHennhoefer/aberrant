@@ -16,7 +16,7 @@ differ in what they predict from, which shows in how they are called:
 | Learn | `learn_one(y)` | `learn_one(x, y)` |
 | Predict | `forecast_one()` | `predict_one(x)` |
 | Leads | `1..horizon` | `0` |
-| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster` | `RLSRegressor` |
+| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster` | `RLSRegressor` |
 
 The target is its own argument, never a key of `x`, so a regressor cannot see
 the value it predicts and transformers in front of it never touch the target.
@@ -91,8 +91,14 @@ When no single choice is clear, or the series changes character over time,
 every lead, how much to trust each one. Its weights follow the member that
 does best lately, and it often beats every member, since a weighted mean of
 different models cancels part of their errors. Its spread is its own faded
-mean absolute error. `benchmarks/compare_forecasters.py` compares all of them
-on synthetic series.
+mean absolute error.
+
+`LagForecaster` turns any regressor into a forecaster: it regresses each
+value on the values before it, the same phase of earlier cycles and the
+phase itself, and forecasts longer leads by feeding its predictions back.
+With `RLSRegressor` it is the autoregression above; with a nonlinear
+regressor it follows dynamics no linear model can.
+`benchmarks/compare_forecasters.py` compares all of them on synthetic series.
 
 ## One value, many forecasts
 

@@ -108,3 +108,11 @@ def test_large_covariates_keep_learning(forgetting: float) -> None:
     weights = forgetting ** np.arange(9, -1, -1)
     targets = np.array([1.0] + [2.0] * 9)
     assert model.coefficients["x"] == pytest.approx(weights @ targets / weights.sum())
+
+
+@pytest.mark.parametrize("fit_intercept", [True, False])
+def test_required_counts_the_events_until_ready(fit_intercept) -> None:
+    model = RLSRegressor(fit_intercept=fit_intercept)
+    for learned, (x, y) in enumerate(_events(8), start=1):
+        model.learn_one(x, y)
+        assert model.readiness.ready == (learned >= model.readiness.required)

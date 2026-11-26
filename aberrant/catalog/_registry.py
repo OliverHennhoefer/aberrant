@@ -783,6 +783,14 @@ _FORECASTER_SPECS = (
         import_path="aberrant.forecast.AutoRegressive",
     ),
     ComponentSpec(
+        id="lag_forecaster",
+        display_name="LagForecaster",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.LagForecaster",
+        dependencies=(ComponentDependency("regressor", ComponentKind.FORECASTER),),
+    ),
+    ComponentSpec(
         id="ensemble_forecaster",
         display_name="EnsembleForecaster",
         kind=ComponentKind.FORECASTER,

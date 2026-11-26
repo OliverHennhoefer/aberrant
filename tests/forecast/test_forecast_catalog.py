@@ -22,6 +22,7 @@ from aberrant.forecast import (
     EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
+    LagForecaster,
     ResidualDetector,
     RLSRegressor,
     SeasonalNaive,
@@ -59,6 +60,7 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters",
         "kalman_forecaster",
         "autoregressive",
+        "lag_forecaster",
         "ensemble_forecaster",
         "rls_regressor",
     }
@@ -67,6 +69,7 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters": HoltWinters,
         "kalman_forecaster": KalmanForecaster,
         "autoregressive": AutoRegressive,
+        "lag_forecaster": LagForecaster,
         "ensemble_forecaster": EnsembleForecaster,
         "rls_regressor": RLSRegressor,
     }
@@ -253,4 +256,22 @@ def test_an_ensemble_member_error_names_its_position() -> None:
                     ]
                 },
             }
+        ).build()
+
+
+def test_a_lag_forecaster_takes_its_regressor_as_a_nested_component() -> None:
+    config = _config(
+        {
+            "id": "lag_forecaster",
+            "params": {"regressor": {"id": "rls_regressor"}, "order": 2},
+        }
+    )
+    capabilities = config.capabilities()
+    assert capabilities.event_kind is EventKind.UNIVARIATE
+    detector = config.build()
+    assert isinstance(detector.model, LagForecaster)
+    assert isinstance(detector.model.regressor, RLSRegressor)
+    with pytest.raises(ConfigurationError, match="regressor"):
+        _config(
+            {"id": "lag_forecaster", "params": {"regressor": {"id": "seasonal_naive"}}}
         ).build()

@@ -45,6 +45,11 @@ Semantic Versioning.
   absolute error, with `forgetting` for weights that follow a change. The
   catalog lists it as `ensemble_forecaster`, whose `forecasters` are a list
   of nested forecasters; `ComponentDependency.many` marks such a parameter.
+- `aberrant.forecast.LagForecaster`: forecasts a series with any regressor
+  of its own past: recent values, the same phase of earlier cycles and
+  sine and cosine terms of the phase, on an optionally differenced series.
+  Leads beyond 1 are forecast recursively. The catalog lists it as
+  `lag_forecaster`, with its regressor nested in `regressor`.
 - `attribute_one(x)` on `LODA`, `MovingMahalanobisDistance` and
   `HalfSpaceTrees`, alongside `OnlineECOD` and `OnlineCOPOD`: each feature's
   share of the score, without learning. The shares sum to the score minus
@@ -53,6 +58,8 @@ Semantic Versioning.
 
 ### Fixed
 
+- `RLSRegressor.readiness.required` counts the intercept. With
+  `fit_intercept=True` it said one event fewer than the model needs.
 - `MovingCorrelationCoefficient` scores `0.0` until its window holds two
   pairs. With one, it scored the full correlation of the two-point window,
   always 1.

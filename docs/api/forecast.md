@@ -17,6 +17,8 @@ Forecasters learn one series with `learn_one(y)` and forecast it with
 
 ::: aberrant.forecast.EnsembleForecaster
 
+::: aberrant.forecast.LagForecaster
+
 ::: aberrant.forecast.RLSRegressor
 
 ::: aberrant.forecast.ResidualDetector
