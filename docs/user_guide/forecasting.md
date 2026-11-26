@@ -118,7 +118,74 @@ reservoir keeps a fading nonlinear memory of the series, and only a linear
 readout from it learns, by recursive least squares. A small `input_scale`
 keeps the reservoir nearly linear and its memory long, which suits seasonal
 series; a larger one makes it more nonlinear.
-`benchmarks/compare_forecasters.py` compares all of them on synthetic series.
+
+## How they compare
+
+`benchmarks/compare_forecasters.py` runs every forecaster on eight kinds of
+synthetic series, one value at a time, and scores the forecasts after the
+first 1,000 of 4,000 values. The series are a stationary autoregression, a
+seasonal autoregression, a random walk, a noisy trend with a fixed season, a
+series wandering in both level and season, a threshold autoregression
+(SETAR), a series that switches from an autoregression to a noisy season
+halfway, and a noisy logistic map. Regressors run inside `LagForecaster`
+with three lags, and every season is 12 values long. The tables are the mean
+over three series of each kind, from
+`uv run python benchmarks/compare_forecasters.py --seeds 3 --markdown`.
+
+The relative error is the geometric mean, over the series, of a
+forecaster's lead-1 mean absolute error divided by the best forecaster's on
+that series, so 1.00 would be best everywhere. "Near best" counts the series
+where it is within 2% of the best.
+
+| Forecaster | Relative MAE@1 | Near best (of 8) | µs per event |
+| --- | ---: | ---: | ---: |
+| `Ensemble(mixed)` | 1.341 | 7 | 1055 |
+| `Ensemble(classic)` | 1.581 | 6 | 503 |
+| `AR(p=2, P=1)` | 1.642 | 4 | 76 |
+| `Lag(RandomFourier)` | 1.653 | 1 | 233 |
+| `EchoState(D=1)` | 1.824 | 1 | 213 |
+| `Kalman(trend, season)` | 1.827 | 1 | 135 |
+| `Lag(AdaptiveForest)` | 1.875 | 2 | 1190 |
+| `Lag(KNN)` | 1.997 | 0 | 320 |
+| `AR(p=2, P=1, d=1, D=1)` | 2.035 | 1 | 78 |
+| `EchoState` | 2.068 | 2 | 209 |
+| `Kalman(season)` | 2.208 | 1 | 131 |
+| `HoltWinters` | 2.277 | 0 | 22 |
+| `Lag(HoeffdingTree)` | 2.497 | 3 | 199 |
+| `Lag(RLS)` | 2.556 | 2 | 144 |
+| `AR(p=2)` | 2.624 | 2 | 73 |
+| `Lag(PassiveAggressive)` | 2.761 | 1 | 127 |
+| `Kalman(trend)` | 2.957 | 0 | 123 |
+| `Kalman(level)` | 3.026 | 1 | 118 |
+| `Kalman(season, fixed)` | 3.086 | 0 | 62 |
+| `Lag(SGD Huber)` | 3.171 | 1 | 136 |
+| `Kalman(level, fixed)` | 3.722 | 0 | 55 |
+| `SeasonalNaive` | 4.160 | 0 | 15 |
+
+Where the model class contains the process, the best lead-1 error is about
+0.80, the mean absolute value of the standard normal innovations:
+
+| Series | Best MAE@1 | Best forecaster | Best MAE@6 |
+| --- | ---: | --- | ---: |
+| ar2 | 0.805 | `AR(p=2)` | 0.943 |
+| seasonal_ar | 0.806 | `AR(p=2, P=1)` | 0.924 |
+| random_walk | 0.805 | `AR(p=2)` | 1.956 |
+| trend_season | 0.834 | `Kalman(season)` | 0.842 |
+| wandering_season | 0.806 | `AR(p=2, P=1, d=1, D=1)` | 1.961 |
+| setar | 0.841 | `Lag(AdaptiveForest)` | 1.029 |
+| regime_switch | 0.855 | `Ensemble(mixed)` | 0.913 |
+| logistic | 0.004 | `Lag(RandomFourier)` | 0.051 |
+
+Three patterns stand out. A model whose structure matches the series wins
+it, often by a wide margin: the autoregressions on autoregressive series,
+`KalmanForecaster` on a noisy season, the nonlinear regressors on SETAR and
+the logistic map. `EnsembleForecaster` over models of different kinds is
+within 2% of the best on seven of the eight kinds and best after the
+regime switch, at the sum of its members' cost. And learning the variance
+ratios makes `KalmanForecaster` markedly better than its fixed ratios on
+every series that moves faster or slower than they assume. When the series
+is unknown, start with an ensemble of a seasonal `AutoRegressive`, a
+seasonal `KalmanForecaster` and one nonlinear member.
 
 ## One value, many forecasts
 
