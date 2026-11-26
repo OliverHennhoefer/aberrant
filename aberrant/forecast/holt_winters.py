@@ -9,7 +9,12 @@ from aberrant._utils.validation import (
 )
 from aberrant.base.forecast import Forecast
 from aberrant.base.readiness import Readiness
-from aberrant.forecast._arithmetic import LeadErrors, fsum, holt_winters_initialize
+from aberrant.forecast._arithmetic import (
+    CycleWarmUp,
+    LeadErrors,
+    fsum,
+    holt_winters_initialize,
+)
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
 
 
@@ -34,8 +39,17 @@ class HoltWinters(BaseForecaster):
         Exactly two cycles initialize the model. Their mean difference gives
         the per-observation trend, the detrended values at each seasonal
         position give the seasonal components, and the second cycle's mean,
-        advanced to its last position, gives the level. Every lead's spread starts at the mean absolute error of the
-        fitted warm-up model, then fades towards that lead's own errors. State
+        advanced to its last position, gives the level. Every lead's spread
+        starts at the mean absolute error of the fitted warm-up model, then
+        fades towards that lead's own errors.
+
+        ``learn_one(None)`` learns that a value is missing. Once warm, the
+        components advance without a correction, which is the same as
+        learning the lead-1 forecast, no error is measured, and each forecast
+        reports the spread of the longer lead it now is. During warm-up a
+        missing value takes the value one cycle earlier, or in the first
+        cycle the last observed value; missing values before the first
+        observed one do not start the series. State
         is O(season_length + horizon^2) and each event costs O(horizon).
         Unrepresentable arithmetic raises OverflowError without changing state.
 
@@ -75,12 +89,14 @@ class HoltWinters(BaseForecaster):
     @property
     def readiness(self) -> Readiness:
         """Ready once two complete cycles have been learned."""
-        return Readiness.after(self.n_samples_seen, 2 * self.season_length)
+        return Readiness.after(self._learned, 2 * self.season_length)
 
     def _reset_state(self) -> None:
         """Forget learned components and errors."""
         self.n_samples_seen = 0
-        self._warmup: list[float] = []
+        # Events since the first observed value; they set the seasonal phase.
+        self._learned = 0
+        self._warmup = CycleWarmUp(self.season_length)
         self._seasonal: list[float] = []
         self._level = 0.0
         self._trend = 0.0
@@ -105,42 +121,59 @@ class HoltWinters(BaseForecaster):
             means.append(fsum((fsum((level, lead * trend)), season)))
         return tuple(means)
 
-    def learn_one(self, y: float) -> None:
-        """Learn the next value of the series."""
-        value = coerce_event_number(y, label="y")
-        origin = self.n_samples_seen + 1
-        if self.n_samples_seen < 2 * self.season_length:
-            if origin < 2 * self.season_length:
-                self._warmup.append(value)
-                self.n_samples_seen = origin
+    def learn_one(self, y: float | None) -> None:
+        """Learn the next value of the series, or ``None`` for a missing one."""
+        value = None if y is None else coerce_event_number(y, label="y")
+        m = self.season_length
+        origin = self._learned + 1
+        if self._learned < 2 * m:
+            if value is None and not self._warmup.started:
+                self.n_samples_seen += 1
                 return
-            level, trend, seasonal, scale = holt_winters_initialize(
-                [*self._warmup, value], self.season_length
-            )
+            self._warmup.add(value)
+            if not self._warmup.complete:
+                self._learned = origin
+                self.n_samples_seen += 1
+                return
+            try:
+                level, trend, seasonal, scale = holt_winters_initialize(
+                    self._warmup.values, m, self._warmup.observed
+                )
+                means = self._means(level, trend, seasonal, origin)
+            except OverflowError:
+                self._warmup.discard_last()
+                raise
             mae = self._errors.seeded(scale)
-            means = self._means(level, trend, seasonal, origin)
+            stale = self._warmup.stale
             self._seasonal = seasonal
+            self._warmup = CycleWarmUp(m)
         else:
-            phase = self.n_samples_seen % self.season_length
+            phase = self._learned % m
             base = fsum((self._level, self._trend))
-            residual = fsum((value, -fsum((base, self._seasonal[phase]))))
-            # Residual corrections avoid overflowing unweighted intermediates.
-            level_correction = self.alpha * residual
-            level = fsum((base, level_correction))
-            trend = fsum((self._trend, self.beta * level_correction))
-            season = fsum((self._seasonal[phase], self.gamma * residual))
-            mae = self._errors.updated(value)
+            if value is None:
+                level, trend, season = base, self._trend, self._seasonal[phase]
+                mae = list(self._errors.mae)
+                stale = self._errors.stale + 1
+            else:
+                residual = fsum((value, -fsum((base, self._seasonal[phase]))))
+                # Residual corrections avoid overflowing unweighted intermediates.
+                level_correction = self.alpha * residual
+                level = fsum((base, level_correction))
+                trend = fsum((self._trend, self.beta * level_correction))
+                season = fsum((self._seasonal[phase], self.gamma * residual))
+                mae = self._errors.updated(value)
+                stale = 0
             means = self._means(level, trend, self._seasonal, origin, (phase, season))
             # Publish only after all arithmetic succeeds; no per-event copy.
             self._seasonal[phase] = season
         self._level, self._trend = level, trend
-        self._errors.publish(mae, means)
-        self._warmup = []
-        self.n_samples_seen = origin
+        self._errors.publish(mae, means, stale)
+        self._learned = origin
+        self.n_samples_seen += 1
 
     def forecast_one(self) -> Forecast | None:
         """Forecast leads ``1..horizon``, or ``None`` before two cycles."""
-        if self.n_samples_seen < 2 * self.season_length:
+        if self._learned < 2 * self.season_length:
             return None
         return Forecast(
             origin=self.n_samples_seen,

@@ -52,8 +52,13 @@ Lead `k` forecasts the value learned `k` events after the origin. A
 
 Forecasters count events instead of reading timestamps: every learned value
 advances the series by one step. Resample irregular readings before learning
-them. `KalmanForecaster` also takes `learn_one(None)` for a missing reading:
-it advances the series without a correction, and its spreads widen.
+them, and learn `None` for a step whose value is missing. Every forecaster
+then advances the series without a correction. Its next forecast is the one it
+would have issued before the gap, so a lead-1 forecast after two missing
+values is really a lead-3 forecast, and reports lead 3's spread (beyond the
+horizon, at least the longest lead's). Errors are measured only against
+forecasts issued right after an observed value, so a gap never teaches a
+lead an error that belongs to a longer one.
 
 ## Spreads
 

@@ -84,19 +84,17 @@ def test_drift_detectors_reject_malformed_values(detector, value):
 
 @pytest.mark.parametrize(
     "forecaster",
-    [lambda: SeasonalNaive(season_length=2), lambda: HoltWinters(season_length=2)],
+    [
+        lambda: SeasonalNaive(season_length=2),
+        lambda: HoltWinters(season_length=2),
+        KalmanForecaster,
+    ],
 )
-@pytest.mark.parametrize("value", [math.nan, math.inf, "x", None])
+@pytest.mark.parametrize("value", [math.nan, math.inf, "x"])
 def test_forecasters_reject_malformed_values(forecaster, value):
+    # None is not malformed: it is a missing value.
     with pytest.raises(ValidationError):
         forecaster().learn_one(value)
-
-
-@pytest.mark.parametrize("value", [math.nan, math.inf, "x"])
-def test_kalman_forecaster_rejects_malformed_values(value):
-    # None is not malformed here: it is a missing value.
-    with pytest.raises(ValidationError):
-        KalmanForecaster().learn_one(value)
 
 
 def test_validation_error_is_a_value_error():

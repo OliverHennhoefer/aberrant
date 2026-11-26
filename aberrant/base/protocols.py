@@ -83,7 +83,8 @@ class ForecasterProtocol(Protocol):
 
     A forecaster learns one target series. ``forecast_one()`` forecasts the
     next ``horizon`` values from the series' own past without learning, and
-    ``learn_one(y)`` then learns the value that arrived.
+    ``learn_one(y)`` then learns the value that arrived. ``learn_one(None)``
+    learns that the value is missing: the series still advances one step.
     """
 
     @property
@@ -96,8 +97,8 @@ class ForecasterProtocol(Protocol):
         """Whether the component has learned enough to predict."""
         ...
 
-    def learn_one(self, y: float) -> None:
-        """Learn the next value of the series."""
+    def learn_one(self, y: float | None) -> None:
+        """Learn the next value of the series, or ``None`` for a missing one."""
         ...
 
     def forecast_one(self) -> Forecast | None:
