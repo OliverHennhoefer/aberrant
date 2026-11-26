@@ -140,9 +140,9 @@ has seen enough values for a final output, such as the largest lag plus one.
 An application that keeps its own state, one per feature, uses the same
 computation without the transformer holding any: `initial_state()` gives a
 feature's empty state, `step(state, value)` returns the next state and the
-value's outputs, and `valid_state(state)` checks a restored one. States are
-tuples of plain numbers that `step` never changes, so a caller can stage them
-and keep or drop them as one. `lead` is how many earlier values a feature
+value's outputs, and `valid_state(state)` checks a restored one. A state is a
+tuple of numbers and arrays of doubles that `step` never changes, so a caller
+can stage the states of an event and keep or drop them as one. `lead` is how many earlier values a feature
 needs before its output is final.
 
 ```python

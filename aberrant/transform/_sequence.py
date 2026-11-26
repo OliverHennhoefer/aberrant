@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import math
+from array import array
 from bisect import bisect_left, bisect_right, insort
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from aberrant._utils.validation import coerce_feature_values, coerce_finite_number
 from aberrant.base.readiness import Readiness
@@ -14,7 +15,7 @@ from aberrant.base.transformer import BaseTransformer
 from aberrant.exceptions import ValidationError
 
 State = tuple[Any, ...]
-Window = tuple[float, ...]
+Window: TypeAlias = "array[float]"
 ChangeKind = Literal["difference", "percent"]
 Statistic = Literal[
     "sum",
@@ -76,27 +77,39 @@ def _floats(items: object, limit: int, exact: bool = False) -> bool:
     )
 
 
+def _doubles(items: object, limit: int) -> bool:
+    """Whether items is an array of at most limit finite doubles."""
+    return (
+        isinstance(items, array)
+        and items.typecode == "d"
+        and len(items) <= limit
+        and all(math.isfinite(item) for item in items)
+    )
+
+
 def _window(state: object, size: int, ordered: bool) -> bool:
-    """Whether state is a window, with its sorted copy when ordered."""
+    """Whether state holds a window, and its sorted copy when ordered."""
     if not isinstance(state, tuple) or len(state) != 1 + ordered:
         return False
-    return _floats(state[0], size) and (
-        not ordered or state[1] == tuple(sorted(state[0]))
+    return _doubles(state[0], size) and (
+        not ordered or (_doubles(state[1], size) and list(state[1]) == sorted(state[0]))
     )
 
 
 def _pushed(window: Window, value: float, size: int) -> Window:
-    """The window with value appended, dropping the oldest value once full."""
-    return (*window, value)[-size:]
+    """A new window with value appended, dropping the oldest value once full."""
+    following = window[1:] if len(window) == size else window[:]
+    following.append(value)
+    return following
 
 
 def _reordered(ordered: Window, leaving: float | None, value: float) -> Window:
-    """The sorted window after leaving goes and value arrives."""
-    items = list(ordered)
+    """A new sorted window after leaving goes and value arrives."""
+    following = ordered[:]
     if leaving is not None:
-        del items[bisect_left(items, leaving)]
-    insort(items, value)
-    return tuple(items)
+        del following[bisect_left(following, leaving)]
+    insort(following, value)
+    return following
 
 
 class _SequenceTransformer(BaseTransformer):
@@ -264,15 +277,19 @@ class Lags(_SequenceTransformer):
     def _names(self, feature: str) -> tuple[str, ...]:
         return tuple(f"{feature}_lag{lag}" for lag in self.lags)
 
+    def initial_state(self) -> State:
+        return (array("d"),)
+
     def valid_state(self, state: object) -> bool:
-        return _floats(state, self.lags[-1])
+        return _window(state, self.lags[-1], ordered=False)
 
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
+        (window,) = state
         outputs = tuple(
-            state[-lag] if len(state) >= lag else state[0] if state else value
+            window[-lag] if len(window) >= lag else window[0] if window else value
             for lag in self.lags
         )
-        return _pushed(state, value, self.lags[-1]), outputs
+        return (_pushed(window, value, self.lags[-1]),), outputs
 
 
 class Difference(_SequenceTransformer):
@@ -306,14 +323,18 @@ class Difference(_SequenceTransformer):
     def lead(self) -> int:
         return self.lag
 
+    def initial_state(self) -> State:
+        return (array("d"),)
+
     def valid_state(self, state: object) -> bool:
-        return _floats(state, self.lag)
+        return _window(state, self.lag, ordered=False)
 
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
-        following = _pushed(state, value, self.lag)
-        if len(state) < self.lag:
+        (window,) = state
+        following = (_pushed(window, value, self.lag),)
+        if len(window) < self.lag:
             return following, (0.0,)
-        reference = state[-self.lag]
+        reference = window[0]
         if self.kind == "difference":
             return following, (value - reference,)
         if reference == 0:
@@ -386,7 +407,7 @@ class Despike(_SequenceTransformer):
         return self.window_size - 1
 
     def initial_state(self) -> State:
-        return ((), ())
+        return (array("d"), array("d"))
 
     def valid_state(self, state: object) -> bool:
         return _window(state, self.window_size, ordered=True)
@@ -465,7 +486,7 @@ class RollingStatistic(_SequenceTransformer):
         return self.statistic in _ORDERED
 
     def initial_state(self) -> State:
-        return ((), ()) if self._ordered else ((),)
+        return (array("d"), array("d")) if self._ordered else (array("d"),)
 
     def valid_state(self, state: object) -> bool:
         return _window(state, self.window_size, self._ordered)
@@ -474,7 +495,8 @@ class RollingStatistic(_SequenceTransformer):
         values = state[0]
         window = _pushed(values, value, self.window_size)
         if not self._ordered:
-            return (window,), (_STATISTIC[self.statistic](window, (), self.quantile),)
+            result = _STATISTIC[self.statistic](window, window, self.quantile)
+            return (window,), (result,)
         leaving = values[0] if len(values) == self.window_size else None
         ordered = _reordered(state[1], leaving, value)
         result = _STATISTIC[self.statistic](window, ordered, self.quantile)

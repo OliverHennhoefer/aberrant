@@ -2,6 +2,7 @@
 
 import math
 import pickle
+from array import array
 
 import numpy as np
 import pytest
@@ -243,7 +244,17 @@ def test_steps_on_states_an_application_keeps(transformer) -> None:
         assert outputs == tuple(row[name] for name in transformer._names("a"))
     assert transformer.lead + 1 == reference.readiness.required
     assert transformer.readiness == Readiness(False, 0, transformer.lead + 1)
-    for invalid in (None, [], (math.nan,), ("1",), (1,), (0.0,) * 40):
+    invalid_states = (
+        None,
+        [],
+        (math.nan,),
+        ("1",),
+        (1,),
+        (0.0,) * 40,
+        (array("d", [math.nan]),),
+        (array("d", [0.0] * 40),) * 2,
+    )
+    for invalid in invalid_states:
         assert not transformer.valid_state(invalid)
 
 
@@ -260,9 +271,11 @@ def test_step_rejects_results_that_are_not_finite() -> None:
 
 def test_rolling_states_must_keep_their_sorted_copy() -> None:
     rolling = RollingStatistic(window_size=3, statistic="median")
-    assert rolling.valid_state(((2.0, 1.0), (1.0, 2.0)))
-    assert not rolling.valid_state(((2.0, 1.0), (2.0, 1.0)))
-    assert not rolling.valid_state(((2.0, 1.0),))
+    assert rolling.valid_state((array("d", [2.0, 1.0]), array("d", [1.0, 2.0])))
+    assert not rolling.valid_state((array("d", [2.0, 1.0]), array("d", [2.0, 1.0])))
+    assert not rolling.valid_state((array("d", [2.0, 1.0]),))
+    assert not rolling.valid_state(((2.0, 1.0), (1.0, 2.0)))
+    assert not rolling.valid_state((array("f", [2.0]), array("f", [2.0])))
     deseason = Deseasonalize(season_length=2)
     assert not deseason.valid_state((1, (0.0, 0.0), (0.0, 0.0), (0, 0)))
     assert not deseason.valid_state((0, (0.0, 0.0), (-1.0, 0.0), (0, 0)))
