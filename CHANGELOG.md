@@ -9,6 +9,16 @@ Semantic Versioning.
 
 ### Added
 
+- Sequence transformers in `aberrant.transform`, each per feature and
+  limited to `features=` when given: `Lags` appends earlier values,
+  `Difference` the change or percent change over `lag` events,
+  `ExponentialSmoother` an exponentially weighted mean, `Despike` replaces
+  spikes by the window median (Hampel), `RollingStatistic` a window's sum,
+  mean, deviation, extremes, median, quantile, MAD or z-score, and
+  `Deseasonalize` subtracts a robust level per position of the cycle. In a
+  pipeline, learning and scoring see the same output for an event. The
+  catalog lists them as `lags`, `difference`, `exponential_smoother`,
+  `despike`, `rolling_statistic` and `deseasonalize`.
 - `aberrant.evaluate.ForecastEvaluator`: forecast-before-learn evaluation of
   a forecaster. Every observed value is scored once at each lead, and each
   lead reports MAE, RMSE, bias, MASE against the seasonal naive forecast,
@@ -89,6 +99,11 @@ Semantic Versioning.
   `aberrant.base` recognizes such models.
 
 ### Fixed
+
+- The transform API page documents every transformer again; its entries
+  had lost their class names. The pipeline and transformer guides build
+  their `OnlineIsolationForest` with a window it accepts, and the custom
+  components in the pipeline guide have the `readiness` the protocols require.
 
 - `RLSRegressor.readiness.required` counts the intercept. With
   `fit_intercept=True` it said one event fewer than the model needs.

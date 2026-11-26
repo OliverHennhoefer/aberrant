@@ -1,4 +1,4 @@
-"""Transformers for streaming validation, preprocessing, and projection."""
+"""Transformers for streaming validation, preprocessing, sequences and projection."""
 
 from aberrant.transform._preprocessing import (
     FeatureSchemaGuard,
@@ -10,8 +10,22 @@ from aberrant.transform._preprocessing import (
     StandardScaler,
 )
 from aberrant.transform._projection import IncrementalPCA, RandomProjection
+from aberrant.transform._sequence import (
+    Deseasonalize,
+    Despike,
+    Difference,
+    ExponentialSmoother,
+    Lags,
+    RollingStatistic,
+)
 
 __all__ = [
+    "Deseasonalize",
+    "Despike",
+    "Difference",
+    "ExponentialSmoother",
+    "Lags",
+    "RollingStatistic",
     "IncrementalPCA",
     "FeatureSchemaGuard",
     "MinMaxScaler",

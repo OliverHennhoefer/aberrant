@@ -44,6 +44,7 @@ TRANSFORMER_PARAMS: dict[str, dict[str, object]] = {
     "rename": {"mapping": {"a": "c"}},
     "incremental_pca": {"n_components": 1, "warm_up": 5},
     "random_projection": {"n_components": 1},
+    "deseasonalize": {"season_length": 4},
 }
 _EDGE_MODELS = {"anoedge_l", "isconna", "midas", "streamspot"}
 _MULTIVARIATE_STATISTICS = {

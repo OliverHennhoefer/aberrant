@@ -670,6 +670,32 @@ def _renamed_names(
     return names
 
 
+def _lagged_names(
+    params: Parameters, inputs: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if inputs is None:
+        return None
+    lags = sorted(cast(Sequence[int], params["lags"]))
+    features = params["features"]
+    lagged = inputs if features is None else cast(Sequence[str], features)
+    if not set(lagged).issubset(inputs):
+        raise ValueError("Lagged features must exist in the input")
+    names = (*inputs, *(f"{name}_lag{lag}" for name in lagged for lag in lags))
+    if len(names) != len(set(names)):
+        raise ValueError("Lagging produces duplicate features")
+    return names
+
+
+def _lagged_count(params: Parameters, inputs: int | None) -> int | None:
+    lags = len(cast(Sequence[int], params["lags"]))
+    features = params["features"]
+    if features is None:
+        return None if inputs is None else inputs * (1 + lags)
+    return (
+        None if inputs is None else inputs + len(cast(Sequence[str], features)) * lags
+    )
+
+
 def _transformer(
     *,
     component_id: str,
@@ -743,6 +769,49 @@ _TRANSFORMER_SPECS = (
         class_name="RollingRobustScaler",
         module="aberrant.transform",
         family="preprocessing",
+        resolver=_preserve_features,
+    ),
+    _transformer(
+        component_id="lags",
+        class_name="Lags",
+        module="aberrant.transform",
+        family="sequence",
+        resolver=_lagged_count,
+        names_resolver=_lagged_names,
+    ),
+    _transformer(
+        component_id="difference",
+        class_name="Difference",
+        module="aberrant.transform",
+        family="sequence",
+        resolver=_preserve_features,
+    ),
+    _transformer(
+        component_id="exponential_smoother",
+        class_name="ExponentialSmoother",
+        module="aberrant.transform",
+        family="sequence",
+        resolver=_preserve_features,
+    ),
+    _transformer(
+        component_id="despike",
+        class_name="Despike",
+        module="aberrant.transform",
+        family="sequence",
+        resolver=_preserve_features,
+    ),
+    _transformer(
+        component_id="rolling_statistic",
+        class_name="RollingStatistic",
+        module="aberrant.transform",
+        family="sequence",
+        resolver=_preserve_features,
+    ),
+    _transformer(
+        component_id="deseasonalize",
+        class_name="Deseasonalize",
+        module="aberrant.transform",
+        family="sequence",
         resolver=_preserve_features,
     ),
     _transformer(

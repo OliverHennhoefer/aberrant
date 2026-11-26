@@ -52,6 +52,7 @@ def _classes() -> list[type]:
 # Arguments a class needs before it can reject anything else.
 _REQUIRED: dict[str, dict[str, object]] = {
     "HoltWinters": {"season_length": 2},
+    "Deseasonalize": {"season_length": 2},
     "IncrementalPCA": {"n_components": 1},
 }
 

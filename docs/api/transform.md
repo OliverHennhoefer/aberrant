@@ -6,22 +6,36 @@ not learn.
 
 ## Preprocessing
 
-::: aberrant.transform
+::: aberrant.transform.FeatureSchemaGuard
 
-::: aberrant.transform
+::: aberrant.transform.MinMaxScaler
 
-::: aberrant.transform
+::: aberrant.transform.StandardScaler
 
-::: aberrant.transform
+::: aberrant.transform.RollingRobustScaler
 
-::: aberrant.transform
+::: aberrant.transform.Select
 
-::: aberrant.transform
+::: aberrant.transform.Rename
 
-::: aberrant.transform
+::: aberrant.transform.Passthrough
+
+## Sequences
+
+::: aberrant.transform.Lags
+
+::: aberrant.transform.Difference
+
+::: aberrant.transform.ExponentialSmoother
+
+::: aberrant.transform.Despike
+
+::: aberrant.transform.RollingStatistic
+
+::: aberrant.transform.Deseasonalize
 
 ## Projection
 
-::: aberrant.transform
+::: aberrant.transform.IncrementalPCA
 
-::: aberrant.transform
+::: aberrant.transform.RandomProjection
