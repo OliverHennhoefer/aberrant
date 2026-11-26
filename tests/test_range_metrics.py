@@ -97,7 +97,7 @@ def test_vus_matches_one_threshold_at_a_time(n, k, window, ties, edges):
     label, score = _case(n, k, seed=n + window, ties=ties, edges=edges)
     expected = _reference(label, score, window)
 
-    result = vus(label, score, window=window)
+    result = vus(label, score, window_size=window)
 
     assert (result.roc, result.pr) == pytest.approx(expected, abs=1e-12)
 
@@ -105,7 +105,7 @@ def test_vus_matches_one_threshold_at_a_time(n, k, window, ties, edges):
 def test_a_perfect_score_has_full_volume():
     label, _ = _case(1000, 4, seed=5)
 
-    result = vus(label, label.astype(float), window=20)
+    result = vus(label, label.astype(float), window_size=20)
 
     assert result.roc == pytest.approx(1.0, abs=0.01)
     assert result.pr == pytest.approx(1.0, abs=0.01)
@@ -116,8 +116,8 @@ def test_a_margin_credits_a_detection_just_before_its_range():
     label[[200, 500, 800]] = 1
     early = np.roll(label, -2).astype(float)
 
-    tight = vus(label, early, window=0)
-    loose = vus(label, early, window=10)
+    tight = vus(label, early, window_size=0)
+    loose = vus(label, early, window_size=10)
 
     assert loose.pr > tight.pr + 0.3
     assert isinstance(loose, VolumeUnderSurface)
@@ -136,4 +136,4 @@ def test_a_margin_credits_a_detection_just_before_its_range():
 )
 def test_invalid_series_are_rejected(labels, scores, message):
     with pytest.raises(ValueError, match=message):
-        vus(labels, scores, window=2)
+        vus(labels, scores, window_size=2)

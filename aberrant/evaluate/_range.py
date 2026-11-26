@@ -22,7 +22,7 @@ def vus(
     labels: Sequence[int] | np.ndarray,
     scores: Sequence[float] | np.ndarray,
     *,
-    window: int,
+    window_size: int,
     thresholds: int = 250,
 ) -> VolumeUnderSurface:
     """Volume under the range-based ROC and PR surfaces (Paparrizos et al. 2022).
@@ -33,7 +33,7 @@ def vus(
     metrics count each labeled range as one event, weigh its detection by
     how much of it is covered, and give partial credit to scores within a
     soft margin around it. VUS averages them over every margin from 0 to
-    ``window``, so the result does not hinge on one margin.
+    ``window_size``, so the result does not hinge on one margin.
 
     This follows ``RangeAUC_volume_opt`` of the reference package ``vus``
     0.0.7, the threshold grid included.
@@ -41,7 +41,7 @@ def vus(
     Args:
         labels: Binary labels in time order, ``1`` for an anomalous event.
         scores: One finite score per event, higher is more anomalous.
-        window: Largest margin, in events, around each range; about one
+        window_size: Largest margin, in events, around each range; about one
             period of the series is the usual choice.
         thresholds: Number of thresholds, at evenly spaced ranks of the
             sorted scores.
@@ -51,7 +51,7 @@ def vus(
             or not finite, or the labels are all normal or all anomalous.
     """
     label, score = _series(labels, scores)
-    window = coerce_integer_count(window, label="window", minimum=0)
+    window_size = coerce_integer_count(window_size, label="window_size", minimum=0)
     thresholds = coerce_integer_count(thresholds, label="thresholds", minimum=2)
     n = len(score)
     positives = float(label.sum())
@@ -61,7 +61,7 @@ def vus(
     grid = order_desc[np.linspace(0, n - 1, thresholds).astype(int)]
     predicted = n - np.searchsorted(np.sort(score), grid, side="left")
 
-    near = _merged(ranges, window, n)
+    near = _merged(ranges, window_size, n)
     region = np.concatenate([np.arange(a, b + 1) for a, b in near])
     order = region[np.argsort(-score[region], kind="stable")]
     reached = np.searchsorted(-score[order], -grid, side="right")
@@ -69,7 +69,7 @@ def vus(
     found = np.concatenate([[0], np.cumsum(anomalous)])
 
     rocs, prs = [], []
-    for margin in range(window + 1):
+    for margin in range(window_size + 1):
         soft = _extended(label, ranges, margin)
         segments = _merged(ranges, margin, n)
         credit = np.concatenate([[0], np.cumsum(np.where(anomalous, 1, soft[order]))])

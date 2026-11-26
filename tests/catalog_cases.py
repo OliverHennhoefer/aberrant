@@ -24,7 +24,7 @@ MODEL_PARAMS: dict[str, dict[str, object]] = {
 }
 # Small warm-ups, so a short stream reaches every model's readiness.
 QUICK_PARAMS: dict[str, dict[str, object]] = {
-    "online_autoencoder_ensemble": {"feature_map_grace": 5, "ad_grace": 7},
+    "online_autoencoder_ensemble": {"feature_map_warm_up": 5, "detector_warm_up": 7},
     "knn": {"k": 3},
     "local_outlier_factor": {"k": 3},
     "cell_neighborhood_detector": {"k": 3, "slide_size": 4, "warm_up": 2},

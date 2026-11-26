@@ -13,8 +13,8 @@ class TestKitNET(unittest.TestCase):
     def create_model(self) -> KitNET:
         return KitNET(
             max_ae_size=2,
-            feature_map_grace=12,
-            ad_grace=24,
+            feature_map_warm_up=12,
+            detector_warm_up=24,
             learning_rate=0.05,
             hidden_ratio=0.75,
             seed=42,
@@ -24,11 +24,11 @@ class TestKitNET(unittest.TestCase):
         """Default constructor values are valid."""
         model = KitNET()
         self.assertEqual(model.max_ae_size, 10)
-        self.assertEqual(model.feature_map_grace, 5000)
-        self.assertEqual(model.ad_grace, 50000)
+        self.assertEqual(model.feature_map_warm_up, 5000)
+        self.assertEqual(model.detector_warm_up, 50000)
         self.assertEqual(model.learning_rate, 0.1)
         self.assertEqual(model.hidden_ratio, 0.75)
-        self.assertEqual(model.phase, "feature_map_warmup")
+        self.assertEqual(model.phase, "feature_map_warm_up")
         self.assertFalse(model.readiness.ready)
 
     def test_invalid_parameters(self) -> None:
@@ -36,9 +36,9 @@ class TestKitNET(unittest.TestCase):
         with self.assertRaises(ValueError):
             KitNET(max_ae_size=0)
         with self.assertRaises(ValueError):
-            KitNET(feature_map_grace=0)
+            KitNET(feature_map_warm_up=0)
         with self.assertRaises(ValueError):
-            KitNET(ad_grace=-1)
+            KitNET(detector_warm_up=-1)
         with self.assertRaises(ValueError):
             KitNET(learning_rate=0.0)
         with self.assertRaises(ValueError):
@@ -69,7 +69,7 @@ class TestKitNET(unittest.TestCase):
 
         self.assertEqual(score, 0.0)
         self.assertIsNone(model._schema.names)
-        self.assertEqual(model.phase, "feature_map_warmup")
+        self.assertEqual(model.phase, "feature_map_warm_up")
 
     def test_phase_transitions(self) -> None:
         """Model transitions through warm-up phases deterministically."""
@@ -77,10 +77,10 @@ class TestKitNET(unittest.TestCase):
 
         for i in range(11):
             model.learn_one({"x": float(i), "y": float(i * 2)})
-        self.assertEqual(model.phase, "feature_map_warmup")
+        self.assertEqual(model.phase, "feature_map_warm_up")
 
         model.learn_one({"x": 11.0, "y": 22.0})
-        self.assertEqual(model.phase, "detector_warmup")
+        self.assertEqual(model.phase, "detector_warm_up")
         self.assertGreater(len(model._feature_groups), 0)
 
         for i in range(24):
@@ -88,21 +88,21 @@ class TestKitNET(unittest.TestCase):
         self.assertTrue(model.readiness.ready)
         self.assertEqual(model.phase, "ready")
 
-    def test_ad_grace_zero_trains_before_ready(self) -> None:
-        """ad_grace=0 should still run one detector training step."""
+    def test_detector_warm_up_zero_trains_before_ready(self) -> None:
+        """detector_warm_up=0 should still run one detector training step."""
         model = KitNET(
             max_ae_size=2,
-            feature_map_grace=3,
-            ad_grace=0,
+            feature_map_warm_up=3,
+            detector_warm_up=0,
             learning_rate=0.05,
             hidden_ratio=0.75,
-            adaptive_after_warmup=False,
+            adaptive_after_warm_up=False,
             seed=42,
         )
 
         model.learn_one({"x": 0.0, "y": 0.0})
         model.learn_one({"x": 1.0, "y": 1.0})
-        self.assertEqual(model.phase, "feature_map_warmup")
+        self.assertEqual(model.phase, "feature_map_warm_up")
         self.assertEqual(model._detector_samples, 0)
 
         model.learn_one({"x": 2.0, "y": 2.0})
@@ -189,7 +189,7 @@ class TestKitNET(unittest.TestCase):
 
         model.reset()
         self.assertIsNone(model._schema.names)
-        self.assertEqual(model.phase, "feature_map_warmup")
+        self.assertEqual(model.phase, "feature_map_warm_up")
         self.assertFalse(model.readiness.ready)
         self.assertEqual(model.score_one({"x": 0.0, "y": 1.0}), 0.0)
 
@@ -200,8 +200,8 @@ class TestKitNET(unittest.TestCase):
 
         self.assertIn("OnlineAutoencoderEnsemble", representation)
         self.assertIn("max_ae_size=2", representation)
-        self.assertIn("feature_map_grace=12", representation)
-        self.assertIn("ad_grace=24", representation)
+        self.assertIn("feature_map_warm_up=12", representation)
+        self.assertIn("detector_warm_up=24", representation)
 
 
 if __name__ == "__main__":

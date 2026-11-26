@@ -163,10 +163,10 @@ def test_stateless_models_do_not_retain_unbounded_feature_names(model: object) -
 def test_numpy_ensemble_state_has_fixed_shapes_after_warmup(adaptive: bool) -> None:
     model = OnlineAutoencoderEnsemble(
         max_ae_size=2,
-        feature_map_grace=13,
-        ad_grace=17,
+        feature_map_warm_up=13,
+        detector_warm_up=17,
         learning_rate=0.02,
-        adaptive_after_warmup=adaptive,
+        adaptive_after_warm_up=adaptive,
         seed=7,
     )
     shapes = None
@@ -193,7 +193,7 @@ def test_numpy_ensemble_state_has_fixed_shapes_after_warmup(adaptive: bool) -> N
 
 
 def test_numpy_ensemble_rejects_overflowing_feature_moments_without_poisoning() -> None:
-    model = OnlineAutoencoderEnsemble(feature_map_grace=2, ad_grace=0, seed=7)
+    model = OnlineAutoencoderEnsemble(feature_map_warm_up=2, detector_warm_up=0, seed=7)
     model.learn_one({"x": 0.2})
     before = model._sum.copy(), model._sum_sq.copy(), model._sum_cross.copy()
     with pytest.raises(OverflowError):
@@ -208,7 +208,7 @@ def test_numpy_ensemble_rejects_overflowing_feature_moments_without_poisoning() 
 
 
 def test_rejected_first_ensemble_event_does_not_lock_feature_dimensions() -> None:
-    model = OnlineAutoencoderEnsemble(feature_map_grace=2, ad_grace=0, seed=7)
+    model = OnlineAutoencoderEnsemble(feature_map_warm_up=2, detector_warm_up=0, seed=7)
     with pytest.raises(OverflowError):
         model.learn_one({"x": 1e200, "y": 1e200})
     assert model._schema.names is None and model._sum is None
@@ -247,10 +247,10 @@ def test_retained_python_memory_plateaus_after_warmup_across_model_families() ->
         MultivariateRollingMatrixProfile(subsequence_length=4, window_size=23),
         DAMP(subsequence_length=4, x_lag=23, start_index=8),
         OnlineAutoencoderEnsemble(
-            feature_map_grace=13,
-            ad_grace=17,
+            feature_map_warm_up=13,
+            detector_warm_up=17,
             learning_rate=0.02,
-            adaptive_after_warmup=True,
+            adaptive_after_warm_up=True,
             seed=7,
         ),
     ]
