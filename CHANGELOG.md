@@ -32,7 +32,10 @@ Semantic Versioning.
   `harmonics` trade detail for fewer states on long cycles. Its spread is the
   predictive standard deviation of each lead, with the noise variance
   estimated online, and `learn_one(None)` learns a missing reading. The
-  catalog lists it as `kalman_forecaster`.
+  step variance ratios are learned online by recursive maximum likelihood,
+  through a tangent filter of their derivatives, unless
+  `learn_ratios=False`; `ratios` reports them. The catalog lists it as
+  `kalman_forecaster`.
 - `aberrant.forecast.AutoRegressive`: a seasonal autoregression on a
   differenced series (SARIMA without moving-average terms) whose weights
   recursive least squares with forgetting updates at every value. Leads
