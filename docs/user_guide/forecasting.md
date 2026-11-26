@@ -69,8 +69,12 @@ slope (`slope_ratio`) and a season (`season_length`), whose noise variance it
 estimates online. That spread
 grows with the lead as the model says it should, and on Gaussian noise
 `|y - mean| / spread` stays within 1.645 for 90% of values at every lead.
-`level_ratio` sets how quickly it follows the series; the default matches
-exponential smoothing with weight 0.2.
+`level_ratio`, `slope_ratio` and `season_ratio` set how quickly each
+component follows the series. The filter learns them online by recursive
+maximum likelihood, starting from the values given, so a series that wanders
+faster or slower than they say is still forecast well; `learn_ratios=False`
+keeps them fixed, and the fixed default level ratio matches exponential
+smoothing with weight 0.2.
 
 ## Choosing a forecaster
 

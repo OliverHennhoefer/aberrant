@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from aberrant.forecast import KalmanForecaster, ResidualDetector
+from aberrant.forecast.kalman import _gradient
 
 
 def _matrix_filter(values, level_ratio, slope_ratio, horizon, prior=1e9):
@@ -49,7 +50,11 @@ def test_matches_a_matrix_filter_with_a_vague_prior(slope_ratio):
     for gap in (1, 6, 30, 31):
         values[gap] = None
     model = KalmanForecaster(
-        horizon=4, level_ratio=0.3, slope_ratio=slope_ratio, residual_alpha=1e-9
+        horizon=4,
+        level_ratio=0.3,
+        slope_ratio=slope_ratio,
+        learn_ratios=False,
+        residual_alpha=1e-9,
     )
     for value in values:
         model.learn_one(value)
@@ -83,7 +88,7 @@ def test_readiness_counts_observed_values(slope_ratio, required):
 @pytest.mark.parametrize("level_ratio", [0.05, 0.5, 4.0])
 def test_a_local_level_settles_to_exponential_smoothing(level_ratio):
     rng = np.random.default_rng(1)
-    model = KalmanForecaster(level_ratio=level_ratio)
+    model = KalmanForecaster(level_ratio=level_ratio, learn_ratios=False)
     for value in rng.standard_normal(200):
         model.learn_one(value)
     before = model.forecast_one().point(1)
@@ -181,6 +186,8 @@ def test_overflow_leaves_state_unchanged_and_pickle_continues():
         {"residual_alpha": 0.0},
         {"min_scale": 0.0},
         {"horizon": 0},
+        {"learn_ratios": 1},
+        {"ratio_rate": 0.0},
     ],
 )
 def test_rejects_invalid_configuration(kwargs):
@@ -264,6 +271,7 @@ def test_a_season_matches_a_matrix_filter_with_a_vague_prior(season_length, harm
         season_length=season_length,
         season_ratio=0.01,
         harmonics=harmonics,
+        learn_ratios=False,
         residual_alpha=1e-9,
     )
     for value in values:
@@ -346,3 +354,83 @@ def test_seasonal_spreads_are_calibrated_at_every_lead():
 def test_rejects_invalid_seasons(kwargs):
     with pytest.raises(ValueError):
         KalmanForecaster(**kwargs)
+
+
+def _log_likelihood(model, value, variance):
+    z = model._observe
+    error = value - z @ model._state
+    f = z @ model._covariance @ z + 1
+    return -0.5 * (math.log(f) + error * error / (variance * f))
+
+
+def test_the_tangent_filter_gives_the_log_likelihood_gradient():
+    rng = np.random.default_rng(7)
+    t = np.arange(150)
+    values: list[float | None] = list(
+        np.cumsum(0.5 * rng.standard_normal(150))
+        + 2 * np.sin(2 * np.pi * t / 6)
+        + rng.standard_normal(150)
+    )
+    values[90] = None
+    ratios = {"level_ratio": 0.2, "slope_ratio": 0.01, "season_ratio": 0.05}
+    model = KalmanForecaster(season_length=6, harmonics=2, ratio_rate=1e-300, **ratios)
+    for value in values[:-1]:
+        model.learn_one(value)
+    assert model.ratios == pytest.approx(
+        {"level": 0.2, "slope": 0.01, "season": 0.05}, rel=1e-12
+    )
+    z, value = model._observe, values[-1]
+    error = value - z @ model._state
+    f = z @ model._covariance @ z + 1
+    tangents = (model._tangent_state, model._tangent_covariance)
+    gradient = _gradient(tangents, z, error, f, model._variance)
+
+    step = 1e-5
+    for index, name in enumerate(ratios):
+        likelihoods = []
+        for sign in (1, -1):
+            shifted = dict(ratios)
+            shifted[name] = ratios[name] * math.exp(sign * step)
+            fixed = KalmanForecaster(
+                season_length=6, harmonics=2, learn_ratios=False, **shifted
+            )
+            for earlier in values[:-1]:
+                fixed.learn_one(earlier)
+            likelihoods.append(_log_likelihood(fixed, value, model._variance))
+        numeric = (likelihoods[0] - likelihoods[1]) / (2 * step)
+        assert gradient[index] == pytest.approx(numeric, rel=1e-4, abs=1e-8)
+
+
+def _local_level(n, ratio, seed):
+    rng = np.random.default_rng(seed)
+    level = np.cumsum(math.sqrt(ratio) * rng.standard_normal(n))
+    return [float(v) for v in level + rng.standard_normal(n)]
+
+
+@pytest.mark.parametrize("ratio", [0.002, 1.0])
+def test_learned_ratios_find_the_level_ratio_and_forecast_better(ratio):
+    values = _local_level(5000, ratio, seed=3)
+    models = {
+        "learned": KalmanForecaster(),
+        "fixed": KalmanForecaster(learn_ratios=False),
+    }
+    errors = dict.fromkeys(models, 0.0)
+    for index, value in enumerate(values):
+        for name, model in models.items():
+            if index >= 2000:
+                errors[name] += abs(value - model.forecast_one().point(1))
+            model.learn_one(value)
+    assert 0.5 < models["learned"].ratios["level"] / ratio < 2
+    assert models["fixed"].ratios == {"level": 0.05}
+    assert errors["learned"] < 0.98 * errors["fixed"]
+
+
+def test_an_outlier_moves_the_learned_ratios_little():
+    model = KalmanForecaster(slope_ratio=0.01)
+    for value in _local_level(3000, 0.1, seed=4):
+        model.learn_one(value)
+    before = model.ratios
+    model.learn_one(1e6)
+    after = model.ratios
+    for name, ratio in before.items():
+        assert after[name] == pytest.approx(ratio, rel=0.1)
