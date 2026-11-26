@@ -344,8 +344,7 @@ def _stack(rows: list[np.ndarray], shape: tuple[int, ...]) -> np.ndarray:
     Blocks always hold contiguous float64 bounds. Joining their raw buffers is
     about three times faster than ``np.concatenate`` for this many small rows.
     """
-    # Arrays expose their memory through the buffer protocol.
-    joined = bytearray().join(rows)  # type: ignore[arg-type]
+    joined = bytearray().join(rows)
     return np.frombuffer(joined, dtype=np.float64).reshape(shape)
 
 

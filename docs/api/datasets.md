@@ -14,6 +14,14 @@
 
 ::: aberrant.datasets.DatasetStream
 
+::: aberrant.datasets.synthetic
+
+::: aberrant.datasets.SyntheticStream
+
+::: aberrant.datasets.InjectedAnomaly
+
+::: aberrant.datasets.Anomaly
+
 ::: aberrant.datasets.Sample
 
 ::: aberrant.datasets.RELEASE_URL

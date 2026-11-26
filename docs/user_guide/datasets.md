@@ -60,6 +60,34 @@ written to a temporary file in that directory and moved into place only once
 its checksum matches, so interrupted or concurrent downloads never leave a
 partial file under a dataset's name. To free the space, delete the directory.
 
+## Generate a stream with known anomalies
+
+`synthetic` generates a labelled stream without a download, for tests,
+examples and comparing detectors on a known kind of anomaly. Every feature
+follows one shared signal, a seasonal cycle plus a slow random walk, so the
+features are correlated. After a clean prefix for warm-up, it injects spikes,
+level shifts, bursts of variance, flatlines (a frozen sensor) and decouplings,
+where a feature runs against the shared signal: each value looks normal on its
+own, but the relationship between the features breaks.
+
+```python
+from aberrant.datasets import synthetic
+from aberrant.evaluate import PrequentialEvaluator
+from aberrant.model.stat import MovingMahalanobisDistance
+
+stream = synthetic(n_samples=3000, anomalies=["level_shift", "decoupling"], seed=1)
+print(stream.anomalies[0])
+
+result = PrequentialEvaluator(
+    MovingMahalanobisDistance(window_size=200), metrics=True
+).evaluate(stream)
+print(result.average_precision)
+```
+
+`stream.anomalies` lists each anomaly's kind, feature and events, and every
+event of an anomaly is labelled 1. The same arguments always give the same
+stream.
+
 ## Replay your own archive
 
 `DatasetStream` replays any `.npz` file with a two-dimensional array `X` and a

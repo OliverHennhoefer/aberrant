@@ -4,18 +4,15 @@ import math
 from collections import Counter, defaultdict
 from collections.abc import Iterator, MutableMapping
 from contextlib import contextmanager
-from typing import TypeVar
 
 from aberrant._utils.validation import coerce_feature_values
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.exceptions import ValidationError
 
-_Value = TypeVar("_Value", int, float)
 
-
-def _restore_features(
-    values: MutableMapping[str, _Value], previous: dict[str, _Value | None]
+def _restore_features[Value: (int, float)](
+    values: MutableMapping[str, Value], previous: dict[str, Value | None]
 ) -> None:
     """Restore changed feature values, including their prior absence."""
     for feature, value in previous.items():

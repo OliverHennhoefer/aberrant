@@ -121,8 +121,8 @@ no outlier to find.
 
 ## Installation
 
-`aberrant` requires Python 3.11 or newer and is continuously tested on CPython
-3.11 to 3.14 on Linux and Windows.
+`aberrant` requires Python 3.12 or newer and is continuously tested on CPython
+3.12 to 3.14 on Linux and Windows.
 
 ```bash
 pip install aberrant

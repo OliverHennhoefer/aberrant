@@ -133,3 +133,82 @@ def test_a_malformed_archive_is_rejected(
 
     with pytest.raises(ValueError, match=message):
         list(DatasetStream(path))
+
+
+def test_synthetic_streams_repeat_for_the_same_arguments() -> None:
+    first, second = datasets.synthetic(seed=3), datasets.synthetic(seed=3)
+    assert first.anomalies == second.anomalies
+    assert np.array_equal(first.arrays()[0], second.arrays()[0])
+    assert not np.array_equal(first.arrays()[0], datasets.synthetic(seed=4).arrays()[0])
+
+
+def test_synthetic_labels_cover_exactly_the_injected_anomalies() -> None:
+    stream = datasets.synthetic(n_samples=2000, n_anomalies=10, length=15)
+    features, labels = stream.arrays()
+    expected = np.zeros(len(stream), dtype=int)
+    for anomaly in stream.anomalies:
+        expected[anomaly.start : anomaly.stop] = 1
+    assert np.array_equal(labels, expected)
+    assert not labels[:400].any()
+    assert [anomaly.kind for anomaly in stream.anomalies] == [
+        "spike",
+        "level_shift",
+        "variance",
+        "flatline",
+        "decoupling",
+    ] * 2
+    rows = list(stream)
+    assert len(rows) == 2000
+    assert list(rows[0][0]) == ["feature_0", "feature_1", "feature_2"]
+    assert [label for _, label in rows] == labels.tolist()
+
+
+def test_each_kind_changes_its_feature_as_described() -> None:
+    clean = datasets.synthetic(n_anomalies=0, seed=5).arrays()[0]
+    stream = datasets.synthetic(seed=5)
+    features = stream.arrays()[0]
+    scale = clean[:1000].std(axis=0)
+    for anomaly in stream.anomalies:
+        column = int(anomaly.feature.removeprefix("feature_"))
+        window = slice(anomaly.start, anomaly.stop)
+        change = features[window, column] - clean[window, column]
+        others = np.delete(features[window], column, axis=1)
+        assert np.array_equal(others, np.delete(clean[window], column, axis=1))
+        if anomaly.kind == "spike":
+            assert abs(change[0]) == pytest.approx(6 * scale[column])
+        elif anomaly.kind == "level_shift":
+            assert np.allclose(np.abs(change), 3 * scale[column])
+        elif anomaly.kind == "flatline":
+            assert np.ptp(features[window, column]) == 0.0
+        elif anomaly.kind == "decoupling":
+            assert (
+                np.corrcoef(features[window, column], clean[window, column])[0, 1] < 0
+            )
+
+
+def test_synthetic_streams_hold_only_the_requested_kinds() -> None:
+    stream = datasets.synthetic(n_features=1, anomalies=["flatline"], n_anomalies=3)
+    assert {anomaly.kind for anomaly in stream.anomalies} == {"flatline"}
+    assert (
+        repr(stream) == "SyntheticStream(n_samples=5000, n_features=1, n_anomalies=3)"
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"n_samples": 0},
+        {"anomalies": []},
+        {"anomalies": "spike"},
+        {"anomalies": ["spike", "spike"]},
+        {"anomalies": ["drift"]},
+        {"n_features": 1, "anomalies": ["decoupling"]},
+        {"n_samples": 100, "n_anomalies": 10, "length": 20},
+        {"clean_prefix": 6000},
+        {"noise": -1.0},
+        {"season_length": 0},
+    ],
+)
+def test_synthetic_rejects_invalid_arguments(params) -> None:
+    with pytest.raises(ValueError):
+        datasets.synthetic(**params)

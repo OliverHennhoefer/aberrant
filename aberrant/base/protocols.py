@@ -1,12 +1,12 @@
 """Structural contracts for online pipeline components."""
 
 from contextlib import AbstractContextManager
-from typing import Protocol, TypeAlias, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from aberrant.base.forecast import Forecast
 from aberrant.base.readiness import Readiness
 
-FeatureMap: TypeAlias = dict[str, float]
+type FeatureMap = dict[str, float]
 
 
 class LearnerProtocol(Protocol):

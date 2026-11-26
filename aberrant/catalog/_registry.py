@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TypeVar, cast
+from typing import cast
 
 from aberrant.base.readiness import ReadinessUnit
 from aberrant.exceptions import UnknownComponentError
@@ -35,8 +35,6 @@ ONE_FEATURE = FeatureCount(1, 1)
 TWO_FEATURES = FeatureCount(2, 2)
 CATALOG_FORMAT_VERSION = 2
 """Format version of `catalog_manifest()`."""
-
-_Spec = TypeVar("_Spec", bound=ComponentSpec)
 
 
 def _as_int(value: object) -> int:
@@ -1126,7 +1124,7 @@ _FORECASTER_SPECS = (
 )
 
 
-def _index(specs: tuple[_Spec, ...]) -> Mapping[str, _Spec]:
+def _index[Spec: ComponentSpec](specs: tuple[Spec, ...]) -> Mapping[str, Spec]:
     indexed = {spec.id: spec for spec in specs}
     if len(indexed) != len(specs):
         raise RuntimeError("Catalog component identifiers must be unique")

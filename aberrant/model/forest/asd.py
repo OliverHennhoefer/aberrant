@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass
-from typing import TypeAlias
 
 import numpy as np
 
@@ -31,7 +30,7 @@ class _ASDBranch:
     right: _ASDNode
 
 
-_ASDNode: TypeAlias = _ASDLeaf | _ASDBranch
+type _ASDNode = _ASDLeaf | _ASDBranch
 
 
 @dataclass(frozen=True, slots=True)

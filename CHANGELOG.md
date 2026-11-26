@@ -39,6 +39,11 @@ Semantic Versioning.
   timestamp by the sine and cosine of its position in the day, week or year
   of a time zone. The catalog lists them as `signed_log` and
   `calendar_features`.
+- `aberrant.datasets.synthetic` generates a labelled stream of correlated,
+  seasonal features with spikes, level shifts, bursts of variance,
+  flatlines and decouplings injected after a clean prefix, without a
+  download. `SyntheticStream.anomalies` lists each one's kind, feature and
+  events.
 - `aberrant.model.ScoreEnsemble` combines two or more detectors. Each
   member's score is ranked or z-scored against that member's last
   `window_size` learned scores, and the results are combined by mean, max
@@ -185,6 +190,8 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** aberrant requires Python 3.12 or newer and is tested on 3.12
+  to 3.14.
 - **Breaking:** `ForecasterProtocol.learn_one` takes `None` for a missing
   value, and every forecaster accepts it. `SeasonalNaive` and `HoltWinters`
   advance without a correction, report the spread of the longer lead each

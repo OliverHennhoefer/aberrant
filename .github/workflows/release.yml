@@ -25,7 +25,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --locked --extra faiss
@@ -64,7 +64,7 @@ jobs:
 
       - name: Wheel smoke test
         run: |
-          uv venv .venv-smoke --python 3.11
+          uv venv .venv-smoke --python 3.12
           VIRTUAL_ENV=.venv-smoke uv pip install dist/*.whl
           . .venv-smoke/bin/activate
           python -I - <<'PY'
