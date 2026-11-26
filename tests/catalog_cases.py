@@ -53,7 +53,11 @@ TRANSFORMER_PARAMS: dict[str, dict[str, object]] = {
     "incremental_pca": {"n_components": 1, "warm_up": 5},
     "random_projection": {"n_components": 1},
     "deseasonalize": {"season_length": 4},
+    "one_hot_encoder": {"categories": {"b": ["x", "y"]}},
+    "frequency_encoder": {"features": ["b"], "window_size": 10},
+    "calendar_features": {"timestamp": "a", "cycles": ["day", "year"]},
 }
+_CATEGORICAL = {"one_hot_encoder", "frequency_encoder"}
 _EDGE_MODELS = {"anoedge_l", "isconna", "midas", "streamspot"}
 _MULTIVARIATE_STATISTICS = {
     "moving_correlation_coefficient",
@@ -86,6 +90,8 @@ def event_factory(component_id: str) -> Callable[[int], dict[str, object]]:
     )
     if univariate:
         return lambda index: {"a": index % 7 + 0.1}
+    if component_id in _CATEGORICAL:
+        return lambda index: {"a": index % 7 + 0.1, "b": "xyz"[index % 3]}
     return lambda index: {"a": index % 7 + 0.1, "b": index % 3 + 0.2}
 
 

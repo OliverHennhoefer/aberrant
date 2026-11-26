@@ -1,13 +1,17 @@
 """Transformers for streaming validation, preprocessing, sequences and projection."""
 
 from aberrant.transform._preprocessing import (
+    CalendarFeatures,
     FeatureSchemaGuard,
+    FrequencyEncoder,
     Imputer,
     MinMaxScaler,
+    OneHotEncoder,
     Passthrough,
     Rename,
     RollingRobustScaler,
     Select,
+    SignedLog,
     StandardScaler,
 )
 from aberrant.transform._projection import IncrementalPCA, RandomProjection
@@ -29,7 +33,9 @@ __all__ = [
     "RollingStatistic",
     "IncrementalPCA",
     "FeatureSchemaGuard",
+    "FrequencyEncoder",
     "Imputer",
+    "OneHotEncoder",
     "MinMaxScaler",
     "RandomProjection",
     "RollingRobustScaler",
@@ -37,4 +43,6 @@ __all__ = [
     "Select",
     "Rename",
     "Passthrough",
+    "CalendarFeatures",
+    "SignedLog",
 ]
