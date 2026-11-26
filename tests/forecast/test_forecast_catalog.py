@@ -19,6 +19,7 @@ from aberrant.catalog import (
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.forecast import (
     AutoRegressive,
+    EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
     ResidualDetector,
@@ -58,6 +59,7 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters",
         "kalman_forecaster",
         "autoregressive",
+        "ensemble_forecaster",
         "rls_regressor",
     }
     classes = {
@@ -65,6 +67,7 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters": HoltWinters,
         "kalman_forecaster": KalmanForecaster,
         "autoregressive": AutoRegressive,
+        "ensemble_forecaster": EnsembleForecaster,
         "rls_regressor": RLSRegressor,
     }
     for component_id, spec in FORECASTER_CATALOG.items():
@@ -114,6 +117,18 @@ def test_residual_detector_takes_its_forecaster_as_a_nested_component() -> None:
         ({"id": "kalman_forecaster", "params": {"slope_ratio": 0.0, "horizon": 4}}, 3),
         ({"id": "kalman_forecaster", "params": {"season_length": 12}}, None),
         ({"id": "autoregressive", "params": {}}, None),
+        (
+            {
+                "id": "ensemble_forecaster",
+                "params": {
+                    "forecasters": [
+                        {"id": "seasonal_naive", "params": {"season_length": 4}},
+                        {"id": "holt_winters", "params": {"season_length": 4}},
+                    ]
+                },
+            },
+            None,
+        ),
         (
             {
                 "id": "autoregressive",
@@ -189,3 +204,53 @@ def test_invalid_residual_configurations_are_rejected(
 ) -> None:
     with pytest.raises(ConfigurationError, match=match):
         _config(forecaster, **params).build()
+
+
+def test_an_ensemble_lists_its_members_as_nested_components() -> None:
+    spec = get_forecaster_spec("ensemble_forecaster")
+    assert [(item.parameter, item.kind, item.many) for item in spec.dependencies] == [
+        ("forecasters", ComponentKind.FORECASTER, True)
+    ]
+    schema = spec.parameter_schema()["properties"]["forecasters"]
+    assert schema["type"] == "array"
+    assert schema["items"]["x-aberrant-component-kind"] == "forecaster"
+
+    members = [
+        {"id": "seasonal_naive", "params": {"season_length": 4, "horizon": 2}},
+        {"id": "kalman_forecaster", "params": {"horizon": 2}},
+    ]
+    config = _config(
+        {"id": "ensemble_forecaster", "params": {"forecasters": members}}, lead=2
+    )
+    normalized = config.normalized().as_dict()["model"]["params"]["model"]["params"]
+    assert [member["id"] for member in normalized["forecasters"]] == [
+        "seasonal_naive",
+        "kalman_forecaster",
+    ]
+    detector = config.build()
+    assert isinstance(detector.model, EnsembleForecaster)
+    assert [type(member) for member in detector.model.forecasters] == [
+        SeasonalNaive,
+        KalmanForecaster,
+    ]
+
+
+def test_an_ensemble_member_error_names_its_position() -> None:
+    members = [{"id": "seasonal_naive"}, {"id": "timestral"}]
+    with pytest.raises(UnknownComponentError) as raised:
+        _config(
+            {"id": "ensemble_forecaster", "params": {"forecasters": members}}
+        ).capabilities()
+    assert raised.value.issues[0].loc[-3:] == ("forecasters", 1, "id")
+    with pytest.raises(ConfigurationError, match="same horizon"):
+        _config(
+            {
+                "id": "ensemble_forecaster",
+                "params": {
+                    "forecasters": [
+                        {"id": "seasonal_naive"},
+                        {"id": "kalman_forecaster", "params": {"horizon": 2}},
+                    ]
+                },
+            }
+        ).build()

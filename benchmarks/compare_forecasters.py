@@ -16,7 +16,8 @@ learning and forecasting.
 
 The series cover a stationary autoregression, a seasonal autoregression, a
 random walk, a noisy trend with a fixed season, and a series that wanders in
-both its level and its season (``(1 - B)(1 - B^m) y = e``). All innovations are
+both its level and its season (``(1 - B)(1 - B^m) y = e``), and a series
+that switches from the autoregression to a noisy fixed season halfway. All innovations are
 standard normal, so the best possible lead-1 error is ``sqrt(2 / pi)``, about
 0.80, wherever the model class contains the process.
 """
@@ -33,6 +34,7 @@ import numpy as np
 from aberrant.base.protocols import ForecasterProtocol
 from aberrant.forecast import (
     AutoRegressive,
+    EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
     SeasonalNaive,
@@ -63,6 +65,14 @@ def series(n: int, seed: int) -> dict[str, list[float]]:
         "wandering_season": _recursive(
             n, seed, lambda y, e: y[-1] + y[-12] - y[-13] + e
         ),
+        "regime_switch": [
+            *_recursive(n // 2, seed, lambda y, e: 0.6 * y[-1] - 0.3 * y[-2] + e),
+            *(
+                float(v)
+                for v in 3 * np.sin(2 * np.pi * t[n // 2 :] / SEASON)
+                + rng.standard_normal(n - n // 2)
+            ),
+        ],
     }
 
 
@@ -91,6 +101,23 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
             seasonal_order=1,
             difference=1,
             seasonal_difference=1,
+        ),
+        "Ensemble(HW, Kalman, 2 AR)": lambda: EnsembleForecaster(
+            [
+                HoltWinters(season_length=SEASON, horizon=horizon),
+                KalmanForecaster(horizon=horizon, season_length=SEASON),
+                AutoRegressive(
+                    horizon=horizon, order=2, season_length=SEASON, seasonal_order=1
+                ),
+                AutoRegressive(
+                    horizon=horizon,
+                    order=2,
+                    season_length=SEASON,
+                    seasonal_order=1,
+                    difference=1,
+                    seasonal_difference=1,
+                ),
+            ]
         ),
     }
 
