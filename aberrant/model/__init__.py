@@ -12,8 +12,10 @@ Available submodules:
 
 Also available directly:
     - NullModel, RandomModel, ThresholdModel
+    - ScoreEnsemble, which combines several detectors' scores
 """
 
+from aberrant.model.ensemble import ScoreEnsemble
 from aberrant.model.null import NullModel
 from aberrant.model.random import RandomModel
 from aberrant.model.threshold import ThresholdModel
@@ -21,5 +23,6 @@ from aberrant.model.threshold import ThresholdModel
 __all__ = [
     "NullModel",
     "RandomModel",
+    "ScoreEnsemble",
     "ThresholdModel",
 ]

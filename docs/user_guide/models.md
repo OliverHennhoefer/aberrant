@@ -18,6 +18,7 @@ then compare warm-up, state growth, latency, and calibration within that family.
 | Changing relationships between time-series channels | `MultivariateRollingMatrixProfile` | Exact joint subsequence novelty requiring all channels to match the same historical interval |
 | Interpretable local statistic change | `aberrant.model.stat` | Robust or plain z-scores of one feature, candidate-induced changes in covariance or correlation, Mahalanobis distance, or ECOD/COPOD tail probabilities |
 | Learned reconstruction error | `OnlineAutoencoderEnsemble` or optional `Autoencoder` | Uses NumPy or user-supplied PyTorch autoencoders |
+| Several detectors that should vote | `ScoreEnsemble` | Ranks or z-scores each member against its own recent scores, then takes the mean, max or median; see [combining detectors](#combining-detectors) |
 | A fixed bound on raw features | `ThresholdModel` | Returns `1.0` when a feature leaves its configured ceiling or floor; learned alarm thresholds on scores live in [calibration](calibration.md) |
 
 Feature scaling is part of the model specification. Distance-based methods and
@@ -423,6 +424,43 @@ the authors' normalized denoising implementation. The source method is
 `Architecture`, a PyTorch optimizer, and a reconstruction loss. It has no
 built-in warm-up policy; `score_one` returns the supplied criterion's loss and
 `learn_one` performs one optimizer step.
+
+### Combining detectors
+
+Detectors score on different scales, so their raw scores cannot be averaged.
+`ScoreEnsemble` puts each member's score on one scale against that member's
+own last `window_size` learned scores, then combines them:
+
+```python
+from aberrant.model import ScoreEnsemble
+from aberrant.model.forest import HalfSpaceTrees
+from aberrant.model.sketch import LODA
+
+detector = ScoreEnsemble(
+    [LODA(seed=1), HalfSpaceTrees(seed=2)],
+    normalize="rank",
+    combine="mean",
+)
+```
+
+| Parameter | Contract |
+| --- | --- |
+| `normalize="rank"` | Share of the member's recent scores below the score, ties counting half, from 0 to 1. Robust to any score scale. |
+| `normalize="zscore"` | Distance from the mean of the member's recent scores in standard deviations; 0 when they are all equal. Keeps how far out a score is. |
+| `combine` | `"mean"` lets members vote, `"max"` raises an alarm when any member is sure, `"median"` ignores a single member that disagrees. |
+| `warm_up` | Scores each member's history needs, after the member itself is ready, before the ensemble scores anything but 0.0. |
+
+Every member learns every event and must take the same kind of event. An
+event costs the members' own work plus O(M W) for M members and window W.
+When a member fails to learn, the members that support `learning_transaction`
+are restored and the others keep what they learned. In a catalog
+configuration the members are nested under `models`:
+
+```json
+{"model": {"id": "score_ensemble", "params": {
+  "models": [{"id": "loda"}, {"id": "half_space_trees"}],
+  "combine": "max"}}}
+```
 
 ### Core utility models
 

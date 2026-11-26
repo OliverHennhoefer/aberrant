@@ -13,6 +13,14 @@ MODEL_PARAMS: dict[str, dict[str, object]] = {
     "multivariate_rolling_matrix_profile": {"subsequence_length": 4},
     "rolling_matrix_profile": {"subsequence_length": 4},
     "damp": {"subsequence_length": 4},
+    "score_ensemble": {
+        "models": [
+            {"id": "loda", "params": {"warm_up": 10, "seed": 1}},
+            {"id": "half_space_trees", "params": {"window_size": 10, "seed": 2}},
+        ],
+        "window_size": 20,
+        "warm_up": 5,
+    },
 }
 # Small warm-ups, so a short stream reaches every model's readiness.
 QUICK_PARAMS: dict[str, dict[str, object]] = {

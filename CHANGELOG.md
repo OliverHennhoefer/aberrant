@@ -27,6 +27,12 @@ Semantic Versioning.
   feature, `None` or NaN, with the feature's last value, its mean or a
   constant, and adds `{feature}_missing` indicators on request. Only
   observed values are learned. The catalog lists it as `imputer`.
+- `aberrant.model.ScoreEnsemble` combines two or more detectors. Each
+  member's score is ranked or z-scored against that member's last
+  `window_size` learned scores, and the results are combined by mean, max
+  or median. Members that support `learning_transaction` are restored when
+  another member fails to learn. The catalog lists it as `score_ensemble`
+  with its members nested under `models`.
 - `aberrant.evaluate.ForecastEvaluator`: forecast-before-learn evaluation of
   a forecaster. Every observed value is scored once at each lead, and each
   lead reports MAE, RMSE, bias, MASE against the seasonal naive forecast,
@@ -276,8 +282,9 @@ Semantic Versioning.
   path lengths, and `AnoEdgeL` scores `0.0` before its first learned edge.
 - **Breaking:** every constructor takes keyword arguments only, for example
   `HalfSpaceTrees(n_trees=25, height=8)` instead of `HalfSpaceTrees(25, 8)`.
-  The wrapped component stays positional in `ResidualDetector(model, target=...)`
-  and the method in `ScoreCalibrator(method, alpha=...)`.
+  The wrapped components stay positional in
+  `ResidualDetector(model, target=...)` and `ScoreEnsemble(models, ...)`, and
+  the method in `ScoreCalibrator(method, alpha=...)`.
 - **Breaking:** classes named after their method without a prefix:
   `StreamingLODA` is `LODA`, `StreamingRSHash` is `RSHash`, `XLagDAMP` is
   `DAMP`, `IncrementalOneClassSVMAdaptiveKernel` is `AdaptiveOneClassSVM`,
