@@ -9,6 +9,7 @@ can precede another transformer or one terminal model in a pipeline.
 | Transformer | Learned state | Output | Important semantics |
 | --- | --- | --- | --- |
 | `FeatureSchemaGuard` | Configured or first-learned feature schema | Same keys and values in schema order | Rejects invalid values or a changed feature set |
+| `Imputer` | Per-feature last value, or count and mean | Schema keys, then `{feature}_missing` when `indicate` | Fills an absent, `None` or NaN value; ready once every feature was observed |
 | `MinMaxScaler` | Per-feature running minimum and maximum | Same keys, values mapped to `feature_range` | A value outside the learned extrema can transform outside the requested range; a constant learned feature maps to the lower bound |
 | `StandardScaler` | Per-feature count, mean, and population variance accumulator | Same keys, centered values and optionally population-standardized values | A feature with zero learned variance maps to `0.0`; `with_std=False` centers without scaling |
 | `RollingRobustScaler` | Per-feature recent window, median, and interquartile range | Same keys, median-centered and IQR-scaled values | Exact linearly interpolated quartiles; zero IQR uses `fallback_scale` to preserve deviations; calibration can be frozen |
@@ -115,14 +116,14 @@ follows its past, they score the level unless a step before them carries
 time. The sequence transformers do that, one feature at a time: `Lags` adds
 earlier values, `Difference` the change, `ExponentialSmoother` and
 `RollingStatistic` a recent summary, `Despike` removes isolated spikes and
-`Deseasonalize` a repeating cycle. `features=` limits them to some features
+`Deseasonalize` a repeating cycle. `apply_to=` limits them to some features
 and passes the others through.
 
 ```python
 from aberrant.model.forest import OnlineIsolationForest
 from aberrant.transform import Difference, Lags
 
-detector = Difference(features=["load"]) | Lags(lags=[1, 2], features=["load"])
+detector = Difference(apply_to=["load"]) | Lags(lags=[1, 2], apply_to=["load"])
 detector = detector | OnlineIsolationForest(n_trees=10, window_size=64, seed=5)
 
 for t in range(100):

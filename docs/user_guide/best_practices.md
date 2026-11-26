@@ -12,8 +12,11 @@ substitute for detector-specific calibration or an application threat model.
 - For `IncrementalPCA` and `RandomProjection`, pass `features=` when order must be
   declared before learning; otherwise the first learned dictionary's order is
   retained.
-- Do not encode missingness as an undocumented numeric sentinel. Impute or
-  reject it under a policy the model was calibrated with.
+- Do not encode missingness as an undocumented numeric sentinel. Models and
+  transformers reject a missing value, whether an absent feature, `None` or
+  NaN, with `ValidationError`. Put an `Imputer` first to fill it in, with
+  `indicate=True` when missingness itself may be anomalous. Forecasters are
+  the exception: `learn_one(None)` learns that a step is missing.
 - Reject non-finite values before they reach static threshold wrappers too.
   Stateful numeric boundaries reject them, but `ThresholdModel` is a rule
   evaluator rather than a general numeric validator.

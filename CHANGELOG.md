@@ -10,7 +10,7 @@ Semantic Versioning.
 ### Added
 
 - Sequence transformers in `aberrant.transform`, each per feature and
-  limited to `features=` when given: `Lags` appends earlier values,
+  limited to `apply_to=` when given: `Lags` appends earlier values,
   `Difference` the change or percent change over `lag` events,
   `ExponentialSmoother` an exponentially weighted mean, `Despike` replaces
   spikes by the window median (Hampel), `RollingStatistic` a window's sum,
@@ -23,6 +23,10 @@ Semantic Versioning.
   that overflow or vanish, and windows keep a sorted copy, so an event costs
   O(W). `initial_state`, `step`, `valid_state` and `lead` let an
   application keep each feature's state itself.
+- `aberrant.transform.Imputer` fills in a missing value, whether an absent
+  feature, `None` or NaN, with the feature's last value, its mean or a
+  constant, and adds `{feature}_missing` indicators on request. Only
+  observed values are learned. The catalog lists it as `imputer`.
 - `aberrant.evaluate.ForecastEvaluator`: forecast-before-learn evaluation of
   a forecaster. Every observed value is scored once at each lead, and each
   lead reports MAE, RMSE, bias, MASE against the seasonal naive forecast,
