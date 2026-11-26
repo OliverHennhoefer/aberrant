@@ -1,4 +1,4 @@
-"""Online regressors with standardized inputs: kernel, PA, Huber SGD, KNN."""
+"""Online regressors with standardized inputs: kernel, PA, Huber SGD, KNN, trees."""
 
 import math
 import pickle
@@ -9,6 +9,8 @@ import pytest
 from aberrant.base import ForecasterProtocol, RegressorProtocol
 from aberrant.exceptions import ValidationError
 from aberrant.forecast import (
+    AdaptiveRandomForestRegressor,
+    HoeffdingTreeRegressor,
     KNNRegressor,
     LagForecaster,
     PassiveAggressiveRegressor,
@@ -22,6 +24,8 @@ REGRESSORS = {
     "passive_aggressive": PassiveAggressiveRegressor,
     "sgd": SGDRegressor,
     "knn": KNNRegressor,
+    "hoeffding_tree": HoeffdingTreeRegressor,
+    "random_forest": lambda: AdaptiveRandomForestRegressor(seed=1),
 }
 
 

@@ -8,7 +8,9 @@ import pytest
 from aberrant.catalog import MODEL_CATALOG, TRANSFORMER_CATALOG
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.forecast import (
+    AdaptiveRandomForestRegressor,
     AutoRegressive,
+    HoeffdingTreeRegressor,
     HoltWinters,
     KalmanForecaster,
     KNNRegressor,
@@ -25,7 +27,9 @@ def _classes() -> list[type]:
         CUSUM,
         KSWIN,
         PageHinkley,
+        AdaptiveRandomForestRegressor,
         AutoRegressive,
+        HoeffdingTreeRegressor,
         KNNRegressor,
         PassiveAggressiveRegressor,
         RandomFourierRegressor,

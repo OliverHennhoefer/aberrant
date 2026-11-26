@@ -58,6 +58,15 @@ Semantic Versioning.
   covariates and target over a `warm_up`. The catalog lists them as
   `random_fourier_regressor`, `passive_aggressive_regressor`,
   `sgd_regressor` and `knn_regressor`.
+- `aberrant.forecast.HoeffdingTreeRegressor`: an online regression tree
+  that splits a leaf once a Hoeffding bound supports it, scoring each split
+  against the leaf's own model, with mean, linear or adaptive leaves. Over
+  lagged values in `LagForecaster` it is a threshold autoregression.
+  `aberrant.forecast.AdaptiveRandomForestRegressor` bags such trees by
+  Poisson weights over random covariate subsets and replaces a tree whose
+  error ADWIN finds drifting by one grown in the background since a
+  warning. The catalog lists them as `hoeffding_tree_regressor` and
+  `adaptive_random_forest_regressor`.
 - `attribute_one(x)` on `LODA`, `MovingMahalanobisDistance` and
   `HalfSpaceTrees`, alongside `OnlineECOD` and `OnlineCOPOD`: each feature's
   share of the score, without learning. The shares sum to the score minus
