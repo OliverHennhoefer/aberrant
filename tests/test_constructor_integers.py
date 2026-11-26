@@ -7,7 +7,12 @@ import pytest
 
 from aberrant.catalog import MODEL_CATALOG, TRANSFORMER_CATALOG
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
-from aberrant.forecast import HoltWinters, KalmanForecaster, SeasonalNaive
+from aberrant.forecast import (
+    AutoRegressive,
+    HoltWinters,
+    KalmanForecaster,
+    SeasonalNaive,
+)
 
 
 def _classes() -> list[type]:
@@ -16,6 +21,7 @@ def _classes() -> list[type]:
         CUSUM,
         KSWIN,
         PageHinkley,
+        AutoRegressive,
         HoltWinters,
         KalmanForecaster,
         SeasonalNaive,

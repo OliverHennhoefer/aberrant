@@ -776,6 +776,13 @@ _FORECASTER_SPECS = (
         import_path="aberrant.forecast.KalmanForecaster",
     ),
     ComponentSpec(
+        id="autoregressive",
+        display_name="AutoRegressive",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.AutoRegressive",
+    ),
+    ComponentSpec(
         id="rls_regressor",
         display_name="RLSRegressor",
         kind=ComponentKind.FORECASTER,

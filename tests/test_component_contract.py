@@ -11,7 +11,13 @@ from aberrant.calibration import ScoreCalibrator
 from aberrant.catalog import create_model, create_transformer, model_capabilities
 from aberrant.compose import GraphNode, GraphPipeline, MergeNode
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
-from aberrant.forecast import HoltWinters, KalmanForecaster, RLSRegressor, SeasonalNaive
+from aberrant.forecast import (
+    AutoRegressive,
+    HoltWinters,
+    KalmanForecaster,
+    RLSRegressor,
+    SeasonalNaive,
+)
 from aberrant.model.forest import HalfSpaceTrees
 from aberrant.model.stat import MovingCovariance
 from aberrant.transform import MinMaxScaler, Select, StandardScaler
@@ -193,6 +199,7 @@ _SERIES = [float(index % 7) + 0.1 * (index % 3) for index in range(80)]
         lambda: SeasonalNaive(season_length=4),
         lambda: HoltWinters(season_length=4),
         lambda: KalmanForecaster(horizon=3, slope_ratio=0.01),
+        lambda: AutoRegressive(horizon=3, season_length=7, seasonal_order=1),
     ],
 )
 def test_forecaster_contract(factory):

@@ -19,6 +19,41 @@ from aberrant.forecast._arithmetic import blend
 from aberrant.forecast.base import BaseRegressor, check_spread_parameters
 
 
+def rls_update(
+    weights: np.ndarray,
+    covariance: np.ndarray,
+    z: np.ndarray,
+    target: float,
+    forgetting: float,
+) -> tuple[float, np.ndarray, np.ndarray]:
+    """One recursive least-squares step: the prior error and the new state.
+
+    Raises OverflowError, before anything changes, when the step is not
+    representable.
+    """
+    with np.errstate(over="ignore", invalid="ignore"):
+        error = target - float(weights @ z)
+        pz = covariance @ z
+        denominator = forgetting + float(z @ pz)
+        gain = pz / denominator
+        new_weights = weights + gain * error
+        # Joseph form (I - k z')P(I - k z')' + lambda k k', in two rank-one
+        # steps: it stays positive where P - k (Pz)' cancels to zero.
+        reduced = covariance - np.outer(gain, pz)
+        new_covariance = (
+            reduced - np.outer(reduced @ z, gain) + forgetting * np.outer(gain, gain)
+        ) / forgetting
+        new_covariance = (new_covariance + new_covariance.T) / 2
+    if not (
+        math.isfinite(error)
+        and math.isfinite(denominator)
+        and np.isfinite(new_weights).all()
+        and np.isfinite(new_covariance).all()
+    ):
+        raise OverflowError("Regression arithmetic exceeds the float range")
+    return error, new_weights, new_covariance
+
+
 class RLSRegressor(BaseRegressor):
     """Predict a target linearly from covariates, by recursive least squares.
 
@@ -151,28 +186,9 @@ class RLSRegressor(BaseRegressor):
             covariance = np.eye(d) * self.delta
         else:
             weights, covariance = self._weights, self._covariance
-        with np.errstate(over="ignore", invalid="ignore"):
-            error = target - float(weights @ z)
-            pz = covariance @ z
-            denominator = self.forgetting + float(z @ pz)
-            gain = pz / denominator
-            new_weights = weights + gain * error
-            # Joseph form (I - k z')P(I - k z')' + lambda k k', in two rank-one
-            # steps: it stays positive where P - k (Pz)' cancels to zero.
-            reduced = covariance - np.outer(gain, pz)
-            new_covariance = (
-                reduced
-                - np.outer(reduced @ z, gain)
-                + self.forgetting * np.outer(gain, gain)
-            ) / self.forgetting
-            new_covariance = (new_covariance + new_covariance.T) / 2
-        if not (
-            math.isfinite(error)
-            and math.isfinite(denominator)
-            and np.isfinite(new_weights).all()
-            and np.isfinite(new_covariance).all()
-        ):
-            raise OverflowError("Regression arithmetic exceeds the float range")
+        error, new_weights, new_covariance = rls_update(
+            weights, covariance, z, target, self.forgetting
+        )
         mae = self._mae
         if self.n_samples_seen >= d:
             mae = (

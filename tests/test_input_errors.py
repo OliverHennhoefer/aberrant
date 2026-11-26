@@ -8,7 +8,12 @@ import pytest
 from aberrant.catalog import create_model, create_transformer
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.exceptions import ValidationError
-from aberrant.forecast import HoltWinters, KalmanForecaster, SeasonalNaive
+from aberrant.forecast import (
+    AutoRegressive,
+    HoltWinters,
+    KalmanForecaster,
+    SeasonalNaive,
+)
 from tests.catalog_cases import (
     MODEL_IDS,
     TRANSFORMER_IDS,
@@ -88,6 +93,7 @@ def test_drift_detectors_reject_malformed_values(detector, value):
         lambda: SeasonalNaive(season_length=2),
         lambda: HoltWinters(season_length=2),
         KalmanForecaster,
+        AutoRegressive,
     ],
 )
 @pytest.mark.parametrize("value", [math.nan, math.inf, "x"])

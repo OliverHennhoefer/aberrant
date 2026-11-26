@@ -11,6 +11,7 @@ for :mod:`aberrant.calibration`.
 """
 
 from aberrant.base.forecast import Forecast
+from aberrant.forecast.autoregressive import AutoRegressive
 from aberrant.forecast.base import BaseForecaster, BaseRegressor
 from aberrant.forecast.holt_winters import HoltWinters
 from aberrant.forecast.kalman import KalmanForecaster
@@ -20,6 +21,7 @@ from aberrant.forecast.residual import ResidualDetector
 from aberrant.forecast.scores import NonconformityScore, interval, nonconformity
 
 __all__ = [
+    "AutoRegressive",
     "BaseForecaster",
     "BaseRegressor",
     "Forecast",

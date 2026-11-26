@@ -13,6 +13,8 @@ Forecasters learn one series with `learn_one(y)` and forecast it with
 
 ::: aberrant.forecast.KalmanForecaster
 
+::: aberrant.forecast.AutoRegressive
+
 ::: aberrant.forecast.RLSRegressor
 
 ::: aberrant.forecast.ResidualDetector
