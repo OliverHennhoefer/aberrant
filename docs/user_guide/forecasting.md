@@ -139,39 +139,39 @@ where it is within 2% of the best.
 
 | Forecaster | Relative MAE@1 | Near best (of 8) | µs per event |
 | --- | ---: | ---: | ---: |
-| `Ensemble(mixed)` | 1.341 | 7 | 1055 |
-| `Ensemble(classic)` | 1.581 | 6 | 503 |
-| `AR(p=2, P=1)` | 1.642 | 4 | 76 |
-| `Lag(RandomFourier)` | 1.653 | 1 | 233 |
-| `EchoState(D=1)` | 1.824 | 1 | 213 |
-| `Kalman(trend, season)` | 1.827 | 1 | 135 |
-| `Lag(AdaptiveForest)` | 1.875 | 2 | 1190 |
-| `Lag(KNN)` | 1.997 | 0 | 320 |
-| `AR(p=2, P=1, d=1, D=1)` | 2.035 | 1 | 78 |
-| `EchoState` | 2.068 | 2 | 209 |
-| `Kalman(season)` | 2.208 | 1 | 131 |
-| `HoltWinters` | 2.277 | 0 | 22 |
-| `Lag(HoeffdingTree)` | 2.497 | 3 | 199 |
-| `Lag(RLS)` | 2.556 | 2 | 144 |
-| `AR(p=2)` | 2.624 | 2 | 73 |
-| `Lag(PassiveAggressive)` | 2.761 | 1 | 127 |
-| `Kalman(trend)` | 2.957 | 0 | 123 |
-| `Kalman(level)` | 3.026 | 1 | 118 |
-| `Kalman(season, fixed)` | 3.086 | 0 | 62 |
-| `Lag(SGD Huber)` | 3.171 | 1 | 136 |
-| `Kalman(level, fixed)` | 3.722 | 0 | 55 |
-| `SeasonalNaive` | 4.160 | 0 | 15 |
+| `Ensemble(mixed)` | 1.335 | 7 | 1134 |
+| `Ensemble(classic)` | 1.576 | 6 | 516 |
+| `AR(p=2, P=1)` | 1.636 | 4 | 83 |
+| `Lag(RandomFourier)` | 1.653 | 1 | 270 |
+| `EchoState(D=1)` | 1.817 | 1 | 223 |
+| `Kalman(trend, season)` | 1.821 | 1 | 148 |
+| `Lag(AdaptiveForest)` | 1.862 | 2 | 1265 |
+| `Lag(KNN)` | 1.991 | 0 | 338 |
+| `AR(p=2, P=1, d=1, D=1)` | 2.028 | 1 | 93 |
+| `EchoState` | 2.058 | 2 | 208 |
+| `Kalman(season)` | 2.201 | 1 | 144 |
+| `HoltWinters` | 2.269 | 0 | 23 |
+| `Lag(HoeffdingTree)` | 2.489 | 3 | 213 |
+| `Lag(RLS)` | 2.547 | 2 | 145 |
+| `AR(p=2)` | 2.616 | 2 | 77 |
+| `Lag(PassiveAggressive)` | 2.752 | 1 | 123 |
+| `Kalman(trend)` | 2.947 | 0 | 148 |
+| `Kalman(level)` | 3.016 | 1 | 132 |
+| `Kalman(season, fixed)` | 3.075 | 0 | 75 |
+| `Lag(SGD Huber)` | 3.159 | 1 | 134 |
+| `Kalman(level, fixed)` | 3.710 | 0 | 63 |
+| `SeasonalNaive` | 4.146 | 0 | 16 |
 
 Where the model class contains the process, the best lead-1 error is about
 0.80, the mean absolute value of the standard normal innovations:
 
 | Series | Best MAE@1 | Best forecaster | Best MAE@6 |
 | --- | ---: | --- | ---: |
-| ar2 | 0.805 | `AR(p=2)` | 0.943 |
+| ar2 | 0.805 | `AR(p=2)` | 0.944 |
 | seasonal_ar | 0.806 | `AR(p=2, P=1)` | 0.924 |
-| random_walk | 0.805 | `AR(p=2)` | 1.956 |
+| random_walk | 0.805 | `Lag(HoeffdingTree)` | 1.956 |
 | trend_season | 0.834 | `Kalman(season)` | 0.842 |
-| wandering_season | 0.806 | `AR(p=2, P=1, d=1, D=1)` | 1.961 |
+| wandering_season | 0.806 | `AR(p=2, P=1, d=1, D=1)` | 1.960 |
 | setar | 0.841 | `Lag(AdaptiveForest)` | 1.029 |
 | regime_switch | 0.855 | `Ensemble(mixed)` | 0.913 |
 | logistic | 0.004 | `Lag(RandomFourier)` | 0.051 |

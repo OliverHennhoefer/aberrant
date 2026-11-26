@@ -30,6 +30,8 @@ from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.evaluate import (
     EvaluationRecord,
     EvaluationResult,
+    ForecastEvaluator,
+    ForecastResult,
     PrequentialEvaluator,
     VolumeUnderSurface,
     vus,
@@ -180,6 +182,8 @@ def test_evaluation_public_imports_base_smoke() -> None:
     assert EvaluationRecord is not None
     assert EvaluationResult is not None
     assert PrequentialEvaluator is not None
+    assert ForecastEvaluator is not None
+    assert ForecastResult is not None
     assert VolumeUnderSurface is not None
     assert callable(vus)
 

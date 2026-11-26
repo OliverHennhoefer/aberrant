@@ -234,6 +234,37 @@ threshold using scores available before the candidate. Do not search the
 evaluated labels for the threshold that maximizes the reported result; that is
 evaluation leakage.
 
+## Forecasters
+
+`ForecastEvaluator` runs the same loop for a forecaster: each update asks
+for a forecast, then learns the value. A forecast issued before value *t*
+targets it at lead 1 and the values after it up to the horizon, so every
+observed value is scored once at each lead. Missing values (`None`) are
+learned as missing and scored at no lead.
+
+```python
+import math
+
+from aberrant.evaluate import ForecastEvaluator
+from aberrant.forecast import AutoRegressive
+
+values = [math.sin(t / 3) for t in range(1000)]
+evaluator = ForecastEvaluator(AutoRegressive(order=2, horizon=3), warmup=200)
+result = evaluator.evaluate(values)
+for scores in result.leads:
+    print(scores.lead, scores.mae, scores.rmse, scores.mase, scores.spread_ratio)
+```
+
+Each lead reports its mean absolute and root mean squared error, the bias
+(`actual - forecast`), MASE and the spread ratio. MASE divides the error by
+the mean absolute difference of observed values `season_length` apart, so
+below 1 beats the in-sample seasonal naive forecast. The spread ratio
+divides the error by the mean spread the forecaster issued. Most
+forecasters issue a faded mean absolute error, so near 1 means calibrated.
+`KalmanForecaster` issues a standard deviation, for which calibrated
+Gaussian errors give about 0.80. `benchmarks/compare_forecasters.py`
+compares every built-in forecaster with this evaluator.
+
 ## Reproducible comparisons
 
 For every compared model:
