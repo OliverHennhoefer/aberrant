@@ -119,6 +119,8 @@ _REGRESSORS = frozenset(
         "passive_aggressive_regressor",
         "sgd_regressor",
         "knn_regressor",
+        "hoeffding_tree_regressor",
+        "adaptive_random_forest_regressor",
     }
 )
 
@@ -842,6 +844,20 @@ _FORECASTER_SPECS = (
         kind=ComponentKind.FORECASTER,
         family="forecast",
         import_path="aberrant.forecast.KNNRegressor",
+    ),
+    ComponentSpec(
+        id="hoeffding_tree_regressor",
+        display_name="HoeffdingTreeRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.HoeffdingTreeRegressor",
+    ),
+    ComponentSpec(
+        id="adaptive_random_forest_regressor",
+        display_name="AdaptiveRandomForestRegressor",
+        kind=ComponentKind.FORECASTER,
+        family="forecast",
+        import_path="aberrant.forecast.AdaptiveRandomForestRegressor",
     ),
 )
 

@@ -35,8 +35,10 @@ import numpy as np
 
 from aberrant.base.protocols import ForecasterProtocol
 from aberrant.forecast import (
+    AdaptiveRandomForestRegressor,
     AutoRegressive,
     EnsembleForecaster,
+    HoeffdingTreeRegressor,
     HoltWinters,
     KalmanForecaster,
     KNNRegressor,
@@ -123,6 +125,12 @@ def forecasters(horizon: int) -> dict[str, Callable[[], ForecasterProtocol]]:
         ),
         "Lag(SGD Huber, p=3)": lambda: LagForecaster(
             SGDRegressor(), horizon=horizon, order=3
+        ),
+        "Lag(HoeffdingTree, p=3)": lambda: LagForecaster(
+            HoeffdingTreeRegressor(), horizon=horizon, order=3
+        ),
+        "Lag(ARF, p=3)": lambda: LagForecaster(
+            AdaptiveRandomForestRegressor(seed=0), horizon=horizon, order=3
         ),
         "Ensemble(HW, Kalman, 2 AR)": lambda: EnsembleForecaster(
             [

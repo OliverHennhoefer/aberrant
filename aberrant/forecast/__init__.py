@@ -27,13 +27,19 @@ from aberrant.forecast.regressors import (
 )
 from aberrant.forecast.residual import ResidualDetector
 from aberrant.forecast.scores import NonconformityScore, interval, nonconformity
+from aberrant.forecast.trees import (
+    AdaptiveRandomForestRegressor,
+    HoeffdingTreeRegressor,
+)
 
 __all__ = [
+    "AdaptiveRandomForestRegressor",
     "AutoRegressive",
     "BaseForecaster",
     "BaseRegressor",
     "EnsembleForecaster",
     "Forecast",
+    "HoeffdingTreeRegressor",
     "HoltWinters",
     "KNNRegressor",
     "KalmanForecaster",

@@ -233,8 +233,9 @@ set or run FAISS-backed and PyTorch-backed detectors in separate processes.
 forecaster from `FORECASTER_CATALOG`: `seasonal_naive`, `holt_winters`,
 `kalman_forecaster`, `autoregressive`, `ensemble_forecaster`,
 `lag_forecaster`, or one of the regressors `rls_regressor`,
-`random_fourier_regressor`, `passive_aggressive_regressor`, `sgd_regressor`
-and `knn_regressor`. `lag_forecaster` takes a nested
+`random_fourier_regressor`, `passive_aggressive_regressor`, `sgd_regressor`,
+`knn_regressor`, `hoeffding_tree_regressor` and
+`adaptive_random_forest_regressor`. `lag_forecaster` takes a nested
 regressor in `regressor`. `ensemble_forecaster` takes its members as a list of nested
 forecasters in `forecasters`, all with the same `horizon`.
 

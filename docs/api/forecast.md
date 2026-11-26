@@ -29,6 +29,10 @@ Forecasters learn one series with `learn_one(y)` and forecast it with
 
 ::: aberrant.forecast.KNNRegressor
 
+::: aberrant.forecast.HoeffdingTreeRegressor
+
+::: aberrant.forecast.AdaptiveRandomForestRegressor
+
 ::: aberrant.forecast.ResidualDetector
     options:
       inherited_members: true

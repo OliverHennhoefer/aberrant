@@ -16,7 +16,7 @@ differ in what they predict from, which shows in how they are called:
 | Learn | `learn_one(y)` | `learn_one(x, y)` |
 | Predict | `forecast_one()` | `predict_one(x)` |
 | Leads | `1..horizon` | `0` |
-| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster` | `RLSRegressor`, `RandomFourierRegressor`, `PassiveAggressiveRegressor`, `SGDRegressor`, `KNNRegressor` |
+| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster` | `RLSRegressor`, `RandomFourierRegressor`, `PassiveAggressiveRegressor`, `SGDRegressor`, `KNNRegressor`, `HoeffdingTreeRegressor`, `AdaptiveRandomForestRegressor` |
 
 The target is its own argument, never a key of `x`, so a regressor cannot see
 the value it predicts and transformers in front of it never touch the target.
@@ -101,7 +101,12 @@ regressor it follows dynamics no linear model can. `RandomFourierRegressor`
 is kernel ridge regression online and fits smooth bends; `KNNRegressor`
 forecasts the future of the most similar recent situations;
 `SGDRegressor` uses the Huber loss, so an anomaly in the target barely moves
-it; and `PassiveAggressiveRegressor` is the cheapest linear learner. All four
+it; and `PassiveAggressiveRegressor` is the cheapest linear learner.
+`HoeffdingTreeRegressor` splits the covariates into regions once the
+evidence for a split suffices and fits a line in each, so over lags it is a
+threshold autoregression that finds its own regimes.
+`AdaptiveRandomForestRegressor` bags such trees and replaces a tree whose
+errors drift, so it recovers after the dynamics change. All of them
 standardize their covariates and target over their first `warm_up` events.
 `benchmarks/compare_forecasters.py` compares all of them on synthetic series.
 

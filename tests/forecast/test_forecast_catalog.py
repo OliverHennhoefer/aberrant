@@ -18,8 +18,10 @@ from aberrant.catalog import (
 )
 from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.forecast import (
+    AdaptiveRandomForestRegressor,
     AutoRegressive,
     EnsembleForecaster,
+    HoeffdingTreeRegressor,
     HoltWinters,
     KalmanForecaster,
     KNNRegressor,
@@ -71,6 +73,8 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "passive_aggressive_regressor",
         "sgd_regressor",
         "knn_regressor",
+        "hoeffding_tree_regressor",
+        "adaptive_random_forest_regressor",
     }
     classes = {
         "seasonal_naive": SeasonalNaive,
@@ -84,6 +88,8 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "passive_aggressive_regressor": PassiveAggressiveRegressor,
         "sgd_regressor": SGDRegressor,
         "knn_regressor": KNNRegressor,
+        "hoeffding_tree_regressor": HoeffdingTreeRegressor,
+        "adaptive_random_forest_regressor": AdaptiveRandomForestRegressor,
     }
     for component_id, spec in FORECASTER_CATALOG.items():
         assert spec.kind is ComponentKind.FORECASTER
@@ -296,6 +302,8 @@ def test_a_lag_forecaster_takes_its_regressor_as_a_nested_component() -> None:
         "passive_aggressive_regressor",
         "sgd_regressor",
         "knn_regressor",
+        "hoeffding_tree_regressor",
+        "adaptive_random_forest_regressor",
     ],
 )
 def test_new_regressors_score_covariates_at_lead_zero(regressor) -> None:
