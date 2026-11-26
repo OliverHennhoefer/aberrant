@@ -7,6 +7,7 @@ import pytest
 
 from aberrant.forecast import (
     AutoRegressive,
+    EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
     SeasonalNaive,
@@ -19,6 +20,12 @@ FORECASTERS = {
     "kalman": lambda: KalmanForecaster(horizon=HORIZON, slope_ratio=0.01),
     "kalman_seasonal": lambda: KalmanForecaster(
         horizon=HORIZON, slope_ratio=0.01, season_length=4, season_ratio=0.01
+    ),
+    "ensemble": lambda: EnsembleForecaster(
+        [
+            SeasonalNaive(season_length=4, horizon=HORIZON),
+            KalmanForecaster(horizon=HORIZON, slope_ratio=0.01),
+        ]
     ),
     "autoregressive": lambda: AutoRegressive(
         horizon=HORIZON, season_length=4, seasonal_difference=1

@@ -13,6 +13,7 @@ from aberrant.compose import GraphNode, GraphPipeline, MergeNode
 from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.forecast import (
     AutoRegressive,
+    EnsembleForecaster,
     HoltWinters,
     KalmanForecaster,
     RLSRegressor,
@@ -200,6 +201,9 @@ _SERIES = [float(index % 7) + 0.1 * (index % 3) for index in range(80)]
         lambda: HoltWinters(season_length=4),
         lambda: KalmanForecaster(horizon=3, slope_ratio=0.01),
         lambda: AutoRegressive(horizon=3, season_length=7, seasonal_order=1),
+        lambda: EnsembleForecaster(
+            [SeasonalNaive(season_length=4, horizon=2), KalmanForecaster(horizon=2)]
+        ),
     ],
 )
 def test_forecaster_contract(factory):

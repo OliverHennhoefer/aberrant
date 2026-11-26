@@ -115,10 +115,14 @@ class ModelCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class ComponentDependency:
-    """A constructor parameter containing another catalog component."""
+    """A constructor parameter containing another catalog component.
+
+    With ``many`` it holds a list of them instead.
+    """
 
     parameter: str
     kind: ComponentKind
+    many: bool = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -180,7 +184,7 @@ class ComponentSpec:
         """
         return ConstructorParameters.inspect(self.load()).schema(
             {
-                dependency.parameter: dependency.kind.value
+                dependency.parameter: (dependency.kind.value, dependency.many)
                 for dependency in self.dependencies
             }
         )
@@ -197,7 +201,11 @@ class ComponentSpec:
             "optional_extra": self.optional_extra,
             "declarative": self.declarative,
             "dependencies": [
-                {"parameter": dependency.parameter, "kind": dependency.kind.value}
+                {
+                    "parameter": dependency.parameter,
+                    "kind": dependency.kind.value,
+                    "many": dependency.many,
+                }
                 for dependency in self.dependencies
             ],
         }

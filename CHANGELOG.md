@@ -40,6 +40,11 @@ Semantic Versioning.
   absolute error, and `learn_one(None)` learns a missing value. The catalog
   lists it as `autoregressive`. `benchmarks/compare_forecasters.py` compares
   every forecaster on synthetic series.
+- `aberrant.forecast.EnsembleForecaster`: runs several forecasters and
+  combines them per lead with weights learned online by ML-Poly on the
+  absolute error, with `forgetting` for weights that follow a change. The
+  catalog lists it as `ensemble_forecaster`, whose `forecasters` are a list
+  of nested forecasters; `ComponentDependency.many` marks such a parameter.
 - `attribute_one(x)` on `LODA`, `MovingMahalanobisDistance` and
   `HalfSpaceTrees`, alongside `OnlineECOD` and `OnlineCOPOD`: each feature's
   share of the score, without learning. The shares sum to the score minus

@@ -285,13 +285,19 @@ class _ResolvedComponent:
     config: ComponentConfig
     constructor: ConstructorParameters
     params: Mapping[str, object]
-    dependencies: tuple[tuple[str, _ResolvedComponent], ...]
+    dependencies: tuple[
+        tuple[str, _ResolvedComponent | tuple[_ResolvedComponent, ...]], ...
+    ]
     loc: Location
 
     def build(self) -> object:
         params = {name: copy_parameter(value) for name, value in self.params.items()}
         for name, dependency in self.dependencies:
-            params[name] = dependency.build()
+            params[name] = (
+                [item.build() for item in dependency]
+                if isinstance(dependency, tuple)
+                else dependency.build()
+            )
         try:
             return self.constructor.component(**params)
         except (TypeError, ValueError) as error:
@@ -329,19 +335,32 @@ class _Resolution:
         with _at((*loc, "id")):
             constructor = self.constructor(spec)
         params = dict(config.params)
-        dependencies: list[tuple[str, _ResolvedComponent]] = []
+        dependencies: list[
+            tuple[str, _ResolvedComponent | tuple[_ResolvedComponent, ...]]
+        ] = []
         errors: list[ConfigurationError] = []
         for dependency in spec.dependencies:
             value = params.get(dependency.parameter)
+            nested_loc = (*loc, "params", dependency.parameter)
+            if dependency.many and _is_config_list(value):
+                items: list[_ResolvedComponent] = []
+                for index, item in enumerate(cast("Sequence[object]", value)):
+                    try:
+                        items.append(
+                            self._nested(dependency.kind, item, (*nested_loc, index))
+                        )
+                    except ConfigurationError as error:
+                        errors.append(error)
+                if len(items) == len(cast("Sequence[object]", value)):
+                    dependencies.append((dependency.parameter, tuple(items)))
+                    params[dependency.parameter] = [
+                        item.config.as_dict() for item in items
+                    ]
+                continue
             if not isinstance(value, ComponentConfig | Mapping):
                 continue
-            nested_loc = (*loc, "params", dependency.parameter)
             try:
-                with _at(nested_loc):
-                    nested = _as_component_config(value)
-                    with _at(("id",)):
-                        nested_spec = _dependency_spec(dependency.kind, nested.id)
-                resolved_dependency = self.component(nested_spec, nested, nested_loc)
+                resolved_dependency = self._nested(dependency.kind, value, nested_loc)
                 dependencies.append((dependency.parameter, resolved_dependency))
                 params[dependency.parameter] = resolved_dependency.config.as_dict()
             except ConfigurationError as error:
@@ -365,6 +384,25 @@ class _Resolution:
             tuple(dependencies),
             loc,
         )
+
+    def _nested(
+        self, kind: ComponentKind, value: object, loc: Location
+    ) -> _ResolvedComponent:
+        with _at(loc):
+            nested = _as_component_config(
+                cast("ComponentConfig | Mapping[str, object]", value)
+            )
+            with _at(("id",)):
+                nested_spec = _dependency_spec(kind, nested.id)
+        return self.component(nested_spec, nested, loc)
+
+
+def _is_config_list(value: object) -> bool:
+    return (
+        isinstance(value, list | tuple)
+        and bool(value)
+        and all(isinstance(item, ComponentConfig | Mapping) for item in value)
+    )
 
 
 def _model_instance(component: _ResolvedComponent) -> ModelProtocol:

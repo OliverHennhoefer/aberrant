@@ -18,8 +18,8 @@ from aberrant.base.descriptors import (
 from aberrant.exceptions import ConfigurationError, ConfigurationIssue
 
 
-def _dependency_schema(kind: str) -> dict[str, object]:
-    return {
+def _dependency_schema(kind: str, many: bool) -> dict[str, object]:
+    component: dict[str, object] = {
         "type": "object",
         "properties": {
             "id": {"type": "string"},
@@ -29,6 +29,20 @@ def _dependency_schema(kind: str) -> dict[str, object]:
         "additionalProperties": False,
         "x-aberrant-component-kind": kind,
     }
+    if not many:
+        return component
+    return {"type": "array", "items": component, "minItems": 1}
+
+
+def is_component_value(value: object) -> bool:
+    """Whether ``value`` is a nested component config, or a list of them."""
+    if isinstance(value, Mapping):
+        return True
+    return (
+        isinstance(value, list | tuple)
+        and bool(value)
+        and all(isinstance(item, Mapping) for item in value)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +107,7 @@ class ConstructorParameters:
             if name not in values:
                 continue
             value = values[name]
-            if name in dependencies and isinstance(value, Mapping):
+            if name in dependencies and is_component_value(value):
                 resolved[name] = copy_parameter(value)
                 continue
             try:
@@ -141,8 +155,11 @@ class ConstructorParameters:
             )
         return issues or [ConfigurationIssue("invalid_configuration", (), message)]
 
-    def schema(self, dependencies: Mapping[str, str]) -> dict[str, object]:
+    def schema(self, dependencies: Mapping[str, tuple[str, bool]]) -> dict[str, object]:
         return parameters_schema(
             self.parameters,
-            {name: _dependency_schema(kind) for name, kind in dependencies.items()},
+            {
+                name: _dependency_schema(kind, many)
+                for name, (kind, many) in dependencies.items()
+            },
         )
