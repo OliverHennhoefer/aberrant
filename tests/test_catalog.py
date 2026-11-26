@@ -605,6 +605,17 @@ def test_damp_warmup_matches_scoring_readiness(start_index, ready_count) -> None
         ("rename", {"mapping": {"a": "x"}}, ("x", "b", "c")),
         ("passthrough", {}, ("a", "b", "c")),
         ("incremental_pca", {"n_components": 2}, ("component_0", "component_1")),
+        (
+            "lags",
+            {"lags": [2, 1], "features": ["b"]},
+            ("a", "b", "c", "b_lag1", "b_lag2"),
+        ),
+        (
+            "lags",
+            {},
+            ("a", "b", "c", "a_lag1", "b_lag1", "c_lag1"),
+        ),
+        ("deseasonalize", {"season_length": 4}, ("a", "b", "c")),
     ],
 )
 def test_transformers_resolve_output_names_without_learning(
@@ -634,6 +645,7 @@ def test_rename_names_stay_unknown_until_inputs_are_known() -> None:
         ("select", {"features": ["z"]}, "must exist in the input"),
         ("rename", {"mapping": {"z": "x"}}, "must exist in the input"),
         ("rename", {"mapping": {"a": "b"}}, "duplicate features"),
+        ("lags", {"features": ["z"]}, "must exist in the input"),
     ],
 )
 def test_transformers_reject_names_that_cannot_be_resolved(

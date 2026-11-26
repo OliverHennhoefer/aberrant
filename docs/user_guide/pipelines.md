@@ -74,7 +74,7 @@ pipeline = (
     | RandomProjection(n_components=2, seed=17)
     | OnlineIsolationForest(
         n_trees=10,
-        window_size=32,
+        window_size=64,
         seed=17,
     )
 )
@@ -123,17 +123,21 @@ Pipeline compatibility is structural. A custom component does not have to
 inherit `BaseTransformer` or `BaseModel`; it must satisfy exactly one of these
 runtime-checkable protocols:
 
-- `TransformerProtocol`: callable `learn_one` and `transform_one` methods;
-- `ModelProtocol`: callable `learn_one` and `score_one` methods.
+- `TransformerProtocol`: a `readiness` property and callable `learn_one` and
+  `transform_one` methods;
+- `ModelProtocol`: a `readiness` property and callable `learn_one` and
+  `score_one` methods.
 
 An object implementing both shapes is ambiguous and rejected. Plain structural
 objects do not inherit the `|` operator, so construct `Pipeline` explicitly:
 
 ```python
-from aberrant.base import Pipeline
+from aberrant.base import Pipeline, Readiness
 
 
 class SelectCoordinates:
+    readiness = Readiness(True)
+
     def learn_one(self, x: dict[str, float]) -> None:
         return None
 
@@ -142,6 +146,8 @@ class SelectCoordinates:
 
 
 class L1Magnitude:
+    readiness = Readiness(True)
+
     def learn_one(self, x: dict[str, float]) -> None:
         return None
 

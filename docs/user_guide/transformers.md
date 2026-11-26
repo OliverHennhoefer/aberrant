@@ -14,6 +14,12 @@ can precede another transformer or one terminal model in a pipeline.
 | `RollingRobustScaler` | Per-feature recent window, median, and interquartile range | Same keys, median-centered and IQR-scaled values | Exact linearly interpolated quartiles; zero IQR uses `fallback_scale` to preserve deviations; calibration can be frozen |
 | `IncrementalPCA` | Warm-up SVD followed by an incremental uncentered subspace | `component_0` through `component_{n_components - 1}` | Returns zero components until `warm_up` events; inputs are projected around the origin, not around an internally learned mean |
 | `RandomProjection` | One seeded sparse Achlioptas projection matrix | `component_0` through `component_{n_components - 1}` | `learn_one` establishes the schema and matrix once; later calls do not fit distributional parameters |
+| `Lags` | Per-feature last values up to the largest lag | Every input feature plus `{feature}_lag{k}` | Before `k` earlier values, a lag repeats the oldest one |
+| `Difference` | Per-feature last `lag` values | Same keys, change over `lag` events (or percent) | 0 until `lag` earlier values; a percent change from 0 is rejected |
+| `ExponentialSmoother` | Per-feature smoothed level | Same keys, exponentially weighted mean | Starts from the first value; ready after `span` values |
+| `Despike` | Per-feature recent window | Same keys, a spike replaced by the window median | Hampel rule on `threshold` scaled MADs; a flat window replaces nothing |
+| `RollingStatistic` | Per-feature recent window | Same keys, a window statistic | Sum, mean, std, min, max, range, median, quantile, MAD or z-score |
+| `Deseasonalize` | Per-feature level and spread per position of the cycle | Same keys, the value less its position's level | Levels average over `memory` cycles; one odd value moves them at most four spreads |
 
 All built-in transformers reject non-numeric or non-finite values before updating their
 persistent state.
@@ -102,6 +108,35 @@ evicted observations and removes newly introduced feature state after a later
 stage rejects an event. See the standalone
 [frozen/adaptive example](https://github.com/OliverHennhoefer/aberrant/blob/main/examples/rolling_robust_scaler.py).
 
+## Sequences
+
+Point detectors score each event as if it had no past. On a series that
+follows its past, they score the level unless a step before them carries
+time. The sequence transformers do that, one feature at a time: `Lags` adds
+earlier values, `Difference` the change, `ExponentialSmoother` and
+`RollingStatistic` a recent summary, `Despike` removes isolated spikes and
+`Deseasonalize` a repeating cycle. `features=` limits them to some features
+and passes the others through.
+
+```python
+from aberrant.model.forest import OnlineIsolationForest
+from aberrant.transform import Difference, Lags
+
+detector = Difference(features=["load"]) | Lags(lags=[1, 2], features=["load"])
+detector = detector | OnlineIsolationForest(n_trees=10, window_size=64, seed=5)
+
+for t in range(100):
+    event = {"load": float(t % 10), "temperature": 20.0 + t % 3}
+    score = detector.score_one(event)
+    detector.learn_one(event)
+```
+
+Each transformer computes an event's output from the history before it. In a
+pipeline, `learn_one` hands the next stage the output of the event it just
+learned, and scoring sees the same output for the next event, so a model
+learns and scores the same features. A transformer is ready once each feature
+has seen enough values for a final output, such as the largest lag plus one.
+
 ## Projection schemas
 
 `IncrementalPCA` and `RandomProjection` use the exact order supplied through
@@ -143,7 +178,7 @@ from aberrant.transform import StandardScaler
 
 detector = StandardScaler() | OnlineIsolationForest(
     n_trees=10,
-    window_size=32,
+    window_size=64,
     seed=5,
 )
 
