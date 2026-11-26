@@ -10,6 +10,7 @@ from aberrant.drift import ADWIN, CUSUM, KSWIN, PageHinkley
 from aberrant.forecast import (
     AdaptiveRandomForestRegressor,
     AutoRegressive,
+    EchoStateForecaster,
     HoeffdingTreeRegressor,
     HoltWinters,
     KalmanForecaster,
@@ -29,6 +30,7 @@ def _classes() -> list[type]:
         PageHinkley,
         AdaptiveRandomForestRegressor,
         AutoRegressive,
+        EchoStateForecaster,
         HoeffdingTreeRegressor,
         KNNRegressor,
         PassiveAggressiveRegressor,

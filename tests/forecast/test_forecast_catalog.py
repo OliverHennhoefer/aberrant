@@ -20,6 +20,7 @@ from aberrant.exceptions import ConfigurationError, UnknownComponentError
 from aberrant.forecast import (
     AdaptiveRandomForestRegressor,
     AutoRegressive,
+    EchoStateForecaster,
     EnsembleForecaster,
     HoeffdingTreeRegressor,
     HoltWinters,
@@ -66,6 +67,7 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters",
         "kalman_forecaster",
         "autoregressive",
+        "echo_state_forecaster",
         "lag_forecaster",
         "ensemble_forecaster",
         "rls_regressor",
@@ -81,6 +83,7 @@ def test_forecasters_are_cataloged_with_their_constructor_schemas() -> None:
         "holt_winters": HoltWinters,
         "kalman_forecaster": KalmanForecaster,
         "autoregressive": AutoRegressive,
+        "echo_state_forecaster": EchoStateForecaster,
         "lag_forecaster": LagForecaster,
         "ensemble_forecaster": EnsembleForecaster,
         "rls_regressor": RLSRegressor,

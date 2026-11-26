@@ -16,7 +16,7 @@ differ in what they predict from, which shows in how they are called:
 | Learn | `learn_one(y)` | `learn_one(x, y)` |
 | Predict | `forecast_one()` | `predict_one(x)` |
 | Leads | `1..horizon` | `0` |
-| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster` | `RLSRegressor`, `RandomFourierRegressor`, `PassiveAggressiveRegressor`, `SGDRegressor`, `KNNRegressor`, `HoeffdingTreeRegressor`, `AdaptiveRandomForestRegressor` |
+| Included | `SeasonalNaive`, `HoltWinters`, `KalmanForecaster`, `AutoRegressive`, `EnsembleForecaster`, `LagForecaster`, `EchoStateForecaster` | `RLSRegressor`, `RandomFourierRegressor`, `PassiveAggressiveRegressor`, `SGDRegressor`, `KNNRegressor`, `HoeffdingTreeRegressor`, `AdaptiveRandomForestRegressor` |
 
 The target is its own argument, never a key of `x`, so a regressor cannot see
 the value it predicts and transformers in front of it never touch the target.
@@ -108,6 +108,12 @@ threshold autoregression that finds its own regimes.
 `AdaptiveRandomForestRegressor` bags such trees and replaces a tree whose
 errors drift, so it recovers after the dynamics change. All of them
 standardize their covariates and target over their first `warm_up` events.
+
+`EchoStateForecaster` needs no choice of lags: a fixed random recurrent
+reservoir keeps a fading nonlinear memory of the series, and only a linear
+readout from it learns, by recursive least squares. A small `input_scale`
+keeps the reservoir nearly linear and its memory long, which suits seasonal
+series; a larger one makes it more nonlinear.
 `benchmarks/compare_forecasters.py` compares all of them on synthetic series.
 
 ## One value, many forecasts

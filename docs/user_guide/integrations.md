@@ -232,7 +232,7 @@ set or run FAISS-backed and PyTorch-backed detectors in separate processes.
 `residual_detector` scores a target against a forecast. Its `model` is a nested
 forecaster from `FORECASTER_CATALOG`: `seasonal_naive`, `holt_winters`,
 `kalman_forecaster`, `autoregressive`, `ensemble_forecaster`,
-`lag_forecaster`, or one of the regressors `rls_regressor`,
+`lag_forecaster`, `echo_state_forecaster`, or one of the regressors `rls_regressor`,
 `random_fourier_regressor`, `passive_aggressive_regressor`, `sgd_regressor`,
 `knn_regressor`, `hoeffding_tree_regressor` and
 `adaptive_random_forest_regressor`. `lag_forecaster` takes a nested
