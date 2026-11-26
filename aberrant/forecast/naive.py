@@ -5,7 +5,7 @@ from __future__ import annotations
 from aberrant._utils.validation import coerce_event_number, coerce_integer_count
 from aberrant.base.forecast import Forecast
 from aberrant.base.readiness import Readiness
-from aberrant.forecast._arithmetic import LeadErrors, fsum
+from aberrant.forecast._arithmetic import CycleWarmUp, LeadErrors, fsum
 from aberrant.forecast.base import BaseForecaster, check_spread_parameters
 
 
@@ -26,7 +26,10 @@ class SeasonalNaive(BaseForecaster):
     Notes:
         Two cycles warm the forecaster up. The spread of every lead starts at
         the mean absolute seasonal-naive error within the second cycle, then
-        each lead fades towards its own errors. State is
+        each lead fades towards its own errors. ``learn_one(None)`` learns
+        that a value is missing: once warm, the forecaster repeats the value
+        one cycle earlier and reports the spreads of the longer leads its
+        forecasts now are; during warm-up see :class:`HoltWinters`. State is
         O(season_length + horizon^2) and each event after warm-up costs
         O(horizon).
 
@@ -59,13 +62,15 @@ class SeasonalNaive(BaseForecaster):
     @property
     def readiness(self) -> Readiness:
         """Ready once two complete cycles have been learned."""
-        return Readiness.after(self.n_samples_seen, 2 * self.season_length)
+        return Readiness.after(self._learned, 2 * self.season_length)
 
     def _reset_state(self) -> None:
         """Forget every learned value and error."""
         self.n_samples_seen = 0
-        # Warm-up values, then the last cycle as a ring whose oldest value
-        # sits at ``_oldest``.
+        # Events since the first observed value.
+        self._learned = 0
+        self._warmup = CycleWarmUp(self.season_length)
+        # The last cycle as a ring whose oldest value sits at ``_oldest``.
         self._values: list[float] = []
         self._oldest = 0
         self._errors = LeadErrors(self.horizon, self.residual_alpha, self.min_scale)
@@ -80,36 +85,54 @@ class SeasonalNaive(BaseForecaster):
             means.append(replaced if position == oldest else self._values[position])
         return tuple(means)
 
-    def learn_one(self, y: float) -> None:
-        """Learn the next value of the series."""
-        value = coerce_event_number(y, label="y")
+    def learn_one(self, y: float | None) -> None:
+        """Learn the next value of the series, or ``None`` for a missing one."""
+        value = None if y is None else coerce_event_number(y, label="y")
         m = self.season_length
-        if self.n_samples_seen + 1 < 2 * m:
-            self._values.append(value)
-            self.n_samples_seen += 1
-            return
-        if self.n_samples_seen >= 2 * self.season_length:
-            mae = self._errors.updated(value)
-            means = self._means(self._oldest, value)
-            self._errors.publish(mae, means)
-            self._values[self._oldest] = value
+        if self._learned >= 2 * m:
+            if value is None:
+                kept = self._values[self._oldest]
+                self._errors.publish(
+                    list(self._errors.mae),
+                    self._means(self._oldest, kept),
+                    self._errors.stale + 1,
+                )
+            else:
+                mae = self._errors.updated(value)
+                means = self._means(self._oldest, value)
+                self._errors.publish(mae, means, 0)
+                self._values[self._oldest] = value
             self._oldest = (self._oldest + 1) % m
-        else:
-            values = [*self._values, value]
-            warmup = fsum(abs(fsum((values[m + i], -values[i]))) / m for i in range(m))
-            self._errors.publish(
-                self._errors.seeded(warmup),
-                tuple(
-                    values[m + (lead - 1) % m] for lead in range(1, self.horizon + 1)
-                ),
-            )
-            self._values = values[m:]
-            self._oldest = 0
+            self._learned += 1
+        elif value is not None or self._warmup.started:
+            self._warmup.add(value)
+            if self._warmup.complete:
+                try:
+                    self._start()
+                except OverflowError:
+                    self._warmup.discard_last()
+                    raise
+            self._learned += 1
         self.n_samples_seen += 1
+
+    def _start(self) -> None:
+        """Seed the spreads and the first forecast from the two cycles."""
+        m = self.season_length
+        values, observed = self._warmup.values, self._warmup.observed
+        pairs = [i for i in range(m) if observed[i] and observed[m + i]]
+        warmup = fsum(abs(fsum((values[m + i], -values[i]))) for i in pairs)
+        self._errors.publish(
+            self._errors.seeded(warmup / len(pairs) if pairs else 0.0),
+            tuple(values[m + (lead - 1) % m] for lead in range(1, self.horizon + 1)),
+            self._warmup.stale,
+        )
+        self._values = values[m:]
+        self._oldest = 0
+        self._warmup = CycleWarmUp(m)
 
     def forecast_one(self) -> Forecast | None:
         """Forecast leads ``1..horizon``, or ``None`` before two cycles."""
-        if self.n_samples_seen < 2 * self.season_length:
+        if self._learned < 2 * self.season_length:
             return None
         return Forecast(
             origin=self.n_samples_seen,

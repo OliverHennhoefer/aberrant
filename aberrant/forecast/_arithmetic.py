@@ -26,12 +26,12 @@ def blend(previous: float, observed: float, weight: float) -> float:
 
 
 def holt_winters_initialize(
-    values: list[float], season_length: int
+    values: list[float], season_length: int, observed: list[bool]
 ) -> tuple[float, float, list[float], float]:
     """Initialize additive Holt-Winters from exactly two cycles.
 
     Returns level, per-observation trend, seasonal components and the mean
-    absolute error of the fitted warm-up model.
+    absolute error of the fitted warm-up model at the observed values.
     """
     m = season_length
     first_mean = mean(values[:m])
@@ -51,6 +51,7 @@ def holt_winters_initialize(
         for index in range(m)
     ]
     level = fsum((second_mean, trend * midpoint))
+    count = sum(observed)
     errors = (
         abs(
             fsum(
@@ -62,10 +63,61 @@ def holt_winters_initialize(
                 )
             )
         )
-        / (2 * m)
+        / count
         for index, value in enumerate(values)
+        if observed[index]
     )
     return level, trend, seasonal, fsum(errors)
+
+
+class CycleWarmUp:
+    """The first two cycles of a seasonal forecaster, with gaps filled.
+
+    A missing value takes the value one cycle earlier, or in the first cycle
+    the last observed value. Missing values before the first observed one do
+    not start the series.
+    """
+
+    def __init__(self, season_length: int) -> None:
+        self.season_length = season_length
+        self.values: list[float] = []
+        self.observed: list[bool] = []
+
+    @property
+    def started(self) -> bool:
+        """Whether an observed value has started the series."""
+        return bool(self.values)
+
+    @property
+    def complete(self) -> bool:
+        """Whether both cycles are filled."""
+        return len(self.values) == 2 * self.season_length
+
+    @property
+    def stale(self) -> int:
+        """Missing values since the last observed one."""
+        count = 0
+        for observed in reversed(self.observed):
+            if observed:
+                break
+            count += 1
+        return count
+
+    def discard_last(self) -> None:
+        """Undo the last ``add``."""
+        self.values.pop()
+        self.observed.pop()
+
+    def add(self, value: float | None) -> None:
+        """Add the next value of a started series, or fill a missing one."""
+        if value is None:
+            m = self.season_length
+            fill = self.values[-m] if len(self.values) >= m else self.values[-1]
+            self.values.append(fill)
+            self.observed.append(False)
+        else:
+            self.values.append(value)
+            self.observed.append(True)
 
 
 class LeadErrors:
@@ -73,7 +125,11 @@ class LeadErrors:
 
     Every value that arrives was forecast once at each lead ``h``, by the
     forecast issued ``h`` events earlier. Each lead keeps its own faded mean
-    absolute error, since errors grow with the lead.
+    absolute error, since errors grow with the lead. A forecast issued after
+    a missing value repeats the one issued after the last observed value, so
+    only forecasts issued after observed values are scored, and a lead ``h``
+    forecast ``s`` missing values on reports the spread of lead ``s + h``,
+    or of the longest lead beyond the horizon.
     """
 
     def __init__(self, horizon: int, residual_alpha: float, min_scale: float) -> None:
@@ -81,12 +137,18 @@ class LeadErrors:
         self.residual_alpha = residual_alpha
         self.min_scale = min_scale
         self.issued: deque[tuple[float, ...]] = deque(maxlen=horizon)
+        self.observed: deque[bool] = deque(maxlen=horizon)
         self.mae: list[float] = []
+        self.stale = 0
 
     @property
     def scales(self) -> tuple[float, ...]:
         """Faded MAE per lead, floored at ``min_scale``."""
-        return tuple(max(self.min_scale, value) for value in self.mae)
+        last = self.horizon - 1
+        return tuple(
+            max(self.min_scale, self.mae[min(self.stale + lead, last)])
+            for lead in range(self.horizon)
+        )
 
     def seeded(self, value: float) -> list[float]:
         """Every lead's MAE set to one fitted warm-up error."""
@@ -96,12 +158,22 @@ class LeadErrors:
         """MAE per lead after learning ``y``, without changing state."""
         mae = list(self.mae)
         for lead in range(1, min(self.horizon, len(self.issued)) + 1):
+            if not self.observed[-lead]:
+                continue
             forecast = self.issued[-lead][lead - 1]
             error = abs(fsum((y, -forecast)))
             mae[lead - 1] = blend(mae[lead - 1], error, self.residual_alpha)
         return mae
 
-    def publish(self, mae: list[float], forecast: tuple[float, ...]) -> None:
-        """Commit new errors and the forecast issued at the new origin."""
+    def publish(
+        self, mae: list[float], forecast: tuple[float, ...], stale: int
+    ) -> None:
+        """Commit new errors and the forecast issued at the new origin.
+
+        ``stale`` counts the missing values up to the new origin, 0 when its
+        value was observed.
+        """
         self.mae = mae
         self.issued.append(forecast)
+        self.observed.append(stale == 0)
+        self.stale = stale

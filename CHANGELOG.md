@@ -91,6 +91,15 @@ Semantic Versioning.
 
 ### Changed
 
+- **Breaking:** `ForecasterProtocol.learn_one` takes `None` for a missing
+  value, and every forecaster accepts it. `SeasonalNaive` and `HoltWinters`
+  advance without a correction, report the spread of the longer lead each
+  forecast becomes, and score only forecasts issued after observed values.
+  During their warm-up a gap takes the value one cycle earlier (in the first
+  cycle the last observed value), and missing values before the first
+  observed one do not start the series. A custom forecaster must accept
+  `None` too.
+
 - `XStream` keeps the projected points of its two windows while they take
   no more memory than one count-min sketch, and its pickles then store those
   points instead of the sketches, which loading counts again. With the

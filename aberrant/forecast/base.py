@@ -30,7 +30,8 @@ class BaseForecaster(Parameterized, abc.ABC):
     ``forecast_one()`` forecasts leads ``1..horizon`` from the values learned
     so far, and ``learn_one(y)`` learns the next value. Each learned value
     advances the series by one step: there are no timestamps, so resample
-    irregular or missing readings before learning them.
+    irregular readings before learning them, and learn ``None`` for a step
+    whose value is missing.
     """
 
     def __init__(self, *, horizon: int) -> None:
@@ -42,8 +43,8 @@ class BaseForecaster(Parameterized, abc.ABC):
         """Whether ``forecast_one`` returns a forecast."""
 
     @abc.abstractmethod
-    def learn_one(self, y: float) -> None:
-        """Learn the next value of the series."""
+    def learn_one(self, y: float | None) -> None:
+        """Learn the next value of the series, or ``None`` for a missing one."""
 
     @abc.abstractmethod
     def forecast_one(self) -> Forecast | None:
