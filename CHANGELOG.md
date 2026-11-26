@@ -14,11 +14,15 @@ Semantic Versioning.
   `Difference` the change or percent change over `lag` events,
   `ExponentialSmoother` an exponentially weighted mean, `Despike` replaces
   spikes by the window median (Hampel), `RollingStatistic` a window's sum,
-  mean, deviation, extremes, median, quantile, MAD or z-score, and
-  `Deseasonalize` subtracts a robust level per position of the cycle. In a
-  pipeline, learning and scoring see the same output for an event. The
-  catalog lists them as `lags`, `difference`, `exponential_smoother`,
-  `despike`, `rolling_statistic` and `deseasonalize`.
+  mean, deviation, extremes, median, quantile, IQR, MAD, slope, z-score,
+  robust z-score, rank, RMS, skewness or kurtosis, and `Deseasonalize`
+  subtracts a robust level per position of the cycle. In a pipeline,
+  learning and scoring see the same output for an event. The catalog lists
+  them as `lags`, `difference`, `exponential_smoother`, `despike`,
+  `rolling_statistic` and `deseasonalize`. Window deviations avoid squares
+  that overflow or vanish, and windows keep a sorted copy, so an event costs
+  O(W). `initial_state`, `step`, `valid_state` and `lead` let an
+  application keep each feature's state itself.
 - `aberrant.evaluate.ForecastEvaluator`: forecast-before-learn evaluation of
   a forecaster. Every observed value is scored once at each lead, and each
   lead reports MAE, RMSE, bias, MASE against the seasonal naive forecast,

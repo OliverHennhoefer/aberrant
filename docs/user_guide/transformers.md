@@ -18,7 +18,7 @@ can precede another transformer or one terminal model in a pipeline.
 | `Difference` | Per-feature last `lag` values | Same keys, change over `lag` events (or percent) | 0 until `lag` earlier values; a percent change from 0 is rejected |
 | `ExponentialSmoother` | Per-feature smoothed level | Same keys, exponentially weighted mean | Starts from the first value; ready after `span` values |
 | `Despike` | Per-feature recent window | Same keys, a spike replaced by the window median | Hampel rule on `threshold` scaled MADs; a flat window replaces nothing |
-| `RollingStatistic` | Per-feature recent window | Same keys, a window statistic | Sum, mean, std, min, max, range, median, quantile, MAD or z-score |
+| `RollingStatistic` | Per-feature recent window | Same keys, a window statistic | Location, spread, quantiles, slope, z-scores, rank, RMS or shape |
 | `Deseasonalize` | Per-feature level and spread per position of the cycle | Same keys, the value less its position's level | Levels average over `memory` cycles; one odd value moves them at most four spreads |
 
 All built-in transformers reject non-numeric or non-finite values before updating their
@@ -136,6 +136,24 @@ pipeline, `learn_one` hands the next stage the output of the event it just
 learned, and scoring sees the same output for the next event, so a model
 learns and scores the same features. A transformer is ready once each feature
 has seen enough values for a final output, such as the largest lag plus one.
+
+An application that keeps its own state, one per feature, uses the same
+computation without the transformer holding any: `initial_state()` gives a
+feature's empty state, `step(state, value)` returns the next state and the
+value's outputs, and `valid_state(state)` checks a restored one. A state is a
+tuple of numbers and arrays of doubles that `step` never changes, so a caller
+can stage the states of an event and keep or drop them as one. `lead` is how many earlier values a feature
+needs before its output is final.
+
+```python
+from aberrant.transform import RollingStatistic
+
+slope = RollingStatistic(window_size=3, statistic="slope")
+state = slope.initial_state()
+for value in [1.0, 2.0, 4.0]:
+    state, (output,) = slope.step(state, value)
+assert output == 1.5 and slope.valid_state(state)
+```
 
 ## Projection schemas
 

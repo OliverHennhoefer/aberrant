@@ -3,22 +3,43 @@
 from __future__ import annotations
 
 import math
+from array import array
+from bisect import bisect_left, bisect_right, insort
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
-from aberrant._utils.statistics import linear_quantile
 from aberrant._utils.validation import coerce_feature_values, coerce_finite_number
 from aberrant.base.readiness import Readiness
 from aberrant.base.transformer import BaseTransformer
 from aberrant.exceptions import ValidationError
 
 State = tuple[Any, ...]
+Window: TypeAlias = "array[float]"
 ChangeKind = Literal["difference", "percent"]
 Statistic = Literal[
-    "sum", "mean", "std", "min", "max", "range", "median", "quantile", "mad", "zscore"
+    "sum",
+    "mean",
+    "std",
+    "min",
+    "max",
+    "range",
+    "median",
+    "quantile",
+    "iqr",
+    "mad",
+    "slope",
+    "zscore",
+    "robust_zscore",
+    "rank",
+    "rms",
+    "skewness",
+    "kurtosis",
 ]
+# Scales a median absolute deviation to the standard deviation of normal data.
 _MAD_SCALE = 1.4826
+# Scales a mean absolute deviation to the standard deviation of normal data.
+_MEAN_DEVIATION_SCALE = math.sqrt(math.pi / 2)
 
 
 def _positive_int(value: object, name: str, minimum: int = 1) -> int:
@@ -47,20 +68,62 @@ def _features(features: Sequence[str] | None) -> list[str] | None:
     return names
 
 
-def _finite(value: float, name: str) -> float:
-    if not math.isfinite(value):
-        raise ValidationError(f"Feature '{name}' result must be finite")
-    return value
+def _floats(items: object, limit: int, exact: bool = False) -> bool:
+    """Whether items is a tuple of at most (or exactly) limit finite floats."""
+    return (
+        isinstance(items, tuple)
+        and (len(items) == limit if exact else len(items) <= limit)
+        and all(type(item) is float and math.isfinite(item) for item in items)
+    )
+
+
+def _doubles(items: object, limit: int) -> bool:
+    """Whether items is an array of at most limit finite doubles."""
+    return (
+        isinstance(items, array)
+        and items.typecode == "d"
+        and len(items) <= limit
+        and all(math.isfinite(item) for item in items)
+    )
+
+
+def _window(state: object, size: int, ordered: bool) -> bool:
+    """Whether state holds a window, and its sorted copy when ordered."""
+    if not isinstance(state, tuple) or len(state) != 1 + ordered:
+        return False
+    return _doubles(state[0], size) and (
+        not ordered or (_doubles(state[1], size) and list(state[1]) == sorted(state[0]))
+    )
+
+
+def _pushed(window: Window, value: float, size: int) -> Window:
+    """A new window with value appended, dropping the oldest value once full."""
+    following = window[1:] if len(window) == size else window[:]
+    following.append(value)
+    return following
+
+
+def _reordered(ordered: Window, leaving: float | None, value: float) -> Window:
+    """A new sorted window after leaving goes and value arrives."""
+    following = ordered[:]
+    if leaving is not None:
+        del following[bisect_left(following, leaving)]
+    insort(following, value)
+    return following
 
 
 class _SequenceTransformer(BaseTransformer):
     """Shared state handling of the sequence transformers.
 
-    Each selected feature keeps its own immutable state. ``learn_one``
-    computes the event's output from the state before the event and then
-    advances it. ``transform_one`` of the event just learned returns that
-    output, as a pipeline's post-update pass needs; any other event gets the
-    output it would get as the next one, without learning.
+    Each selected feature keeps its own immutable state, which ``step``
+    advances by one value. ``learn_one`` computes the event's output from the
+    state before the event and then advances it. ``transform_one`` of the
+    event just learned returns that output, as a pipeline's post-update pass
+    needs; any other event gets the output it would get as the next one,
+    without learning.
+
+    ``initial_state``, ``step`` and ``valid_state`` let an application keep
+    the states itself, one per feature; they never change the transformer.
     """
 
     _keeps_input = False
@@ -76,8 +139,28 @@ class _SequenceTransformer(BaseTransformer):
         """Earlier values a feature needs before its output is final."""
         raise NotImplementedError
 
-    def _initial(self) -> State:
+    def initial_state(self) -> State:
+        """The state of a feature that has seen no value."""
         return ()
+
+    def step(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
+        """Advance one feature's state by a finite float.
+
+        Returns the next state and the value's outputs, one per output name;
+        ``state`` itself never changes. Raises ValidationError when an output
+        is undefined or not finite.
+        """
+        try:
+            following, outputs = self._advance(state, value)
+        except OverflowError:
+            raise ValidationError("The result must be finite") from None
+        if not all(math.isfinite(output) for output in outputs):
+            raise ValidationError("The result must be finite")
+        return following, outputs
+
+    def valid_state(self, state: object) -> bool:
+        """Whether a restored state has the shape this transformer's states have."""
+        return state == ()
 
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
         raise NotImplementedError
@@ -111,8 +194,13 @@ class _SequenceTransformer(BaseTransformer):
             if key not in selected:
                 result[key] = value
                 continue
-            state = self._states.get(key, self._initial())
-            states[key], outputs = self._advance(state, value)
+            state = self._states.get(key)
+            try:
+                states[key], outputs = self.step(
+                    self.initial_state() if state is None else state, value
+                )
+            except ValidationError as error:
+                raise ValidationError(f"Feature '{key}': {error}") from None
             named = list(zip(self._names(key), outputs, strict=True))
             if self._keeps_input:
                 result[key] = value
@@ -123,9 +211,6 @@ class _SequenceTransformer(BaseTransformer):
             if name in result:
                 raise ValidationError(f"Feature '{name}' already exists")
             result[name] = output
-        for name in states:
-            for output_name in self._names(name):
-                _finite(result[output_name], output_name)
         return result, states
 
     @contextmanager
@@ -192,12 +277,19 @@ class Lags(_SequenceTransformer):
     def _names(self, feature: str) -> tuple[str, ...]:
         return tuple(f"{feature}_lag{lag}" for lag in self.lags)
 
+    def initial_state(self) -> State:
+        return (array("d"),)
+
+    def valid_state(self, state: object) -> bool:
+        return _window(state, self.lags[-1], ordered=False)
+
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
+        (window,) = state
         outputs = tuple(
-            state[-lag] if len(state) >= lag else state[0] if state else value
+            window[-lag] if len(window) >= lag else window[0] if window else value
             for lag in self.lags
         )
-        return (*state, value)[-self.lags[-1] :], outputs
+        return (_pushed(window, value, self.lags[-1]),), outputs
 
 
 class Difference(_SequenceTransformer):
@@ -205,7 +297,8 @@ class Difference(_SequenceTransformer):
 
     ``kind="difference"`` gives ``x[t] - x[t - lag]`` and ``"percent"`` gives
     ``100 (x[t] - x[t - lag]) / |x[t - lag]|``, which rejects a reference of
-    0. Until a feature has ``lag`` earlier values, its change is 0.
+    0. Until a feature has ``lag`` earlier values, its change is 0. ``Lags``
+    gives the value ``lag`` events back itself.
 
     Args:
         lag: Events between the value and its reference.
@@ -230,11 +323,18 @@ class Difference(_SequenceTransformer):
     def lead(self) -> int:
         return self.lag
 
+    def initial_state(self) -> State:
+        return (array("d"),)
+
+    def valid_state(self, state: object) -> bool:
+        return _window(state, self.lag, ordered=False)
+
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
-        following = (*state, value)[-self.lag :]
-        if len(state) < self.lag:
+        (window,) = state
+        following = (_pushed(window, value, self.lag),)
+        if len(window) < self.lag:
             return following, (0.0,)
-        reference = state[-self.lag]
+        reference = window[0]
         if self.kind == "difference":
             return following, (value - reference,)
         if reference == 0:
@@ -264,6 +364,9 @@ class ExponentialSmoother(_SequenceTransformer):
     def lead(self) -> int:
         return self.span - 1
 
+    def valid_state(self, state: object) -> bool:
+        return _floats(state, 1)
+
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
         if not state:
             return (value,), (value,)
@@ -280,7 +383,7 @@ class Despike(_SequenceTransformer):
     replaces nothing, and an excursion longer than half the window moves the
     median and passes. A window of fewer than 3 values replaces nothing.
 
-    Each event costs O(F W log W) for F selected features and window W.
+    Each event costs O(F W) for F selected features and window W.
 
     Args:
         window_size: Values in the window, at least 3.
@@ -303,34 +406,55 @@ class Despike(_SequenceTransformer):
     def lead(self) -> int:
         return self.window_size - 1
 
+    def initial_state(self) -> State:
+        return (array("d"), array("d"))
+
+    def valid_state(self, state: object) -> bool:
+        return _window(state, self.window_size, ordered=True)
+
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
-        window = (*state, value)[-self.window_size :]
+        values, ordered = state
+        leaving = values[0] if len(values) == self.window_size else None
+        window = _pushed(values, value, self.window_size)
+        ordered = _reordered(ordered, leaving, value)
         if len(window) < 3:
-            return window, (value,)
-        ordered = sorted(window)
-        median = linear_quantile(ordered, 0.5)
-        spread = linear_quantile(sorted(abs(item - median) for item in window), 0.5)
+            return (window, ordered), (value,)
+        median = _quantile(ordered, 0.5)
+        spread = _median_deviation(ordered, median)
         spike = (
             spread > 0 and abs(value - median) > self.threshold * _MAD_SCALE * spread
         )
-        return window, (median if spike else value,)
+        return (window, ordered), (median if spike else value,)
 
 
 class RollingStatistic(_SequenceTransformer):
     """Replace each selected feature by a statistic of its recent values.
 
     The window holds the last ``window_size`` values, the current one
-    included, and starts shorter. ``std`` is the sample deviation (0 for one
-    value), ``mad`` the unscaled median absolute deviation, ``quantile``
-    interpolates linearly at ``quantile`` and ``zscore`` is the value's
-    distance from the window mean in deviations (0 in a flat window).
+    included, and starts shorter. Quantiles interpolate linearly.
 
-    Each event costs O(F W log W) for F selected features and window W.
+    - ``sum``, ``mean``, ``min``, ``max``, ``range`` and ``median``.
+    - ``std``: the sample deviation, 0 for one value.
+    - ``quantile`` at probability ``quantile``; ``iqr`` the interquartile
+      range; ``mad`` the unscaled median absolute deviation.
+    - ``slope``: the least-squares change per event.
+    - ``zscore``: the value's distance from the window mean in sample
+      deviations. ``robust_zscore``: its distance from the median in scaled
+      MADs, or in scaled mean absolute deviations when more than half the
+      window holds one value. Both are 0 in a flat window.
+    - ``rank``: the value's place among the window's values, from 0 for the
+      lowest to 1 for the highest, ties counting half; 0.5 for one value.
+    - ``rms``: the root mean square.
+    - ``skewness`` and ``kurtosis`` (excess over a normal distribution), 0 in
+      a flat window.
+
+    Deviations are taken without squares that overflow or vanish, so a window
+    of large values that differ little keeps its spread. Each event costs
+    O(F W) for F selected features and window W.
 
     Args:
         window_size: Values in the window.
-        statistic: One of ``sum``, ``mean``, ``std``, ``min``, ``max``,
-            ``range``, ``median``, ``quantile``, ``mad`` and ``zscore``.
+        statistic: The statistic, as listed above.
         quantile: Probability in [0, 1] for ``statistic="quantile"``.
         features: Features to replace; ``None`` uses every feature.
     """
@@ -357,49 +481,185 @@ class RollingStatistic(_SequenceTransformer):
     def lead(self) -> int:
         return self.window_size - 1
 
+    @property
+    def _ordered(self) -> bool:
+        return self.statistic in _ORDERED
+
+    def initial_state(self) -> State:
+        return (array("d"), array("d")) if self._ordered else (array("d"),)
+
+    def valid_state(self, state: object) -> bool:
+        return _window(state, self.window_size, self._ordered)
+
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
-        window: tuple[float, ...] = (*state, value)[-self.window_size :]
-        return window, (_STATISTIC[self.statistic](window, self.quantile),)
+        values = state[0]
+        window = _pushed(values, value, self.window_size)
+        if not self._ordered:
+            result = _STATISTIC[self.statistic](window, window, self.quantile)
+            return (window,), (result,)
+        leaving = values[0] if len(values) == self.window_size else None
+        ordered = _reordered(state[1], leaving, value)
+        result = _STATISTIC[self.statistic](window, ordered, self.quantile)
+        return (window, ordered), (result,)
 
 
-def _mean(window: tuple[float, ...], _quantile: float) -> float:
-    return math.fsum(window) / len(window)
+def _quantile(ordered: Window, probability: float) -> float:
+    position = (len(ordered) - 1) * probability
+    low = int(position)
+    weight = position - low
+    if weight == 0:
+        return ordered[low]
+    return (1 - weight) * ordered[low] + weight * ordered[low + 1]
 
 
-def _std(window: tuple[float, ...], _quantile: float) -> float:
+def _deviation(ordered: Window, centre: float, rank: int) -> float:
+    """The rank-th smallest distance from centre, counted from 1.
+
+    In a sorted window the rank values nearest to centre lie side by side, so
+    a binary search finds where they start and nothing is sorted again.
+    """
+    low, high = 0, len(ordered) - rank
+    while low < high:
+        middle = (low + high) // 2
+        if centre - ordered[middle] > ordered[middle + rank] - centre:
+            low = middle + 1
+        else:
+            high = middle
+    return max(centre - ordered[low], ordered[low + rank - 1] - centre)
+
+
+def _median_deviation(ordered: Window, centre: float) -> float:
+    """The median distance from centre."""
+    size = len(ordered)
+    middle = _deviation(ordered, centre, size // 2 + 1)
+    if size % 2:
+        return middle
+    return 0.5 * _deviation(ordered, centre, size // 2) + 0.5 * middle
+
+
+def _deviations(window: Window) -> list[float]:
+    """Each value's distance from the mean of the window; 0 in a flat window.
+
+    The mean of large values that differ little rounds to a value next to
+    them, which would move every distance by as much as the values differ.
+    Values on one side of 0 are therefore measured from the smallest one
+    first, and the mean is taken of what remains.
+    """
+    low, high = min(window), max(window)
+    if low == high:
+        return [0.0] * len(window)
+    start = low if low > 0 or high < 0 else 0.0
+    offsets = [item - start for item in window]
+    mean = math.fsum(offsets) / len(offsets)
+    return [item - mean for item in offsets]
+
+
+def _squares(values: Sequence[float]) -> float:
+    return math.fsum(item * item for item in values)
+
+
+def _root_mean_square(values: Sequence[float], divisor: int) -> float:
+    """The root of the sum of squares over divisor, without overflow."""
+    largest = max(map(abs, values))
+    if largest == 0:
+        return 0.0
+    return largest * math.sqrt(_squares([item / largest for item in values]) / divisor)
+
+
+def _std(window: Window, _ordered: Window, _q: float) -> float:
     if len(window) < 2:
         return 0.0
-    mean = _mean(window, _quantile)
-    return math.sqrt(
-        math.fsum((item - mean) ** 2 for item in window) / (len(window) - 1)
-    )
+    return _root_mean_square(_deviations(window), len(window) - 1)
 
 
-def _zscore(window: tuple[float, ...], _quantile: float) -> float:
-    deviation = _std(window, _quantile)
-    return (window[-1] - _mean(window, _quantile)) / deviation if deviation > 0 else 0.0
+def _rms(window: Window, _ordered: Window, _q: float) -> float:
+    # The root lies between the smallest and the largest magnitude, which
+    # rounding alone may not keep.
+    return max(_root_mean_square(window, len(window)), min(map(abs, window)))
 
 
-def _median(window: tuple[float, ...], _quantile: float) -> float:
-    return linear_quantile(sorted(window), 0.5)
+def _slope(window: Window, _ordered: Window, _q: float) -> float:
+    size = len(window)
+    if size < 2:
+        return 0.0
+    # Positions centred on the window sum to zero, so the mean drops out and
+    # the deviations from it keep the products small.
+    centre = (size - 1) / 2
+    spread = size * (size * size - 1) / 12
+    deviations = _deviations(window)
+    return math.fsum((i - centre) * item for i, item in enumerate(deviations)) / spread
 
 
-def _mad(window: tuple[float, ...], _quantile: float) -> float:
-    median = _median(window, _quantile)
-    return linear_quantile(sorted(abs(item - median) for item in window), 0.5)
+def _rank(window: Window, ordered: Window, _q: float) -> float:
+    if len(window) < 2:
+        return 0.5
+    below = bisect_left(ordered, window[-1])
+    equal = bisect_right(ordered, window[-1]) - below
+    return (below + (equal - 1) / 2) / (len(window) - 1)
 
 
-_STATISTIC: dict[str, Callable[[tuple[float, ...], float], float]] = {
-    "sum": lambda window, _quantile: math.fsum(window),
-    "mean": _mean,
+def _robust_zscore(window: Window, ordered: Window, _q: float) -> float:
+    median = _quantile(ordered, 0.5)
+    spread = _MAD_SCALE * _median_deviation(ordered, median)
+    if spread == 0:
+        mean_deviation = math.fsum(abs(item - median) for item in window)
+        spread = _MEAN_DEVIATION_SCALE * mean_deviation / len(window)
+    return (window[-1] - median) / spread if spread else 0.0
+
+
+def _moment(statistic: str) -> Callable[[Window, Window, float], float]:
+    """zscore, skewness or excess kurtosis, within the values they can take."""
+
+    def moment(window: Window, _ordered: Window, _q: float) -> float:
+        size = len(window)
+        deviations = _deviations(window)
+        largest = max(map(abs, deviations))
+        if largest == 0:
+            return 0.0
+        unit = [item / largest for item in deviations]
+        second = _squares(unit) / size
+        if statistic == "zscore":
+            # Samuelson: no value lies more than (n - 1) / sqrt(n) deviations out.
+            score = unit[-1] / math.sqrt(second * size / (size - 1))
+            limit = (size - 1) / math.sqrt(size)
+            return min(max(score, -limit), limit)
+        if statistic == "skewness":
+            third = math.fsum(item * item * item for item in unit) / size
+            limit = (size - 2) / math.sqrt(size - 1)
+            return min(max(third / math.pow(second, 1.5), -limit), limit)
+        fourth = _squares([item * item for item in unit]) / size
+        high = max(size - 5 + 1 / (size - 1), 0.0)
+        return min(max(fourth / (second * second) - 3, -2.0), high)
+
+    return moment
+
+
+_ORDERED = frozenset(
+    {"median", "min", "max", "range", "quantile", "iqr", "mad", "robust_zscore"}
+    | {"rank"}
+)
+_STATISTIC: dict[str, Callable[[Window, Window, float], float]] = {
+    "sum": lambda window, _ordered, _q: math.fsum(window),
+    "mean": lambda window, _ordered, _q: math.fsum(window) / len(window),
     "std": _std,
-    "min": lambda window, _quantile: min(window),
-    "max": lambda window, _quantile: max(window),
-    "range": lambda window, _quantile: max(window) - min(window),
-    "median": _median,
-    "quantile": lambda window, quantile: linear_quantile(sorted(window), quantile),
-    "mad": _mad,
-    "zscore": _zscore,
+    "min": lambda _window, ordered, _q: ordered[0],
+    "max": lambda _window, ordered, _q: ordered[-1],
+    "range": lambda _window, ordered, _q: ordered[-1] - ordered[0],
+    "median": lambda _window, ordered, _q: _quantile(ordered, 0.5),
+    "quantile": lambda _window, ordered, q: _quantile(ordered, q),
+    "iqr": lambda _window, ordered, _q: (
+        _quantile(ordered, 0.75) - _quantile(ordered, 0.25)
+    ),
+    "mad": lambda _window, ordered, _q: _median_deviation(
+        ordered, _quantile(ordered, 0.5)
+    ),
+    "slope": _slope,
+    "zscore": _moment("zscore"),
+    "robust_zscore": _robust_zscore,
+    "rank": _rank,
+    "rms": _rms,
+    "skewness": _moment("skewness"),
+    "kurtosis": _moment("kurtosis"),
 }
 
 
@@ -437,9 +697,23 @@ class Deseasonalize(_SequenceTransformer):
     def lead(self) -> int:
         return self.season_length
 
-    def _initial(self) -> State:
+    def initial_state(self) -> State:
         empty = (0.0,) * self.season_length
         return (0, empty, empty, (0,) * self.season_length)
+
+    def valid_state(self, state: object) -> bool:
+        m = self.season_length
+        if not isinstance(state, tuple) or len(state) != 4:
+            return False
+        count, levels, spreads, counts = state
+        return (
+            type(count) is int
+            and count >= 0
+            and _floats(levels, m, exact=True)
+            and _floats(spreads, m, exact=True)
+            and all(spread >= 0 for spread in spreads)
+            and counts == tuple((count - p + m - 1) // m for p in range(m))
+        )
 
     def _advance(self, state: State, value: float) -> tuple[State, tuple[float, ...]]:
         count, levels, spreads, counts = state
