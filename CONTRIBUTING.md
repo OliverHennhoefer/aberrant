@@ -70,9 +70,11 @@ uv run python benchmarks/detectors.py --cases loda --against HEAD \
 each case on both back to back, so both halves of a pair see the same
 machine load; each round times a case for at least `--min-seconds` (0.25 s).
 A timing counts as faster or slower only when a distribution-free 95%
-interval of the median ratio excludes no change, the median moves by at least `--min-gain`
-(5%) for speed or `--latency-tolerance` (25%) for p99 latency, the noisier
-of the two, and as many fresh rounds agree on their own. Sizes count as
+interval of the median ratio excludes no change and the median moves by at
+least `--min-gain` (5%) for speed or `--latency-tolerance` (25%) for p99
+latency, the noisier of the two. `--rounds` (7) sets how many rounds run; a
+case whose median moved past its threshold gets as many again, and its
+verdict and the interval shown both come from all of its rounds. Sizes count as
 changed beyond both 2% and 4 KiB; quality counts any change in ROC-AUC or
 PR-AUC; readiness counts any change in the event at which the model becomes
 ready. `--pareto` exits 0 when some axis got better and none got worse, 1
@@ -88,8 +90,11 @@ spell the trade-off out in the pull request, with the numbers, for review.
 module can move every detector that imports it, so run the final check
 without `--cases` (about 25 minutes for the whole catalog).
 `--require-same-scores` fails when any score sequence changed, which a speed
-or memory change must not do; the exact score fixtures in
-`tests/data/score_sequences/` check the same at the unit level. Detectors
+or memory change must not do; the score fixtures in
+`tests/data/score_sequences/` check the same at the unit level. The gate
+measures the benchmark's parameters only: it is not a correctness check, so
+a kept change also needs the test suite, including inputs the benchmark never
+reaches, such as a very large `window_size`. Detectors
 whose parameters the benchmark overrides also run at their defaults
 (`<id>@defaults`), so a gain in one regime cannot hide a loss in the other.
 
