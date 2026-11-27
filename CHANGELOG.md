@@ -444,6 +444,10 @@ Semantic Versioning.
   comparisons with river for `HalfSpaceTrees`, `ADWIN` and `PageHinkley`.
   Pull requests skip them.
 - The FAISS CI job runs the kNN quality case, which no job ran before.
+- `docs/scripts/stream_figure.py` and the `stream-light.svg` and
+  `stream-dark.svg` figures it rendered. The README shows the discord figure
+  instead, and nothing else used them. Unused data generators and assertion
+  helpers left `tests/utils.py`.
 
 ### Removed
 
