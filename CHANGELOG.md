@@ -427,8 +427,6 @@ Semantic Versioning.
   test that passes fails the run.
 - `LocalOutlierFactor` is checked score by score against scikit-learn's
   novelty LOF over a sliding window, for both metrics.
-- The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
-  skips without FAISS and so ran in no job.
 - Integration tests check detection quality with floors instead of PR-AUC
   ranges. Every tabular detector runs from one table on 5,000 SHUTTLE rows
   (387 anomalies instead of about 40), and must keep ROC-AUC and PR-AUC within
@@ -444,6 +442,9 @@ Semantic Versioning.
   comparisons with river for `HalfSpaceTrees`, `ADWIN` and `PageHinkley`.
   Pull requests skip them.
 - The FAISS CI job runs the kNN quality case, which no job ran before.
+- `tests/utils.py` keeps only `DataGenerator.generate_streaming_data`, the one
+  helper a test uses, and the `benchmark` dependency group drops
+  `pytest-benchmark`, which no test used.
 
 ### Removed
 

@@ -90,7 +90,6 @@ notebooks = [
 ]
 benchmark = [
     "river>=0.22.0,<1.0.0",
-    "pytest-benchmark>=5.3.1,<6.0.0",
 ]
 
 [project.urls]
