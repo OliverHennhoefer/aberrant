@@ -21,6 +21,29 @@ _DISTANCE_TOLERANCE = 1e-9
 _CLOSE_ABSOLUTE = 1e-300
 
 
+class _Rows:
+    """Rows that arrive at the end and leave from the front, without copying."""
+
+    __slots__ = ("buffer", "end", "start")
+
+    def __init__(self, rows: np.ndarray) -> None:
+        self.buffer = rows
+        self.start = 0
+        self.end = len(rows)
+
+    def append(self, row: np.ndarray) -> None:
+        if self.end == len(self.buffer):
+            live = self.buffer[self.start : self.end]
+            grown = np.empty((max(2 * len(live), 8), self.buffer.shape[1]))
+            grown[: len(live)] = live
+            self.buffer, self.start, self.end = grown, 0, len(live)
+        self.buffer[self.end] = row
+        self.end += 1
+
+    def pop_oldest(self) -> None:
+        self.start += 1
+
+
 class CellNeighborhoodDetector(BaseModel):
     """
     Bounded cell-neighborhood streaming outlier detector.
@@ -64,7 +87,7 @@ class CellNeighborhoodDetector(BaseModel):
         Original implementation: https://github.com/kaist-dmlab/NETS
     """
 
-    _transient = ("_cell_arrays",)
+    _transient = ("_cell_rows",)
 
     def __init__(
         self,
@@ -111,8 +134,9 @@ class CellNeighborhoodDetector(BaseModel):
         self._cell_members: dict[_Cell, dict[int, np.ndarray]] = {}
         self._neighbor_cache: dict[_Cell, tuple[_Cell, ...]] = {}
         self._neighbor_offsets_cache: dict[int, tuple[_Cell, ...]] = {}
-        # Each cell's members stacked as rows, rebuilt after the cell changes.
-        self._cell_arrays: dict[_Cell, np.ndarray] | None = {}
+        # Each scored cell's members as rows ``buffer[start:end]``, oldest
+        # first like the members, kept up to date as points arrive and leave.
+        self._cell_rows: dict[_Cell, _Rows] | None = {}
         self._samples_seen = 0
 
     @property
@@ -219,18 +243,20 @@ class CellNeighborhoodDetector(BaseModel):
         entry_id = self._samples_seen
         self._window_entries.append((entry_id, cell))
         self._cell_members.setdefault(cell, {})[entry_id] = vector
-        arrays = self._cell_arrays
-        if arrays is not None:
-            arrays.pop(cell, None)
+        rows = self._cell_rows
+        if rows is not None and cell in rows:
+            rows[cell].append(vector)
 
         if len(self._window_entries) > self.window_size:
             old_id, old_cell = self._window_entries.popleft()
             members = self._cell_members[old_cell]
             del members[old_id]
-            if arrays is not None:
-                arrays.pop(old_cell, None)
+            if rows is not None and old_cell in rows:
+                rows[old_cell].pop_oldest()
             if not members:
                 del self._cell_members[old_cell]
+                if rows is not None:
+                    rows.pop(old_cell, None)
                 self._neighbor_cache.clear()
         self._samples_seen += 1
         self._boundary.commit(event)
@@ -241,11 +267,11 @@ class CellNeighborhoodDetector(BaseModel):
         if not self.readiness.ready:
             return 0.0
         vector = event.features.values
-        if self._cell_arrays is None:
-            self._cell_arrays = {}
-        arrays = self._cell_arrays
+        if self._cell_rows is None:
+            self._cell_rows = {}
+        cell_rows = self._cell_rows
         limit = self._distance_limit_sq
-        # Summing the squares as a batch may round differently from
+        # Summing the squares of a batch may round differently from
         # ``np.dot``, by far less than this relative margin. Distances that
         # close to the limit, or not finite, are summed again with ``np.dot``
         # so that every comparison matches the one point at a time.
@@ -253,19 +279,25 @@ class CellNeighborhoodDetector(BaseModel):
         close = margin * abs(limit) + _CLOSE_ABSOLUTE
         neighbors = 0
         for cell in self._candidate_cells(self._cell_id(vector)):
-            points = arrays.get(cell)
-            if points is None:
-                points = np.array(list(self._cell_members[cell].values()))
-                arrays[cell] = points
-            diffs = points - vector
-            distances = np.einsum("ij,ij->i", diffs, diffs)
-            inside = distances <= limit
-            unsure = ~(np.abs(distances - limit) > close)
-            if unsure.any():
-                for row in np.flatnonzero(unsure).tolist():
-                    diff = diffs[row]
-                    inside[row] = float(np.dot(diff, diff)) <= limit
-            neighbors += int(np.count_nonzero(inside))
-            if neighbors >= self.k:
-                return 0.0
+            rows = cell_rows.get(cell)
+            if rows is None:
+                rows = _Rows(np.array(list(self._cell_members[cell].values())))
+                cell_rows[cell] = rows
+            points = rows.buffer[rows.start : rows.end]
+            # A crowded cell is measured ``4 * k`` points at a time, so that
+            # stopping once ``k`` neighbors are found skips most of it.
+            size = 4 * self.k
+            while len(points):
+                diffs = (points if len(points) <= size else points[:size]) - vector
+                points = points[size:]
+                distances = np.einsum("ij,ij->i", diffs, diffs)
+                inside = distances <= limit
+                unsure = ~(np.abs(distances - limit) > close)
+                if unsure.any():
+                    for row in np.flatnonzero(unsure).tolist():
+                        diff = diffs[row]
+                        inside[row] = float(np.dot(diff, diff)) <= limit
+                neighbors += int(np.count_nonzero(inside))
+                if neighbors >= self.k:
+                    return 0.0
         return 1.0 - neighbors / float(self.k)
