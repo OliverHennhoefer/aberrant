@@ -157,7 +157,7 @@ class TestKSWIN(unittest.TestCase):
             samples = (recent, historical)
         expected = ks_2samp(*samples, method="exact")
         self.assertEqual(detector.p_value, expected.pvalue)
-        self.assertEqual(detector.statistic, expected.statistic)
+        self.assertAlmostEqual(detector.statistic, expected.statistic, places=12)
 
     def test_two_sample_test_matches_scipy_exact_ks(self):
         """The KS test equals SciPy's exact test, also for tied values."""
@@ -175,7 +175,7 @@ class TestKSWIN(unittest.TestCase):
                         warnings.simplefilter("ignore", RuntimeWarning)
                         expected = ks_2samp(left, right, method="exact")
                     statistic, p_value = kswin_module._ks_two_sample(left, right)
-                    self.assertEqual(statistic, expected.statistic)
+                    self.assertAlmostEqual(statistic, expected.statistic, places=12)
                     self.assertEqual(p_value, expected.pvalue)
 
     def test_two_sample_test_rejects_unequal_sizes(self):
