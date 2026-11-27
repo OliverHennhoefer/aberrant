@@ -467,6 +467,15 @@ Semantic Versioning.
   overrides also run at their defaults, rows flag a stream that never filled
   the detector's window, `--memory` reports what the live model retains, and
   a missing baseline row now fails `--require-same-scores`.
+- `benchmarks/detectors.py --against REF --pareto` judges every case on
+  speed, p99 latency, pickled state, peak and retained memory, ROC-AUC,
+  PR-AUC, readiness and determinism, and passes only when some axis got
+  better and none got worse. A trade-off passes only with
+  `--accept-tradeoff "reason"`, which the log records. `--against` now runs
+  each case on both versions back to back in a fresh pair of workers per
+  round, uses a sign-test interval of the median instead of a bootstrap, times
+  fast detectors for at least `--min-seconds`, and counts a timing change
+  only when fresh rounds repeat it; `--min-gain` defaults to 5%.
 - `CellNeighborhoodDetector` has an exact score fixture, including window
   eviction, ties on the radius and an explicit time key.
 

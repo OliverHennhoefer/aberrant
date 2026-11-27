@@ -4,19 +4,38 @@ This is the internal benchmark. It is not part of CI. To judge a change, edit
 the working tree and compare it with the last commit::
 
     uv run python benchmarks/detectors.py --cases loda --against HEAD \
-        --require-same-scores --forbid-slower --log .benchmarks/results.tsv \
+        --pareto --require-same-scores --log .benchmarks/results.tsv \
         --note "what the change does"
 
 ``--against REF`` checks REF out into a temporary git worktree and imports it
 through ``PYTHONPATH``, so both sides share this environment and this harness
-and no second ``uv sync`` is needed. It alternates the two sides for
-``--rounds`` rounds (7 by default), one fresh model per side and round, and
-reports the median of the per-round speed ratios with a 95% bootstrap
-interval. A case is "faster" or "slower" only when the interval excludes no
-change and the median moves by at least ``--min-gain`` (3%). After a kept
+and no second ``uv sync`` is needed. Each of ``--rounds`` rounds (7 by
+default) starts a fresh worker process per side and runs every case on both
+back to back, alternating which goes first, one fresh model per side and
+round (more for a detector that streams in under ``--min-seconds``, 0.25).
+Both halves of a pair see the same machine load, and fresh processes spread
+what a process keeps for its life, such as its hash seed and memory layout,
+over the rounds. The report holds the median of the per-round speed ratios
+and a distribution-free interval of at least 95% for it (from a sign test;
+with 7 rounds, the slowest to the fastest ratio). A case is "faster" or
+"slower" only when the interval excludes no change, the median moves by at
+least ``--min-gain`` (5%), and as many fresh rounds, which run whenever speed
+or p99 moved, agree on their own. After a kept
 commit, ``HEAD`` moves with it, so the next run compares against the new
 head. ``--log`` appends one row per case to a tab-separated file;
 ``.benchmarks/`` is git-ignored. Do not run anything else meanwhile.
+
+``--pareto`` judges every axis of every case: speed and p99 latency through
+the interval above, p99 with its own ``--latency-tolerance`` (25%); pickled
+state, peak and retained memory beyond 2% and 4 KiB (``SIZE_TOLERANCE`` and
+``SIZE_FLOOR_BYTES``), from one traced run per side and case;
+ROC-AUC and PR-AUC, which move only when the scores do; the event at which
+the model becomes ready; and determinism across rounds. It exits 0 when some
+axis got better and none got worse, 1 when any got worse, and 3 when nothing
+moved beyond the noise. ``--accept-tradeoff REASON`` keeps a change that
+made some axis worse and records the reason in the log; such a change needs
+review. With ``--cases``, only those cases are judged, so a change to shared
+code needs a final run without it.
 
 Without ``--against``, the script measures the working tree once and can
 compare with an earlier ``--json`` file through ``--baseline``.
@@ -32,7 +51,8 @@ out. A few slow detectors stream fewer events; ``EVENT_CAPS`` lists them.
 Every case scores and then learns each event of a fresh model, warm-up
 included. For each case the report holds:
 
-- ``events_per_second``: the median over ``--runs`` fresh models.
+- ``events_per_second``: the median over ``--runs`` fresh models, or over
+  as many as ``--min-seconds`` needs (``runs`` records how many).
 - ``spread``: the fastest run over the slowest minus 1, a rough noise level.
 - ``p50_us``, ``p99_us`` and ``max_us``: per-event score-plus-learn latency
   over all runs. Periodic refits show up in ``p99_us`` and ``max_us``.
@@ -78,10 +98,12 @@ from __future__ import annotations
 import argparse
 import contextlib
 import cProfile
+import gc
 import hashlib
 import importlib
 import inspect
 import json
+import math
 import os
 import pickle
 import platform
@@ -155,7 +177,28 @@ LOG_COLUMNS = (
     "ratio_high",
     "verdict",
     "scores",
+    "p99_ratio",
+    "state_ratio",
+    "peak_ratio",
+    "retained_ratio",
+    "roc_auc_delta",
+    "pr_auc_delta",
+    "better",
+    "worse",
+    "tradeoff",
     "note",
+)
+# A size counts as changed under ``--pareto`` only beyond both floors. Pickled
+# state repeats exactly, but the traced memory of a small model moves by a KiB
+# or two between runs of the same code, which is several percent of it.
+SIZE_TOLERANCE = 0.02
+SIZE_FLOOR_BYTES = 4 * 1024
+# Size axes of the Pareto check: name, row field, and whether ``--memory`` is
+# needed for it.
+SIZE_AXES = (
+    ("state", "state_bytes", False),
+    ("peak memory", "peak_kib", True),
+    ("retained memory", "retained_kib", True),
 )
 
 
@@ -489,6 +532,7 @@ def memory_kib(case: Case, stream: Stream) -> tuple[float, float]:
     tracemalloc.start()
     try:
         model, scores, elapsed, _ = run_once(case, stream)
+        gc.collect()
         current, peak = tracemalloc.get_traced_memory()
         retained = current - scores.nbytes - elapsed.nbytes
         del model
@@ -497,13 +541,29 @@ def memory_kib(case: Case, stream: Stream) -> tuple[float, float]:
         tracemalloc.stop()
 
 
-def measure(case: Case, stream: Stream, runs: int, memory: bool) -> dict[str, Any]:
-    """Run one case ``runs`` times and summarize it."""
+# The most fresh models ``--min-seconds`` may add to one measurement.
+MAX_RUNS = 100
+
+
+def measure(
+    case: Case, stream: Stream, runs: int, memory: bool, min_seconds: float = 0.0
+) -> dict[str, Any]:
+    """Run one case ``runs`` times, or until ``min_seconds`` are timed, and summarize it.
+
+    A detector that streams 10,000 events in 20 ms is timed mostly by the noise
+    of the machine; more fresh models give its median something to work with.
+    """
     stream = stream.head(case.max_events or len(stream.labels), case.n_features)
-    throughputs, latencies, prints = [], [], []
+    throughputs: list[float] = []
+    latencies: list[np.ndarray] = []
+    prints: list[str] = []
     model, first_scores = None, None
-    for _ in range(runs):
+    timed_ns = 0
+    while len(throughputs) < runs or (
+        timed_ns < min_seconds * 1e9 and len(throughputs) < MAX_RUNS
+    ):
         model, scores, elapsed, ready_at = run_once(case, stream)
+        timed_ns += int(elapsed.sum())
         throughputs.append(len(scores) / (elapsed.sum() / 1e9))
         latencies.append(elapsed)
         prints.append(fingerprint(scores))
@@ -525,7 +585,10 @@ def measure(case: Case, stream: Stream, runs: int, memory: bool) -> dict[str, An
         "events": len(labels),
         "features": stream.rows.shape[1],
         "events_per_second": statistics.median(throughputs),
-        "spread": max(throughputs) / min(throughputs) - 1 if runs > 1 else None,
+        "runs": len(throughputs),
+        "spread": max(throughputs) / min(throughputs) - 1
+        if len(throughputs) > 1
+        else None,
         "p50_us": float(np.percentile(pooled, 50)),
         "p99_us": float(np.percentile(pooled, 99)),
         "max_us": float(pooled.max()),
@@ -680,13 +743,25 @@ def compare(
     return "\n".join(lines), problems
 
 
-def _bootstrap_median(
-    ratios: np.ndarray, rng: np.random.Generator
-) -> tuple[float, float]:
-    """A 95% bootstrap interval for the median of paired per-round ratios."""
-    draws = rng.choice(ratios, size=(4_000, len(ratios)), replace=True)
-    low, high = np.percentile(np.median(draws, axis=1), [2.5, 97.5])
-    return float(low), float(high)
+def _median_interval(ratios: np.ndarray) -> tuple[float, float]:
+    """A distribution-free interval for the median, of at least 95% coverage.
+
+    It runs from the k-th smallest to the k-th largest ratio, with the largest
+    k for which a sign test puts at most 2.5% on either side; a bootstrap is
+    too narrow with a handful of rounds. With fewer than 6 rounds there is no
+    such k, and the interval is unbounded.
+    """
+    n = len(ratios)
+    k, tail = 0, 0.0
+    while k < n // 2:
+        tail += math.comb(n, k) / 2**n
+        if tail > 0.025:
+            break
+        k += 1
+    if k == 0:
+        return -math.inf, math.inf
+    ordered = np.sort(ratios)
+    return float(ordered[k - 1]), float(ordered[n - k])
 
 
 def against(args: argparse.Namespace) -> int:
@@ -695,9 +770,16 @@ def against(args: argparse.Namespace) -> int:
     The base is checked out into a temporary git worktree and imported through
     ``PYTHONPATH``, so both sides share this environment and this harness; only
     the ``aberrant`` package differs. Each round runs one fresh model per side,
-    alternating which side goes first, and the verdict comes from the per-round
-    speed ratios.
+    alternating which side goes first, and the speed and latency verdicts come
+    from the per-round ratios. Each side is one long-lived worker process, and
+    every round of a case runs back to back on both sides, so the two halves of
+    a pair are seconds apart and see the same load. With ``--memory`` or
+    ``--pareto``, one more run per side traces memory, which repeats closely
+    enough to need no rounds.
     """
+    if args.pareto and args.rounds < 6:
+        print("--pareto needs --rounds 6 or more for its intervals", file=sys.stderr)
+        return 2
     root = Path(__file__).resolve().parent.parent
     base_sha = _git("rev-parse", "--short", args.against)
     if base_sha == "unknown":
@@ -715,17 +797,15 @@ def against(args: argparse.Namespace) -> int:
         args.streams,
         "--events",
         str(args.events),
-        "--runs",
-        "1",
-        "--quiet",
+        "--worker",
     ]
     if args.cases:
         child += ["--cases", args.cases]
-    rows = _alternate(root, args.against, args.rounds, child)
+    min_seconds = 0.25 if args.min_seconds is None else args.min_seconds
+    rows = _alternate(root, child, args, min_seconds)
     if rows is None:
         return 2
-    lines, log_rows, problems = _verdicts(rows, args, f"{args.against} ({base_sha})")
-    slower = sum(entry[11] == "slower" for entry in log_rows)
+    lines, log_rows, checks = _verdicts(rows, args, f"{args.against} ({base_sha})")
     for entry in log_rows:
         entry[1:3] = [base_sha, candidate]
     print(f"Candidate {candidate} against {args.against} ({base_sha}):\n")
@@ -733,104 +813,387 @@ def against(args: argparse.Namespace) -> int:
     if args.log:
         _append_log(Path(args.log), log_rows)
     failed = False
-    if args.require_same_scores and problems:
-        print(f"\n{problems} score sequence(s) changed.", file=sys.stderr)
+    changed = sum(not check["same_scores"] for check in checks)
+    if args.require_same_scores and changed:
+        print(f"\n{changed} score sequence(s) changed.", file=sys.stderr)
         failed = True
+    slower = sum("speed" in check["worse"] for check in checks)
     if args.forbid_slower and slower:
         print(f"\n{slower} case(s) got slower.", file=sys.stderr)
         failed = True
+    if args.pareto:
+        status = _pareto_gate(checks, args)
+        if status:
+            return status
     return 1 if failed else 0
 
 
+def _pareto_gate(checks: list[dict[str, Any]], args: argparse.Namespace) -> int:
+    """Print the Pareto verdict; 0 keeps the change, 1 or 3 rejects it."""
+    worse = [check for check in checks if check["worse"]]
+    better = [check for check in checks if check["better"]]
+    print(
+        f"\nPareto check over {len(checks)} case(s): {len(better)} with an axis "
+        f"better, {len(worse)} with an axis worse.",
+        file=sys.stderr,
+    )
+    if args.cases:
+        print(
+            "Only the cases in --cases ran. Before keeping a change outside one "
+            "detector's own module, run the check without --cases.",
+            file=sys.stderr,
+        )
+    if worse:
+        for check in worse:
+            print(
+                f"  worse: {check['stream']} {check['case']}: "
+                + ", ".join(check["worse"]),
+                file=sys.stderr,
+            )
+        if args.accept_tradeoff:
+            print(
+                f"Trade-off accepted: {args.accept_tradeoff}\n"
+                "List it in the pull request for review.",
+                file=sys.stderr,
+            )
+            return 0
+        print(
+            "NOT A PARETO IMPROVEMENT. Revert, or keep it only as a reasoned "
+            'trade-off with --accept-tradeoff "why it is a net benefit".',
+            file=sys.stderr,
+        )
+        return 1
+    if not better:
+        print(
+            "NO MEASURABLE IMPROVEMENT. Nothing got worse, but nothing got "
+            "better beyond the noise either.",
+            file=sys.stderr,
+        )
+        return 3
+    print("PARETO IMPROVEMENT.", file=sys.stderr)
+    return 0
+
+
+class _Worker:
+    """One ``--worker`` process importing aberrant from ``source``."""
+
+    def __init__(self, child: list[str], source: Path, min_seconds: float) -> None:
+        self.min_seconds = min_seconds
+        self.process = subprocess.Popen(
+            child,
+            env={**os.environ, "PYTHONPATH": str(source)},
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        hello = json.loads(self._read())
+        self.jobs: int = hello["jobs"]
+        imported = Path(hello["environment"]["aberrant_path"])
+        self.imported_from_source = imported.is_relative_to(source.resolve())
+        self.imported = imported
+
+    def _read(self) -> str:
+        assert self.process.stdout is not None
+        line = self.process.stdout.readline()
+        if not line:
+            raise RuntimeError("a benchmark worker stopped")
+        return line
+
+    def ask(self, job: int, *, traced: bool = False) -> dict[str, Any]:
+        """Measure one job once, tracing memory when ``traced``."""
+        assert self.process.stdin is not None
+        request = {"job": job, "memory": traced, "min_seconds": self.min_seconds}
+        self.process.stdin.write(json.dumps(request) + "\n")
+        self.process.stdin.flush()
+        return dict(json.loads(self._read()))
+
+    def close(self) -> None:
+        if self.process.stdin is not None:
+            self.process.stdin.close()
+        self.process.wait(timeout=60)
+
+
 def _alternate(
-    root: Path, ref: str, rounds: int, child: list[str]
+    root: Path, child: list[str], args: argparse.Namespace, min_seconds: float
 ) -> dict[str, list[list[dict[str, Any]]]] | None:
-    """Run ``child`` on a worktree of ``ref`` and on ``root``, alternating."""
-    rows: dict[str, list[list[dict[str, Any]]]] = {"base": [], "candidate": []}
+    """Run every job on a worktree of ``args.against`` and on ``root``, alternating.
+
+    ``rows[side][round]`` lists the result of every job in report order. A job
+    whose speed or p99 moved gets as many fresh rounds again, listed by job
+    under ``base_extra`` and ``candidate_extra`` (empty for the others). With
+    ``--memory`` or ``--pareto``, one traced run per side and job lands under
+    ``base_memory`` and ``candidate_memory``.
+    """
     with tempfile.TemporaryDirectory(prefix="aberrant-base-") as scratch:
         tree = Path(scratch) / "tree"
         subprocess.run(
-            [
-                "git",
-                "-C",
-                str(root),
-                "worktree",
-                "add",
-                "--detach",
-                "--quiet",
-                str(tree),
-                ref,
-            ],
+            ["git", "-C", str(root), "worktree", "add", "--detach", "--quiet"]
+            + [str(tree), args.against],
             check=True,
         )
         try:
             sources = {"base": tree, "candidate": root}
-            for round_index in range(rounds):
-                order = (
-                    ["base", "candidate"]
-                    if round_index % 2 == 0
-                    else ["candidate", "base"]
-                )
-                for side in order:
-                    out = Path(scratch) / f"{side}-{round_index}.json"
-                    env = {**os.environ, "PYTHONPATH": str(sources[side])}
-                    subprocess.run([*child, "--json", str(out)], env=env, check=True)
-                    payload = json.loads(out.read_text(encoding="utf-8"))
-                    imported = Path(payload["environment"]["aberrant_path"])
-                    if not imported.is_relative_to(sources[side].resolve()):
-                        print(
-                            f"{side} imported aberrant from {imported}", file=sys.stderr
-                        )
-                        return None
-                    rows[side].append(payload["results"])
-                print(f"round {round_index + 1} of {rounds} done", file=sys.stderr)
+            for side, source in sources.items():
+                probe = _Worker(child, source, min_seconds)
+                probe.close()
+                if not probe.imported_from_source:
+                    print(
+                        f"{side} imported aberrant from {probe.imported}",
+                        file=sys.stderr,
+                    )
+                    return None
+            return _paired_rounds(
+                lambda: {
+                    side: _Worker(child, source, min_seconds)
+                    for side, source in sources.items()
+                },
+                probe.jobs,
+                args,
+            )
         finally:
             subprocess.run(
                 ["git", "-C", str(root), "worktree", "remove", "--force", str(tree)],
                 check=False,
             )
+
+
+def _paired_rounds(
+    start: Callable[[], dict[str, _Worker]], n_jobs: int, args: argparse.Namespace
+) -> dict[str, list[list[dict[str, Any]]]]:
+    """Each round starts a fresh pair of workers and runs every job on both.
+
+    Fresh processes each round spread what one process carries for its whole
+    life, such as its hash seed and memory layout, over the rounds; running a
+    job on both sides back to back puts both halves of a pair under the same
+    machine load.
+    """
+    sides = ("base", "candidate")
+    traced = args.memory or args.pareto
+    memory: dict[str, list[dict[str, Any]]] = {side: [] for side in sides}
+
+    def rounds_of(jobs: list[int], label: str) -> dict[str, list[list[dict[str, Any]]]]:
+        runs: dict[str, list[list[dict[str, Any]]]] = {
+            side: [[] for _ in range(n_jobs)] for side in sides
+        }
+        for round_index in range(args.rounds):
+            workers = start()
+            try:
+                for job in jobs:
+                    flip = (round_index + job) % 2
+                    for side in sides[::-1] if flip else sides:
+                        runs[side][job].append(workers[side].ask(job))
+                if traced and label == "rounds" and round_index == 0:
+                    for job in jobs:
+                        for side in sides:
+                            memory[side].append(workers[side].ask(job, traced=True))
+            finally:
+                for worker in workers.values():
+                    worker.close()
+            print(f"{label}: {round_index + 1} of {args.rounds} done", file=sys.stderr)
+        return runs
+
+    first = rounds_of(list(range(n_jobs)), "rounds")
+    moved = [
+        job
+        for job in range(n_jobs)
+        if any(
+            verdict[3]
+            for verdict in _timing(
+                first["base"][job], first["candidate"][job], args
+            ).values()
+        )
+    ]
+    extra = rounds_of(moved, f"confirming {len(moved)} case(s)") if moved else None
+    rows: dict[str, list[list[dict[str, Any]]]] = {}
+    for side in sides:
+        rows[side] = [
+            [first[side][job][round_index] for job in range(n_jobs)]
+            for round_index in range(args.rounds)
+        ]
+        rows[f"{side}_extra"] = extra[side] if extra else [[] for _ in range(n_jobs)]
+        rows[f"{side}_memory"] = [memory[side]] if traced else []
     return rows
+
+
+def _timed(ratios: np.ndarray, min_gain: float) -> tuple[float, float, float, int]:
+    """Median ratio, its 95% interval, and +1 up, -1 down or 0 within noise."""
+    median = float(np.median(ratios))
+    low, high = _median_interval(ratios)
+    if low > 1.0 and median >= 1.0 + min_gain:
+        return median, low, high, 1
+    if high < 1.0 and median <= 1.0 - min_gain:
+        return median, low, high, -1
+    return median, low, high, 0
+
+
+def _size_change(
+    before: dict[str, Any], after: dict[str, Any], field: str
+) -> tuple[float | None, int]:
+    """The ratio of a size field, and +1 smaller, -1 larger or 0 within the floors."""
+    old, new = before.get(field), after.get(field)
+    if old is None or new is None or old <= 0:
+        return None, 0
+    ratio = float(new / old)
+    scale = 1 if field == "state_bytes" else 1024  # the traced fields are in KiB
+    if abs(new - old) * scale <= SIZE_FLOOR_BYTES or abs(ratio - 1) <= SIZE_TOLERANCE:
+        return ratio, 0
+    return ratio, 1 if ratio < 1 else -1
+
+
+def _timing(
+    before: list[dict[str, Any]],
+    cand: list[dict[str, Any]],
+    args: argparse.Namespace,
+) -> dict[str, tuple[float, float, float, int]]:
+    """Speed and p99 verdicts from paired rounds; +1 is better for both."""
+    pairs = list(zip(before, cand, strict=True))
+    speed = np.array(
+        [c["events_per_second"] / b["events_per_second"] for b, c in pairs]
+    )
+    p99 = np.array([c["p99_us"] / b["p99_us"] for b, c in pairs])
+    median, low, high, direction = _timed(p99, args.latency_tolerance)
+    return {
+        "speed": _timed(speed, args.min_gain),
+        "p99 latency": (median, low, high, -direction),
+    }
+
+
+def _pareto_axes(
+    before: list[dict[str, Any]],
+    cand: list[dict[str, Any]],
+    extra: tuple[list[dict[str, Any]], list[dict[str, Any]]] | None,
+    memory: tuple[dict[str, Any], dict[str, Any]] | None,
+    *,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    """Judge one case on every axis; ``better`` and ``worse`` name the axes.
+
+    ``extra`` holds the confirmation rounds of a case whose first rounds moved
+    a timing: the move counts only when the fresh rounds agree on its own.
+    """
+    better: list[str] = []
+    worse: list[str] = []
+
+    def judge(axis: str, direction: int) -> None:
+        if direction > 0:
+            better.append(axis)
+        elif direction < 0:
+            worse.append(axis)
+
+    first = _timing(before, cand, args)
+    again = _timing(*extra, args) if extra else None
+    if extra:
+        before, cand = before + extra[0], cand + extra[1]
+    shown = _timing(before, cand, args)
+    for axis, (_, _, _, direction) in first.items():
+        judge(axis, direction if again and again[axis][3] == direction else 0)
+    speed_median, low, high, _ = shown["speed"]
+    p99_median = shown["p99 latency"][0]
+
+    sizes: dict[str, float | None] = {}
+    for axis, field, needs_memory in SIZE_AXES:
+        pair = memory if needs_memory else (before[0], cand[0])
+        ratio, direction = (None, 0) if pair is None else _size_change(*pair, field)
+        sizes[axis] = ratio
+        judge(axis, direction)
+
+    base_prints = {row["fingerprint"] for row in before}
+    cand_prints = {row["fingerprint"] for row in cand}
+    same = len(base_prints | cand_prints) == 1
+    deltas = {}
+    for metric in ("roc_auc", "pr_auc"):
+        delta = float(
+            np.median([row[metric] for row in cand])
+            - np.median([row[metric] for row in before])
+        )
+        deltas[metric] = 0.0 if same or np.isnan(delta) else delta
+        judge(metric.replace("_", "-").upper(), int(np.sign(deltas[metric])))
+    if len(cand_prints) > 1 and len(base_prints) == 1:
+        worse.append("determinism")
+
+    def ready(row: dict[str, Any]) -> float:
+        return math.inf if row["ready_at"] is None else row["ready_at"]
+
+    base_ready, cand_ready = ready(before[0]), ready(cand[0])
+    if before[0]["library"] == "aberrant":
+        judge("readiness", (cand_ready < base_ready) - (cand_ready > base_ready))
+    return {
+        "stream": before[0]["stream"],
+        "case": before[0]["case"],
+        "speed": (speed_median, low, high),
+        "p99": p99_median,
+        "sizes": sizes,
+        "deltas": deltas,
+        "ready_at": cand[0]["ready_at"],
+        "same_scores": same,
+        "better": better,
+        "worse": worse,
+    }
+
+
+def _pct(ratio: float | None) -> str:
+    return "n/a" if ratio is None else f"{ratio - 1:+.1%}"
 
 
 def _verdicts(
     rows: dict[str, list[list[dict[str, Any]]]], args: argparse.Namespace, base: str
-) -> tuple[list[str], list[list[str]], int]:
-    """Per-case verdicts as table lines, log rows and the changed-score count."""
-    rng = np.random.default_rng(0)
+) -> tuple[list[str], list[list[str]], list[dict[str, Any]]]:
+    """Per-case verdicts as table lines, log rows and the per-axis checks."""
     lines = [
-        "| Stream | Detector | Base ev/s | Candidate ev/s | Speed (median) "
-        "| 95% interval | p99 | Verdict | Scores |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Stream | Detector | Base ev/s | Speed (median) | 95% interval | p99 "
+        "| State | Peak | Retained | ROC-AUC | PR-AUC | Scores | Pareto |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
+        "| ---: | ---: | --- | --- |",
     ]
     log_rows: list[list[str]] = []
-    problems = 0
+    checks = []
+    memory_rows = (
+        list(zip(rows["base_memory"][0], rows["candidate_memory"][0], strict=True))
+        if rows["base_memory"]
+        else None
+    )
     for index, base_row in enumerate(rows["base"][0]):
         before = [run[index] for run in rows["base"]]
         cand = [run[index] for run in rows["candidate"]]
         if _key(cand[0]) != _key(base_row):
             raise RuntimeError("base and candidate ran different cases")
-        base_speed = np.array([row["events_per_second"] for row in before])
-        cand_speed = np.array([row["events_per_second"] for row in cand])
-        ratios = cand_speed / base_speed
-        median = float(np.median(ratios))
-        low, high = _bootstrap_median(ratios, rng)
-        if low > 1.0 and median >= 1.0 + args.min_gain:
-            verdict = "faster"
-        elif high < 1.0 and median <= 1.0 - args.min_gain:
-            verdict = "slower"
-        else:
-            verdict = "within noise"
-        prints = {row["fingerprint"] for row in before + cand}
-        same = len(prints) == 1
-        problems += not same
-        p99 = np.median(
-            [c["p99_us"] / b["p99_us"] for b, c in zip(before, cand, strict=True)]
+        memory = memory_rows[index] if memory_rows else None
+        if memory and not _key(memory[0]) == _key(memory[1]) == _key(base_row):
+            raise RuntimeError("the memory pass ran different cases")
+        extra = (rows["base_extra"][index], rows["candidate_extra"][index])
+        check = _pareto_axes(
+            before, cand, extra if extra[0] else None, memory, args=args
         )
+        checks.append(check)
+        median, low, high = check["speed"]
+        verdict = (
+            "faster"
+            if "speed" in check["better"]
+            else "slower"
+            if "speed" in check["worse"]
+            else "within noise"
+        )
+        if check["better"] and check["worse"]:
+            pareto = "trade-off: " + ", ".join(
+                [f"+{axis}" for axis in check["better"]]
+                + [f"-{axis}" for axis in check["worse"]]
+            )
+        elif check["worse"]:
+            pareto = "worse: " + ", ".join(check["worse"])
+        elif check["better"]:
+            pareto = "better: " + ", ".join(check["better"])
+        else:
+            pareto = "no change"
+        sizes, deltas = check["sizes"], check["deltas"]
+        base_speed = np.median([row["events_per_second"] for row in before])
+        cand_speed = np.median([row["events_per_second"] for row in cand])
         lines.append(
-            f"| {base_row['stream']} | {base_row['case']} "
-            f"| {np.median(base_speed):,.0f} | {np.median(cand_speed):,.0f} "
+            f"| {base_row['stream']} | {base_row['case']} | {base_speed:,.0f} "
             f"| {median - 1:+.1%} | {low - 1:+.1%} to {high - 1:+.1%} "
-            f"| {p99 - 1:+.1%} | {verdict} | {'same' if same else 'CHANGED'} |"
+            f"| {_pct(check['p99'])} | {_pct(sizes['state'])} "
+            f"| {_pct(sizes['peak memory'])} | {_pct(sizes['retained memory'])} "
+            f"| {deltas['roc_auc']:+.4f} | {deltas['pr_auc']:+.4f} "
+            f"| {'same' if check['same_scores'] else 'CHANGED'} | {pareto} |"
         )
         log_rows.append(
             [
@@ -840,26 +1203,46 @@ def _verdicts(
                 base_row["stream"],
                 base_row["case"],
                 base_row["parameters"],
-                f"{np.median(base_speed):.1f}",
-                f"{np.median(cand_speed):.1f}",
+                f"{base_speed:.1f}",
+                f"{cand_speed:.1f}",
                 f"{median:.4f}",
                 f"{low:.4f}",
                 f"{high:.4f}",
                 verdict,
-                "same" if same else "changed",
+                "same" if check["same_scores"] else "changed",
+                f"{check['p99']:.4f}",
+                *(
+                    "" if sizes[axis] is None else f"{sizes[axis]:.4f}"
+                    for axis, _, _ in SIZE_AXES
+                ),
+                f"{deltas['roc_auc']:+.6f}",
+                f"{deltas['pr_auc']:+.6f}",
+                ",".join(check["better"]),
+                ",".join(check["worse"]),
+                args.accept_tradeoff if check["worse"] else "",
                 args.note,
             ]
         )
-    return lines, log_rows, problems
+    return lines, log_rows, checks
 
 
 def _append_log(log: Path, entries: list[list[str]]) -> None:
     """Append tab-separated rows, writing the header to a new file."""
+    header = "\t".join(LOG_COLUMNS)
+    if log.exists():
+        with log.open(encoding="utf-8") as handle:
+            if handle.readline().rstrip("\n") != header:
+                print(
+                    f"\n{log} has other columns; not appending. Move it aside "
+                    "to start a new log.",
+                    file=sys.stderr,
+                )
+                return
     log.parent.mkdir(parents=True, exist_ok=True)
     new = not log.exists()
     with log.open("a", encoding="utf-8") as handle:
         if new:
-            handle.write("\t".join(LOG_COLUMNS) + "\n")
+            handle.write(header + "\n")
         for entry in entries:
             handle.write("\t".join(field.replace("\t", " ") for field in entry) + "\n")
     print(f"\nAppended {len(entries)} row(s) to {log}", file=sys.stderr)
@@ -879,6 +1262,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--events", type=int, default=10_000)
     parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument(
+        "--min-seconds",
+        type=float,
+        default=None,
+        help="add fresh models until a case has been timed this long (at most "
+        f"{MAX_RUNS} runs); 0 by default, 0.25 for each round of --against",
+    )
     parser.add_argument(
         "--memory", action="store_true", help="also trace peak allocation (slow)"
     )
@@ -904,7 +1294,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--against",
         metavar="REF",
         help="alternate the working tree with this git ref (for example HEAD) "
-        "and report the median speed ratio with a bootstrap interval",
+        "and report the median speed ratio with a 95% interval",
     )
     parser.add_argument(
         "--rounds", type=int, default=7, help="alternating rounds for --against"
@@ -912,8 +1302,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--min-gain",
         type=float,
-        default=0.03,
-        help="smallest median change --against calls faster or slower",
+        default=0.05,
+        help="smallest median speed change --against calls faster or slower",
+    )
+    parser.add_argument(
+        "--latency-tolerance",
+        type=float,
+        default=0.25,
+        help="smallest median p99 change --pareto calls better or worse; p99 "
+        "moved up to 18%% between runs of the same code on a shared machine",
     )
     parser.add_argument(
         "--log",
@@ -926,7 +1323,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="with --against, exit with status 1 when any case got slower",
     )
+    parser.add_argument(
+        "--pareto",
+        action="store_true",
+        help="with --against, judge every axis (speed, p99 latency, pickled "
+        "state, peak and retained memory, ROC-AUC, PR-AUC, readiness, "
+        "determinism) and exit 0 only when some axis got better and none got "
+        "worse; 1 when one got worse, 3 when nothing changed beyond the noise. "
+        "Implies --memory.",
+    )
+    parser.add_argument(
+        "--accept-tradeoff",
+        metavar="REASON",
+        default="",
+        help="with --pareto, keep a change that makes some axis worse, and "
+        "record why it is a net benefit in the --log row",
+    )
     parser.add_argument("--quiet", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     return parser
 
 
@@ -943,12 +1357,10 @@ def profile_cases(cases: Sequence[Case], streams: Sequence[Stream], limit: int) 
             pstats.Stats(profiler).strip_dirs().sort_stats("tottime").print_stats(limit)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    if args.against:
-        return against(args)
-
+def select(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> tuple[list[Case], list[Stream]]:
+    """The cases and streams that ``args`` selects."""
     suites = {suite.strip() for suite in args.suites.split(",") if suite.strip()}
     cases = catalog_cases(suites)
     if args.peers:
@@ -966,6 +1378,39 @@ def main(argv: Sequence[str] | None = None) -> int:
     streams = [
         make_stream(name.strip(), args.events) for name in args.streams.split(",")
     ]
+    return cases, streams
+
+
+def worker(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """Serve measurements for ``--against`` over stdin and stdout.
+
+    The first line out holds the environment and the number of jobs, one per
+    stream and case in report order. Each line in names a job and whether to
+    trace memory; each line out is that job's result row.
+    """
+    out = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8")
+    sys.stdout = sys.stderr  # keep anything a model prints off the protocol
+    cases, streams = select(args, parser)
+    jobs = [(stream, case) for stream in streams for case in cases]
+    out.write(json.dumps({"environment": environment(), "jobs": len(jobs)}) + "\n")
+    out.flush()
+    for line in sys.stdin:
+        request = json.loads(line)
+        stream, case = jobs[request["job"]]
+        row = measure(case, stream, 1, request["memory"], request["min_seconds"])
+        out.write(json.dumps(row) + "\n")
+        out.flush()
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.against:
+        return against(args)
+    if args.worker:
+        return worker(args, parser)
+    cases, streams = select(args, parser)
 
     if args.profile:
         profile_cases(cases, streams, args.profile_limit)
@@ -974,7 +1419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     results = []
     for stream in streams:
         for case in cases:
-            row = measure(case, stream, args.runs, args.memory)
+            row = measure(case, stream, args.runs, args.memory, args.min_seconds or 0)
             results.append(row)
             if args.quiet:
                 continue
