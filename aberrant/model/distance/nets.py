@@ -130,6 +130,32 @@ class CellNeighborhoodDetector(BaseModel):
             abs(a - b) <= self._max_cell_delta for a, b in zip(left, right, strict=True)
         )
 
+    def _scan_neighbor_cells(self, cell: _Cell) -> tuple[_Cell, ...]:
+        """Return the retained cells near ``cell``, in insertion order."""
+        existing = list(self._cell_members)
+        span = self._max_cell_delta
+        if span is None:
+            return tuple(existing)
+        try:
+            coordinates = np.array(existing, dtype=np.int64)
+            center = np.array(cell, dtype=np.int64)
+        except OverflowError:
+            # Cells of extreme values exceed int64; compare them exactly.
+            return tuple(
+                other for other in existing if self._are_neighbor_cells(other, cell)
+            )
+        # Far from zero, the int64 difference could overflow, so those cells
+        # are compared as Python integers instead.
+        limit = 2**61
+        if (np.abs(center) < limit).all() and (
+            (coordinates > -limit) & (coordinates < limit)
+        ).all():
+            near = (np.abs(coordinates - center) <= span).all(axis=1)
+            return tuple(existing[index] for index in np.flatnonzero(near).tolist())
+        return tuple(
+            other for other in existing if self._are_neighbor_cells(other, cell)
+        )
+
     def _candidate_cells(self, cell: _Cell) -> tuple[_Cell, ...]:
         cached = self._neighbor_cache.get(cell)
         if cached is not None:
@@ -160,11 +186,7 @@ class CellNeighborhoodDetector(BaseModel):
                     neighbors.append(candidate)
             candidates = tuple(neighbors)
         else:
-            candidates = tuple(
-                existing
-                for existing in self._cell_members
-                if self._are_neighbor_cells(existing, cell)
-            )
+            candidates = self._scan_neighbor_cells(cell)
 
         # Score-only queries cannot accumulate state for arbitrary new cells.
         if cell in self._cell_members:
