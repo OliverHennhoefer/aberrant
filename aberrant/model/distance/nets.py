@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
+from collections.abc import Iterator
 from itertools import product
 
 import numpy as np
@@ -21,34 +22,62 @@ _DISTANCE_TOLERANCE = 1e-9
 _CLOSE_ABSOLUTE = 1e-300
 
 
-class _Rows:
-    """Rows that arrive at the end and leave from the front, without copying."""
+class _CellMembers:
+    """The points of one cell, oldest first, stored once as rows of a buffer.
 
-    __slots__ = ("buffer", "end", "start")
+    Points arrive at the end and leave from the front, as the window evicts
+    them, so ``rows[start:start + len(ids)]`` holds them without copying.
+    Iterating yields their entry ids. The buffer doubles when it is full and
+    halves its slack when it is under a quarter full, so it holds at most
+    four times its points. Pickles keep only the live rows.
+    """
 
-    def __init__(self, rows: np.ndarray) -> None:
-        self.buffer = rows
+    __slots__ = ("ids", "rows", "start")
+
+    def __init__(self, n_features: int) -> None:
+        self.ids: deque[int] = deque()
+        self.rows = np.empty((1, n_features))
         self.start = 0
-        self.end = len(rows)
 
-    def append(self, row: np.ndarray) -> None:
-        if self.end == len(self.buffer):
-            live = self.buffer[self.start : self.end]
-            grown = np.empty((max(2 * len(live), 8), self.buffer.shape[1]))
-            grown[: len(live)] = live
-            self.buffer, self.start, self.end = grown, 0, len(live)
-        self.buffer[self.end] = row
-        self.end += 1
+    def __len__(self) -> int:
+        return len(self.ids)
 
-    def pop_oldest(self) -> None:
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.ids)
+
+    def points(self) -> np.ndarray:
+        """Return the live rows as a view, oldest first."""
+        return self.rows[self.start : self.start + len(self.ids)]
+
+    def append(self, entry_id: int, point: np.ndarray) -> None:
+        end = self.start + len(self.ids)
+        if end == len(self.rows):
+            self._resize(2 * len(self.ids) + 1)
+            end = len(self.ids)
+        self.rows[end] = point
+        self.ids.append(entry_id)
+
+    def pop_oldest(self) -> int:
+        entry_id = self.ids.popleft()
         self.start += 1
-        live = self.end - self.start
-        # Shrink a buffer once it is under a quarter full, so a cell that was
-        # crowded once keeps at most four times its rows (and at least 8).
-        if len(self.buffer) > 8 and 4 * live < len(self.buffer):
-            kept = np.empty((max(2 * live, 8), self.buffer.shape[1]))
-            kept[:live] = self.buffer[self.start : self.end]
-            self.buffer, self.start, self.end = kept, 0, live
+        if len(self.rows) > 2 and 4 * len(self.ids) < len(self.rows):
+            self._resize(2 * len(self.ids) + 1)
+        return entry_id
+
+    def _resize(self, capacity: int) -> None:
+        live = self.points()
+        rows = np.empty((capacity, self.rows.shape[1]))
+        rows[: len(live)] = live
+        self.rows, self.start = rows, 0
+
+    def __getstate__(self) -> tuple[list[int], np.ndarray]:
+        return list(self.ids), self.points().copy()
+
+    def __setstate__(self, state: tuple[list[int], np.ndarray]) -> None:
+        ids, rows = state
+        self.ids = deque(ids)
+        self.rows = rows if len(rows) else np.empty((1, rows.shape[1]))
+        self.start = 0
 
 
 class CellNeighborhoodDetector(BaseModel):
@@ -94,8 +123,6 @@ class CellNeighborhoodDetector(BaseModel):
         Original implementation: https://github.com/kaist-dmlab/NETS
     """
 
-    _transient = ("_cell_rows",)
-
     def __init__(
         self,
         *,
@@ -138,12 +165,9 @@ class CellNeighborhoodDetector(BaseModel):
     def _reset_state(self) -> None:
         self._boundary = NumericEventBoundary(time_key=self.time_key)
         self._window_entries: deque[_Entry] = deque()
-        self._cell_members: dict[_Cell, dict[int, np.ndarray]] = {}
+        self._cell_members: dict[_Cell, _CellMembers] = {}
         self._neighbor_cache: dict[_Cell, tuple[_Cell, ...]] = {}
         self._neighbor_offsets_cache: dict[int, tuple[_Cell, ...]] = {}
-        # Each scored cell's members as rows ``buffer[start:end]``, oldest
-        # first like the members, kept up to date as points arrive and leave.
-        self._cell_rows: dict[_Cell, _Rows] | None = {}
         self._samples_seen = 0
 
     @property
@@ -249,21 +273,19 @@ class CellNeighborhoodDetector(BaseModel):
             self._neighbor_cache.clear()
         entry_id = self._samples_seen
         self._window_entries.append((entry_id, cell))
-        self._cell_members.setdefault(cell, {})[entry_id] = vector
-        rows = self._cell_rows
-        if rows is not None and cell in rows:
-            rows[cell].append(vector)
+        members = self._cell_members.get(cell)
+        if members is None:
+            members = self._cell_members[cell] = _CellMembers(vector.size)
+        members.append(entry_id, vector)
 
         if len(self._window_entries) > self.window_size:
-            old_id, old_cell = self._window_entries.popleft()
-            members = self._cell_members[old_cell]
-            del members[old_id]
-            if rows is not None and old_cell in rows:
-                rows[old_cell].pop_oldest()
-            if not members:
+            # The window is first in, first out, so the oldest entry is also
+            # the oldest member of its cell.
+            _, old_cell = self._window_entries.popleft()
+            old_members = self._cell_members[old_cell]
+            old_members.pop_oldest()
+            if not old_members:
                 del self._cell_members[old_cell]
-                if rows is not None:
-                    rows.pop(old_cell, None)
                 self._neighbor_cache.clear()
         self._samples_seen += 1
         self._boundary.commit(event)
@@ -274,9 +296,6 @@ class CellNeighborhoodDetector(BaseModel):
         if not self.readiness.ready:
             return 0.0
         vector = event.features.values
-        if self._cell_rows is None:
-            self._cell_rows = {}
-        cell_rows = self._cell_rows
         limit = self._distance_limit_sq
         # Summing the squares of a batch may round differently from
         # ``np.dot``, by far less than this relative margin. Distances that
@@ -286,11 +305,7 @@ class CellNeighborhoodDetector(BaseModel):
         close = margin * abs(limit) + _CLOSE_ABSOLUTE
         neighbors = 0
         for cell in self._candidate_cells(self._cell_id(vector)):
-            rows = cell_rows.get(cell)
-            if rows is None:
-                rows = _Rows(np.array(list(self._cell_members[cell].values())))
-                cell_rows[cell] = rows
-            points = rows.buffer[rows.start : rows.end]
+            points = self._cell_members[cell].points()
             # A crowded cell is measured ``4 * k`` points at a time, so that
             # stopping once ``k`` neighbors are found skips most of it.
             size = 4 * self.k
