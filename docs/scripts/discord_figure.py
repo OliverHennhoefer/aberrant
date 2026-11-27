@@ -8,8 +8,12 @@ detector that looks at one value at a time has nothing to find.
 
 ``DAMP`` scores each event before learning it, in one pass, from the first
 sample, without the archive's training split and with bounded memory. Its
-highest score lands on the anomalous beat. An overlay of every heartbeat shows
-why a detector that scores single values has no outlier to find there.
+highest score lands on the anomalous beat.
+
+The figure draws the heartbeats around that beat large enough to read, between
+two dotted lines at the lowest and highest normal value of the series. Below
+them it draws the DAMP score of the whole series and marks the stretch shown
+above.
 
 Requires matplotlib, which is not an aberrant dependency::
 
@@ -29,7 +33,7 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.transforms import blended_transform_factory
+from matplotlib.patches import Polygon
 
 from aberrant.model.timeseries import DAMP
 
@@ -43,29 +47,28 @@ DATA_URL = (
 DATA_SHA256 = "3811edc0a3dbc6b2aa4fdfb314f56fde32bb352a79cd55acfadc4be0e8485e44"
 SUBSEQUENCE_LENGTH = 167  # about one heartbeat
 R_PEAK_HEIGHT = 100.0  # normal R peaks rise far above this; the anomaly does not
-BEAT_WINDOW = (-75, 115)  # samples around each beat's peak in the overlay
+EXCERPT_BEATS = 5  # heartbeats drawn on each side of the anomalous one
 WARMUP = 4 * SUBSEQUENCE_LENGTH  # DAMP's default start_index
 BUCKETS = 1600  # min/max envelope per bucket keeps the SVGs small
+SCORE_CEILING = 1.12  # top of the score axis; the highest score is drawn at 1
 THEMES = {
     "light": {
         "text": "#3d3c39",
         "muted": "#8a8984",
         "faint": "#c9c8c2",
         "line": "#52514e",
-        "beats": "#52514e17",
         "score": "#2a78d6",
         "accent": "#eb6834",
-        "band": "#eb68342e",
+        "zoom": "#8a898422",
     },
     "dark": {
         "text": "#d8d7cd",
         "muted": "#8f8e86",
         "faint": "#4a4945",
         "line": "#c3c2b7",
-        "beats": "#c3c2b724",
         "score": "#3987e5",
         "accent": "#f07a45",
-        "band": "#f07a452b",
+        "zoom": "#8f8e8630",
     },
 }
 
@@ -122,102 +125,113 @@ def envelope(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.array(xs), np.array(ys)
 
 
-def heading(
-    ax: plt.Axes, colors: dict[str, str], title: str, note: str, strong: bool = False
-) -> None:
-    """Write a bold panel title on the left and a note on the right."""
-    ax.text(0, 1.2, title, transform=ax.transAxes, fontweight="bold", va="bottom")
-    ax.text(
-        1,
-        1.2,
-        note,
-        transform=ax.transAxes,
-        color=colors["text" if strong else "muted"],
-        ha="right",
-        va="bottom",
-        fontsize=9,
+def excerpt_window(peaks: np.ndarray, anomaly: int) -> tuple[int, int]:
+    """Return the samples that span the heartbeats around the anomalous one."""
+    half_beat = int(np.median(np.diff(peaks))) // 2
+    return (
+        int(peaks[anomaly - EXCERPT_BEATS]) - half_beat,
+        int(peaks[anomaly + EXCERPT_BEATS]) + half_beat,
     )
 
 
-def draw_stream(
+def heading(
+    ax: plt.Axes, colors: dict[str, str], title: str, note: str, note_color: str
+) -> None:
+    """Write a bold panel title on the left and a note on the right."""
+    ax.text(0, 1.07, title, transform=ax.transAxes, fontweight="bold", va="bottom")
+    ax.text(
+        1,
+        1.07,
+        note,
+        transform=ax.transAxes,
+        color=colors[note_color],
+        ha="right",
+        va="bottom",
+        fontsize=9.5,
+    )
+
+
+def draw_excerpt(
     ax: plt.Axes,
     colors: dict[str, str],
     values: np.ndarray,
     span: tuple[int, int],
-    n_beats: int,
+    window: tuple[int, int],
 ) -> None:
-    """Draw the raw stream with the labelled beat marked."""
+    """Draw the heartbeats around the labelled one inside the normal range."""
+    left, right = window
     start, stop = span
-    ax.plot(*envelope(values), color=colors["line"], linewidth=0.45)
-    ax.axvspan(start - 120, stop + 120, color=colors["band"], linewidth=0)
-    ax.set_xlim(0, len(values))
+    normal = np.concatenate([values[:start], values[stop:]])
+    for bound in (normal.min(), normal.max()):
+        ax.axhline(
+            bound, color=colors["muted"], linewidth=0.7, linestyle=(0, (1, 4)), zorder=0
+        )
+    ax.plot(
+        np.arange(left, right), values[left:right], color=colors["line"], linewidth=1.0
+    )
+    ax.plot(
+        np.arange(start, stop + 1),
+        values[start : stop + 1],
+        color=colors["accent"],
+        linewidth=2.2,
+        solid_capstyle="round",
+    )
+    ax.set_xlim(left, right)
     ax.set_xticks([])
     ax.set_yticks([])
-    heading(
-        ax,
-        colors,
-        f"{len(values):,} noisy ECG samples, {n_beats} heartbeats, one anomalous",
-        "",
-    )
 
 
 def draw_scores(
     ax: plt.Axes,
     colors: dict[str, str],
     scores: np.ndarray,
-    span: tuple[int, int],
+    window: tuple[int, int],
 ) -> None:
-    """Draw the DAMP score stream and mark its highest score."""
-    start, stop = span
+    """Draw the DAMP score of the whole series and mark its highest score."""
     warm = scores[WARMUP:]
-    scaled = warm / warm.max()
-    xs, ys = envelope(scaled)
-    ax.plot(xs + WARMUP, ys, color=colors["score"], linewidth=0.7)
+    xs, ys = envelope(warm / warm.max())
+    ax.plot(xs + WARMUP, ys, color=colors["score"], linewidth=0.8)
+    ax.axvspan(*window, color=colors["zoom"], linewidth=0)
     top = int(np.argmax(scores))
-    ax.scatter([top], [1.0], s=34, color=colors["accent"], zorder=3, linewidth=0)
-    ax.axvspan(start - 120, stop + 120, color=colors["band"], linewidth=0)
+    ax.scatter([top], [1.0], s=38, color=colors["accent"], zorder=3, linewidth=0)
+    ax.annotate(
+        "highest score",
+        (top, 1.0),
+        xytext=(9, 0),
+        textcoords="offset points",
+        va="center",
+        fontsize=9.5,
+    )
     ax.set_xlim(0, len(scores))
-    ax.set_ylim(0, 1.12)
+    ax.set_ylim(0, SCORE_CEILING)
     ax.set_yticks([])
-    ax.set_xticks([0, 10_000, 20_000, 30_000], ["0", "10k", "20k", "30k"])
-    heading(
-        ax,
-        colors,
-        "DAMP score",
-        f"one pass, no training split  ·  peak at sample {top:,}, the anomalous beat",
-        strong=True,
-    )
+    ax.set_xticks([0, 10_000, 20_000, 30_000], ["0", "10,000", "20,000", "30,000"])
 
 
-def draw_beats(
-    ax: plt.Axes,
+def draw_zoom(
+    fig: plt.Figure,
     colors: dict[str, str],
-    values: np.ndarray,
-    peaks: np.ndarray,
-    anomaly: int,
+    excerpt_ax: plt.Axes,
+    score_ax: plt.Axes,
+    window: tuple[int, int],
 ) -> None:
-    """Overlay every normal beat and draw the anomalous beat on top."""
-    left, right = BEAT_WINDOW
-    offsets = np.arange(left, right)
-    for index, peak in enumerate(peaks):
-        if index == anomaly or peak + left < 0 or peak + right > len(values):
-            continue
-        ax.plot(
-            offsets,
-            values[peak + offsets],
-            color=colors["beats"],
-            linewidth=0.8,
-            rasterized=True,  # 180 overlaid lines would bloat the SVG
+    """Join the excerpt to the stretch of the score axis that it shows."""
+    left, right = window
+    to_figure = fig.transFigure.inverted()
+    corners = [
+        excerpt_ax.transAxes.transform((0, 0)),
+        excerpt_ax.transAxes.transform((1, 0)),
+        score_ax.transData.transform((right, SCORE_CEILING)),
+        score_ax.transData.transform((left, SCORE_CEILING)),
+    ]
+    fig.add_artist(
+        Polygon(
+            to_figure.transform(corners),
+            facecolor=colors["zoom"],
+            edgecolor="none",
+            transform=fig.transFigure,
         )
-    ax.plot(
-        offsets,
-        values[peaks[anomaly] + offsets],
-        color=colors["accent"],
-        linewidth=1.8,
     )
-    ax.set_xlim(left, right)
-    ax.set_xticks([])
-    ax.set_yticks([])
 
 
 def render(
@@ -233,7 +247,7 @@ def render(
             "svg.fonttype": "none",
             "svg.hashsalt": "aberrant",  # stable element ids across runs
             "font.family": "sans-serif",
-            "font.size": 10,
+            "font.size": 11,
             "text.color": colors["text"],
             "axes.labelcolor": colors["muted"],
             "xtick.color": colors["muted"],
@@ -242,42 +256,40 @@ def render(
         }
     )
     peaks, anomaly = find_beats(values, span)
-    fig = plt.figure(figsize=(12, 4.6))
-    grid = fig.add_gridspec(
-        2,
-        2,
-        width_ratios=[2.7, 1],
-        height_ratios=[1, 1],
-        hspace=0.5,
-        wspace=0.08,
-    )
-    stream_ax = fig.add_subplot(grid[0, 0])
-    damp_ax = fig.add_subplot(grid[1, 0])
-    beat_ax = fig.add_subplot(grid[:, 1])
+    window = excerpt_window(peaks, anomaly)
+    fig = plt.figure(figsize=(9.6, 4.4))
+    grid = fig.add_gridspec(2, 1, height_ratios=[1.35, 1], hspace=0.62)
+    excerpt_ax = fig.add_subplot(grid[0])
+    score_ax = fig.add_subplot(grid[1])
 
-    draw_stream(stream_ax, colors, values, span, len(peaks))
-    draw_scores(damp_ax, colors, damp_scores, span)
-    draw_beats(beat_ax, colors, values, peaks, anomaly)
-    beat_ax.text(  # aligned with the stream title
-        0,
-        1.2,
-        "The anomalous beat",
-        transform=blended_transform_factory(beat_ax.transAxes, stream_ax.transAxes),
-        fontweight="bold",
-        va="bottom",
+    draw_excerpt(excerpt_ax, colors, values, span, window)
+    heading(
+        excerpt_ax,
+        colors,
+        f"ECG: {2 * EXCERPT_BEATS + 1} of {len(peaks)} heartbeats",
+        "wrong shape, but every sample inside the normal range",
+        "accent",
     )
+    draw_scores(score_ax, colors, damp_scores, window)
+    heading(
+        score_ax,
+        colors,
+        f"DAMP score for all {len(values):,} samples",
+        "one pass, no training split",
+        "muted",
+    )
+    draw_zoom(fig, colors, excerpt_ax, score_ax, window)
 
-    for ax in (stream_ax, damp_ax, beat_ax):
+    for ax in (excerpt_ax, score_ax):
         for side in ("top", "right", "left"):
             ax.spines[side].set_visible(False)
         ax.patch.set_alpha(0)
-    beat_ax.spines["bottom"].set_visible(False)
+    excerpt_ax.spines["bottom"].set_visible(False)
     fig.patch.set_alpha(0)
     fig.savefig(
         OUTPUT_DIR / f"discord-{theme}.svg",
         bbox_inches="tight",
         transparent=True,
-        dpi=200,  # resolution of the rasterized beat overlay
         metadata={"Date": None},  # keep re-renders byte-identical
     )
     plt.close(fig)

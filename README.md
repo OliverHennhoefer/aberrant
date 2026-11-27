@@ -44,7 +44,7 @@ bounded memory, and its highest score lands on that beat.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-dark.svg">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="A 30,000-sample noisy ECG with 181 heartbeats, one of them anomalous. The DAMP score stream has a single dominant peak on the anomalous beat. An overlay of all beats shows the anomalous beat stays within the normal value range but has a different shape.">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="Eleven heartbeats of a noisy ECG. One beat, drawn in orange, lacks the tall spike of its neighbours, yet stays between the lowest and the highest normal value. Below them, the DAMP score for all 30,000 samples of the recording has a single dominant peak, on that beat.">
   </picture>
 </p>
 

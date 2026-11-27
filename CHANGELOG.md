@@ -202,6 +202,10 @@ Semantic Versioning.
   0.8 ships MIDAS, DAMP and a matrix profile, which the table marked as
   missing, and the migration guide no longer claims that neither library has
   them.
+- The README's DAMP figure is redrawn. It shows the eleven heartbeats around
+  the anomalous one at a scale where their shapes can be read, above the
+  score of the whole recording, in place of the full 30,000-sample trace and
+  an overlay of all 181 beats.
 - `CellNeighborhoodDetector` is about twice as fast, with the same scores
   and less memory: each cell stores its points once, as rows of one array
   that a score measures in batches, and candidate cells are compared as one
