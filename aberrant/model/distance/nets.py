@@ -17,6 +17,8 @@ type _Entry = tuple[int, _Cell]
 _MAX_NEIGHBOR_OFFSETS = 20_000
 # Added to the squared radius so rounding cannot drop a neighbor on the boundary.
 _DISTANCE_TOLERANCE = 1e-9
+# Absolute rounding allowance for squared distances in the subnormal range.
+_CLOSE_ABSOLUTE = 1e-300
 
 
 class CellNeighborhoodDetector(BaseModel):
@@ -61,6 +63,8 @@ class CellNeighborhoodDetector(BaseModel):
         https://doi.org/10.14778/3342263.3342269
         Original implementation: https://github.com/kaist-dmlab/NETS
     """
+
+    _transient = ("_cell_arrays",)
 
     def __init__(
         self,
@@ -107,6 +111,8 @@ class CellNeighborhoodDetector(BaseModel):
         self._cell_members: dict[_Cell, dict[int, np.ndarray]] = {}
         self._neighbor_cache: dict[_Cell, tuple[_Cell, ...]] = {}
         self._neighbor_offsets_cache: dict[int, tuple[_Cell, ...]] = {}
+        # Each cell's members stacked as rows, rebuilt after the cell changes.
+        self._cell_arrays: dict[_Cell, np.ndarray] | None = {}
         self._samples_seen = 0
 
     @property
@@ -213,11 +219,16 @@ class CellNeighborhoodDetector(BaseModel):
         entry_id = self._samples_seen
         self._window_entries.append((entry_id, cell))
         self._cell_members.setdefault(cell, {})[entry_id] = vector
+        arrays = self._cell_arrays
+        if arrays is not None:
+            arrays.pop(cell, None)
 
         if len(self._window_entries) > self.window_size:
             old_id, old_cell = self._window_entries.popleft()
             members = self._cell_members[old_cell]
             del members[old_id]
+            if arrays is not None:
+                arrays.pop(old_cell, None)
             if not members:
                 del self._cell_members[old_cell]
                 self._neighbor_cache.clear()
@@ -230,12 +241,31 @@ class CellNeighborhoodDetector(BaseModel):
         if not self.readiness.ready:
             return 0.0
         vector = event.features.values
+        if self._cell_arrays is None:
+            self._cell_arrays = {}
+        arrays = self._cell_arrays
+        limit = self._distance_limit_sq
+        # Summing the squares as a batch may round differently from
+        # ``np.dot``, by far less than this relative margin. Distances that
+        # close to the limit, or not finite, are summed again with ``np.dot``
+        # so that every comparison matches the one point at a time.
+        margin = 4.0 * (vector.size + 2) * np.finfo(np.float64).eps
+        close = margin * abs(limit) + _CLOSE_ABSOLUTE
         neighbors = 0
         for cell in self._candidate_cells(self._cell_id(vector)):
-            for point in self._cell_members[cell].values():
-                diff = point - vector
-                if float(np.dot(diff, diff)) <= self._distance_limit_sq:
-                    neighbors += 1
-                    if neighbors >= self.k:
-                        return 0.0
+            points = arrays.get(cell)
+            if points is None:
+                points = np.array(list(self._cell_members[cell].values()))
+                arrays[cell] = points
+            diffs = points - vector
+            distances = np.einsum("ij,ij->i", diffs, diffs)
+            inside = distances <= limit
+            unsure = ~(np.abs(distances - limit) > close)
+            if unsure.any():
+                for row in np.flatnonzero(unsure).tolist():
+                    diff = diffs[row]
+                    inside[row] = float(np.dot(diff, diff)) <= limit
+            neighbors += int(np.count_nonzero(inside))
+            if neighbors >= self.k:
+                return 0.0
         return 1.0 - neighbors / float(self.k)
