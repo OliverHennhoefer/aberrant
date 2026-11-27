@@ -35,10 +35,21 @@ class _ChainLevels:
     # Whether bin steps and their hash terms are reduced modulo the width
     # before summing, as int64 sums of unreduced terms could overflow.
     reduce_terms: bool
+    # The integer type of bins and hash sums: int32 where unreduced sums fit.
+    hash_dtype: type[np.signedinteger[Any]]
     # Hash offsets and the flat sketch index of each row's first counter,
     # shaped ``(n_hashes, depth, n_chains)``.
     hash_offsets: np.ndarray
     row_starts: np.ndarray
+    # ``width - 1`` for a power-of-two width, where masking the low bits
+    # reduces modulo the width as ``%`` does, also for negative values.
+    width_mask: int | None
+    # Each level's depth-scaled log count, ``(depth, 1)``, the chain score of
+    # every level and count, ``(depth, window_size + 1)``, or ``None`` where
+    # that table would be large, and chain indexes.
+    level_offsets: np.ndarray
+    chain_scores: np.ndarray | None
+    chains: np.ndarray
 
 
 @dataclass(slots=True)
@@ -365,7 +376,15 @@ class XStream(BaseModel):
         width = self.sketch_width
         # Unreduced terms lie within (-2 * width**2, 2 * width**2).
         reduce_terms = 2 * depth * width * width + width > np.iinfo(np.int64).max
+        fits_int32 = 2 * depth * width * width + width <= np.iinfo(np.int32).max
+        hash_dtype = np.int32 if fits_int32 else np.int64
         rows = np.arange(n_splits * self.n_hashes, dtype=np.intp) * width
+        level_offsets = np.arange(1.0, depth + 1.0).reshape(-1, 1)
+        chain_scores = None
+        if depth * (self.window_size + 1) <= _MAX_SCORE_TABLE:
+            counts = np.arange(self.window_size + 1)
+            level_scores = np.log2(1.0 + np.broadcast_to(counts, (depth, counts.size)))
+            chain_scores = _chain_scores(level_scores + level_offsets)
         return _ChainLevels(
             dims=dims,
             shift=level_shift,
@@ -376,12 +395,19 @@ class XStream(BaseModel):
                 for splits, earlier in revisits
             ],
             previous=previous,
-            hash_coeffs=hash_coeffs_mod[:, dims],
+            hash_coeffs=hash_coeffs_mod[:, dims].astype(hash_dtype),
             reduce_terms=reduce_terms,
-            hash_offsets=np.ascontiguousarray(hash_offsets_mod.transpose(2, 1, 0)),
+            hash_dtype=hash_dtype,
+            hash_offsets=np.ascontiguousarray(
+                hash_offsets_mod.transpose(2, 1, 0), dtype=hash_dtype
+            ),
             row_starts=np.ascontiguousarray(
                 rows.reshape(n_chains, depth, self.n_hashes).transpose(2, 1, 0)
             ),
+            width_mask=width - 1 if width & (width - 1) == 0 else None,
+            level_offsets=level_offsets,
+            chain_scores=chain_scores,
+            chains=np.arange(n_chains),
         )
 
     def _initialize_model(self) -> None:
@@ -416,7 +442,7 @@ class XStream(BaseModel):
             int(by_chain[~finite.reshape(self.depth, -1).T][0])
         # The hashes are linear modulo the width, so each bin only matters
         # modulo the width. ``fmod`` of an integral float is exact.
-        bins_mod = np.zeros(bins.size + 1, dtype=np.int64)
+        bins_mod = np.zeros(bins.size + 1, dtype=levels.hash_dtype)
         bins_mod[:-1] = np.fmod(bins, width)
         steps = bins_mod[:-1] - bins_mod[levels.previous]
         if levels.reduce_terms:
@@ -424,8 +450,15 @@ class XStream(BaseModel):
             terms = steps * levels.hash_coeffs % width
         else:
             terms = steps * levels.hash_coeffs
-        dots = np.cumsum(terms.reshape(levels.hash_offsets.shape), axis=1)
-        cells: np.ndarray = levels.row_starts + (dots + levels.hash_offsets) % width
+        dots = np.cumsum(
+            terms.reshape(levels.hash_offsets.shape), axis=1, dtype=levels.hash_dtype
+        )
+        dots += levels.hash_offsets
+        if levels.width_mask is None:
+            dots %= width
+        else:
+            dots &= levels.width_mask
+        cells: np.ndarray = levels.row_starts + dots
         state.last_point = point
         state.last_cells = cells
         return cells
@@ -475,15 +508,15 @@ class XStream(BaseModel):
         self._learn_projected(state, y)
 
     def _score_projected(self, state: _XStreamState, y: np.ndarray) -> float:
+        levels = state.levels
         counts = state.cms_reference.reshape(-1)[self._sketch_cells(state, y)]
-        level_scores = np.log2(1.0 + counts.min(axis=0)) + np.arange(
-            1.0, self.depth + 1.0
-        ).reshape(-1, 1)
-        # Python's power, as in a per-chain loop: NumPy's vectorized power can
-        # differ from it in the last bit.
-        chain_scores = np.array(
-            [2.0 ** (1.0 - best) for best in level_scores.min(axis=0).tolist()]
-        )
+        minimum = counts.min(axis=0)
+        level_scores = np.log2(1.0 + minimum) + levels.level_offsets
+        if levels.chain_scores is None:
+            chain_scores = _chain_scores(level_scores.min(axis=0))
+        else:
+            best = level_scores.argmin(axis=0)
+            chain_scores = levels.chain_scores[best, minimum[best, levels.chains]]
         score = float(np.mean(chain_scores))
         return min(max(score, 0.0), 1.0)
 
@@ -494,6 +527,20 @@ class XStream(BaseModel):
         if state is None or not state.reference_ready:
             return 0.0
         return self._score_projected(state, self._project_one(x))
+
+
+# The most entries of a precomputed chain-score table.
+_MAX_SCORE_TABLE = 1 << 16
+
+
+def _chain_scores(best: np.ndarray) -> np.ndarray:
+    """``2 ** (1 - best)`` elementwise, with Python's power.
+
+    NumPy's vectorized power can differ from Python's in the last bit.
+    """
+    return np.array([2.0 ** (1.0 - value) for value in best.ravel().tolist()]).reshape(
+        best.shape
+    )
 
 
 def _counter_dtype(window_size: int) -> type[np.signedinteger[Any]]:

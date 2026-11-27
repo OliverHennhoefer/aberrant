@@ -197,6 +197,9 @@ Semantic Versioning.
   and less memory: each cell stores its points once, as rows of one array
   that a score measures in batches, and candidate cells are compared as one
   integer array.
+- `XStream` scores and learns about 12% faster with the same scores: sketch
+  hashes use int32 arithmetic where the sums fit and a mask for power-of-two
+  widths, and chain scores come from a precomputed table for small windows.
 - **Breaking:** aberrant requires Python 3.12 or newer and is tested on 3.12
   to 3.14.
 - **Breaking:** `ForecasterProtocol.learn_one` takes `None` for a missing
