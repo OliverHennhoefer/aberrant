@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 
 import aberrant
-from aberrant.model.distance import LocalOutlierFactor
+from aberrant.model.distance import CellNeighborhoodDetector, LocalOutlierFactor
 from aberrant.model.forest import (
     RHF,
     ASDIsolationForest,
@@ -481,6 +481,68 @@ CASES: dict[str, tuple[Callable[..., Any], list[dict[str, Any]]]] = {
                     "n_events": 500,
                     "n_nodes": 300,
                     "bucket_size": 40,
+                },
+            },
+        ],
+    ),
+    "cell_neighborhood_detector": (
+        CellNeighborhoodDetector,
+        [
+            {
+                "name": "defaults",
+                "params": {},
+                "stream": {"seed": 51, "n_events": 1500, "n_features": 4},
+            },
+            {
+                "name": "evicting_window",
+                "params": {
+                    "k": 5,
+                    "radius": 0.8,
+                    "window_size": 60,
+                    "slide_size": 20,
+                    "warm_up": 2,
+                },
+                "stream": {"seed": 52, "n_events": 500, "n_features": 3},
+            },
+            {
+                "name": "unit_small_radius",
+                "params": {
+                    "k": 10,
+                    "radius": 0.15,
+                    "window_size": 300,
+                    "slide_size": 50,
+                },
+                "stream": {
+                    "seed": 53,
+                    "n_events": 900,
+                    "n_features": 4,
+                    "kind": "unit",
+                },
+            },
+            {
+                "name": "grid_ties_on_the_radius",
+                "params": {"k": 4, "radius": 0.5, "window_size": 80, "slide_size": 10},
+                "stream": {
+                    "seed": 54,
+                    "n_events": 400,
+                    "n_features": 2,
+                    "kind": "grid",
+                },
+            },
+            {
+                "name": "time_key",
+                "params": {
+                    "k": 3,
+                    "radius": 1.0,
+                    "window_size": 40,
+                    "slide_size": 8,
+                    "time_key": "t",
+                },
+                "stream": {
+                    "seed": 55,
+                    "n_events": 300,
+                    "n_features": 2,
+                    "time_key": "t",
                 },
             },
         ],

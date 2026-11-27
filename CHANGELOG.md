@@ -427,8 +427,6 @@ Semantic Versioning.
   test that passes fails the run.
 - `LocalOutlierFactor` is checked score by score against scikit-learn's
   novelty LOF over a sliding window, for both metrics.
-- The FAISS CI job runs `tests/transformers/test_pca_pipeline.py`, which
-  skips without FAISS and so ran in no job.
 - Integration tests check detection quality with floors instead of PR-AUC
   ranges. Every tabular detector runs from one table on 5,000 SHUTTLE rows
   (387 anomalies instead of about 40), and must keep ROC-AUC and PR-AUC within
@@ -444,6 +442,38 @@ Semantic Versioning.
   comparisons with river for `HalfSpaceTrees`, `ADWIN` and `PageHinkley`.
   Pull requests skip them.
 - The FAISS CI job runs the kNN quality case, which no job ran before.
+- `tests/utils.py` keeps only `DataGenerator.generate_streaming_data`, the one
+  helper a test uses, and the `benchmark` dependency group drops
+  `pytest-benchmark`, which no test used.
+- The unused figure of three scored sensor streams (`docs/img/stream-*.svg`
+  and `docs/scripts/stream_figure.py`) is gone; the README shows the DAMP
+  discord figure instead.
+- `benchmarks/compare_peers.py`, which no longer ran on 2.0, became
+  `benchmarks/detectors.py`, an internal benchmark of every catalog detector.
+  It reports throughput, per-event latency, pickled state size, the event at
+  which a detector becomes ready, ROC-AUC, PR-AUC and a fingerprint of the
+  exact scores. `--baseline` compares with an earlier run, and
+  `--require-same-scores` fails when a change moved any score. The river and
+  PySAD comparisons moved behind `--peers`.
+- `benchmarks/detectors.py --against REF` alternates the working tree with a
+  git ref over several rounds and calls each case faster, slower or within
+  noise from a bootstrap interval of the median speed ratio. `--forbid-slower`
+  and `--require-same-scores` turn it into a gate, and `--log` appends the
+  verdicts to a tab-separated file. Detectors whose parameters the benchmark
+  overrides also run at their defaults, rows flag a stream that never filled
+  the detector's window, `--memory` reports what the live model retains, and
+  a missing baseline row now fails `--require-same-scores`.
+- `benchmarks/detectors.py --against REF --pareto` judges every case on
+  speed, p99 latency, pickled state, peak and retained memory, ROC-AUC,
+  PR-AUC, readiness and determinism, and passes only when some axis got
+  better and none got worse. A trade-off passes only with
+  `--accept-tradeoff "reason"`, which the log records. `--against` now runs
+  each case on both versions back to back in a fresh pair of workers per
+  round, uses a sign-test interval of the median instead of a bootstrap, times
+  fast detectors for at least `--min-seconds`, and counts a timing change
+  only when fresh rounds repeat it; `--min-gain` defaults to 5%.
+- `CellNeighborhoodDetector` has an exact score fixture, including window
+  eviction, ties on the radius and an explicit time key.
 
 ### Removed
 
