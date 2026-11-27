@@ -42,6 +42,13 @@ class _Rows:
 
     def pop_oldest(self) -> None:
         self.start += 1
+        live = self.end - self.start
+        # Shrink a buffer once it is under a quarter full, so a cell that was
+        # crowded once keeps at most four times its rows (and at least 8).
+        if len(self.buffer) > 8 and 4 * live < len(self.buffer):
+            kept = np.empty((max(2 * live, 8), self.buffer.shape[1]))
+            kept[:live] = self.buffer[self.start : self.end]
+            self.buffer, self.start, self.end = kept, 0, live
 
 
 class CellNeighborhoodDetector(BaseModel):
