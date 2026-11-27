@@ -10,6 +10,7 @@ import pytest
 
 from aberrant.model.distance import CellNeighborhoodDetector as NETS
 from aberrant.model.distance import nets as nets_module
+from tests import score_sequences
 
 TOLERANCE = nets_module._DISTANCE_TOLERANCE
 
@@ -408,3 +409,15 @@ def test_score_matches_window_reference_through_eviction(n_features, eps):
     assert model.n_samples_seen == 0
     assert model.score_one({"new": 1.0, "t": 0.0}) == 0.0
     model.learn_one({"new": 1.0, "t": 0.0})
+
+
+@pytest.mark.parametrize(
+    "case",
+    score_sequences.load("cell_neighborhood_detector"),
+    ids=lambda case: case["name"],
+)
+def test_score_sequences_match_recorded_reference(case):
+    """Faster implementations must reproduce the recorded scores exactly."""
+    model = NETS(**case["params"])
+    scores = score_sequences.replay(model, case)
+    np.testing.assert_array_equal(scores, case["scores"])

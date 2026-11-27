@@ -55,20 +55,28 @@ uv run python -m pytest tests/integration -m benchmark -q
 
 `benchmarks/detectors.py` measures every catalog detector: events per
 second, per-event latency, pickled state size, the event at which it becomes
-ready, ROC-AUC, PR-AUC and a fingerprint of its exact scores. Measure the base
-and the change, then compare:
+ready, ROC-AUC, PR-AUC and a fingerprint of its exact scores. To judge a
+change, edit the working tree and compare it with the last commit:
 
 ```bash
-uv run python benchmarks/detectors.py --cases loda --runs 5 --json before.json
-# change something
-uv run python benchmarks/detectors.py --cases loda --runs 5 --json after.json \
-    --baseline before.json --require-same-scores
+uv run python benchmarks/detectors.py --cases loda --against HEAD \
+    --require-same-scores --forbid-slower --log .benchmarks/results.tsv \
+    --note "what the change does"
 ```
 
-`--require-same-scores` fails when any score sequence changed, which a pure
-speed or memory change must not do. `--profile --cases loda` prints the
-hottest functions. Count a speedup only when it is larger than the reported
-`spread` of both runs.
+`--against` alternates the two versions over several rounds and calls a case
+faster or slower only when a bootstrap interval of the median speed ratio
+excludes no change. `--require-same-scores` fails when any score sequence
+changed, which a pure speed or memory change must not do; the exact score
+fixtures in `tests/data/score_sequences/` check the same at the unit level.
+Detectors whose parameters the benchmark overrides also run at their
+defaults (`<id>@defaults`), and `--memory` adds what the live model retains,
+caches included.
+
+Timings are noisy on shared machines: run nothing else meanwhile, and treat
+`within noise` as no gain. `--profile --cases loda` prints the hottest
+functions, but cProfile inflates code that makes many small Python calls.
+The repository needs uv 0.12.18 or later.
 
 ## PR expectations
 

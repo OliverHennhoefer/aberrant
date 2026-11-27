@@ -455,6 +455,16 @@ Semantic Versioning.
   exact scores. `--baseline` compares with an earlier run, and
   `--require-same-scores` fails when a change moved any score. The river and
   PySAD comparisons moved behind `--peers`.
+- `benchmarks/detectors.py --against REF` alternates the working tree with a
+  git ref over several rounds and calls each case faster, slower or within
+  noise from a bootstrap interval of the median speed ratio. `--forbid-slower`
+  and `--require-same-scores` turn it into a gate, and `--log` appends the
+  verdicts to a tab-separated file. Detectors whose parameters the benchmark
+  overrides also run at their defaults, rows flag a stream that never filled
+  the detector's window, `--memory` reports what the live model retains, and
+  a missing baseline row now fails `--require-same-scores`.
+- `CellNeighborhoodDetector` has an exact score fixture, including window
+  eviction, ties on the radius and an explicit time key.
 
 ### Removed
 
