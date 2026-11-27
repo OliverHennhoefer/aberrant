@@ -271,6 +271,9 @@ class TestXStreamExactness(unittest.TestCase):
             {"k": 3, "n_chains": 5, "depth": 12, "sketch_width": 37, "density": 1.0},
             {"k": 16, "n_chains": 7, "depth": 9, "sketch_width": 64},
             {"k": 6, "n_chains": 4, "depth": 6, "sketch_width": 1},
+            # Widths whose hash sums need int64, a power of two and not.
+            {"k": 4, "n_chains": 3, "depth": 5, "sketch_width": 1 << 15},
+            {"k": 4, "n_chains": 3, "depth": 5, "sketch_width": 40_009},
         ]
         rng = np.random.default_rng(5)
         for params in configurations:
@@ -306,6 +309,24 @@ class TestXStreamExactness(unittest.TestCase):
             state.last_cells = None
             state.levels.reduce_terms = True
             np.testing.assert_array_equal(model._sketch_cells(state, y), unreduced)
+
+    def test_chain_score_table_gives_the_same_scores(self):
+        events = score_sequences.make_stream(seed=7, n_events=200, n_features=4)
+        tabled = XStream(k=8, n_chains=6, depth=5, window_size=20, warm_up=20, seed=1)
+        computed = XStream(k=8, n_chains=6, depth=5, window_size=20, warm_up=20, seed=1)
+        tabled_scores = []
+        computed_scores = []
+        for event in events:
+            if computed._state is not None:
+                computed._state.levels.chain_scores = None
+            tabled_scores.append(tabled.score_one(event))
+            computed_scores.append(computed.score_one(event))
+            tabled.learn_one(event)
+            computed.learn_one(event)
+        assert tabled._state is not None
+        self.assertIsNotNone(tabled._state.levels.chain_scores)
+        self.assertGreater(len(set(tabled_scores)), 10)
+        self.assertEqual(tabled_scores, computed_scores)
 
     def test_learning_after_scoring_another_point_counts_the_learned_point(self):
         events = score_sequences.make_stream(seed=5, n_events=80, n_features=3)
