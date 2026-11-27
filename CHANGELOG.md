@@ -447,8 +447,7 @@ Semantic Versioning.
   `pytest-benchmark`, which no test used.
 - The unused figure of three scored sensor streams (`docs/img/stream-*.svg`
   and `docs/scripts/stream_figure.py`) is gone; the README shows the DAMP
-  discord figure instead. So is `docs/img/aberrant.png`, a raster copy of the
-  light logo that nothing referenced.
+  discord figure instead.
 
 ### Removed
 
