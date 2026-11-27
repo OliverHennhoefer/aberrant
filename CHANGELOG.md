@@ -193,6 +193,10 @@ Semantic Versioning.
 
 ### Changed
 
+- `CellNeighborhoodDetector` is about twice as fast, with the same scores
+  and less memory: each cell stores its points once, as rows of one array
+  that a score measures in batches, and candidate cells are compared as one
+  integer array.
 - **Breaking:** aberrant requires Python 3.12 or newer and is tested on 3.12
   to 3.14.
 - **Breaking:** `ForecasterProtocol.learn_one` takes `None` for a missing
