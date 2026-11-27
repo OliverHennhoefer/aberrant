@@ -200,7 +200,8 @@ Semantic Versioning.
   components around it. A scope section states what a score and a threshold
   do not promise. The comparison table with river and PySAD is gone: PySAD
   0.8 ships MIDAS, DAMP and a matrix profile, which the table marked as
-  missing.
+  missing, and the migration guide no longer claims that neither library has
+  them.
 - `CellNeighborhoodDetector` is about twice as fast, with the same scores
   and less memory: each cell stores its points once, as rows of one array
   that a score measures in batches, and candidate cells are compared as one
