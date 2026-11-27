@@ -147,6 +147,10 @@ class OnlineAutoencoderEnsemble(BaseModel):
     - ``detector_warm_up``: train ensemble and output autoencoders.
     - ``ready``: score samples; optionally keep adapting if enabled.
 
+    The default warm-ups are Kitsune's (5,000 and 50,000 events), so the
+    model scores 0 for its first 55,000 events. Lower both for shorter
+    streams.
+
     Args:
         max_ae_size: Maximum number of input features assigned to one ensemble
             autoencoder.

@@ -42,7 +42,11 @@ class CellNeighborhoodDetector(BaseModel):
 
     Args:
         k: Neighbor count at which the scarcity score reaches zero.
-        radius: Finite positive Euclidean neighborhood radius and grid-cell width.
+        radius: Finite positive Euclidean neighborhood radius and grid-cell
+            width, in the units of the features. The default of 1.5 suits
+            standardized features; on features scaled to ``[0, 1]`` it covers
+            most of the space, so every point finds ``k`` neighbors and
+            scores 0.
         window_size: Maximum number of learned points retained. It must exceed
             ``k``.
         slide_size: Number of learned events per warm-up slide.

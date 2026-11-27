@@ -9,7 +9,8 @@ the two JSON files. It is not part of CI. From the repository root::
 
 Cases come from the model catalog, so a new detector is measured without
 editing this file. The ``tabular`` suite runs every tabular detector at its
-defaults (with ``seed=42`` where it takes one) on all features. The ``series``
+defaults (with ``seed=42`` where it takes one) on all features, except for the
+few overrides in ``TABULAR_PARAMS``. The ``series``
 suite runs the univariate, bivariate and matrix-profile detectors on the first
 one or two features. Graph detectors have no labelled stream yet and are left
 out. A few slow detectors stream fewer events; ``EVENT_CAPS`` lists them.
@@ -102,6 +103,17 @@ SERIES_PARAMS: dict[str, dict[str, object]] = {
         "model": {"id": "seasonal_naive", "params": {"season_length": 100}},
     },
 }
+# Defaults that would make a detector meaningless on these streams. Streams are
+# scaled to [0, 1], where the default radius of 1.5 (sized for standardized
+# features) holds every point's neighbors; and the Kitsune defaults of 5,000 plus
+# 50,000 warm-up events would leave the ensemble unready for the whole stream.
+TABULAR_PARAMS: dict[str, dict[str, object]] = {
+    "cell_neighborhood_detector": {"radius": 0.15},
+    "online_autoencoder_ensemble": {
+        "feature_map_warm_up": 500,
+        "detector_warm_up": 2_000,
+    },
+}
 SERIES_FEATURES = {"bivariate": 2, "univariate": 1}
 TIME_SERIES_IDS = set(SERIES_PARAMS)
 
@@ -175,7 +187,7 @@ def catalog_cases(suites: set[str]) -> list[Case]:
             continue  # graph and edge streams
         if suite not in suites:
             continue
-        params = dict(SERIES_PARAMS.get(model_id, {}))
+        params = dict(SERIES_PARAMS.get(model_id, TABULAR_PARAMS.get(model_id, {})))
         if _takes_seed(model_id):
             params["seed"] = SEED
         cases.append(
