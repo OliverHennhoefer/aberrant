@@ -1294,7 +1294,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--against",
         metavar="REF",
         help="alternate the working tree with this git ref (for example HEAD) "
-        "and report the median speed ratio with a 95% interval",
+        "and report the median speed ratio with a 95%% interval",
     )
     parser.add_argument(
         "--rounds", type=int, default=7, help="alternating rounds for --against"
