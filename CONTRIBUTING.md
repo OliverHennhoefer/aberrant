@@ -51,6 +51,25 @@ uv sync --group benchmark
 uv run python -m pytest tests/integration -m benchmark -q
 ```
 
+## Performance work
+
+`benchmarks/detectors.py` measures every catalog detector: events per
+second, per-event latency, pickled state size, the event at which it becomes
+ready, ROC-AUC, PR-AUC and a fingerprint of its exact scores. Measure the base
+and the change, then compare:
+
+```bash
+uv run python benchmarks/detectors.py --cases loda --runs 5 --json before.json
+# change something
+uv run python benchmarks/detectors.py --cases loda --runs 5 --json after.json \
+    --baseline before.json --require-same-scores
+```
+
+`--require-same-scores` fails when any score sequence changed, which a pure
+speed or memory change must not do. `--profile --cases loda` prints the
+hottest functions. Count a speedup only when it is larger than the reported
+`spread` of both runs.
+
 ## PR expectations
 
 - Keep changes scoped and reviewable.

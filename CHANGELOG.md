@@ -448,6 +448,13 @@ Semantic Versioning.
 - The unused figure of three scored sensor streams (`docs/img/stream-*.svg`
   and `docs/scripts/stream_figure.py`) is gone; the README shows the DAMP
   discord figure instead.
+- `benchmarks/compare_peers.py`, which no longer ran on 2.0, became
+  `benchmarks/detectors.py`, an internal benchmark of every catalog detector.
+  It reports throughput, per-event latency, pickled state size, the event at
+  which a detector becomes ready, ROC-AUC, PR-AUC and a fingerprint of the
+  exact scores. `--baseline` compares with an earlier run, and
+  `--require-same-scores` fails when a change moved any score. The river and
+  PySAD comparisons moved behind `--peers`.
 
 ### Removed
 
