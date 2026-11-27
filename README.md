@@ -36,19 +36,19 @@ the same way, one event at a time: preprocessing, alarm thresholds that adapt
 with the scores, drift detection and evaluation. The base install depends on
 NumPy alone.
 
-Not every anomaly is an outlying value. In this ECG, one of 181 heartbeats has
-the wrong shape, yet every one of its samples lies inside the normal range.
-`DAMP` scores the series in a single pass, with no training split and in
-bounded memory, and its highest score lands on that beat.
+Here `RollingMatrixProfile` reads seven months of New York taxi counts, one
+half hour at a time. It starts with no history and never sees a label. The
+five highest peaks of its score fall on the five events that the Numenta
+Anomaly Benchmark labels in this stream.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-dark.svg">
-    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="Eleven heartbeats of a noisy ECG. One beat, drawn in orange, lacks the tall spike of its neighbours, yet stays between the lowest and the highest normal value. Below them, the DAMP score for all 30,000 samples of the recording has a single dominant peak, on that beat.">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/taxi-dark.svg">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/taxi-light.svg" width="100%" alt="Seven months of half-hourly New York taxi passenger counts with a regular daily and weekly rhythm. Below them, the RollingMatrixProfile score, computed as each count arrives. Its five highest peaks are marked: the New York marathon, Thanksgiving, Christmas, New Year and a snowstorm.">
   </picture>
 </p>
 
-<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), with <code>DAMP(subsequence_length=167)</code>. Reproduce with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
+<p align="center"><sub>Series <code>realKnownCause/nyc_taxi</code> (Lavin and Ahmad, 2015), with <code>RollingMatrixProfile(subsequence_length=48)</code>. Scores start once the detector's 16 days of history are full. Reproduce with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/taxi_figure.py"><code>docs/scripts/taxi_figure.py</code></a>.</sub></p>
 
 ## Installation
 
@@ -156,6 +156,20 @@ detector = MIDAS(source_key="src", destination_key="dst", time_key="t")
 # {"cpu": 0.42, "latency_ms": None}: fill the gap and rescale, then score
 detector = Imputer() | MinMaxScaler() | HalfSpaceTrees(seed=42)
 ```
+
+Not every anomaly is an outlying value. In this ECG, one of 181 heartbeats has
+the wrong shape, yet every one of its samples lies inside the normal range.
+`DAMP` scores the series in a single pass, with no training split and in
+bounded memory, and its highest score lands on that beat.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-dark.svg">
+    <img src="https://raw.githubusercontent.com/OliverHennhoefer/aberrant/main/docs/img/discord-light.svg" width="100%" alt="Eleven heartbeats of a noisy ECG. One beat, drawn in orange, lacks the tall spike of its neighbours, yet stays between the lowest and the highest normal value. Below them, the DAMP score for all 30,000 samples of the recording has a single dominant peak, on that beat.">
+  </picture>
+</p>
+
+<p align="center"><sub>Series <code>013_UCR_Anomaly_DISTORTEDECG3</code> (Wu and Keogh, 2021), with <code>DAMP(subsequence_length=167)</code>. Reproduce with <a href="https://github.com/OliverHennhoefer/aberrant/blob/main/docs/scripts/discord_figure.py"><code>docs/scripts/discord_figure.py</code></a>.</sub></p>
 
 Coming from river or PySAD? The
 [migration guide](https://oliverhennhoefer.github.io/aberrant/user_guide/migrating/)

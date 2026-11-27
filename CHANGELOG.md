@@ -193,19 +193,22 @@ Semantic Versioning.
 
 ### Changed
 
-- The README is rewritten. It opens with the problem a stream poses and the
-  DAMP figure, its quickstart flags Shuttle events with
-  `OnlineIsolationForest` and an adaptive `ScoreCalibrator` threshold and
-  prints the outcome, and one inventory lists every detector and the
-  components around it. A scope section states what a score and a threshold
-  do not promise. The comparison table with river and PySAD is gone: PySAD
-  0.8 ships MIDAS, DAMP and a matrix profile, which the table marked as
-  missing, and the migration guide no longer claims that neither library has
-  them.
-- The README's DAMP figure is redrawn. It shows the eleven heartbeats around
-  the anomalous one at a scale where their shapes can be read, above the
-  score of the whole recording, in place of the full 30,000-sample trace and
-  an overlay of all 181 beats.
+- The README is rewritten. It opens with the problem a stream poses and a
+  figure of seven months of New York taxi counts, in which the five highest
+  peaks of the `RollingMatrixProfile` score fall on the five events that the
+  Numenta Anomaly Benchmark labels (`docs/scripts/taxi_figure.py`). Its
+  quickstart flags Shuttle events with `OnlineIsolationForest` and an
+  adaptive `ScoreCalibrator` threshold and prints the outcome, and one
+  inventory lists every detector and the components around it. A scope
+  section states what a score and a threshold do not promise. The comparison
+  table with river and PySAD is gone: PySAD 0.8 ships MIDAS, DAMP and a
+  matrix profile, which the table marked as missing, and the migration guide
+  no longer claims that neither library has them.
+- The README's DAMP figure is redrawn and sits with the detectors for other
+  kinds of streams. It shows the eleven heartbeats around the anomalous one
+  at a scale where their shapes can be read, above the score of the whole
+  recording, in place of the full 30,000-sample trace and an overlay of all
+  181 beats.
 - `CellNeighborhoodDetector` is about twice as fast, with the same scores
   and less memory: each cell stores its points once, as rows of one array
   that a score measures in batches, and candidate cells are compared as one
