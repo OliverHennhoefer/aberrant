@@ -477,8 +477,10 @@ Semantic Versioning.
   `--accept-tradeoff "reason"`, which the log records. `--against` now runs
   each case on both versions back to back in a fresh pair of workers per
   round, uses a sign-test interval of the median instead of a bootstrap, times
-  fast detectors for at least `--min-seconds`, and counts a timing change
-  only when fresh rounds repeat it; `--min-gain` defaults to 5%.
+  fast detectors for at least `--min-seconds`, and gives a case whose median
+  timing moved as many rounds again, judging it on all of them; `--min-gain`
+  defaults to 5%. The table shows both sides' ev/s and the number of rounds,
+  and log rows identify uncommitted changes by a hash of their diff.
 - `CellNeighborhoodDetector` has an exact score fixture, including window
   eviction, ties on the radius and an explicit time key.
 

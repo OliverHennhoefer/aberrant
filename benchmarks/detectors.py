@@ -19,8 +19,9 @@ over the rounds. The report holds the median of the per-round speed ratios
 and a distribution-free interval of at least 95% for it (from a sign test;
 with 7 rounds, the slowest to the fastest ratio). A case is "faster" or
 "slower" only when the interval excludes no change, the median moves by at
-least ``--min-gain`` (5%), and as many fresh rounds, which run whenever speed
-or p99 moved, agree on their own. After a kept
+least ``--min-gain`` (5%). A case whose median speed or p99 moved past its
+threshold gets as many rounds again, and the verdict and the interval shown
+both come from all its rounds together. After a kept
 commit, ``HEAD`` moves with it, so the next run compares against the new
 head. ``--log`` appends one row per case to a tab-separated file;
 ``.benchmarks/`` is git-ignored. Do not run anything else meanwhile.
@@ -764,6 +765,27 @@ def _median_interval(ratios: np.ndarray) -> tuple[float, float]:
     return float(ordered[k - 1]), float(ordered[n - k])
 
 
+def _candidate_id(root: Path) -> str:
+    """``HEAD``'s short hash, plus a hash of uncommitted changes to ``aberrant``.
+
+    The second hash covers the diff against ``HEAD`` and untracked files, so
+    log rows of the same edit share it and rows of different edits do not.
+    """
+    head = _git("rev-parse", "--short", "HEAD")
+    diff = subprocess.run(
+        ["git", "-C", str(root), "diff", "HEAD", "--binary", "--", "aberrant"],
+        capture_output=True,
+        check=False,
+    ).stdout
+    untracked = _git("ls-files", "--others", "--exclude-standard", "--", "aberrant")
+    if not diff and not untracked:
+        return head
+    digest = hashlib.sha256(diff)
+    for name in untracked.splitlines():
+        digest.update(name.encode() + b"\0" + (root / name).read_bytes())
+    return f"{head}+{digest.hexdigest()[:8]}"
+
+
 def against(args: argparse.Namespace) -> int:
     """Alternate the working tree with ``args.against`` and compare them.
 
@@ -785,9 +807,7 @@ def against(args: argparse.Namespace) -> int:
     if base_sha == "unknown":
         print(f"cannot resolve {args.against!r}", file=sys.stderr)
         return 2
-    candidate = _git("rev-parse", "--short", "HEAD") + (
-        "+dirty" if _git("status", "--porcelain", "--", "aberrant") else ""
-    )
+    candidate = _candidate_id(root)
     child = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -996,12 +1016,7 @@ def _paired_rounds(
     moved = [
         job
         for job in range(n_jobs)
-        if any(
-            verdict[3]
-            for verdict in _timing(
-                first["base"][job], first["candidate"][job], args
-            ).values()
-        )
+        if _moved(first["base"][job], first["candidate"][job], args)
     ]
     extra = rounds_of(moved, f"confirming {len(moved)} case(s)") if moved else None
     rows: dict[str, list[list[dict[str, Any]]]] = {}
@@ -1013,6 +1028,17 @@ def _paired_rounds(
         rows[f"{side}_extra"] = extra[side] if extra else [[] for _ in range(n_jobs)]
         rows[f"{side}_memory"] = [memory[side]] if traced else []
     return rows
+
+
+def _moved(
+    before: list[dict[str, Any]], cand: list[dict[str, Any]], args: argparse.Namespace
+) -> bool:
+    """Whether the median speed or p99 ratio moved past its threshold."""
+    timing = _timing(before, cand, args)
+    speed, p99 = timing["speed"][0], timing["p99 latency"][0]
+    return bool(
+        abs(speed - 1) >= args.min_gain or abs(p99 - 1) >= args.latency_tolerance
+    )
 
 
 def _timed(ratios: np.ndarray, min_gain: float) -> tuple[float, float, float, int]:
@@ -1068,8 +1094,8 @@ def _pareto_axes(
 ) -> dict[str, Any]:
     """Judge one case on every axis; ``better`` and ``worse`` name the axes.
 
-    ``extra`` holds the confirmation rounds of a case whose first rounds moved
-    a timing: the move counts only when the fresh rounds agree on its own.
+    ``extra`` holds the further rounds of a case whose first rounds moved a
+    median timing; the verdict then comes from all rounds together.
     """
     better: list[str] = []
     worse: list[str] = []
@@ -1080,15 +1106,13 @@ def _pareto_axes(
         elif direction < 0:
             worse.append(axis)
 
-    first = _timing(before, cand, args)
-    again = _timing(*extra, args) if extra else None
     if extra:
         before, cand = before + extra[0], cand + extra[1]
-    shown = _timing(before, cand, args)
-    for axis, (_, _, _, direction) in first.items():
-        judge(axis, direction if again and again[axis][3] == direction else 0)
-    speed_median, low, high, _ = shown["speed"]
-    p99_median = shown["p99 latency"][0]
+    timing = _timing(before, cand, args)
+    for axis, (_, _, _, direction) in timing.items():
+        judge(axis, direction)
+    speed_median, low, high, _ = timing["speed"]
+    p99_median = timing["p99 latency"][0]
 
     sizes: dict[str, float | None] = {}
     for axis, field, needs_memory in SIZE_AXES:
@@ -1121,6 +1145,7 @@ def _pareto_axes(
         "stream": before[0]["stream"],
         "case": before[0]["case"],
         "speed": (speed_median, low, high),
+        "rounds": len(before),
         "p99": p99_median,
         "sizes": sizes,
         "deltas": deltas,
@@ -1140,10 +1165,11 @@ def _verdicts(
 ) -> tuple[list[str], list[list[str]], list[dict[str, Any]]]:
     """Per-case verdicts as table lines, log rows and the per-axis checks."""
     lines = [
-        "| Stream | Detector | Base ev/s | Speed (median) | 95% interval | p99 "
-        "| State | Peak | Retained | ROC-AUC | PR-AUC | Scores | Pareto |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
-        "| ---: | ---: | --- | --- |",
+        "| Stream | Detector | Base ev/s | Candidate ev/s | Speed (median) "
+        "| 95% interval | Rounds | p99 | State | Peak | Retained | ROC-AUC "
+        "| PR-AUC | Scores | Pareto |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
+        "| ---: | ---: | ---: | --- | --- |",
     ]
     log_rows: list[list[str]] = []
     checks = []
@@ -1189,7 +1215,8 @@ def _verdicts(
         cand_speed = np.median([row["events_per_second"] for row in cand])
         lines.append(
             f"| {base_row['stream']} | {base_row['case']} | {base_speed:,.0f} "
-            f"| {median - 1:+.1%} | {low - 1:+.1%} to {high - 1:+.1%} "
+            f"| {cand_speed:,.0f} | {median - 1:+.1%} "
+            f"| {low - 1:+.1%} to {high - 1:+.1%} | {check['rounds']} "
             f"| {_pct(check['p99'])} | {_pct(sizes['state'])} "
             f"| {_pct(sizes['peak memory'])} | {_pct(sizes['retained memory'])} "
             f"| {deltas['roc_auc']:+.4f} | {deltas['pr_auc']:+.4f} "
@@ -1223,6 +1250,11 @@ def _verdicts(
                 args.note,
             ]
         )
+    lines.append(
+        "\nEach column is the candidate's change. Speed: + is faster. p99, state, "
+        "peak and retained memory: - is better. The ev/s columns are each side's "
+        "median, the speed column the median of the paired ratios."
+    )
     return lines, log_rows, checks
 
 
@@ -1284,7 +1316,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-same-scores",
         action="store_true",
-        help="exit with status 1 when a score sequence differs from --baseline",
+        help="exit with status 1 when a score sequence differs from --baseline "
+        "or, with --against, from the base",
     )
     parser.add_argument(
         "--profile", action="store_true", help="print a cProfile summary per case"
@@ -1297,7 +1330,11 @@ def build_parser() -> argparse.ArgumentParser:
         "and report the median speed ratio with a 95%% interval",
     )
     parser.add_argument(
-        "--rounds", type=int, default=7, help="alternating rounds for --against"
+        "--rounds",
+        type=int,
+        default=7,
+        help="alternating rounds for --against; a case whose median timing "
+        "moved gets as many again, judged on all rounds together",
     )
     parser.add_argument(
         "--min-gain",
