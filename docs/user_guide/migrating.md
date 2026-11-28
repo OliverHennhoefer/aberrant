@@ -95,7 +95,6 @@ identical numbers.
 | `compose.Pipeline` or `\|` | — | `\|` (see [Pipelines](pipelines.md)) |
 | `evaluate` with a metric | `evaluation.AUROCMetric`, `utils.ArrayStreamer` | `evaluate.PrequentialEvaluator` |
 
-aberrant also covers families that neither library ships: graph-edge
-detectors (`MIDAS`, `AnoEdgeL`, `ISCONNA`), time-series discords
-(`RollingMatrixProfile`, `DAMP`), online SVMs and autoencoders. The
-[model guide](models.md) lists them all.
+The table lists the components that port most directly; it is not a full
+comparison of the three libraries. The [model guide](models.md) lists every
+aberrant detector.
